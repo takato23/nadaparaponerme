@@ -49,8 +49,13 @@ export default defineConfig(({ mode }) => {
           manualChunks: (id) => {
             // Vendor chunks optimization
             if (id.includes('node_modules')) {
-              // React core
-              if (id.includes('react') || id.includes('react-dom') || id.includes('scheduler')) {
+              // React core + React UI libraries that depend on React context
+              if (id.includes('react') ||
+                  id.includes('react-dom') ||
+                  id.includes('scheduler') ||
+                  id.includes('framer-motion') ||
+                  id.includes('lucide-react') ||
+                  id.includes('@use-gesture/react')) {
                 return 'vendor-react';
               }
               // Supabase + PostgREST
