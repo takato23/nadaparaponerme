@@ -1,0 +1,26 @@
+# Supabase Local Development Configuration
+# Run `supabase start` to start local development environment
+
+# [project]
+# ref will be set by supabase link command
+
+[api]
+enabled = true
+port = 54321
+max_rows = 1000
+
+[auth]
+enabled = true
+site_url = "http://localhost:3000"
+additional_redirect_urls = ["http://localhost:3000/**"]
+jwt_expiry = 3600
+enable_signup = true
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = true
+enable_confirmations = false
+
+[storage]
+enabled = true
+file_size_limit = "10MB"

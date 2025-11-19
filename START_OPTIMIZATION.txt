@@ -1,0 +1,243 @@
+# 🚀 Proyecto: No Tengo Nada Para Ponerme - Fase de Optimización
+
+## Contexto del Proyecto
+
+Soy el desarrollador de "No Tengo Nada Para Ponerme", una fashion AI app en React + TypeScript que ayuda a usuarios a gestionar su armario digital y generar outfits con IA.
+
+**Directorio del proyecto**: `/Users/santiagobalosky/no-tengo-nada-para-ponerme`
+
+## Estado Actual ✅
+
+### Features Completadas: 20/20 (100%)
+- **FASE 1**: Analytics Dashboard, Color Palette, Versatility Score
+- **FASE 2**: Fashion Chat, Weather Outfits
+- **FASE 3**: Weekly Planner, Calendar Sync
+- **FASE 4**: Lookbook, Challenges, Ratings, Feedback
+- **FASE 5**: Gap Analysis, Brand Recognition, Dupe Finder
+- **FASE 6**: Capsule Wardrobe, Style DNA, AI Designer, Evolution
+- **BONUS**: Virtual Shopping Assistant
+
+**Total**: 26 funciones de IA operativas
+
+### Stack Tecnológico
+- **Frontend**: React 19 + TypeScript + Vite + TailwindCSS
+- **Backend**: Supabase (PostgreSQL + Auth + Storage + Edge Functions)
+- **IA**: Google Gemini AI (26 funciones)
+  - Gemini 2.5 Flash (análisis, chat)
+  - Gemini 2.5 Pro (outfits, packing)
+  - Imagen 4.0 (generación de imágenes)
+- **Estado**: localStorage + Supabase (migración gradual)
+- **Build**: Vite con code splitting y lazy loading
+
+### Configuración Actual
+- ✅ Build exitoso sin errores (4.44s)
+- ✅ Gemini API configurado (frontend + backend)
+- ✅ 3 Edge Functions deployadas
+- ✅ Dev server corriendo: http://localhost:3002/
+- ✅ Bundle size: ~1.2MB gzipped
+
+### Documentación Clave
+- `CLAUDE.md` - Guía del proyecto para Claude Code
+- `CHANGELOG.md` - Todas las features documentadas
+- `NEXT_STEPS.md` - Opciones de próximos pasos
+- `GEMINI_README.md` - Configuración de Gemini API
+- `README.md` - Documentación principal
+
+## Objetivo: Optimizaciones & Polish 💎
+
+Quiero optimizar el proyecto en las siguientes áreas:
+
+### 1. Performance Optimization (Prioridad Alta)
+**Objetivos**:
+- Lighthouse score >90 (Performance, Accessibility, Best Practices, SEO)
+- First Contentful Paint <1.5s
+- Time to Interactive <3s
+- Bundle size reduction (actualmente ~1.2MB gzipped)
+
+**Áreas a optimizar**:
+- [ ] Implementar caching layer con React Query
+- [ ] Optimizar bundle size (tree shaking, code splitting mejorado)
+- [ ] Lazy loading de componentes pesados
+- [ ] Image optimization (WebP, lazy loading, blur placeholder)
+- [ ] Reducir dependencias innecesarias
+- [ ] Memoization de componentes pesados
+- [ ] Virtual scrolling para listas largas
+- [ ] Service Worker para offline mode
+
+### 2. AI Optimization (Prioridad Alta)
+**Objetivos**:
+- Reducir llamadas a API de Gemini
+- Mejorar tiempo de respuesta
+- Reducir costos de API
+
+**Áreas a optimizar**:
+- [ ] Caching de resultados de IA (localStorage + TTL)
+- [ ] Debouncing en inputs que llaman IA
+- [ ] Batch processing de requests similares
+- [ ] Rate limiting inteligente (evitar spam)
+- [ ] Fallback strategies mejorados
+- [ ] Retry logic con exponential backoff
+- [ ] Request queue management
+
+### 3. UX Improvements (Prioridad Media)
+**Objetivos**:
+- Experiencia de usuario más fluida
+- Feedback visual mejorado
+- Onboarding más claro
+
+**Áreas a mejorar**:
+- [ ] Skeleton loaders en lugar de spinners
+- [ ] Optimistic UI updates
+- [ ] Animaciones y transiciones suaves
+- [ ] Toast notifications mejoradas
+- [ ] Error messages más claras
+- [ ] Tutorial interactivo mejorado
+- [ ] Empty states más informativos
+
+### 4. Code Quality (Prioridad Media)
+**Objetivos**:
+- Codebase más limpio y mantenible
+- Mejor type safety
+- Reducir duplicación
+
+**Áreas a mejorar**:
+- [ ] Consolidar lógica duplicada
+- [ ] Extraer hooks personalizados comunes
+- [ ] Mejorar organización de carpetas
+- [ ] Añadir JSDoc a funciones complejas
+- [ ] Remover código muerto (dead code elimination)
+- [ ] Estandarizar patrones de error handling
+- [ ] Mejorar tipos de TypeScript
+
+### 5. Supabase Optimization (Prioridad Media)
+**Objetivos**:
+- Mejor uso de recursos
+- Queries más eficientes
+- Reducir llamadas innecesarias
+
+**Áreas a optimizar**:
+- [ ] Índices de base de datos optimizados
+- [ ] Queries con joins eficientes
+- [ ] Pagination en lugar de "load all"
+- [ ] Real-time subscriptions selectivas
+- [ ] RLS policies optimizadas
+- [ ] Connection pooling
+
+## Comandos Útiles
+
+```bash
+# Development
+npm run dev              # Ya corriendo en :3002
+npm run build            # Production build
+npm run verify-setup     # Verify Gemini config
+
+# Analysis
+npm run build            # Analizar bundle size en output
+# Recomendado instalar: npm i -D vite-bundle-visualizer
+
+# Testing
+./test-edge-function.sh  # Test Edge Functions
+
+# Supabase
+supabase status
+supabase functions logs
+supabase db push
+```
+
+## Restricciones y Consideraciones
+
+1. **No romper features existentes**: Todas las 20 features deben seguir funcionando
+2. **Backward compatibility**: Mantener compatibilidad con localStorage legacy
+3. **Free tier limits**: Optimizar para Supabase free tier (500MB DB, 2GB bandwidth/month)
+4. **Gemini API limits**: Respetar rate limits (Flash: 15 RPM, Pro: 2 RPM)
+5. **Mobile-first**: Optimizaciones deben mejorar mobile experience
+6. **Spanish UI**: Mantener todos los textos en español
+
+## Arquitectura Actual
+
+### State Management
+- **localStorage**: Legacy data (closet, outfits, preferences)
+- **Supabase**: Modern backend (clothing_items, outfits, etc)
+- **Feature Flags**: Gradual migration system (`src/config/features.ts`)
+- **App.tsx**: Centralized state con hooks personalizados
+
+### AI Services
+- **Frontend Direct**: `services/geminiService.ts` (23 funciones)
+- **Edge Functions**: Supabase proxies (3 funciones)
+- **Router**: `src/services/aiService.ts` (smart routing con fallback)
+
+### Key Patterns
+- Modal overlay pattern para vistas
+- Lazy loading de componentes pesados
+- Glassmorphism design system
+- Dark mode con ThemeContext
+- Image compression antes de upload
+
+## Archivos Clave a Revisar
+
+**Core**:
+- `src/App.tsx` - Estado centralizado, 2000+ líneas
+- `services/geminiService.ts` - Todas las funciones de IA
+- `src/services/aiService.ts` - Router de IA
+
+**Heavy Components** (candidatos a optimización):
+- `components/BulkUploadView.tsx` - Análisis batch de imágenes
+- `components/CapsuleWardrobeBuilderView.tsx` - Generación compleja
+- `components/StyleEvolutionView.tsx` - Análisis temporal
+- `components/VirtualShoppingAssistantView.tsx` - Chat extenso
+
+**Build Config**:
+- `vite.config.ts` - Configuración de build
+- `tailwind.config.js` - Estilos
+- `package.json` - Dependencias
+
+## Métricas Actuales (Baseline)
+
+**Build Stats**:
+- Build time: 4.44s
+- Total bundle: ~1.2MB gzipped
+- Largest chunk: vendor-charts (248KB)
+- Components: 50+ lazy loaded
+
+**Dependencies**:
+- @google/genai: 1.27.0
+- @supabase/supabase-js: 2.39.1
+- react: 19.2.0
+- recharts: 3.3.0 (pesado)
+- lucide-react: 0.417.0
+
+## Plan de Acción Sugerido
+
+### Fase 1: Quick Wins (2-4 horas)
+1. Analizar bundle size con visualizer
+2. Identificar dependencias pesadas innecesarias
+3. Implementar lazy loading mejorado
+4. Optimizar imágenes (WebP conversion)
+
+### Fase 2: Performance (1-2 días)
+1. Implementar React Query para caching
+2. Memoization de componentes pesados
+3. Virtual scrolling en ClosetView
+4. Service Worker básico
+
+### Fase 3: AI Optimization (1-2 días)
+1. Caching de resultados de IA
+2. Rate limiting y debouncing
+3. Batch processing
+4. Request queue
+
+### Fase 4: UX Polish (1-2 días)
+1. Skeleton loaders
+2. Animaciones suaves
+3. Mejor feedback visual
+4. Error handling mejorado
+
+## Output Esperado
+
+Por favor, ayúdame a:
+1. **Analizar** el estado actual y identificar optimizaciones prioritarias
+2. **Implementar** las optimizaciones de forma incremental
+3. **Medir** el impacto de cada optimización
+4. **Documentar** los cambios realizados
+
+Empecemos con un análisis del bundle size y las dependencias pesadas.

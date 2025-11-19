@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Setup Migration Test Data</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        .danger {
+            background: #f44336;
+        }
+        .danger:hover {
+            background: #da190b;
+        }
+        .info {
+            background: #2196F3;
+        }
+        .info:hover {
+            background: #0b7dda;
+        }
+        pre {
+            background: #f4f4f4;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Migration Test Data Setup</h1>
+        <p>Este script te ayuda a preparar datos de prueba para testear la migración localStorage → Supabase</p>
+
+        <hr>
+
+        <h2>Paso 1: Crear Datos de Prueba</h2>
+        <button onclick="createTestData()">✨ Crear 3 Prendas de Prueba</button>
+        <button onclick="createLargeTestData()" class="info">✨ Crear 10 Prendas (Test Grande)</button>
+
+        <div id="createStatus"></div>
+
+        <hr>
+
+        <h2>Paso 2: Verificar Datos</h2>
+        <button onclick="checkLocalStorageData()" class="info">🔍 Ver Datos Actuales</button>
+
+        <div id="dataStatus"></div>
+        <pre id="dataDisplay"></pre>
+
+        <hr>
+
+        <h2>Paso 3: Limpiar (después del test)</h2>
+        <button onclick="clearAllData()" class="danger">🗑️ Borrar Todo localStorage</button>
+        <button onclick="clearMigrationFlag()" class="danger">🔄 Reset Migration Flag</button>
+
+        <div id="clearStatus"></div>
+
+        <hr>
+
+        <h2>Estado Actual:</h2>
+        <div id="currentState"></div>
+    </div>
+
+    <script>
+        // Sample base64 image (1x1 red pixel)
+        const sampleImage = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==';
+
+        function createTestData() {
+            const testCloset = [
+                {
+                    id: `${Date.now()}-1`,
+                    imageDataUrl: sampleImage,
+                    metadata: {
+                        category: 'top',
+                        subcategory: 'Camiseta Básica',
+                        color_primary: 'blanco',
+                        vibe_tags: ['casual', 'cómodo'],
+                        seasons: ['verano', 'primavera']
+                    }
+                },
+                {
+                    id: `${Date.now()}-2`,
+                    imageDataUrl: sampleImage,
+                    metadata: {
+                        category: 'bottom',
+                        subcategory: 'Jeans',
+                        color_primary: 'azul',
+                        vibe_tags: ['casual', 'versátil'],
+                        seasons: ['otoño', 'invierno', 'primavera']
+                    }
+                },
+                {
+                    id: `${Date.now()}-3`,
+                    imageDataUrl: sampleImage,
+                    metadata: {
+                        category: 'shoes',
+                        subcategory: 'Zapatillas Blancas',
+                        color_primary: 'blanco',
+                        vibe_tags: ['deportivo', 'casual'],
+                        seasons: ['verano', 'primavera', 'otoño']
+                    }
+                }
+            ];
+
+            localStorage.setItem('ojodeloca-closet', JSON.stringify(testCloset));
+
+            const statusDiv = document.getElementById('createStatus');
+            statusDiv.className = 'status success';
+            statusDiv.textContent = '✅ 3 prendas de prueba creadas en localStorage';
+
+            updateCurrentState();
+        }
+
+        function createLargeTestData() {
+            const categories = ['top', 'bottom', 'shoes', 'accessory', 'outerwear'];
+            const colors = ['negro', 'blanco', 'azul', 'rojo', 'verde', 'gris'];
+            const vibes = ['casual', 'formal', 'deportivo', 'elegante', 'urbano'];
+
+            const testCloset = [];
+            for (let i = 1; i <= 10; i++) {
+                testCloset.push({
+                    id: `${Date.now()}-${i}`,
+                    imageDataUrl: sampleImage,
+                    metadata: {
+                        category: categories[i % categories.length],
+                        subcategory: `Prenda Test ${i}`,
+                        color_primary: colors[i % colors.length],
+                        vibe_tags: [vibes[i % vibes.length], vibes[(i+1) % vibes.length]],
+                        seasons: ['verano', 'primavera']
+                    }
+                });
+            }
+
+            localStorage.setItem('ojodeloca-closet', JSON.stringify(testCloset));
+
+            const statusDiv = document.getElementById('createStatus');
+            statusDiv.className = 'status success';
+            statusDiv.textContent = '✅ 10 prendas de prueba creadas en localStorage';
+
+            updateCurrentState();
+        }
+
+        function checkLocalStorageData() {
+            const closet = localStorage.getItem('ojodeloca-closet');
+            const migrated = localStorage.getItem('ojodeloca-migrated-closet');
+            const authenticated = localStorage.getItem('ojodeloca-is-authenticated');
+
+            const statusDiv = document.getElementById('dataStatus');
+            const displayDiv = document.getElementById('dataDisplay');
+
+            if (!closet) {
+                statusDiv.className = 'status error';
+                statusDiv.textContent = '❌ No hay datos en localStorage';
+                displayDiv.textContent = '';
+                return;
+            }
+
+            try {
+                const parsed = JSON.parse(closet);
+                statusDiv.className = 'status success';
+                statusDiv.textContent = `✅ Encontradas ${parsed.length} prendas en localStorage`;
+                displayDiv.textContent = JSON.stringify(parsed, null, 2);
+            } catch (e) {
+                statusDiv.className = 'status error';
+                statusDiv.textContent = '❌ Error parseando datos';
+                displayDiv.textContent = closet;
+            }
+
+            updateCurrentState();
+        }
+
+        function clearAllData() {
+            if (confirm('⚠️ ¿Seguro que quieres borrar TODO el localStorage? Esto no se puede deshacer.')) {
+                localStorage.clear();
+
+                const statusDiv = document.getElementById('clearStatus');
+                statusDiv.className = 'status success';
+                statusDiv.textContent = '✅ Todo el localStorage fue borrado';
+
+                updateCurrentState();
+            }
+        }
+
+        function clearMigrationFlag() {
+            localStorage.removeItem('ojodeloca-migrated-closet');
+
+            const statusDiv = document.getElementById('clearStatus');
+            statusDiv.className = 'status success';
+            statusDiv.textContent = '✅ Flag de migración reseteado (puedes volver a migrar)';
+
+            updateCurrentState();
+        }
+
+        function updateCurrentState() {
+            const closet = localStorage.getItem('ojodeloca-closet');
+            const migrated = localStorage.getItem('ojodeloca-migrated-closet');
+            const authenticated = localStorage.getItem('ojodeloca-is-authenticated');
+            const hasOnboarded = localStorage.getItem('ojodeloca-has-onboarded');
+
+            let itemCount = 0;
+            if (closet) {
+                try {
+                    itemCount = JSON.parse(closet).length;
+                } catch (e) {
+                    itemCount = 'Error';
+                }
+            }
+
+            const stateDiv = document.getElementById('currentState');
+            stateDiv.innerHTML = `
+                <ul>
+                    <li><strong>Prendas en localStorage:</strong> ${itemCount}</li>
+                    <li><strong>Ya migrado:</strong> ${migrated === 'true' ? '✅ Sí' : '❌ No'}</li>
+                    <li><strong>Autenticado:</strong> ${authenticated === 'true' ? '✅ Sí' : '❌ No'}</li>
+                    <li><strong>Onboarding completo:</strong> ${hasOnboarded === 'true' ? '✅ Sí' : '❌ No'}</li>
+                </ul>
+            `;
+        }
+
+        // Initialize on load
+        updateCurrentState();
+    </script>
+</body>
+</html>

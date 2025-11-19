@@ -1,0 +1,8 @@
+{
+  "name": "No tengo nada para ponerme",
+  "description": "Digitize your closet by taking photos of your clothes. Our AI assistant will analyze and tag each item, helping you rediscover your wardrobe and effortlessly style your next look.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}

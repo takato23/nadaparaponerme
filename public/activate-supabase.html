@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Activar Supabase</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .container {
+            background: white;
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            text-align: center;
+            max-width: 500px;
+        }
+        h1 { color: #333; margin-bottom: 1rem; }
+        p { color: #666; margin-bottom: 1.5rem; }
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 1rem 2rem;
+            font-size: 1.1rem;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        button:hover { transform: scale(1.05); }
+        button:active { transform: scale(0.95); }
+        .status {
+            margin-top: 1rem;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            display: none;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Activar Supabase</h1>
+        <p>Click en el botón para activar Supabase en "No Tengo Nada Para Ponerme"</p>
+        <button onclick="activateSupabase()">Activar Supabase</button>
+        <div id="status" class="status"></div>
+    </div>
+
+    <script>
+        function activateSupabase() {
+            try {
+                // Activar feature flags
+                localStorage.setItem('ojodeloca-feature-flags', JSON.stringify({
+                    useSupabaseAuth: true,
+                    useSupabaseCloset: true,
+                    useSupabaseOutfits: true,
+                    useSupabaseAI: true,
+                    useSupabasePreferences: true,
+                    autoMigration: true
+                }));
+
+                // Limpiar auth localStorage
+                localStorage.removeItem('ojodeloca-is-authenticated');
+
+                // Mostrar success
+                const status = document.getElementById('status');
+                status.className = 'status success';
+                status.innerHTML = '✅ ¡Supabase activado!<br><br>Cerrá esta pestaña y recargá la app (F5)';
+
+                console.log('✅ Feature flags activados correctamente');
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+    </script>
+</body>
+</html>

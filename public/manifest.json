@@ -1,0 +1,33 @@
+{
+  "name": "No Tengo Nada Para Ponerme",
+  "short_name": "Ojo de Loca",
+  "description": "Tu asistente personal de moda con IA",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#A8A29E",
+  "theme_color": "#0D9488",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["lifestyle", "fashion", "productivity"],
+  "screenshots": [
+    {
+      "src": "/screenshot-mobile.png",
+      "sizes": "750x1334",
+      "type": "image/png",
+      "form_factor": "narrow"
+    }
+  ]
+}

@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Activar Edge Functions</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 100px auto;
+            padding: 40px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-align: center;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+        button {
+            background: white;
+            color: #667eea;
+            border: none;
+            padding: 20px 40px;
+            font-size: 18px;
+            font-weight: bold;
+            border-radius: 10px;
+            cursor: pointer;
+            margin: 20px 0;
+            transition: transform 0.2s;
+        }
+        button:hover {
+            transform: scale(1.05);
+        }
+        .success {
+            background: #4CAF50;
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+            display: none;
+        }
+        .info {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+            font-size: 14px;
+        }
+        code {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Activar Edge Functions</h1>
+
+        <p>Esto configura la app para usar <strong>Supabase Edge Functions</strong> en lugar de la API directa de Gemini.</p>
+
+        <div class="info">
+            <strong>Beneficios:</strong><br>
+            ✅ Sin límites de rate (429 errors)<br>
+            ✅ API key segura en servidor<br>
+            ✅ Mejor escalabilidad
+        </div>
+
+        <button onclick="activateEdgeFunctions()">
+            🔧 Activar Edge Functions
+        </button>
+
+        <div id="success" class="success">
+            <h2>✅ ¡Activado!</h2>
+            <p>Edge Functions están activos. La app se recargará en 2 segundos...</p>
+        </div>
+
+        <div class="info" style="margin-top: 30px;">
+            <strong>¿Qué hace esto?</strong><br>
+            Actualiza el localStorage con:<br>
+            <code>useSupabaseAI: true</code>
+        </div>
+    </div>
+
+    <script>
+        function activateEdgeFunctions() {
+            // Set feature flags
+            localStorage.setItem('ojodeloca-feature-flags', JSON.stringify({
+                useSupabaseAuth: true,
+                useSupabaseCloset: true,
+                useSupabaseOutfits: true,
+                useSupabaseAI: true,
+                useSupabasePreferences: true,
+                autoMigration: true
+            }));
+
+            // Show success message
+            document.getElementById('success').style.display = 'block';
+
+            // Reload after 2 seconds
+            setTimeout(() => {
+                window.location.href = 'http://localhost:3001/';
+            }, 2000);
+        }
+    </script>
+</body>
+</html>
