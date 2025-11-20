@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
+import toast from 'react-hot-toast';
 import type {
   MultiplayerChallenge,
   ChallengeSubmission,
@@ -130,27 +131,27 @@ const MultiplayerChallengesView = ({ closet, onClose }: MultiplayerChallengesVie
       // Check eligibility with Supabase
       const { canJoin, reason } = await challengesService.canJoinChallenge(challenge.id);
       if (!canJoin) {
-        alert(reason);
+        toast.error(reason);
         return;
       }
 
       // Join via Supabase
       const success = await challengesService.joinChallenge(challenge.id);
       if (success) {
-        alert('¡Te uniste al desafío! Ahora puedes enviar tu outfit.');
+        toast.success('¡Te uniste al desafío! Ahora puedes enviar tu outfit.');
         // Reload challenge to get updated participant count
         const updated = await challengesService.getChallenge(challenge.id);
         if (updated) {
           setChallenges(prev => prev.map(c => c.id === updated.id ? updated : c));
         }
       } else {
-        alert('Error al unirse al desafío. Intenta de nuevo.');
+        toast.error('Error al unirse al desafío. Intenta de nuevo.');
       }
     } else {
       // Mock join
       const { canJoin, reason } = canJoinChallengeMock(challenge, currentUserId);
       if (!canJoin) {
-        alert(reason);
+        toast.error(reason);
         return;
       }
 
@@ -164,7 +165,7 @@ const MultiplayerChallengesView = ({ closet, onClose }: MultiplayerChallengesVie
           : c
       );
       setChallenges(updated);
-      alert('¡Te uniste al desafío! Ahora puedes enviar tu outfit.');
+      toast.success('¡Te uniste al desafío! Ahora puedes enviar tu outfit.');
     }
   }, [challenges, currentUserId]);
 
@@ -222,7 +223,7 @@ const MultiplayerChallengesView = ({ closet, onClose }: MultiplayerChallengesVie
         submission.id
       );
       if (!canVoteResult) {
-        alert(reason);
+        toast.warning(reason);
         return;
       }
 
@@ -234,13 +235,13 @@ const MultiplayerChallengesView = ({ closet, onClose }: MultiplayerChallengesVie
         const updatedSubmissions = await challengesService.getChallengeSubmissions(selectedChallenge.id);
         setSubmissions(updatedSubmissions);
       } else {
-        alert('Error al votar. Intenta de nuevo.');
+        toast.error('Error al votar. Intenta de nuevo.');
       }
     } else {
       // Mock vote
       const { canVote: canVoteResult, reason } = canVoteMock(selectedChallenge, submission, currentUserId);
       if (!canVoteResult) {
-        alert(reason);
+        toast.warning(reason);
         return;
       }
 

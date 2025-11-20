@@ -8,6 +8,7 @@
 import { supabase } from '../lib/supabase';
 import type { OutfitSchedule, ScheduledOutfitWithDetails, SavedOutfit } from '../../types';
 import type { Database } from '../types/api';
+import { logger } from '../../utils/logger';
 
 type ScheduleRow = Database['public']['Tables']['outfit_schedule']['Row'];
 type ScheduleInsert = Database['public']['Tables']['outfit_schedule']['Insert'];
@@ -80,7 +81,7 @@ export async function getWeekSchedule(startDate: string): Promise<ScheduledOutfi
       outfit: convertOutfitToLegacyFormat(schedule.outfit),
     }));
   } catch (error) {
-    console.error('Failed to fetch week schedule:', error);
+    logger.error('Failed to fetch week schedule:', error);
     throw error;
   }
 }
@@ -115,7 +116,7 @@ export async function getTodaySchedule(): Promise<ScheduledOutfitWithDetails | n
       outfit: convertOutfitToLegacyFormat(data.outfit),
     };
   } catch (error) {
-    console.error('Failed to fetch today schedule:', error);
+    logger.error('Failed to fetch today schedule:', error);
     throw error;
   }
 }
@@ -148,7 +149,7 @@ export async function scheduleOutfit(date: string, outfitId: string): Promise<Ou
 
     return convertScheduleToType(data);
   } catch (error) {
-    console.error('Failed to schedule outfit:', error);
+    logger.error('Failed to schedule outfit:', error);
     throw error;
   }
 }
@@ -184,7 +185,7 @@ export async function updateSchedule(
 
     return convertScheduleToType(data);
   } catch (error) {
-    console.error('Failed to update schedule:', error);
+    logger.error('Failed to update schedule:', error);
     throw error;
   }
 }
@@ -205,7 +206,7 @@ export async function deleteSchedule(scheduleId: string): Promise<void> {
 
     if (error) throw error;
   } catch (error) {
-    console.error('Failed to delete schedule:', error);
+    logger.error('Failed to delete schedule:', error);
     throw error;
   }
 }
@@ -227,7 +228,7 @@ export async function deleteScheduleByDate(date: string): Promise<void> {
 
     if (error) throw error;
   } catch (error) {
-    console.error('Failed to delete schedule by date:', error);
+    logger.error('Failed to delete schedule by date:', error);
     throw error;
   }
 }
@@ -257,7 +258,7 @@ export async function getAllSchedules(): Promise<ScheduledOutfitWithDetails[]> {
       outfit: convertOutfitToLegacyFormat(schedule.outfit),
     }));
   } catch (error) {
-    console.error('Failed to fetch all schedules:', error);
+    logger.error('Failed to fetch all schedules:', error);
     throw error;
   }
 }

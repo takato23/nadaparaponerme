@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import toast from 'react-hot-toast';
 import { fetchSuggestedUsers, followUser, SuggestedUser } from '@/services/socialService';
 
 
@@ -28,7 +29,7 @@ export const SuggestedUsers: React.FC = () => {
             setUsers(prev => prev.filter(u => u.id !== userId));
         } catch (error) {
             console.error('Failed to follow user', error);
-            alert('Error al seguir usuario');
+            toast.error('Error al seguir usuario');
         }
     };
 

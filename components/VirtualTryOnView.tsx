@@ -1,8 +1,8 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import type { ClothingItem } from '../types';
-import { generateVirtualTryOn } from '../src/services/aiService';
-// FIX: The Loader component is now correctly created and exported, resolving the 'not a module' error.
-import Loader from './Loader';
+import { logger } from '../utils/logger';
+import { HelpIcon } from './ui/HelpIcon';
 
 interface VirtualTryOnViewProps {
   onBack: () => void;
@@ -13,95 +13,151 @@ interface VirtualTryOnViewProps {
   };
 }
 
-type ViewState = 'upload' | 'generating' | 'result';
+const VirtualTryOnView: React.FC<VirtualTryOnViewProps> = ({ outfitItems, onBack }) => {
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+  const [isCameraActive, setIsCameraActive] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
-const VirtualTryOnView = ({ onBack, outfitItems }: VirtualTryOnViewProps) => {
-  const [viewState, setViewState] = useState<ViewState>('upload');
-  const [userImage, setUserImage] = useState<string | null>(null);
-  const [resultImage, setResultImage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  // Convert outfit items to array for AR overlay
+  const arItems: ClothingItem[] = [
+    outfitItems.top,
+    outfitItems.bottom,
+    outfitItems.shoes,
+  ].filter(Boolean); // Remove any null/undefined items
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const url = e.target?.result as string;
-        setUserImage(url);
-      };
-      reader.readAsDataURL(file);
+  const selectedItem = arItems.find(i => i.id === selectedItemId);
+
+  useEffect(() => {
+    if (isCameraActive && videoRef.current) {
+      navigator.mediaDevices.getUserMedia({ video: true })
+        .then(stream => {
+          if (videoRef.current) {
+            videoRef.current.srcObject = stream;
+          }
+        })
+        .catch(err => {
+          logger.error("Error accessing camera:", err);
+          setIsCameraActive(false);
+        });
     }
-  };
-
-  const handleGenerate = async () => {
-    if (!userImage) return;
-    setViewState('generating');
-    setError(null);
-    try {
-      const result = await generateVirtualTryOn(
-        userImage,
-        outfitItems.top.imageDataUrl,
-        outfitItems.bottom.imageDataUrl,
-        outfitItems.shoes.imageDataUrl,
-      );
-      setResultImage(result);
-      setViewState('result');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An unknown error occurred.');
-      setViewState('upload');
-    }
-  };
-
-  const renderContent = () => {
-    switch (viewState) {
-      case 'upload':
-        return (
-          <div className="p-4 flex flex-col items-center justify-center h-full text-center">
-            <h2 className="text-2xl font-bold mb-2 dark:text-gray-200">Probador Virtual</h2>
-            <p className="text-text-secondary dark:text-gray-400 mb-4">Sube una foto tuya de cuerpo entero.</p>
-             {error && <p className="text-red-500 mb-4">{error}</p>}
-            <div 
-                onClick={() => fileInputRef.current?.click()}
-                className="w-full aspect-[3/4] border-2 border-dashed dark:border-gray-600 rounded-2xl flex items-center justify-center mb-4 cursor-pointer"
-            >
-              {userImage ? (
-                <img src={userImage} alt="user" className="w-full h-full object-cover rounded-2xl" />
-              ) : (
-                <span className="material-symbols-outlined text-5xl text-gray-400">add_a_photo</span>
-              )}
-            </div>
-            <input type="file" accept="image/*" ref={fileInputRef} onChange={handleFileChange} className="hidden" />
-            <button onClick={handleGenerate} disabled={!userImage} className="w-full bg-primary text-white font-bold py-4 rounded-xl disabled:bg-gray-300 dark:disabled:bg-gray-600">
-              Generar
-            </button>
-          </div>
-        );
-      case 'generating':
-        return <div className="flex flex-col items-center justify-center h-full dark:text-gray-300"><Loader /><p className="mt-4">Vistiéndote...</p></div>;
-      case 'result':
-        return (
-          <div className="p-4 flex flex-col items-center justify-center h-full text-center">
-            <h2 className="text-2xl font-bold mb-4 dark:text-gray-200">¡Listo!</h2>
-            {resultImage && <img src={resultImage} alt="try on result" className="w-full aspect-[3/4] object-cover rounded-2xl mb-4" />}
-            <button onClick={() => setViewState('upload')} className="w-full bg-gray-200 dark:bg-gray-700 text-text-primary dark:text-gray-200 font-bold py-4 rounded-xl">
-              Probar con otra foto
-            </button>
-          </div>
-        );
-    }
-  };
+    return () => {
+      // Cleanup stream
+      if (videoRef.current && videoRef.current.srcObject) {
+        const stream = videoRef.current.srcObject as MediaStream;
+        stream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [isCameraActive]);
 
   return (
-    <div className="absolute inset-0 bg-white/80 dark:bg-background-dark/80 backdrop-blur-xl z-[60] flex flex-col md:fixed md:bg-black/30 md:items-center md:justify-center">
-       <div className="contents md:block md:relative md:w-full md:max-w-md bg-white/80 dark:bg-background-dark/80 md:rounded-3xl md:max-h-[90vh] md:flex md:flex-col">
-        <header className="p-4 flex items-center">
-            <button onClick={onBack} className="p-2 dark:text-gray-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-fade-in">
+      <div className="relative w-full max-w-md h-[80vh] bg-black rounded-3xl overflow-hidden shadow-2xl border-4 border-gray-800 flex flex-col">
+
+        {/* Header */}
+        <div className="absolute top-0 inset-x-0 z-20 p-4 flex justify-between items-center bg-gradient-to-b from-black/60 to-transparent">
+          <div className="flex items-center gap-2">
+            <h2 className="text-white font-bold text-xl drop-shadow-md">Magic Mirror</h2>
+            <HelpIcon
+              content="Activá tu cámara y seleccioná prendas para verlas superpuestas en tiempo real. Movete para ver cómo te quedan desde diferentes ángulos."
+              position="bottom"
+              className="text-white"
+            />
+          </div>
+          <button
+            onClick={onBack}
+            className="p-2 bg-white/10 backdrop-blur-md rounded-full text-white hover:bg-white/20 transition-colors"
+          >
             <span className="material-symbols-outlined">close</span>
-            </button>
-        </header>
-        <div className="flex-grow">{renderContent()}</div>
-       </div>
+          </button>
+        </div>
+
+        {/* Camera Feed / Simulation */}
+        <div className="relative flex-grow overflow-hidden bg-gray-900">
+          {isCameraActive ? (
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              className="w-full h-full object-cover transform scale-x-[-1]" // Mirror effect
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-800 to-gray-900">
+              <div className="text-center p-8">
+                <span className="material-symbols-outlined text-6xl text-gray-400 mb-4 block">
+                  person
+                </span>
+                <p className="text-gray-300 text-lg font-medium mb-2">
+                  Activá la cámara para probarte el outfit
+                </p>
+                <p className="text-gray-500 text-sm">
+                  O subí una foto tuya para ver cómo te queda
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* AR Overlay */}
+          <AnimatePresence>
+            {selectedItem && (
+              <motion.div
+                key={selectedItem.id}
+                initial={{ opacity: 0, scale: 0.5, y: -50 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.5 }}
+                className="absolute top-1/3 left-1/2 -translate-x-1/2 w-48 drop-shadow-2xl pointer-events-none"
+                drag
+                dragConstraints={{ left: -100, right: 100, top: -100, bottom: 100 }}
+              >
+                <img
+                  src={selectedItem.imageDataUrl}
+                  alt="AR Item"
+                  className="w-full h-auto"
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {!isCameraActive && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <button
+                onClick={() => setIsCameraActive(true)}
+                className="pointer-events-auto px-6 py-3 bg-white/10 backdrop-blur-md border border-white/30 rounded-full text-white font-bold flex items-center gap-2 hover:bg-white/20 transition-all"
+              >
+                <span className="material-symbols-outlined">videocam</span>
+                Activar Cámara
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Item Selector */}
+        <div className="absolute bottom-0 inset-x-0 p-6 bg-gradient-to-t from-black/90 via-black/60 to-transparent z-20">
+          <p className="text-white/80 text-center text-sm mb-4 font-medium">Selecciona un ítem para probar</p>
+          <div className="flex justify-center gap-4 overflow-x-auto pb-2 no-scrollbar">
+            {arItems.map((item) => (
+              <button
+                key={item.id}
+                onClick={() => setSelectedItemId(selectedItemId === item.id ? null : item.id)}
+                className={`
+                            relative w-16 h-16 rounded-2xl overflow-hidden border-2 transition-all flex-shrink-0
+                            ${selectedItemId === item.id
+                    ? 'border-primary scale-110 shadow-[0_0_15px_rgba(59,130,246,0.5)]'
+                    : 'border-white/20 opacity-70 hover:opacity-100 hover:scale-105'
+                  }
+                        `}
+              >
+                <img
+                  src={item.imageDataUrl}
+                  alt={item.metadata?.subcategory || 'Item'}
+                  className="w-full h-full object-cover bg-white"
+                />
+              </button>
+            ))}
+          </div>
+        </div>
+
+      </div>
     </div>
   );
 };

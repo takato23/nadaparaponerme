@@ -5,6 +5,13 @@ import * as aiService from '../src/services/aiService';
 import { addClothingItem, getClothingItems } from '../src/services/closetService';
 import Loader from './Loader';
 import { validateImageDataUri } from '../utils/imageValidation';
+import CameraCaptureButton from './CameraCaptureButton';
+import PhotoGuidanceModal from './PhotoGuidanceModal';
+import PhotoPreview from './PhotoPreview';
+import { analyzePhotoQuality } from '../utils/photoQualityValidation';
+import useLocalStorage from '../hooks/useLocalStorage';
+import { getErrorMessage } from '../utils/errorMessages';
+import { TooltipWrapper } from './ui/TooltipWrapper';
 
 interface AddItemViewProps {
   onAddLocalItem: (item: ClothingItem) => void;
@@ -13,7 +20,7 @@ interface AddItemViewProps {
   useSupabaseCloset: boolean;
 }
 
-type ViewState = 'capture' | 'generate' | 'analyzing' | 'editing';
+type ViewState = 'capture' | 'camera' | 'preview' | 'generate' | 'analyzing' | 'editing';
 
 // Reusable Chip Component
 const Chip = ({ label, selected, onClick }: { label: string; selected: boolean; onClick: () => void }) => (
@@ -41,9 +48,73 @@ const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }
   const [isSaving, setIsSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Photo guidance system
+  const [hasSeenGuidance, setHasSeenGuidance] = useLocalStorage('ojodeloca-photo-guidance-seen', false);
+  const [showGuidance, setShowGuidance] = useState(false);
+  const [photoQualityWarnings, setPhotoQualityWarnings] = useState<string[]>([]);
+
   // Predefined options for chips
   const SEASONS = ['Verano', 'Invierno', 'Otoño', 'Primavera', 'Todo el año'];
   const VIBES = ['Casual', 'Formal', 'Deportivo', 'Fiesta', 'Trabajo', 'Streetwear', 'Vintage', 'Minimalista', 'Boho', 'Chic'];
+
+  // Show guidance modal on first visit
+  useEffect(() => {
+    if (!hasSeenGuidance) {
+      setShowGuidance(true);
+    }
+  }, [hasSeenGuidance]);
+
+  const processImageDataUrl = async (url: string, file?: File) => {
+    const validationResult = validateImageDataUri(url);
+    if (!validationResult.isValid) {
+      setError(validationResult.error || 'Imagen inválida');
+      setViewState('capture');
+      setImageFile(null);
+      return;
+    }
+
+    // Analyze photo quality
+    try {
+      const qualityResult = await analyzePhotoQuality(url);
+      setPhotoQualityWarnings(qualityResult.warnings);
+    } catch (err) {
+      console.error('Quality analysis error:', err);
+      setPhotoQualityWarnings([]);
+    }
+
+    setImageDataUrl(url);
+    setViewState('preview'); // Show preview before analysis
+    setError(null);
+  };
+
+  const handleConfirmPhoto = async () => {
+    if (!imageDataUrl) return;
+
+    setViewState('analyzing');
+    try {
+      const result = await aiService.analyzeClothingItem(imageDataUrl);
+      setMetadata(result);
+      setViewState('editing');
+    } catch (err) {
+      console.error('Analysis error:', err);
+
+      // Use comprehensive error message system
+      const errorInfo = getErrorMessage(err, undefined, {
+        retakePhoto: handleRetakePhoto,
+        showPhotoGuide: () => setShowGuidance(true)
+      });
+
+      setError(errorInfo.message);
+      setViewState('capture');
+    }
+  };
+
+  const handleRetakePhoto = () => {
+    setImageDataUrl(null);
+    setImageFile(null);
+    setPhotoQualityWarnings([]);
+    setViewState('capture');
+  };
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -52,34 +123,14 @@ const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }
       const reader = new FileReader();
       reader.onload = async (e) => {
         const url = e.target?.result as string;
-        const validationResult = validateImageDataUri(url);
-        if (!validationResult.isValid) {
-          setError(validationResult.error || 'Imagen inválida');
-          setViewState('capture');
-          setImageFile(null);
-          return;
-        }
-        setImageDataUrl(url);
-        setViewState('analyzing');
-        setError(null);
-        try {
-          const result = await aiService.analyzeClothingItem(url);
-          setMetadata(result);
-          setViewState('editing');
-        } catch (err) {
-          console.error('Analysis error:', err);
-          const errorMessage = err instanceof Error ? err.message : String(err);
-          const isRateLimit = errorMessage.includes('429') || errorMessage.includes('rate limit');
-          if (isRateLimit) {
-            setError('⏱️ Límite de análisis alcanzado. Espera un momento.');
-          } else {
-            setError('Error al analizar la imagen. Intenta de nuevo.');
-          }
-          setViewState('capture');
-        }
+        await processImageDataUrl(url, file);
       };
       reader.readAsDataURL(file);
     }
+  };
+
+  const handleCameraCapture = async (imageDataUrl: string) => {
+    await processImageDataUrl(imageDataUrl);
   };
 
   const handleGenerateImage = async () => {
@@ -127,7 +178,13 @@ const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }
       onBack();
     } catch (saveError) {
       console.error('Error saving item:', saveError);
-      alert('Error al guardar la prenda');
+
+      // Use comprehensive error message system
+      const errorInfo = getErrorMessage(saveError, undefined, {
+        retry: () => handleSave()
+      });
+
+      setError(errorInfo.message);
     } finally {
       setIsSaving(false);
     }
@@ -150,6 +207,25 @@ const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }
 
   const renderContent = () => {
     switch (viewState) {
+      case 'camera':
+        return (
+          <CameraCaptureButton
+            onCapture={handleCameraCapture}
+            onClose={() => setViewState('capture')}
+          />
+        );
+
+      case 'preview':
+        if (!imageDataUrl) return null;
+        return (
+          <PhotoPreview
+            imageDataUrl={imageDataUrl}
+            onConfirm={handleConfirmPhoto}
+            onRetake={handleRetakePhoto}
+            qualityWarnings={photoQualityWarnings}
+          />
+        );
+
       case 'capture':
         return (
           <motion.div
@@ -170,6 +246,15 @@ const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }
               </p>
             </div>
 
+            {/* Photo Tips Button */}
+            <button
+              onClick={() => setShowGuidance(true)}
+              className="px-4 py-2 rounded-xl bg-primary/10 text-primary hover:bg-primary/20 transition-colors flex items-center gap-2 text-sm font-medium"
+            >
+              <span className="material-symbols-outlined text-lg">help</span>
+              Tips para Fotos Perfectas
+            </button>
+
             {error && (
               <div className="p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl text-sm">
                 {error}
@@ -177,14 +262,33 @@ const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }
             )}
 
             <div className="w-full space-y-3">
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="w-full bg-primary hover:bg-primary-dark text-white font-bold py-4 px-6 rounded-2xl shadow-glow-accent transition-all transform hover:scale-[1.02] flex items-center justify-center gap-2"
-              >
-                <span className="material-symbols-outlined">add_a_photo</span>
-                Subir Foto
-              </button>
-              <input type="file" accept="image/*" ref={fileInputRef} onChange={handleFileChange} className="hidden" />
+              <TooltipWrapper content="Usá la cámara para sacar una foto de tu prenda sobre fondo blanco" position="bottom">
+                <button
+                  onClick={() => setViewState('camera')}
+                  className="w-full bg-primary hover:bg-primary-dark text-white font-bold py-4 px-6 rounded-2xl shadow-glow-accent transition-all transform hover:scale-[1.02] flex items-center justify-center gap-2"
+                >
+                  <span className="material-symbols-outlined">photo_camera</span>
+                  Tomar Foto
+                </button>
+              </TooltipWrapper>
+
+              <TooltipWrapper content="Seleccioná una imagen existente de tu galería o archivos" position="bottom">
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-text-primary dark:text-gray-200 font-bold py-4 px-6 rounded-2xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-all transform hover:scale-[1.02] flex items-center justify-center gap-2"
+                >
+                  <span className="material-symbols-outlined">add_a_photo</span>
+                  Subir Archivo
+                </button>
+              </TooltipWrapper>
+              <input
+                type="file"
+                accept="image/*"
+                capture="environment"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                className="hidden"
+              />
 
               <div className="relative py-2">
                 <div className="absolute inset-0 flex items-center">
@@ -195,13 +299,15 @@ const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }
                 </div>
               </div>
 
-              <button
-                onClick={() => setViewState('generate')}
-                className="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-text-primary dark:text-gray-200 font-bold py-4 px-6 rounded-2xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-all transform hover:scale-[1.02] flex items-center justify-center gap-2"
-              >
-                <span className="material-symbols-outlined text-secondary">auto_awesome</span>
-                Generar con IA
-              </button>
+              <TooltipWrapper content="Describí una prenda y la IA la creará desde cero con imagen realista" position="bottom">
+                <button
+                  onClick={() => setViewState('generate')}
+                  className="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-text-primary dark:text-gray-200 font-bold py-4 px-6 rounded-2xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-all transform hover:scale-[1.02] flex items-center justify-center gap-2"
+                >
+                  <span className="material-symbols-outlined text-secondary">auto_awesome</span>
+                  Generar con IA
+                </button>
+              </TooltipWrapper>
             </div>
           </motion.div>
         );
@@ -398,46 +504,60 @@ const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 md:p-6">
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        className="w-full max-w-md bg-white dark:bg-gray-900 rounded-3xl shadow-2xl overflow-hidden h-[85vh] md:h-[800px] flex flex-col relative"
-      >
-        {/* Header (only show back button if not in capture mode or if needed) */}
-        {viewState !== 'capture' && (
-          <div className="absolute top-0 left-0 right-0 p-4 z-20 flex justify-between items-center pointer-events-none">
+    <>
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 md:p-6">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.95 }}
+          className="w-full max-w-md bg-white dark:bg-gray-900 rounded-3xl shadow-2xl overflow-hidden h-[85vh] md:h-[800px] flex flex-col relative"
+        >
+          {/* Header (only show back button if not in capture mode or if needed) */}
+          {viewState !== 'capture' && viewState !== 'preview' && (
+            <div className="absolute top-0 left-0 right-0 p-4 z-20 flex justify-between items-center pointer-events-none">
+              <button
+                onClick={() => {
+                  if (viewState === 'editing') setViewState('capture');
+                  else if (viewState === 'generate') setViewState('capture');
+                  else onBack();
+                }}
+                className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white shadow-lg pointer-events-auto hover:bg-white/30 transition-colors"
+              >
+                <span className="material-symbols-outlined">arrow_back</span>
+              </button>
+            </div>
+          )}
+
+          {/* Close button for main view */}
+          {viewState === 'capture' && (
             <button
-              onClick={() => {
-                if (viewState === 'editing') setViewState('capture');
-                else if (viewState === 'generate') setViewState('capture');
-                else onBack();
-              }}
-              className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white shadow-lg pointer-events-auto hover:bg-white/30 transition-colors"
+              onClick={onBack}
+              className="absolute top-4 right-4 w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors z-20"
             >
-              <span className="material-symbols-outlined">arrow_back</span>
+              <span className="material-symbols-outlined">close</span>
             </button>
+          )}
+
+          <div className="flex-grow overflow-hidden relative">
+            <AnimatePresence mode="wait">
+              {renderContent()}
+            </AnimatePresence>
           </div>
-        )}
+        </motion.div>
+      </div>
 
-        {/* Close button for main view */}
-        {viewState === 'capture' && (
-          <button
-            onClick={onBack}
-            className="absolute top-4 right-4 w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors z-20"
-          >
-            <span className="material-symbols-outlined">close</span>
-          </button>
+      {/* Photo Guidance Modal */}
+      <AnimatePresence>
+        {showGuidance && (
+          <PhotoGuidanceModal
+            onClose={() => {
+              setShowGuidance(false);
+              setHasSeenGuidance(true);
+            }}
+          />
         )}
-
-        <div className="flex-grow overflow-hidden relative">
-          <AnimatePresence mode="wait">
-            {renderContent()}
-          </AnimatePresence>
-        </div>
-      </motion.div>
-    </div>
+      </AnimatePresence>
+    </>
   );
 };
 

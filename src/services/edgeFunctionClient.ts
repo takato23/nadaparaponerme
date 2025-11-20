@@ -6,6 +6,7 @@
  */
 
 import { supabase } from '../lib/supabase';
+import { logger } from '../utils/logger';
 import type { ClothingItemMetadata, FitResult, PackingListResult } from '../../types';
 
 /**
@@ -33,7 +34,7 @@ export async function analyzeClothingViaEdge(
       description: data.description,
     };
   } catch (error) {
-    console.error('Edge function analyze-clothing failed:', error);
+    logger.error('Edge function analyze-clothing failed:', error);
     throw new Error('Failed to analyze clothing item via Edge Function');
   }
 }
@@ -64,7 +65,7 @@ export async function generateOutfitViaEdge(
       missing_piece_suggestion: data.missing_piece_suggestion,
     };
   } catch (error) {
-    console.error('Edge function generate-outfit failed:', error);
+    logger.error('Edge function generate-outfit failed:', error);
     throw new Error('Failed to generate outfit via Edge Function');
   }
 }
@@ -94,7 +95,7 @@ export async function generatePackingListViaEdge(
       outfit_suggestions: data.outfit_suggestions || '',
     };
   } catch (error) {
-    console.error('Edge function generate-packing-list failed:', error);
+    logger.error('Edge function generate-packing-list failed:', error);
     throw new Error('Failed to generate packing list via Edge Function');
   }
 }
@@ -122,7 +123,7 @@ export async function generateVirtualTryOnViaEdge(
 
     return data.resultImage;
   } catch (error) {
-    console.error('Edge function virtual-try-on failed:', error);
+    logger.error('Edge function virtual-try-on failed:', error);
     throw new Error('Failed to generate virtual try-on via Edge Function');
   }
 }
@@ -142,7 +143,7 @@ export async function generateClothingImageViaEdge(
 
     return data.resultImage;
   } catch (error) {
-    console.error('Edge function generate-image failed:', error);
+    logger.error('Edge function generate-image failed:', error);
     throw new Error('Failed to generate clothing image via Edge Function');
   }
 }
@@ -165,7 +166,7 @@ export async function analyzeShoppingGapsViaEdge(
 
     return data;
   } catch (error) {
-    console.error('Edge function shopping-assistant (analyze-gaps) failed:', error);
+    logger.error('Edge function shopping-assistant (analyze-gaps) failed:', error);
     throw new Error('Failed to analyze shopping gaps via Edge Function');
   }
 }
@@ -192,7 +193,7 @@ export async function generateShoppingRecommendationsViaEdge(
 
     return data;
   } catch (error) {
-    console.error('Edge function shopping-assistant (recommendations) failed:', error);
+    logger.error('Edge function shopping-assistant (recommendations) failed:', error);
     throw new Error('Failed to generate shopping recommendations via Edge Function');
   }
 }
@@ -219,7 +220,7 @@ export async function conversationalShoppingAssistantViaEdge(
 
     return data;
   } catch (error) {
-    console.error('Edge function shopping-assistant (chat) failed:', error);
+    logger.error('Edge function shopping-assistant (chat) failed:', error);
     throw new Error('Failed to chat with shopping assistant via Edge Function');
   }
 }
@@ -237,7 +238,7 @@ export async function checkEdgeFunctionsAvailable(): Promise<boolean> {
     // If no error, functions are available
     return !error;
   } catch (error) {
-    console.warn('Edge Functions not available:', error);
+    logger.warn('Edge Functions not available:', error);
     return false;
   }
 }

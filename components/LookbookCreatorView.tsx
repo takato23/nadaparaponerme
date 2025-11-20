@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import toast from 'react-hot-toast';
 import type { ClothingItem, Lookbook, LookbookTheme } from '../types';
 import { generateLookbook } from '../src/services/aiService';
 import Loader from './Loader';
@@ -77,7 +78,7 @@ const LookbookCreatorView = ({ closet, onClose }: LookbookCreatorViewProps) => {
       link.click();
     } catch (err) {
       console.error('Error exporting image:', err);
-      alert('Error al exportar imagen. Intentá de nuevo.');
+      toast.error('Error al exportar imagen. Intentá de nuevo.');
     } finally {
       setIsExporting(false);
     }
@@ -89,7 +90,7 @@ const LookbookCreatorView = ({ closet, onClose }: LookbookCreatorViewProps) => {
     try {
       // Check if Web Share API is supported
       if (!navigator.share) {
-        alert('Tu navegador no soporta compartir. Usa "Exportar Imagen" en su lugar.');
+        toast.warning('Tu navegador no soporta compartir. Usa "Exportar Imagen" en su lugar.');
         return;
       }
 

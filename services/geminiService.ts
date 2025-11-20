@@ -2,6 +2,7 @@ import { GoogleGenAI, Type, Part, Modality } from "@google/genai";
 import type { ClothingItemMetadata, ClothingItem, FitResult, PackingListResult, GroundingChunk, ColorPaletteAnalysis, ChatMessage, WeatherData, WeatherOutfitResult, Lookbook, LookbookTheme, ChallengeType, ChallengeDifficulty, FeedbackInsights, FeedbackPatternData, OutfitRating, SavedOutfit, ShoppingGap, ShoppingRecommendation, ShoppingChatMessage } from '../types';
 import { getSeason } from './weatherService';
 import { getToneInstructions } from './aiToneHelper';
+import { retryAIOperation } from '../utils/retryWithBackoff';
 
 /**
  * SECURITY NOTICE: API Key Management
@@ -46,49 +47,21 @@ function getAIClient(): GoogleGenAI {
 }
 
 /**
- * Retry helper with exponential backoff for handling temporary API errors
- * @param fn - Function to retry
- * @param maxRetries - Maximum number of retries (default: 3)
- * @param initialDelay - Initial delay in ms (default: 1000)
+ * Create enriched error with context
+ * Adds operation context to help with debugging and user-facing messages
  */
-async function retryWithBackoff<T>(
-  fn: () => Promise<T>,
-  maxRetries: number = 3,
-  initialDelay: number = 1000
-): Promise<T> {
-  let lastError: any;
+function enrichError(error: unknown, operation: string, context?: Record<string, any>): Error {
+  const err = error instanceof Error ? error : new Error(String(error));
 
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      return await fn();
-    } catch (error: any) {
-      lastError = error;
+  // Add operation context to error message
+  const contextStr = context ? ` | Context: ${JSON.stringify(context)}` : '';
+  err.message = `[${operation}] ${err.message}${contextStr}`;
 
-      // Check if error is retryable (503, 429, network errors)
-      const isRetryable =
-        error?.message?.includes('503') ||
-        error?.message?.includes('overloaded') ||
-        error?.message?.includes('UNAVAILABLE') ||
-        error?.message?.includes('429') ||
-        error?.message?.includes('rate limit') ||
-        error?.message?.includes('RESOURCE_EXHAUSTED') ||
-        error?.message?.includes('network');
+  // Add metadata for error handling
+  (err as any).operation = operation;
+  (err as any).context = context;
 
-      // If not retryable or last attempt, throw immediately
-      if (!isRetryable || attempt === maxRetries) {
-        throw error;
-      }
-
-      // Calculate delay with exponential backoff + jitter
-      const delay = initialDelay * Math.pow(2, attempt) + Math.random() * 1000;
-      console.warn(`API request failed (attempt ${attempt + 1}/${maxRetries + 1}), retrying in ${Math.round(delay)}ms...`, error.message);
-
-      // Wait before retrying
-      await new Promise(resolve => setTimeout(resolve, delay));
-    }
-  }
-
-  throw lastError;
+  return err;
 }
 
 // --- Analyze Item Service ---
@@ -144,18 +117,22 @@ function base64ToGenerativePart(base64Data: string, mimeType: string) {
 }
 
 export async function analyzeClothingItem(imageDataUrl: string): Promise<ClothingItemMetadata> {
-  const [mimeType, base64Data] = imageDataUrl.split(';base64,');
-  const imageMimeType = mimeType.split(':')[1];
-
-  if (!base64Data || !imageMimeType) {
-    throw new Error('Invalid image data URL');
-  }
-
-  const imagePart = base64ToGenerativePart(base64Data, imageMimeType);
-  const systemInstruction = `Eres un experto en moda. Analiza la prenda en la imagen y describe sus características, prestando especial atención a detalles como el tipo de cuello y de manga si son visibles.`;
-
   try {
-    const response = await retryWithBackoff(async () => {
+    const [mimeType, base64Data] = imageDataUrl.split(';base64,');
+    const imageMimeType = mimeType.split(':')[1];
+
+    if (!base64Data || !imageMimeType) {
+      throw enrichError(
+        new Error('Formato de imagen inválido'),
+        'analyzeClothingItem',
+        { hasBase64: !!base64Data, hasMimeType: !!imageMimeType }
+      );
+    }
+
+    const imagePart = base64ToGenerativePart(base64Data, imageMimeType);
+    const systemInstruction = `Eres un experto en moda. Analiza la prenda en la imagen y describe sus características, prestando especial atención a detalles como el tipo de cuello y de manga si son visibles.`;
+
+    const response = await retryAIOperation(async () => {
       return await getAIClient().models.generateContent({
         model: 'gemini-1.5-flash',
         contents: { parts: [imagePart] },
@@ -167,22 +144,67 @@ export async function analyzeClothingItem(imageDataUrl: string): Promise<Clothin
       });
     });
 
+    if (!response?.text) {
+      throw enrichError(
+        new Error('La IA no devolvió ninguna respuesta'),
+        'analyzeClothingItem',
+        { responseEmpty: true }
+      );
+    }
+
     const parsedJson = JSON.parse(response.text);
 
-    if (parsedJson.category && Array.isArray(parsedJson.vibe_tags) && Array.isArray(parsedJson.seasons)) {
-        return parsedJson as ClothingItemMetadata;
-    } else {
-        throw new Error('Parsed JSON does not match expected structure.');
+    if (!parsedJson.category || !Array.isArray(parsedJson.vibe_tags) || !Array.isArray(parsedJson.seasons)) {
+      throw enrichError(
+        new Error('La respuesta de IA no tiene el formato esperado'),
+        'analyzeClothingItem',
+        { hasCategory: !!parsedJson.category, hasVibeTags: Array.isArray(parsedJson.vibe_tags) }
+      );
     }
-  } catch (error) {
+
+    return parsedJson as ClothingItemMetadata;
+  } catch (error: any) {
     console.error("Error analyzing clothing item:", error);
 
-    // Provide more specific error message for API overload
-    if (error?.message?.includes('503') || error?.message?.includes('overloaded')) {
-        throw new Error("El servicio de IA está temporalmente sobrecargado. Por favor, intenta nuevamente en unos segundos.");
+    // Provide more specific error messages
+    if (error?.message?.includes('429') || error?.message?.includes('rate limit') || error?.message?.includes('RESOURCE_EXHAUSTED')) {
+      throw enrichError(
+        new Error('Límite de análisis alcanzado. Por favor esperá 30 minutos o upgradeá a Premium.'),
+        'analyzeClothingItem',
+        { errorType: 'rate_limit' }
+      );
     }
 
-    throw new Error("Failed to analyze image. The response might not be valid JSON.");
+    if (error?.message?.includes('503') || error?.message?.includes('overloaded') || error?.message?.includes('UNAVAILABLE')) {
+      throw enrichError(
+        new Error('El servicio de IA está temporalmente sobrecargado. Por favor, intenta nuevamente en unos segundos.'),
+        'analyzeClothingItem',
+        { errorType: 'service_overload' }
+      );
+    }
+
+    if (error?.message?.includes('dark') || error?.message?.includes('oscura')) {
+      throw enrichError(
+        new Error('La imagen está muy oscura. Por favor tomá la foto con mejor iluminación.'),
+        'analyzeClothingItem',
+        { errorType: 'dark_image' }
+      );
+    }
+
+    if (error?.message?.includes('timeout') || error?.message?.includes('deadline')) {
+      throw enrichError(
+        new Error('El análisis tardó demasiado. Por favor intentá de nuevo.'),
+        'analyzeClothingItem',
+        { errorType: 'timeout' }
+      );
+    }
+
+    // Re-throw enriched error or create generic one
+    throw error?.operation ? error : enrichError(
+      error,
+      'analyzeClothingItem',
+      { originalMessage: error?.message }
+    );
   }
 }
 
@@ -283,6 +305,68 @@ export async function generateOutfit(userPrompt: string, inventory: ClothingItem
 
         throw new Error("No se pudo generar un outfit. Inténtalo de nuevo.");
     }
+}
+
+/**
+ * Generate outfit with custom system prompt (for professional stylist)
+ * @param userPrompt - User's occasion/context
+ * @param inventory - Available clothing items
+ * @param customSystemPrompt - Custom system instruction
+ * @param responseSchema - Custom response schema
+ * @returns FitResult with potential educational fields
+ */
+export async function generateOutfitWithCustomPrompt(
+  userPrompt: string,
+  inventory: ClothingItem[],
+  customSystemPrompt: string,
+  responseSchema: any
+): Promise<any> {
+  console.log('🟢 [GEMINI] generateOutfitWithCustomPrompt iniciando...');
+  console.log('🟢 [GEMINI] Inventory size:', inventory.length);
+
+  const simplifiedInventory = inventory.map(item => ({
+    id: item.id,
+    metadata: item.metadata
+  }));
+
+  if (simplifiedInventory.length < 3) {
+    throw new Error("No hay suficientes prendas en tu armario. Añade al menos un top, un pantalón y un par de zapatos.");
+  }
+
+  try {
+    console.log('🟢 [GEMINI] Llamando a retryWithBackoff...');
+    const response = await retryWithBackoff(async () => {
+      console.log('🟢 [GEMINI] Dentro de retryWithBackoff, llamando a getAIClient()...');
+      return await getAIClient().models.generateContent({
+        model: 'gemini-2.5-pro',
+        contents: { parts: [{ text: `Aquí está la petición del usuario: "${userPrompt}"\n\nINVENTARIO DISPONIBLE:\n${JSON.stringify(simplifiedInventory, null, 2)}` }] },
+        config: {
+          systemInstruction: customSystemPrompt,
+          responseMimeType: "application/json",
+          responseSchema: responseSchema,
+        }
+      });
+    });
+
+    console.log('🟢 [GEMINI] Respuesta recibida, parseando JSON...');
+    const parsedJson = JSON.parse(response.text);
+    console.log('🟢 [GEMINI] JSON parseado exitosamente');
+
+    if (parsedJson.top_id && parsedJson.bottom_id && parsedJson.shoes_id && parsedJson.explanation) {
+      console.log('🟢 [GEMINI] Validación exitosa, retornando resultado');
+      return parsedJson;
+    } else {
+      throw new Error("La IA no pudo crear un outfit válido con las prendas disponibles.");
+    }
+  } catch (error) {
+    console.error("🔴 [GEMINI] Error generating outfit:", error);
+
+    if (error?.message?.includes('503') || error?.message?.includes('overloaded')) {
+      throw new Error("El servicio de IA está temporalmente sobrecargado. Por favor, intenta nuevamente en unos segundos.");
+    }
+
+    throw new Error("No se pudo generar un outfit. Inténtalo de nuevo.");
+  }
 }
 
 // --- Generate Packing List Service ---

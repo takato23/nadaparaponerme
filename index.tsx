@@ -4,7 +4,7 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { initGeminiForDevelopment } from './src/lib/gemini-dev-init';
-import ErrorBoundary from './src/components/ErrorBoundary';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 // Initialize Gemini API for development (no-op in production)
 initGeminiForDevelopment();

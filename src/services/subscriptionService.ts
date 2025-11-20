@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { logger } from '../utils/logger';
 
 export type SubscriptionTier = 'free' | 'pro' | 'premium';
 export type SubscriptionStatus = 'active' | 'past_due' | 'canceled' | 'trialing';
@@ -85,7 +86,7 @@ export async function getUserSubscription(): Promise<Subscription | null> {
         .single();
 
     if (error) {
-        console.error('Error fetching subscription:', error);
+        logger.error('Error fetching subscription:', error);
         return null;
     }
 
@@ -106,7 +107,7 @@ export async function getUserUsageMetrics(): Promise<UsageMetrics | null> {
         .single();
 
     if (error) {
-        console.error('Error fetching usage metrics:', error);
+        logger.error('Error fetching usage metrics:', error);
         return null;
     }
 
@@ -143,7 +144,7 @@ export async function canGenerateOutfit(): Promise<{ allowed: boolean; reason?: 
     });
 
     if (error) {
-        console.error('Error checking generation limit:', error);
+        logger.error('Error checking generation limit:', error);
         return { allowed: false, reason: 'Error checking limits' };
     }
 
@@ -176,7 +177,7 @@ export async function incrementAIGeneration(): Promise<boolean> {
     });
 
     if (error) {
-        console.error('Error incrementing generation count:', error);
+        logger.error('Error incrementing generation count:', error);
         return false;
     }
 
@@ -199,7 +200,7 @@ export async function createCheckoutSession(tier: SubscriptionTier): Promise<str
 
         return data.url;
     } catch (error) {
-        console.error('Error creating checkout session:', error);
+        logger.error('Error creating checkout session:', error);
         return null;
     }
 }
@@ -220,7 +221,7 @@ export async function createBillingPortalSession(): Promise<string | null> {
 
         return data.url;
     } catch (error) {
-        console.error('Error creating portal session:', error);
+        logger.error('Error creating portal session:', error);
         return null;
     }
 }

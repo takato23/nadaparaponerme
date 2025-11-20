@@ -9,6 +9,7 @@
 
 import type { ClothingItem, ClothingItemMetadata, FitResult, PackingListResult } from '../../types';
 import { getFeatureFlag } from '../config/features';
+import { logger } from '../utils/logger';
 import * as edgeClient from './edgeFunctionClient';
 import * as geminiService from '../../services/geminiService-rest';
 import * as geminiServiceFull from '../../services/geminiService';
@@ -19,7 +20,7 @@ if (import.meta.env.DEV && import.meta.env.VITE_GEMINI_API_KEY) {
   try {
     geminiServiceFull.configureGeminiAPI(import.meta.env.VITE_GEMINI_API_KEY);
   } catch (error) {
-    console.warn('Failed to configure Gemini API for development:', error);
+    logger.warn('Failed to configure Gemini API for development:', error);
   }
 }
 
@@ -35,7 +36,7 @@ export async function analyzeClothingItem(
     try {
       return await edgeClient.analyzeClothingViaEdge(imageDataUrl);
     } catch (error) {
-      console.error('Edge Function failed, falling back to direct API:', error);
+      logger.error('Edge Function failed, falling back to direct API:', error);
       // Fallback to direct API if Edge Function fails
       return await geminiService.analyzeClothingItem(imageDataUrl);
     }
@@ -86,7 +87,7 @@ export async function generateOutfit(
       const closetItemIds = closet.map(item => item.id);
       result = await edgeClient.generateOutfitViaEdge(prompt, closetItemIds);
     } catch (error) {
-      console.error('Edge Function failed, falling back to direct API:', error);
+      logger.error('Edge Function failed, falling back to direct API:', error);
       // Fallback to direct API if Edge Function fails
       result = await geminiServiceFull.generateOutfit(prompt, closet);
     }
@@ -98,7 +99,7 @@ export async function generateOutfit(
   // ✅ STEP 3: Increment usage counter (only on success)
   const incremented = await incrementAIGeneration();
   if (!incremented) {
-    console.warn('Failed to increment AI generation counter, but outfit was generated');
+    logger.warn('Failed to increment AI generation counter, but outfit was generated');
   }
 
   return result;
@@ -131,7 +132,7 @@ export async function generatePackingList(
       const closetItemIds = closet.map(item => item.id);
       result = await edgeClient.generatePackingListViaEdge(prompt, closetItemIds);
     } catch (error) {
-      console.error('Edge Function failed, falling back to direct API:', error);
+      logger.error('Edge Function failed, falling back to direct API:', error);
       // Fallback to direct API if Edge Function fails
       result = await geminiServiceFull.generatePackingList(prompt, closet);
     }
@@ -143,7 +144,7 @@ export async function generatePackingList(
   // ✅ STEP 3: Increment usage counter (only on success)
   const incremented = await incrementAIGeneration();
   if (!incremented) {
-    console.warn('Failed to increment AI generation counter, but packing list was generated');
+    logger.warn('Failed to increment AI generation counter, but packing list was generated');
   }
 
   return result;
@@ -160,7 +161,7 @@ export async function generateClothingImage(prompt: string): Promise<string> {
     try {
       return await edgeClient.generateClothingImageViaEdge(prompt);
     } catch (error) {
-      console.error('Edge Function failed, falling back to direct API:', error);
+      logger.error('Edge Function failed, falling back to direct API:', error);
       return await geminiServiceFull.generateClothingImage(prompt);
     }
   }
@@ -187,7 +188,7 @@ export async function analyzeShoppingGaps(
       }));
       return await edgeClient.analyzeShoppingGapsViaEdge(simplifiedCloset);
     } catch (error) {
-      console.error('Edge Function failed, falling back to direct API:', error);
+      logger.error('Edge Function failed, falling back to direct API:', error);
       return await geminiServiceFull.analyzeShoppingGaps(closet);
     }
   }
@@ -215,7 +216,7 @@ export async function generateShoppingRecommendations(
       }));
       return await edgeClient.generateShoppingRecommendationsViaEdge(gaps, simplifiedCloset, budget);
     } catch (error) {
-      console.error('Edge Function failed, falling back to direct API:', error);
+      logger.error('Edge Function failed, falling back to direct API:', error);
       return await geminiServiceFull.generateShoppingRecommendations(gaps, closet, budget);
     }
   }
@@ -246,7 +247,7 @@ export async function conversationalShoppingAssistant(
       };
       return await edgeClient.conversationalShoppingAssistantViaEdge(userMessage, chatHistory, context);
     } catch (error) {
-      console.error('Edge Function failed, falling back to direct API:', error);
+      logger.error('Edge Function failed, falling back to direct API:', error);
       return await geminiServiceFull.conversationalShoppingAssistant(
         userMessage,
         chatHistory,
@@ -285,7 +286,7 @@ export async function generateVirtualTryOn(
     try {
       return await edgeClient.generateVirtualTryOnViaEdge(userImage, topImage, bottomImage, shoesImage);
     } catch (error) {
-      console.error('Edge Function failed, falling back to direct API:', error);
+      logger.error('Edge Function failed, falling back to direct API:', error);
       return await geminiServiceFull.generateVirtualTryOn(userImage, topImage, bottomImage, shoesImage);
     }
   }
@@ -338,13 +339,13 @@ export async function generateCapsuleWardrobe(
     if (apiKey) {
       try {
         geminiServiceFull.configureGeminiAPI(apiKey);
-        console.log('✅ Gemini API configured for development');
+        logger.log('✅ Gemini API configured for development');
       } catch (error) {
         // API key already configured, ignore
-        console.log('⚠️ Gemini API configuration skipped (already configured)');
+        logger.log('⚠️ Gemini API configuration skipped (already configured)');
       }
     } else {
-      console.warn('⚠️ VITE_GEMINI_API_KEY not found. Add it to .env.local for development.');
+      logger.warn('⚠️ VITE_GEMINI_API_KEY not found. Add it to .env.local for development.');
       throw new Error(
         'Gemini API key not configured. Please add VITE_GEMINI_API_KEY to your .env.local file for development, ' +
         'or use Supabase Edge Functions in production.'

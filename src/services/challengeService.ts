@@ -5,6 +5,7 @@
 
 import { supabase } from '../lib/supabase';
 import { getSessionUser } from './authService';
+import { logger } from '../utils/logger';
 import type { StyleChallenge, ChallengeStatus } from '../../types';
 import type { StyleChallengeInsert, StyleChallengeUpdate } from '../types/api';
 
@@ -30,10 +31,10 @@ export async function getUserChallenges(status?: ChallengeStatus): Promise<Style
   const { data, error } = await query;
 
   if (error) {
-    console.error('Error fetching challenges:', error);
+    logger.error('Error fetching challenges:', error);
     // Si la tabla no existe (PGRST205), retornar array vacío
     if (error.code === 'PGRST205' || error.message?.includes('style_challenges')) {
-      console.warn('La tabla style_challenges no existe. Ejecuta la migración apply_style_challenges.sql en Supabase.');
+      logger.warn('La tabla style_challenges no existe. Ejecuta la migración apply_style_challenges.sql en Supabase.');
       return [];
     }
     throw new Error('Error al obtener desafíos');
@@ -59,7 +60,7 @@ export async function getChallengeById(challengeId: string): Promise<StyleChalle
     .single();
 
   if (error) {
-    console.error('Error fetching challenge:', error);
+    logger.error('Error fetching challenge:', error);
     throw new Error('Error al obtener desafío');
   }
 
@@ -85,7 +86,7 @@ export async function createChallenge(challenge: Omit<StyleChallengeInsert, 'use
     .single();
 
   if (error) {
-    console.error('Error creating challenge:', error);
+    logger.error('Error creating challenge:', error);
     throw new Error('Error al crear desafío');
   }
 
@@ -114,7 +115,7 @@ export async function updateChallenge(
     .single();
 
   if (error) {
-    console.error('Error updating challenge:', error);
+    logger.error('Error updating challenge:', error);
     throw new Error('Error al actualizar desafío');
   }
 
@@ -160,7 +161,7 @@ export async function deleteChallenge(challengeId: string): Promise<void> {
     .eq('user_id', user.id);
 
   if (error) {
-    console.error('Error deleting challenge:', error);
+    logger.error('Error deleting challenge:', error);
     throw new Error('Error al eliminar desafío');
   }
 }
@@ -185,10 +186,10 @@ export async function getChallengeStats(): Promise<{
     .eq('user_id', user.id);
 
   if (error) {
-    console.error('Error fetching challenge stats:', error);
+    logger.error('Error fetching challenge stats:', error);
     // Si la tabla no existe (PGRST205), retornar estadísticas vacías
     if (error.code === 'PGRST205' || error.message?.includes('style_challenges')) {
-      console.warn('La tabla style_challenges no existe. Ejecuta la migración apply_style_challenges.sql en Supabase.');
+      logger.warn('La tabla style_challenges no existe. Ejecuta la migración apply_style_challenges.sql en Supabase.');
       return {
         total: 0,
         active: 0,

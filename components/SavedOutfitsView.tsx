@@ -1,5 +1,6 @@
 // FIX: Create component to resolve 'not a module' error.
 import React, { useState, useMemo } from 'react';
+import toast from 'react-hot-toast';
 import type { SavedOutfit, ClothingItem } from '../types';
 import { Card } from './ui/Card';
 import { EmptyState } from './ui/EmptyState';
@@ -102,12 +103,12 @@ const SavedOutfitsView = ({ savedOutfits, closet, onSelectOutfit }: SavedOutfits
       } catch (error) {
         // Fallback: copy to clipboard
         navigator.clipboard.writeText(outfit.explanation);
-        alert('¡Outfit copiado al portapapeles!');
+        toast.success('¡Outfit copiado al portapapeles!');
       }
     } else {
       // Fallback for browsers without Share API
       navigator.clipboard.writeText(outfit.explanation);
-      alert('¡Outfit copiado al portapapeles!');
+      toast.success('¡Outfit copiado al portapapeles!');
     }
   };
 

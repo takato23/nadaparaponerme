@@ -8,6 +8,7 @@
 import { supabase } from '../lib/supabase';
 import type { SavedOutfit, FitResult } from '../../types';
 import type { Database } from '../types/api';
+import { logger } from '../../utils/logger';
 
 type OutfitRow = Database['public']['Tables']['outfits']['Row'];
 type OutfitInsert = Database['public']['Tables']['outfits']['Insert'];
@@ -48,7 +49,7 @@ export async function getSavedOutfits(): Promise<SavedOutfit[]> {
 
     return data.map(convertToLegacyFormat);
   } catch (error) {
-    console.error('Failed to fetch saved outfits:', error);
+    logger.error('Failed to fetch saved outfits:', error);
     throw error;
   }
 }
@@ -76,7 +77,7 @@ export async function getSavedOutfit(id: string): Promise<SavedOutfit | null> {
 
     return convertToLegacyFormat(data);
   } catch (error) {
-    console.error('Failed to fetch saved outfit:', error);
+    logger.error('Failed to fetch saved outfit:', error);
     throw error;
   }
 }
@@ -117,7 +118,7 @@ export async function saveOutfit(
 
     return convertToLegacyFormat(data);
   } catch (error) {
-    console.error('Failed to save outfit:', error);
+    logger.error('Failed to save outfit:', error);
     throw error;
   }
 }
@@ -155,7 +156,7 @@ export async function updateOutfit(
 
     return convertToLegacyFormat(data);
   } catch (error) {
-    console.error('Failed to update outfit:', error);
+    logger.error('Failed to update outfit:', error);
     throw error;
   }
 }
@@ -176,7 +177,7 @@ export async function deleteOutfit(id: string): Promise<void> {
 
     if (error) throw error;
   } catch (error) {
-    console.error('Failed to delete outfit:', error);
+    logger.error('Failed to delete outfit:', error);
     throw error;
   }
 }
@@ -212,7 +213,7 @@ export async function toggleOutfitVisibility(id: string): Promise<boolean> {
 
     return newVisibility;
   } catch (error) {
-    console.error('Failed to toggle outfit visibility:', error);
+    logger.error('Failed to toggle outfit visibility:', error);
     throw error;
   }
 }

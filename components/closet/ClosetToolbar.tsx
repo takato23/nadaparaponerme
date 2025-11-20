@@ -46,6 +46,11 @@ interface ClosetToolbarProps {
   totalItems: number;
   filteredCount: number;
 
+  // Color Filter
+  selectedColor?: string | null;
+  onColorFilter?: (color: string | null) => void;
+  availableColors?: string[];
+
   // UI
   compact?: boolean;
 }
@@ -75,6 +80,9 @@ export default function ClosetToolbar({
   selectedCount = 0,
   totalItems,
   filteredCount,
+  selectedColor,
+  onColorFilter,
+  availableColors = [],
   compact = false
 }: ClosetToolbarProps) {
   const [showSortMenu, setShowSortMenu] = useState(false);
@@ -134,7 +142,14 @@ export default function ClosetToolbar({
 
   // Normal Toolbar
   return (
-    <div className="space-y-3 px-4 py-3 sticky top-0 z-20 bg-background/80 backdrop-blur-md border-b border-white/10">
+    <div
+      className="space-y-3 px-4 py-3 sticky top-0 z-20 border-b border-white/10 transition-all duration-300"
+      style={{
+        backdropFilter: `blur(var(--glass-blur)) saturate(var(--glass-saturation))`,
+        WebkitBackdropFilter: `blur(var(--glass-blur)) saturate(var(--glass-saturation))`,
+        backgroundColor: `rgba(255, 255, 255, var(--glass-opacity))`
+      }}
+    >
       {/* Top Row: Search + Actions */}
       <div className="flex items-center gap-3">
         {/* Search Bar */}
@@ -191,6 +206,44 @@ export default function ClosetToolbar({
           </button>
         )}
       </div>
+
+      {/* Color Filter Pills (if colors available and onColorFilter provided) */}
+      {onColorFilter && availableColors.length > 0 && (
+        <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide pb-2">
+          <span className="text-xs font-bold text-text-secondary dark:text-gray-400 flex-shrink-0">
+            Colores:
+          </span>
+          {availableColors.map((color) => (
+            <motion.button
+              key={color}
+              onClick={() => onColorFilter(selectedColor === color ? null : color)}
+              className={`
+                w-8 h-8 rounded-full border-2 transition-all flex-shrink-0 shadow-sm
+                ${selectedColor === color
+                  ? 'border-primary ring-2 ring-primary/30 scale-110'
+                  : 'border-white/60 hover:border-primary/40 hover:scale-105'
+                }
+              `}
+              style={{ backgroundColor: color }}
+              whileHover={{ scale: selectedColor === color ? 1.1 : 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              title={color}
+              aria-label={`Filter by color ${color}`}
+            />
+          ))}
+          {selectedColor && (
+            <motion.button
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              onClick={() => onColorFilter(null)}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-gray-100 dark:bg-gray-800 text-xs font-medium text-text-secondary dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors flex-shrink-0"
+            >
+              <span className="material-symbols-outlined text-sm">close</span>
+              <span>Limpiar</span>
+            </motion.button>
+          )}
+        </div>
+      )}
 
       {/* Bottom Row: Filters + Sort + View */}
       <div className="flex items-center gap-2 flex-wrap">
@@ -249,7 +302,7 @@ export default function ClosetToolbar({
                   initial={{ opacity: 0, y: 10, scale: 0.95 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                  className="absolute top-full mt-2 right-0 z-20 bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl rounded-2xl shadow-xl border border-white/20 py-2 min-w-[200px] overflow-hidden"
+                  className="absolute top-full mt-2 right-0 z-20 glass-card rounded-2xl py-2 min-w-[200px] overflow-hidden"
                 >
                   {SORT_OPTIONS.map((option) => (
                     <button
@@ -273,7 +326,7 @@ export default function ClosetToolbar({
         </div>
 
         {/* View Mode Switcher */}
-        <div className="hidden md:flex items-center gap-1 bg-white/50 dark:bg-black/20 rounded-xl p-1 border border-white/10">
+        <div className="flex items-center gap-1 bg-white/50 dark:bg-black/20 rounded-xl p-1 border border-white/10">
           <button
             onClick={() => onViewModeChange('grid')}
             className={`
@@ -300,16 +353,20 @@ export default function ClosetToolbar({
           >
             <span className="material-symbols-outlined text-xl">view_list</span>
           </button>
-          {onPresentationMode && (
-            <button
-              onClick={onPresentationMode}
-              className="p-2 rounded-lg text-text-secondary dark:text-gray-400 hover:text-primary hover:bg-black/5 dark:hover:bg-white/5 transition-all duration-300"
-              aria-label="Modo Presentación"
-              title="Modo Presentación"
-            >
-              <span className="material-symbols-outlined text-xl">play_circle</span>
-            </button>
-          )}
+          <button
+            onClick={() => onViewModeChange('carousel')}
+            className={`
+              p-2 rounded-lg transition-all duration-300
+              ${viewMode === 'carousel'
+                ? 'bg-white dark:bg-gray-700 text-primary shadow-sm'
+                : 'text-text-secondary dark:text-gray-400 hover:text-text-primary dark:hover:text-gray-200 hover:bg-black/5 dark:hover:bg-white/5'
+              }
+            `}
+            aria-label="Vista Carrusel"
+            title="Vista Carrusel"
+          >
+            <span className="material-symbols-outlined text-xl">view_carousel</span>
+          </button>
         </div>
 
         {/* Selection Mode Toggle (Desktop) */}

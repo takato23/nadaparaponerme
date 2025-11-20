@@ -11,9 +11,11 @@
  * - Premium glassmorphism design
  */
 
-import React, { useState } from 'react';
+import React, { useState, Suspense, lazy } from 'react';
 import type { Collection } from '../../types/closet';
 import { motion, AnimatePresence } from 'framer-motion';
+
+const ConfirmDeleteModal = lazy(() => import('../ui/ConfirmDeleteModal'));
 
 interface ClosetCollectionsProps {
   collections: Collection[];
@@ -65,6 +67,10 @@ export default function ClosetCollections({
   const [newCollectionName, setNewCollectionName] = useState('');
   const [selectedColor, setSelectedColor] = useState(COLOR_OPTIONS[0].value);
   const [selectedIcon, setSelectedIcon] = useState(ICON_OPTIONS[0]);
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    isOpen: boolean;
+    collection: Collection | null;
+  }>({ isOpen: false, collection: null });
 
   const handleCreateCollection = () => {
     if (newCollectionName.trim()) {
@@ -91,15 +97,15 @@ export default function ClosetCollections({
     }
   };
 
-  const handleDeleteCollection = (collection: Collection) => {
+  const handleDeleteCollectionClick = (collection: Collection) => {
     if (collection.isDefault) return;
+    setDeleteConfirm({ isOpen: true, collection });
+  };
 
-    const confirmed = window.confirm(
-      `¿Eliminar la colección "${collection.name}"? Los items no se eliminarán.`
-    );
-
-    if (confirmed) {
-      onDeleteCollection(collection.id);
+  const handleConfirmDelete = () => {
+    if (deleteConfirm.collection) {
+      onDeleteCollection(deleteConfirm.collection.id);
+      setDeleteConfirm({ isOpen: false, collection: null });
     }
   };
 
@@ -202,7 +208,7 @@ export default function ClosetCollections({
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleDeleteCollection(collection);
+                      handleDeleteCollectionClick(collection);
                     }}
                     className="w-7 h-7 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-500 flex items-center justify-center transition-colors"
                     aria-label="Eliminar colección"
@@ -314,6 +320,18 @@ export default function ClosetCollections({
           </div>
         )}
       </AnimatePresence>
+
+      {/* Delete Confirmation Modal */}
+      <Suspense fallback={null}>
+        <ConfirmDeleteModal
+          isOpen={deleteConfirm.isOpen}
+          onClose={() => setDeleteConfirm({ isOpen: false, collection: null })}
+          onConfirm={handleConfirmDelete}
+          itemName={deleteConfirm.collection?.name}
+          itemType="colección"
+          warningMessage="Los items no se eliminarán, solo la colección."
+        />
+      </Suspense>
     </div>
   );
 }

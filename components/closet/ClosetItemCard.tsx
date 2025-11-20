@@ -122,8 +122,9 @@ export default function ClosetItemCard({
               type="checkbox"
               checked={isSelected}
               onChange={() => onToggleSelection?.(item.id)}
-              className="w-5 h-5 rounded-md border-gray-300 text-primary focus:ring-primary transition-colors"
+              className="w-5 h-5 rounded-md border-gray-300 text-primary focus:ring-primary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
               onClick={(e) => e.stopPropagation()}
+              aria-label={`Seleccionar ${item.metadata?.subcategory || 'prenda'}`}
             />
           </div>
         )}
@@ -174,11 +175,13 @@ export default function ClosetItemCard({
         {/* Quick actions */}
         <div className="flex-shrink-0">
           <button
+            type="button"
             onClick={(e) => handleQuickAction('edit', e)}
-            className="w-10 h-10 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center justify-center transition-colors text-text-secondary"
-            aria-label="Editar"
+            className="w-10 h-10 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center justify-center transition-colors text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+            aria-label={`Editar ${item.metadata?.subcategory || 'prenda'}`}
+            title="Editar"
           >
-            <span className="material-symbols-outlined text-xl">edit</span>
+            <span className="material-symbols-outlined text-xl" aria-hidden="true">edit</span>
           </button>
         </div>
       </motion.div>
@@ -188,6 +191,7 @@ export default function ClosetItemCard({
   // Grid view layout
   return (
     <motion.div
+      layoutId={`item-${item.id}`}
       layout
       whileHover={{ y: -8, scale: 1.02, transition: { duration: 0.3, ease: "easeOut" } }}
       whileTap={{ scale: 0.98 }}
@@ -196,12 +200,22 @@ export default function ClosetItemCard({
         relative rounded-2xl overflow-hidden cursor-pointer glass-card group
         ${sizeClasses[size]}
         ${isSelected ? 'ring-2 ring-primary ring-offset-2 ring-offset-background-light dark:ring-offset-background-dark' : ''}
+        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2
       `}
       onClick={handleClick}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
+      role="button"
+      tabIndex={0}
+      aria-label={`${item.metadata?.subcategory || 'Prenda'} - ${item.metadata?.color_primary || 'sin color'}${isSelected ? ' - Seleccionada' : ''}`}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          handleClick(e as any);
+        }
+      }}
     >
       {/* Image container */}
       <div className={`relative ${imageSizeClasses[size]} overflow-hidden`}>
@@ -272,33 +286,39 @@ export default function ClosetItemCard({
               className="absolute bottom-4 left-0 right-0 z-20 hidden md:flex items-center justify-center gap-3"
             >
               <motion.button
+                type="button"
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.9 }}
                 onClick={(e) => handleQuickAction('favorite', e)}
-                className="w-10 h-10 rounded-full bg-white/90 text-primary shadow-lg flex items-center justify-center backdrop-blur-sm hover:bg-white"
+                className="w-10 h-10 rounded-full bg-white/90 text-primary shadow-lg flex items-center justify-center backdrop-blur-sm hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+                aria-label={`Marcar como favorito ${item.metadata?.subcategory || 'prenda'}`}
                 title="Favorito"
               >
-                <span className="material-symbols-outlined text-xl">favorite</span>
+                <span className="material-symbols-outlined text-xl" aria-hidden="true">favorite</span>
               </motion.button>
 
               <motion.button
+                type="button"
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.9 }}
                 onClick={(e) => handleQuickAction('edit', e)}
-                className="w-10 h-10 rounded-full bg-white/90 text-gray-700 shadow-lg flex items-center justify-center backdrop-blur-sm hover:bg-white"
+                className="w-10 h-10 rounded-full bg-white/90 text-gray-700 shadow-lg flex items-center justify-center backdrop-blur-sm hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+                aria-label={`Editar ${item.metadata?.subcategory || 'prenda'}`}
                 title="Editar"
               >
-                <span className="material-symbols-outlined text-xl">edit</span>
+                <span className="material-symbols-outlined text-xl" aria-hidden="true">edit</span>
               </motion.button>
 
               <motion.button
+                type="button"
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.9 }}
                 onClick={(e) => handleQuickAction('delete', e)}
-                className="w-10 h-10 rounded-full bg-white/90 text-red-500 shadow-lg flex items-center justify-center backdrop-blur-sm hover:bg-white"
+                className="w-10 h-10 rounded-full bg-white/90 text-red-500 shadow-lg flex items-center justify-center backdrop-blur-sm hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+                aria-label={`Eliminar ${item.metadata?.subcategory || 'prenda'}`}
                 title="Eliminar"
               >
-                <span className="material-symbols-outlined text-xl">delete</span>
+                <span className="material-symbols-outlined text-xl" aria-hidden="true">delete</span>
               </motion.button>
             </motion.div>
           )}

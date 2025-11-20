@@ -4,6 +4,7 @@
  */
 
 import { supabase } from '../lib/supabase';
+import { logger } from '../utils/logger';
 import type {
   MultiplayerChallenge,
   ChallengeSubmission,
@@ -111,7 +112,7 @@ export async function getChallenges(options?: {
       tags: challenge.tags || []
     }));
   } catch (error) {
-    console.error('Error fetching challenges:', error);
+    logger.error('Error fetching challenges:', error);
     return [];
   }
 }
@@ -163,7 +164,7 @@ export async function getChallenge(challengeId: string): Promise<MultiplayerChal
       tags: data.tags || []
     };
   } catch (error) {
-    console.error('Error fetching challenge:', error);
+    logger.error('Error fetching challenge:', error);
     return null;
   }
 }
@@ -190,7 +191,7 @@ export async function createChallenge(input: CreateChallengeInput): Promise<Mult
     // Get full challenge data
     return await getChallenge(data.id);
   } catch (error) {
-    console.error('Error creating challenge:', error);
+    logger.error('Error creating challenge:', error);
     return null;
   }
 }
@@ -213,7 +214,7 @@ export async function joinChallenge(challengeId: string): Promise<boolean> {
     if (error) throw error;
     return true;
   } catch (error) {
-    console.error('Error joining challenge:', error);
+    logger.error('Error joining challenge:', error);
     return false;
   }
 }
@@ -235,7 +236,7 @@ export async function leaveChallenge(challengeId: string): Promise<boolean> {
     if (error) throw error;
     return true;
   } catch (error) {
-    console.error('Error leaving challenge:', error);
+    logger.error('Error leaving challenge:', error);
     return false;
   }
 }
@@ -284,7 +285,7 @@ export async function getChallengeSubmissions(challengeId: string): Promise<Chal
       winner_badge: submission.winner_badge
     }));
   } catch (error) {
-    console.error('Error fetching submissions:', error);
+    logger.error('Error fetching submissions:', error);
     return [];
   }
 }
@@ -312,7 +313,7 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Ch
     const submissions = await getChallengeSubmissions(input.challenge_id);
     return submissions.find(s => s.id === data.id) || null;
   } catch (error) {
-    console.error('Error creating submission:', error);
+    logger.error('Error creating submission:', error);
     return null;
   }
 }
@@ -340,7 +341,7 @@ export async function voteForSubmission(submissionId: string, challengeId: strin
     if (error) throw error;
     return true;
   } catch (error) {
-    console.error('Error voting:', error);
+    logger.error('Error voting:', error);
     return false;
   }
 }
@@ -362,7 +363,7 @@ export async function removeVote(submissionId: string): Promise<boolean> {
     if (error) throw error;
     return true;
   } catch (error) {
-    console.error('Error removing vote:', error);
+    logger.error('Error removing vote:', error);
     return false;
   }
 }
@@ -436,7 +437,7 @@ export async function getLeaderboard(limit: number = 10): Promise<ChallengeLeade
       best_streak: entry.best_streak || 0
     }));
   } catch (error) {
-    console.error('Error fetching leaderboard:', error);
+    logger.error('Error fetching leaderboard:', error);
     return [];
   }
 }
@@ -488,7 +489,7 @@ export async function getUserStats(userId?: string): Promise<ChallengeLeaderboar
       best_streak: data.best_streak || 0
     };
   } catch (error) {
-    console.error('Error fetching user stats:', error);
+    logger.error('Error fetching user stats:', error);
     return null;
   }
 }
@@ -519,7 +520,7 @@ export async function getAchievements(): Promise<ChallengeAchievement[]> {
       requirement: achievement.requirement
     }));
   } catch (error) {
-    console.error('Error fetching achievements:', error);
+    logger.error('Error fetching achievements:', error);
     return [];
   }
 }
@@ -549,7 +550,7 @@ export async function getUserAchievements(userId?: string): Promise<ChallengeAch
       unlocked_at: ua.unlocked_at
     }));
   } catch (error) {
-    console.error('Error fetching user achievements:', error);
+    logger.error('Error fetching user achievements:', error);
     return [];
   }
 }

@@ -6,6 +6,7 @@
 
 import { supabase } from '../lib/supabase';
 import type { SortOption } from '../../types';
+import { logger } from '../../utils/logger';
 
 /**
  * Get sort preferences from Supabase
@@ -46,7 +47,7 @@ export async function getSortPreferences(userId: string): Promise<SortOption | n
 
     return null;
   } catch (error) {
-    console.error('Failed to load sort preferences from Supabase:', error);
+    logger.error('Failed to load sort preferences from Supabase:', error);
     return null;
   }
 }
@@ -83,7 +84,7 @@ export async function updateSortPreferences(
 
     if (error) throw error;
   } catch (error) {
-    console.error('Failed to save sort preferences to Supabase:', error);
+    logger.error('Failed to save sort preferences to Supabase:', error);
     throw error;
   }
 }
@@ -106,7 +107,7 @@ export async function getStylePreferences(userId: string): Promise<string[]> {
 
     return (data?.style_preferences as string[]) || [];
   } catch (error) {
-    console.error('Failed to load style preferences from Supabase:', error);
+    logger.error('Failed to load style preferences from Supabase:', error);
     return [];
   }
 }
@@ -129,7 +130,7 @@ export async function updateStylePreferences(
 
     if (error) throw error;
   } catch (error) {
-    console.error('Failed to update style preferences:', error);
+    logger.error('Failed to update style preferences:', error);
     throw error;
   }
 }

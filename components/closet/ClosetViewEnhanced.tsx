@@ -24,6 +24,7 @@ import ClosetGridMasonry from './ClosetGridMasonry';
 import ClosetBulkActions from './ClosetBulkActions';
 import ClosetPresentationMode from './ClosetPresentationMode';
 import VisualSearchModal from './VisualSearchModal';
+import { CoverFlowCarousel } from './CoverFlowCarousel';
 import { useCloset } from '../../contexts/ClosetContext';
 import { getUniqueColors, getUniqueTags, getUniqueSeasons } from '../../utils/closetUtils';
 import type { ClothingItem } from '../../types';
@@ -46,6 +47,9 @@ export default function ClosetViewEnhanced({
     viewPreferences,
     sortOption,
     setSortOption,
+    selectedColor,
+    setSelectedColor,
+    availableColors,
     selection,
     enterSelectionMode,
     exitSelectionMode,
@@ -66,8 +70,7 @@ export default function ClosetViewEnhanced({
   // Visual search state
   const [isVisualSearchOpen, setIsVisualSearchOpen] = useState(false);
 
-  // Extract unique values for filter options
-  const availableColors = useMemo(() => getUniqueColors(items), [items]);
+  // Extract unique values for filter options (colors now come from context)
   const availableTags = useMemo(() => getUniqueTags(items), [items]);
   const availableSeasons = useMemo(() => getUniqueSeasons(items), [items]);
 
@@ -135,9 +138,8 @@ export default function ClosetViewEnhanced({
 
     switch (action) {
       case 'view':
-        // Open presentation mode instead of just clicking
-        const index = displayItems.findIndex(i => i.id === item.id);
-        setPresentationMode({ isOpen: true, initialIndex: index >= 0 ? index : 0 });
+        // Open Item Detail View
+        onItemClick(item.id);
         break;
 
       case 'edit':
@@ -168,10 +170,10 @@ export default function ClosetViewEnhanced({
       default:
         console.log('Unknown quick action:', action);
     }
-  }, [onItemClick]);
+  }, [onItemClick, displayItems]);
 
   return (
-    <div className="flex h-full bg-gradient-to-br from-background-start to-background-end">
+    <div className="flex h-full bg-transparent">
       {/* Desktop Sidebar */}
       <ClosetSidebar
         collections={collections.collections}
@@ -201,7 +203,7 @@ export default function ClosetViewEnhanced({
             onSortChange={setSortOption}
             viewMode={viewPreferences.currentViewMode}
             onViewModeChange={viewPreferences.setViewMode}
-            onPresentationMode={() => setPresentationMode({ isOpen: true, initialIndex: 0 })}
+            onPresentationMode={() => viewPreferences.setViewMode('carousel')}
             onVisualSearch={() => setIsVisualSearchOpen(true)}
             onAddItem={onAddItem}
             onToggleSelection={selection.isSelectionMode ? exitSelectionMode : enterSelectionMode}
@@ -209,21 +211,14 @@ export default function ClosetViewEnhanced({
             selectedCount={selection.selectedIds.size}
             totalItems={totalItems}
             filteredCount={filteredCount}
+            selectedColor={selectedColor}
+            onColorFilter={setSelectedColor}
+            availableColors={availableColors}
           />
 
           {/* Grid/List Content */}
           <div className="flex-1 overflow-hidden">
-            {/* Debug Log */}
-            {(() => {
-              console.log('ClosetViewEnhanced Render:', {
-                displayItemsCount: displayItems.length,
-                firstItem: displayItems[0],
-                viewMode: viewPreferences.currentViewMode,
-                isDesktop: viewPreferences.isDesktop,
-                hasFilters: filters.hasFilters
-              });
-              return null;
-            })()}
+            {/* Debug Log removed */}
 
             {/* Render masonry layout for desktop, virtualized grid for mobile/list */}
             {viewPreferences.currentViewMode === 'masonry' && viewPreferences.isDesktop ? (
@@ -249,6 +244,11 @@ export default function ClosetViewEnhanced({
                 }
                 onEmptyAction={filters.hasFilters ? filters.clearFilters : onAddItem}
                 emptyActionLabel={filters.hasFilters ? 'Limpiar Filtros' : 'Agregar Prenda'}
+              />
+            ) : viewPreferences.currentViewMode === 'carousel' ? (
+              <CoverFlowCarousel
+                items={displayItems}
+                onItemClick={onItemClick}
               />
             ) : (
               <ClosetGridVirtualized

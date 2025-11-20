@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import toast from 'react-hot-toast';
 import type { ClothingItem, ClothingItemMetadata } from '../types';
 import Loader from './Loader';
 import MetadataEditModal from './MetadataEditModal';
@@ -68,7 +69,7 @@ export default function BulkUploadView({ onClose, onAddItemsLocal, onClosetSync,
 
     // Validate file count
     if (uploadItems.length + files.length > MAX_FILES) {
-      alert(`Máximo ${MAX_FILES} fotos por sesión`);
+      toast.error(`Máximo ${MAX_FILES} fotos por sesión`);
       return;
     }
 
@@ -80,11 +81,11 @@ export default function BulkUploadView({ onClose, onAddItemsLocal, onClosetSync,
     // Validate file sizes and types
     const validFiles = files.filter(file => {
       if (file.size > MAX_FILE_SIZE) {
-        alert(`${file.name} es demasiado grande (máx 10MB)`);
+        toast.error(`${file.name} es demasiado grande (máx 10MB)`);
         return false;
       }
       if (!file.type.startsWith('image/')) {
-        alert(`${file.name} no es una imagen válida`);
+        toast.error(`${file.name} no es una imagen válida`);
         return false;
       }
       return true;
@@ -154,7 +155,7 @@ export default function BulkUploadView({ onClose, onAddItemsLocal, onClosetSync,
       }
     } catch (error) {
       console.error('Error loading images:', error);
-      alert('Error al cargar algunas imágenes');
+      toast.error('Error al cargar algunas imágenes');
     }
   };
 
@@ -331,7 +332,7 @@ export default function BulkUploadView({ onClose, onAddItemsLocal, onClosetSync,
     const successItems = uploadItems.filter(item => item.status === 'success' && item.metadata);
 
     if (successItems.length === 0) {
-      alert('No hay items procesados exitosamente');
+      toast.warning('No hay items procesados exitosamente');
       return;
     }
 
@@ -350,7 +351,7 @@ export default function BulkUploadView({ onClose, onAddItemsLocal, onClosetSync,
         onClose();
       } catch (error) {
         console.error('Error saving items to Supabase:', error);
-        alert('Error al guardar prendas. Intentá nuevamente.');
+        toast.error('Error al guardar prendas. Intentá nuevamente.');
       } finally {
         setIsSaving(false);
       }

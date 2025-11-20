@@ -1,9 +1,12 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import type { User } from '@supabase/supabase-js';
 import type { ClothingItem } from '../types';
-import OjoDeLocaLogo from './OjoDeLocaLogo';
-import { Card } from './ui/Card';
+import { Hero3D } from './home/Hero3D';
+import { HomeQuickActions } from './home/HomeQuickActions';
+import { HomeFeatureCard } from './home/HomeFeatureCard';
+import { HomeCategorySection } from './home/HomeCategorySection';
+import { Feature } from './home/types';
+import WeatherCard from './WeatherCard';
 
 interface HomeViewProps {
   user: User | null;
@@ -31,16 +34,9 @@ interface HomeViewProps {
   onStartVirtualShopping: () => void;
   onStartMultiplayerChallenges: () => void;
   onStartBulkUpload: () => void;
-}
-
-interface Feature {
-  id: string;
-  icon: string;
-  title: string;
-  description: string;
-  onClick: () => void;
-  category: 'essential' | 'create' | 'social' | 'advanced';
-  keywords: string[];
+  hasProfessionalProfile?: boolean;
+  onShowProfessionalWizard?: () => void;
+  onStartOutfitTesting?: () => void;
 }
 
 const HomeView = ({
@@ -68,29 +64,17 @@ const HomeView = ({
   onStartActivityFeed,
   onStartVirtualShopping,
   onStartMultiplayerChallenges,
-  onStartBulkUpload
+  onStartBulkUpload,
+  hasProfessionalProfile,
+  onShowProfessionalWizard,
+  onStartOutfitTesting
 }: HomeViewProps) => {
   const displayName = user?.user_metadata?.display_name || user?.email?.split('@')[0] || 'Usuario';
 
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   const [recentFeatures, setRecentFeatures] = useState<string[]>([]);
-  const [activeTab, setActiveTab] = useState<'essential' | 'create' | 'social' | 'advanced'>('essential');
-
-  // Daily inspiration quotes
-  const inspirationQuotes = [
-    { quote: "La moda es la armadura para sobrevivir la realidad de la vida cotidiana", author: "Bill Cunningham" },
-    { quote: "El estilo es una forma de decir quién eres sin tener que hablar", author: "Rachel Zoe" },
-    { quote: "La elegancia es la única belleza que nunca se desvanece", author: "Audrey Hepburn" },
-    { quote: "La moda cambia, pero el estilo permanece", author: "Coco Chanel" },
-    { quote: "Vístete como si fueras a encontrarte con tu peor enemigo hoy", author: "Coco Chanel" },
-    { quote: "La creatividad no tiene límites, solo tu imaginación", author: "Unknown" }
-  ];
-
-  const dailyQuote = useMemo(() => {
-    const dayOfYear = Math.floor((new Date().getTime() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86400000);
-    return inspirationQuotes[dayOfYear % inspirationQuotes.length];
-  }, []);
+  const [activeTab, setActiveTab] = useState<'essential' | 'create' | 'social' | 'advanced' | 'all'>('essential');
 
   // Load recent features from localStorage
   useEffect(() => {
@@ -121,7 +105,8 @@ const HomeView = ({
       description: 'Conversa con tu asistente personal de estilo',
       onClick: () => { trackFeatureUse('chat'); onStartChat(); },
       category: 'essential',
-      keywords: ['chat', 'asistente', 'IA', 'hablar', 'preguntar']
+      keywords: ['chat', 'asistente', 'IA', 'hablar', 'preguntar'],
+      tooltip: 'Preguntá sobre consejos de moda, combinaciones de colores y tendencias actuales'
     },
     {
       id: 'stylist',
@@ -130,8 +115,21 @@ const HomeView = ({
       description: 'Genera un look para cualquier ocasión',
       onClick: () => { trackFeatureUse('stylist'); onStartStylist(); },
       category: 'essential',
-      keywords: ['outfit', 'look', 'estilista', 'generar', 'crear']
+      keywords: ['outfit', 'look', 'estilista', 'generar', 'crear'],
+      tooltip: 'La IA creará combinaciones perfectas usando las prendas de tu armario'
     },
+    ...(onShowProfessionalWizard ? [{
+      id: 'professional-profile',
+      icon: hasProfessionalProfile ? 'verified' : 'person_add',
+      title: hasProfessionalProfile ? 'Perfil Profesional ✅' : 'Perfil Profesional',
+      description: hasProfessionalProfile
+        ? 'Outfits personalizados con morfología y colorimetría'
+        : 'Activa outfits mejorados con tu morfología y paleta',
+      onClick: () => { trackFeatureUse('professional-profile'); onShowProfessionalWizard(); },
+      category: 'essential' as const,
+      keywords: ['perfil', 'profesional', 'morfología', 'colorimetría', 'personalizado', 'mejorado'],
+      badge: hasProfessionalProfile ? undefined : 'Nuevo'
+    }] : []),
     {
       id: 'weather',
       icon: 'wb_sunny',
@@ -139,7 +137,8 @@ const HomeView = ({
       description: 'Basado en el clima actual de tu ciudad',
       onClick: () => { trackFeatureUse('weather'); onStartWeatherOutfit(); },
       category: 'essential',
-      keywords: ['clima', 'tiempo', 'temperatura', 'outfit', 'día']
+      keywords: ['clima', 'tiempo', 'temperatura', 'outfit', 'día'],
+      tooltip: 'Recibí sugerencias de outfits adaptados al clima actual y pronóstico'
     },
     {
       id: 'closet',
@@ -148,7 +147,8 @@ const HomeView = ({
       description: `${closet.length} prendas en tu colección`,
       onClick: () => { trackFeatureUse('closet'); onNavigateToCloset(); },
       category: 'essential',
-      keywords: ['armario', 'ropa', 'prendas', 'closet', 'guardarropa']
+      keywords: ['armario', 'ropa', 'prendas', 'closet', 'guardarropa'],
+      tooltip: 'Explorá, buscá y organizá todas tus prendas en un solo lugar'
     },
     {
       id: 'feed',
@@ -157,7 +157,8 @@ const HomeView = ({
       description: 'Descubrí looks de tu comunidad',
       onClick: () => { trackFeatureUse('feed'); onStartActivityFeed(); },
       category: 'essential',
-      keywords: ['feed', 'amigos', 'comunidad', 'social', 'looks']
+      keywords: ['feed', 'amigos', 'comunidad', 'social', 'looks'],
+      tooltip: 'Mirá los outfits, desafíos y actividades de tus amigos en tiempo real'
     },
     {
       id: 'bulk-upload',
@@ -166,7 +167,8 @@ const HomeView = ({
       description: 'Agregá hasta 30 prendas a la vez con IA',
       onClick: () => { trackFeatureUse('bulk-upload'); onStartBulkUpload(); },
       category: 'essential',
-      keywords: ['subir', 'cargar', 'múltiple', 'fotos', 'agregar']
+      keywords: ['subir', 'cargar', 'múltiple', 'fotos', 'agregar'],
+      tooltip: 'Subí varias fotos simultáneamente y la IA analizará todas automáticamente'
     },
 
     // CREATE & PLAN (8)
@@ -177,7 +179,8 @@ const HomeView = ({
       description: 'Prepara tu equipaje para cualquier viaje',
       onClick: () => { trackFeatureUse('smart-packer'); onStartSmartPacker(); },
       category: 'create',
-      keywords: ['maleta', 'viaje', 'equipaje', 'packer', 'viajar']
+      keywords: ['maleta', 'viaje', 'equipaje', 'packer', 'viajar'],
+      tooltip: 'Generá listas de viaje personalizadas según destino, clima y actividades'
     },
     {
       id: 'lookbook',
@@ -222,7 +225,8 @@ const HomeView = ({
       description: 'Vístete con tus outfits generados',
       onClick: () => { trackFeatureUse('virtual-tryon'); onStartVirtualTryOn(); },
       category: 'create',
-      keywords: ['probador', 'virtual', 'vestir', 'probar']
+      keywords: ['probador', 'virtual', 'vestir', 'probar'],
+      tooltip: 'Probate outfits virtualmente usando tu cámara antes de vestirte'
     },
     {
       id: 'ratings',
@@ -338,55 +342,6 @@ const HomeView = ({
     }
   ], [closet.length, onStartChat, onStartStylist, onStartWeatherOutfit, onNavigateToCloset, onStartActivityFeed, onStartBulkUpload, onStartSmartPacker, onStartLookbookCreator, onStartCalendarSync, onStartCapsuleBuilder, onStartAIDesigner, onStartVirtualTryOn, onStartRatingView, onStartFeedbackAnalysis, onStartMultiplayerChallenges, onStartStyleChallenges, onNavigateToCommunity, onStartGapAnalysis, onStartBrandRecognition, onStartDupeFinder, onStartStyleDNA, onStartStyleEvolution, onStartVirtualShopping]);
 
-  // Smart suggestions based on context
-  const smartSuggestions = useMemo(() => {
-    const suggestions: Feature[] = [];
-    const now = new Date();
-    const hour = now.getHours();
-    const dayOfWeek = now.getDay();
-
-    // Morning suggestion (6am-11am)
-    if (hour >= 6 && hour < 11) {
-      suggestions.push(allFeatures.find(f => f.id === 'weather')!);
-    }
-
-    // Empty closet suggestion
-    if (closet.length < 5) {
-      suggestions.push(allFeatures.find(f => f.id === 'bulk-upload')!);
-    }
-
-    // Weekend suggestions
-    if (dayOfWeek === 0 || dayOfWeek === 6) {
-      suggestions.push(allFeatures.find(f => f.id === 'multiplayer')!);
-    }
-
-    // Always show chat as fallback
-    if (!suggestions.find(s => s.id === 'chat')) {
-      suggestions.push(allFeatures.find(f => f.id === 'chat')!);
-    }
-
-    // Add recently used features
-    recentFeatures.slice(0, 2).forEach(id => {
-      const feature = allFeatures.find(f => f.id === id);
-      if (feature && !suggestions.find(s => s.id === id)) {
-        suggestions.push(feature);
-      }
-    });
-
-    // Add popular features if still need more
-    const popular = ['stylist', 'feed', 'closet'];
-    popular.forEach(id => {
-      if (suggestions.length < 6) {
-        const feature = allFeatures.find(f => f.id === id);
-        if (feature && !suggestions.find(s => s.id === id)) {
-          suggestions.push(feature);
-        }
-      }
-    });
-
-    return suggestions.slice(0, 6);
-  }, [closet.length, allFeatures, recentFeatures]);
-
   // Search filtering
   const filteredFeatures = useMemo(() => {
     if (!searchQuery.trim()) return allFeatures;
@@ -399,16 +354,6 @@ const HomeView = ({
     );
   }, [searchQuery, allFeatures]);
 
-  // Group by category
-  const categorizedFeatures = useMemo(() => {
-    return {
-      essential: filteredFeatures.filter(f => f.category === 'essential'),
-      create: filteredFeatures.filter(f => f.category === 'create'),
-      social: filteredFeatures.filter(f => f.category === 'social'),
-      advanced: filteredFeatures.filter(f => f.category === 'advanced')
-    };
-  }, [filteredFeatures]);
-
   const toggleCategory = (category: string) => {
     const newExpanded = new Set(expandedCategories);
     if (newExpanded.has(category)) {
@@ -419,104 +364,8 @@ const HomeView = ({
     setExpandedCategories(newExpanded);
   };
 
-  const FeatureCard = ({ feature, variant = 'default' }: { feature: Feature, variant?: 'default' | 'compact' }) => (
-    <button
-      onClick={feature.onClick}
-      className={`
-        relative w-full text-left overflow-hidden
-        glass-card rounded-3xl
-        transition-all duration-300 ease-out
-        touch-manipulation
-        hover:shadow-glow hover:-translate-y-1
-        active:scale-[0.98]
-        ${variant === 'compact' ? 'p-3 min-h-[72px]' : 'p-5 min-h-[100px]'}
-        group
-      `}
-    >
-      <div className={`absolute inset-0 bg-gradient-to-br from-white/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none`} />
-
-      <div className={`relative z-10 flex items-start gap-${variant === 'compact' ? '3' : '4'}`}>
-        <div className={`${variant === 'compact' ? 'w-10 h-10' : 'w-12 h-12'} rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center shrink-0 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-3`}>
-          <span className={`material-symbols-outlined text-primary ${variant === 'compact' ? 'text-xl' : 'text-2xl'}`}>
-            {feature.icon}
-          </span>
-        </div>
-        <div className="flex-1 min-w-0 pt-0.5">
-          <h3 className={`font-bold text-text-primary dark:text-gray-100 ${variant === 'compact' ? 'text-sm' : 'text-lg'} mb-0.5 leading-tight group-hover:text-primary transition-colors`}>
-            {feature.title}
-          </h3>
-          <p className={`text-text-secondary dark:text-gray-400 ${variant === 'compact' ? 'text-xs' : 'text-sm'} leading-relaxed line-clamp-2 font-medium opacity-90`}>
-            {feature.description}
-          </p>
-        </div>
-      </div>
-    </button>
-  );
-
-  const CategorySection = ({
-    title,
-    icon,
-    features,
-    categoryId,
-    count
-  }: {
-    title: string,
-    icon: string,
-    features: Feature[],
-    categoryId: string,
-    count: number
-  }) => {
-    const isExpanded = expandedCategories.has(categoryId);
-
-    return (
-      <div className="mb-6">
-        <button
-          onClick={() => toggleCategory(categoryId)}
-          className="w-full flex items-center justify-between p-4 rounded-2xl bg-white/30 dark:bg-slate-800/30 backdrop-blur-md border border-white/20 hover:bg-white/40 dark:hover:bg-slate-800/40 transition-all duration-200 touch-manipulation active:scale-[0.98] group"
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
-              <span className="material-symbols-outlined text-primary text-xl">
-                {icon}
-              </span>
-            </div>
-            <span className="font-serif font-semibold text-text-primary dark:text-gray-200 text-lg tracking-wide">
-              {title}
-            </span>
-            <span className="text-xs font-bold text-primary bg-primary/10 px-2.5 py-1 rounded-full">
-              {count}
-            </span>
-          </div>
-          <span className={`material-symbols-outlined text-text-secondary transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}>
-            expand_more
-          </span>
-        </button>
-
-        {isExpanded && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3 animate-slide-down origin-top">
-            {features.map((feature, idx) => (
-              <div key={feature.id} style={{ animationDelay: `${idx * 50}ms` }} className="animate-fade-in">
-                <FeatureCard feature={feature} variant="compact" />
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  // Get contextual greeting
-  const getGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return '¡Buenos días';
-    if (hour < 19) return '¡Buenas tardes';
-    return '¡Buenas noches';
-  };
-
   // Calculate user stats
   const totalOutfits = useMemo(() => {
-    // This would normally come from a database query
-    // For now, we'll use localStorage as a placeholder
     const saved = localStorage.getItem('ojodeloca-total-outfits');
     return saved ? parseInt(saved, 10) : 0;
   }, []);
@@ -532,338 +381,190 @@ const HomeView = ({
     return diffDays;
   }, []);
 
+  // Scroll detection for sticky header
+  const [isScrolled, setIsScrolled] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 20);
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const quickActions = [
+    { id: 'chat', icon: 'chat_bubble', label: 'Chat IA', color: 'text-purple-500', bg: 'bg-purple-50 dark:bg-purple-900/20', onClick: () => { trackFeatureUse('chat'); onStartChat(); } },
+    { id: 'stylist', icon: 'auto_awesome', label: 'Estilista', color: 'text-primary', bg: 'bg-emerald-50 dark:bg-emerald-900/20', onClick: () => { trackFeatureUse('stylist'); onStartStylist(); } },
+    { id: 'closet', icon: 'checkroom', label: 'Armario', color: 'text-blue-500', bg: 'bg-blue-50 dark:bg-blue-900/20', onClick: () => { trackFeatureUse('closet'); onNavigateToCloset(); } },
+    { id: 'packer', icon: 'luggage', label: 'Maleta', color: 'text-teal-500', bg: 'bg-teal-50 dark:bg-teal-900/20', onClick: () => { trackFeatureUse('packer'); onStartSmartPacker(); } },
+    { id: 'lookbook', icon: 'photo_library', label: 'Lookbook', color: 'text-violet-500', bg: 'bg-violet-50 dark:bg-violet-900/20', onClick: () => { trackFeatureUse('lookbook'); onStartLookbookCreator(); } },
+    { id: 'rate', icon: 'swipe', label: 'Calificar', color: 'text-pink-500', bg: 'bg-pink-50 dark:bg-pink-900/20', onClick: () => { trackFeatureUse('rate'); onStartRatingView(); } },
+    { id: 'tryon', icon: 'photo_camera', label: 'Probar IA', color: 'text-indigo-500', bg: 'bg-indigo-50 dark:bg-indigo-900/20', onClick: () => { trackFeatureUse('tryon'); onStartVirtualTryOn(); } },
+    { id: 'weather', icon: 'sunny', label: 'Del Día', color: 'text-orange-500', bg: 'bg-orange-50 dark:bg-orange-900/20', onClick: () => { trackFeatureUse('weather'); onStartWeatherOutfit(); } },
+  ];
+
   return (
-    <div className="w-full h-full flex flex-col animate-fade-in overflow-hidden bg-transparent">
-      {/* Hero Section Premium - Viral Style */}
-      <header className="relative px-6 pt-safe pt-8 pb-6 overflow-hidden shrink-0">
-        {/* Animated gradient background with more vibrancy */}
-        <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-purple-500/10 to-secondary/20 opacity-60 animate-gradient-shift" />
-        <div className="absolute -top-20 -right-20 w-64 h-64 bg-primary/30 rounded-full blur-3xl opacity-40 animate-pulse-slow" />
-        <div className="absolute -bottom-20 -left-20 w-64 h-64 bg-secondary/30 rounded-full blur-3xl opacity-40 animate-pulse-slow" style={{ animationDelay: '1s' }} />
+    <div className="w-full min-h-screen flex flex-col animate-fade-in bg-transparent font-sans selection:bg-primary/20 relative">
+      {/* Background Orbs removed in favor of Global 3D Canvas */}
 
-        <div className="relative z-10">
-          {/* Main greeting with staggered animation */}
-          <div className="flex flex-col gap-1 mb-6">
-            <div className="flex items-center gap-2 opacity-80 animate-slide-up">
-              <span className="text-sm font-bold tracking-wider uppercase text-text-secondary">
-                {new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric' })}
-              </span>
-              <div className="h-1 w-1 rounded-full bg-text-secondary" />
-              <span className="text-sm font-medium text-text-secondary">
-                {getGreeting()}
-              </span>
-            </div>
-
-            <h1 className="text-4xl sm:text-5xl font-serif font-black text-transparent bg-clip-text bg-gradient-to-r from-text-primary via-primary to-secondary tracking-tight leading-[1.1] animate-slide-up" style={{ animationDelay: '100ms' }}>
+      {/* Sticky Header */}
+      <header
+        className={`
+          fixed top-0 left-0 right-0 z-50 px-6 py-4 transition-all duration-300 ease-in-out
+          ${isScrolled
+            ? 'bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-gray-200/50 dark:border-slate-800/50 shadow-sm'
+            : 'bg-transparent'
+          }
+        `}
+      >
+        <div className="max-w-4xl mx-auto flex items-center justify-between">
+          <div className={`flex flex-col transition-all duration-300 ${isScrolled ? 'opacity-100' : 'opacity-0'}`}>
+            <h1 className="font-serif font-bold text-transparent bg-clip-text bg-gradient-to-r from-text-primary via-primary to-secondary tracking-tight text-xl">
               Hola, {displayName}
             </h1>
-
-            <p className="text-lg text-text-secondary/90 font-medium max-w-xs animate-slide-up" style={{ animationDelay: '200ms' }}>
-              ¿Listo para romperla con tu look hoy? 🔥
-            </p>
           </div>
 
-          {/* Quick Stats - Grid Layout */}
-          <div className="grid grid-cols-3 gap-2 animate-slide-up" style={{ animationDelay: '300ms' }}>
-            <div className="glass-card p-3 rounded-2xl flex flex-col items-center justify-center border border-white/20 shadow-sm">
-              <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary mb-2">
-                <span className="material-symbols-outlined text-xl">checkroom</span>
-              </div>
-              <div className="text-center">
-                <div className="text-xl font-bold text-text-primary leading-none mb-1">{closet.length}</div>
-                <div className="text-[10px] font-medium text-text-secondary">Prendas</div>
-              </div>
+          {/* Mini Stats when scrolled */}
+          <div className={`flex items-center gap-3 transition-all duration-300 ${isScrolled ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'}`}>
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/10 text-primary">
+              <span className="material-symbols-outlined text-lg">checkroom</span>
+              <span className="text-sm font-bold">{closet.length}</span>
             </div>
-
-            <div className="glass-card p-3 rounded-2xl flex flex-col items-center justify-center border border-white/20 shadow-sm">
-              <div className="w-10 h-10 rounded-xl bg-secondary/10 flex items-center justify-center text-secondary mb-2">
-                <span className="material-symbols-outlined text-xl">style</span>
-              </div>
-              <div className="text-center">
-                <div className="text-xl font-bold text-text-primary leading-none mb-1">{totalOutfits}</div>
-                <div className="text-[10px] font-medium text-text-secondary">Outfits</div>
-              </div>
-            </div>
-
-            <div className="glass-card p-3 rounded-2xl flex flex-col items-center justify-center border border-white/20 shadow-sm">
-              <div className="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center text-accent mb-2">
-                <span className="material-symbols-outlined text-xl">local_fire_department</span>
-              </div>
-              <div className="text-center">
-                <div className="text-xl font-bold text-text-primary leading-none mb-1">{daysActive}</div>
-                <div className="text-[10px] font-medium text-text-secondary">Racha</div>
-              </div>
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-secondary/10 text-secondary">
+              <span className="material-symbols-outlined text-lg">local_fire_department</span>
+              <span className="text-sm font-bold">{daysActive}</span>
             </div>
           </div>
         </div>
       </header>
 
-      <main className="flex-grow overflow-y-auto px-4 sm:px-6 pb-safe pb-32 scrollbar-hide">
-        <div className="max-w-4xl mx-auto space-y-8 pt-2">
+      <main className="relative z-10 flex-grow w-full max-w-7xl mx-auto px-3 sm:px-4 md:px-6 pt-16 sm:pt-20 pb-20 sm:pb-24">
 
-          {/* Search - Floating & Modern */}
-          <div className="sticky top-0 z-30 pt-2 pb-4 -mt-2 bg-gradient-to-b from-[#f8f9fa] via-[#f8f9fa] to-transparent dark:from-slate-950 dark:via-slate-950">
-            <div className="relative group">
-              <div className="absolute inset-0 bg-gradient-to-r from-primary/30 to-secondary/30 rounded-2xl blur-md opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-              <input
-                type="text"
-                placeholder="¿Qué buscas hoy?"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="relative w-full px-5 pl-12 py-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 focus:outline-none focus:border-primary/50 focus:ring-4 focus:ring-primary/10 text-text-primary placeholder-text-secondary/60 transition-all duration-300 shadow-sm group-hover:shadow-md"
-              />
-              <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-primary/70">
-                search
-              </span>
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery('')}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full transition-colors"
-                >
-                  <span className="material-symbols-outlined text-text-secondary text-lg">close</span>
-                </button>
-              )}
-            </div>
+        {/* 2-COLUMN LAYOUT: Hero+Weather LEFT | Search+QuickActions RIGHT */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 mb-4">
+
+          {/* LEFT COLUMN - Hero + Weather */}
+          <div className="space-y-3">
+            {/* 3D HERO - Interactive */}
+            <Hero3D
+              displayName={displayName}
+              avatarUrl={user?.user_metadata?.avatar_url}
+              closetLength={closet.length}
+              totalOutfits={totalOutfits}
+              daysActive={daysActive}
+            />
+
+            {/* WEATHER GLASS */}
+            <WeatherCard />
           </div>
 
-          {/* Empty closet CTA */}
-          {closet.length === 0 && !searchQuery && (
-            <div className="glass-card p-6 rounded-3xl text-center relative overflow-hidden group animate-fade-in">
-              <div className="absolute inset-0 bg-gradient-to-r from-primary/10 via-secondary/10 to-accent/10 opacity-50" />
-              <div className="relative z-10">
-                <div className="w-16 h-16 mx-auto mb-4 bg-white/50 rounded-full flex items-center justify-center shadow-glow animate-bounce-slow">
-                  <span className="material-symbols-outlined text-3xl text-primary">add_a_photo</span>
-                </div>
-                <h3 className="text-lg font-bold text-text-primary mb-1">¡Empieza tu transformación!</h3>
-                <p className="text-sm text-text-secondary mb-4">
-                  Sube tus prendas para que la IA haga su magia.
-                </p>
-                <button
-                  onClick={onStartBulkUpload}
-                  className="w-full py-3 bg-gradient-to-r from-primary to-secondary text-white rounded-xl font-bold shadow-lg shadow-primary/30 active:scale-95 transition-all"
-                >
-                  Subir Ropa Ahora
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Quick Actions - Grid */}
-          {!searchQuery && (
-            <div className="animate-slide-up" style={{ animationDelay: '400ms' }}>
-              <div className="flex items-center justify-between mb-3 px-1">
-                <h2 className="font-serif font-bold text-text-primary text-lg">
-                  Acceso Rápido
-                </h2>
-              </div>
-              <div className="grid grid-cols-4 gap-2 sm:gap-4">
-                {[
-                  { id: 'chat', icon: 'chat_bubble', label: 'Chat IA', color: 'text-purple-500', bg: 'bg-purple-500/10', onClick: () => { trackFeatureUse('chat'); onStartChat(); } },
-                  { id: 'stylist', icon: 'auto_awesome', label: 'Estilista', color: 'text-primary', bg: 'bg-primary/10', onClick: () => { trackFeatureUse('stylist'); onStartStylist(); } },
-                  { id: 'closet', icon: 'checkroom', label: 'Armario', color: 'text-blue-500', bg: 'bg-blue-500/10', onClick: () => { trackFeatureUse('closet'); onNavigateToCloset(); } },
-                  { id: 'weather', icon: 'sunny', label: 'Del Día', color: 'text-orange-500', bg: 'bg-orange-500/10', onClick: () => { trackFeatureUse('weather'); onStartWeatherOutfit(); } },
-                ].map((action) => (
-                  <button
-                    key={action.id}
-                    onClick={action.onClick}
-                    className="flex flex-col items-center gap-2 group"
-                  >
-                    <div className={`w-16 h-16 sm:w-20 sm:h-20 rounded-2xl ${action.bg} flex items-center justify-center transition-transform duration-300 group-hover:scale-105 group-active:scale-95`}>
-                      <span className={`material-symbols-outlined text-2xl sm:text-3xl ${action.color}`}>
-                        {action.icon}
-                      </span>
-                    </div>
-                    <span className="text-xs font-medium text-text-secondary group-hover:text-text-primary transition-colors">
-                      {action.label}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Smart Suggestions - Bento Grid Style */}
-          {!searchQuery && (
-            <div className="animate-slide-up" style={{ animationDelay: '500ms' }}>
-              <div className="flex items-center justify-between mb-3 px-1">
-                <div className="flex items-center gap-2">
-                  <h2 className="font-serif font-bold text-text-primary text-lg">
-                    Sugerencias para Ti
-                  </h2>
-                  <span className="px-2 py-0.5 rounded-full bg-gradient-to-r from-primary to-secondary text-[10px] font-bold text-white shadow-sm">
-                    IA
-                  </span>
-                </div>
-              </div>
-
-              {/* Bento Grid Layout: 1 Hero + 4 Standard */}
-              <div className="grid grid-cols-2 gap-3">
-                {smartSuggestions.slice(0, smartSuggestions.length > 5 ? 4 : 5).map((feature, idx) => {
-                  const isHero = idx === 0;
-                  return (
-                    <div
-                      key={feature.id}
-                      className={`${isHero ? 'col-span-2' : 'col-span-1'} animate-fade-in`}
-                      style={{ animationDelay: `${idx * 100}ms` }}
+          {/* RIGHT COLUMN - Search + Quick Actions */}
+          <div className="space-y-3">
+            {/* SEARCH BAR */}
+            <div className="relative z-20">
+              <div className="relative group">
+                <div className="absolute inset-0 bg-gradient-to-r from-primary/20 to-secondary/20 rounded-2xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                <div className="relative bg-white dark:bg-slate-800 rounded-2xl shadow-lg shadow-gray-200/50 dark:shadow-slate-900/50 border border-gray-100 dark:border-slate-700 flex items-center p-1 transition-transform duration-300 group-hover:-translate-y-0.5">
+                  <div className="pl-4 text-primary">
+                    <span className="material-symbols-outlined text-2xl">search</span>
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="¿Qué buscas hoy?"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full px-4 py-3 bg-transparent border-none focus:ring-0 text-text-primary placeholder-text-secondary/60 text-lg"
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery('')}
+                      className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-xl transition-colors mr-1"
                     >
-                      <button
-                        onClick={feature.onClick}
-                        className={`
-                          relative w-full text-left overflow-hidden glass-card rounded-3xl 
-                          transition-all duration-300 hover:shadow-glow hover:-translate-y-1 active:scale-[0.98] group border border-white/40
-                          ${isHero ? 'p-6 min-h-[180px] flex flex-row items-center gap-6' : 'p-5 min-h-[160px] flex flex-col justify-between'}
-                        `}
-                      >
-                        {/* Dynamic Backgrounds */}
-                        <div className={`absolute inset-0 bg-gradient-to-br opacity-10 group-hover:opacity-20 transition-opacity duration-500
-                          ${feature.id === 'chat' ? 'from-purple-500 to-pink-500' :
-                            feature.id === 'stylist' ? 'from-primary to-secondary' :
-                              feature.id === 'weather' ? 'from-orange-400 to-yellow-400' :
-                                'from-blue-400 to-cyan-400'
-                          }`}
-                        />
-
-                        {/* Icon */}
-                        <div className={`
-                          rounded-2xl flex items-center justify-center shadow-sm shrink-0
-                          ${feature.id === 'chat' ? 'bg-purple-100 text-purple-600' :
-                            feature.id === 'stylist' ? 'bg-primary/10 text-primary' :
-                              feature.id === 'weather' ? 'bg-orange-100 text-orange-600' :
-                                'bg-blue-100 text-blue-600'
-                          }
-                          ${isHero ? 'w-16 h-16' : 'w-12 h-12'}
-                        `}>
-                          <span className={`material-symbols-outlined ${isHero ? 'text-3xl' : 'text-2xl'}`}>{feature.icon}</span>
-                        </div>
-
-                        {/* Content */}
-                        <div className={`flex flex-col ${isHero ? 'flex-1' : 'mt-4'}`}>
-                          {isHero && (
-                            <span className="inline-block self-start px-2 py-1 rounded-lg bg-white/80 backdrop-blur text-[10px] font-bold text-text-primary shadow-sm mb-2">
-                              RECOMENDADO
-                            </span>
-                          )}
-
-                          <h3 className={`font-bold text-text-primary leading-tight mb-1 ${isHero ? 'text-xl' : 'text-base'}`}>
-                            {feature.title}
-                          </h3>
-                          <p className={`text-text-secondary font-medium ${isHero ? 'text-base line-clamp-2' : 'text-xs line-clamp-2'}`}>
-                            {feature.description}
-                          </p>
-
-                          {isHero && (
-                            <div className="flex items-center gap-1 mt-3 text-primary font-bold text-sm group-hover:translate-x-1 transition-transform">
-                              <span>Probar ahora</span>
-                              <span className="material-symbols-outlined text-sm">arrow_forward</span>
-                            </div>
-                          )}
-                        </div>
-                      </button>
-                    </div>
-                  );
-                })}
-
-                {/* "Ver más" mini card if we have more than 5 items (optional, or just rely on Explore) */}
-                {smartSuggestions.length > 5 && (
-                  <button
-                    onClick={() => document.getElementById('explore-section')?.scrollIntoView({ behavior: 'smooth' })}
-                    className="col-span-1 min-h-[160px] rounded-3xl border-2 border-dashed border-gray-200 dark:border-gray-700 flex flex-col items-center justify-center gap-2 text-text-secondary hover:border-primary hover:text-primary transition-colors bg-white/20"
-                  >
-                    <span className="material-symbols-outlined text-3xl">add_circle</span>
-                    <span className="font-bold text-sm">Ver más</span>
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Inspiration of the Day - Viral Card */}
-          {!searchQuery && (
-            <div className="animate-slide-up" style={{ animationDelay: '600ms' }}>
-              <div className="relative w-full overflow-hidden rounded-3xl shadow-xl group cursor-pointer active:scale-[0.98] transition-transform duration-300">
-                {/* Background Image/Gradient */}
-                <div className="absolute inset-0 bg-gradient-to-br from-slate-800 to-black" />
-                <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1490481651871-ab68de25d43d?q=80&w=2070&auto=format&fit=crop')] bg-cover bg-center opacity-40 mix-blend-overlay group-hover:scale-105 transition-transform duration-700" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
-
-                <div className="relative z-10 p-8 flex flex-col items-center text-center">
-                  <span className="px-3 py-1 rounded-full border border-white/30 text-white/90 text-xs font-bold tracking-widest uppercase mb-6 backdrop-blur-sm">
-                    Inspiración del Día
-                  </span>
-
-                  <span className="material-symbols-outlined text-4xl text-white/80 mb-4">format_quote</span>
-
-                  <p className="text-2xl sm:text-3xl font-serif italic text-white leading-relaxed mb-6 drop-shadow-lg">
-                    "{dailyQuote.quote}"
-                  </p>
-
-                  <div className="flex items-center gap-2 text-white/80 font-medium text-sm">
-                    <span className="w-8 h-[1px] bg-white/50" />
-                    {dailyQuote.author}
-                    <span className="w-8 h-[1px] bg-white/50" />
-                  </div>
-
-                  <div className="mt-8 flex gap-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300 transform translate-y-2 group-hover:translate-y-0">
-                    <button className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white hover:bg-white/30 transition-colors">
-                      <span className="material-symbols-outlined text-xl">favorite</span>
+                      <span className="material-symbols-outlined text-text-secondary text-xl">close</span>
                     </button>
-                    <button className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white hover:bg-white/30 transition-colors">
-                      <span className="material-symbols-outlined text-xl">share</span>
-                    </button>
-                  </div>
+                  )}
                 </div>
               </div>
             </div>
-          )}
 
-          {/* Categories List */}
-          <div id="explore-section" className="pb-8 animate-slide-up" style={{ animationDelay: '700ms' }}>
-            <div className="flex items-center gap-2 mb-4 px-1 mt-8">
-              <span className="material-symbols-outlined text-primary text-xl">explore</span>
-              <h2 className="font-serif font-bold text-text-primary text-lg">Explorar Todo</h2>
-            </div>
-
-            {searchQuery ? (
-              <div className="grid grid-cols-1 gap-3">
-                {filteredFeatures.map(feature => (
-                  <FeatureCard key={feature.id} feature={feature} variant="compact" />
-                ))}
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <CategorySection
-                  title="Esenciales"
-                  icon="star"
-                  features={categorizedFeatures.essential}
-                  categoryId="essential"
-                  count={categorizedFeatures.essential.length}
-                />
-                <CategorySection
-                  title="Crear & Planear"
-                  icon="palette"
-                  features={categorizedFeatures.create}
-                  categoryId="create"
-                  count={categorizedFeatures.create.length}
-                />
-                <CategorySection
-                  title="Social"
-                  icon="group"
-                  features={categorizedFeatures.social}
-                  categoryId="social"
-                  count={categorizedFeatures.social.length}
-                />
-                <CategorySection
-                  title="Herramientas Avanzadas"
-                  icon="science"
-                  features={categorizedFeatures.advanced}
-                  categoryId="advanced"
-                  count={categorizedFeatures.advanced.length}
-                />
-              </div>
+            {/* QUICK ACTIONS */}
+            {!searchQuery && (
+              <HomeQuickActions actions={quickActions} />
             )}
           </div>
-
         </div>
+
+        {/* Empty closet CTA */}
+        {closet.length === 0 && !searchQuery && (
+          <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] p-8 text-center relative overflow-hidden group animate-fade-in border border-primary/20 shadow-sm mb-6">
+            <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-secondary/5 to-accent/5 opacity-50" />
+            <div className="relative z-10">
+              <div className="w-20 h-20 mx-auto mb-6 bg-white/80 rounded-full flex items-center justify-center shadow-glow animate-bounce-slow">
+                <span className="material-symbols-outlined text-4xl text-primary">add_a_photo</span>
+              </div>
+              <h3 className="text-2xl font-bold text-text-primary mb-2">¡Empieza tu transformación!</h3>
+              <p className="text-base text-text-secondary mb-6 max-w-md mx-auto">
+                Sube tus prendas para que la IA haga su magia y empiece a crear outfits increíbles para ti.
+              </p>
+              <button
+                onClick={onStartBulkUpload}
+                className="px-8 py-4 bg-gradient-to-r from-primary to-secondary text-white rounded-2xl font-bold text-lg shadow-lg shadow-primary/30 active:scale-95 transition-all hover:shadow-xl hover:-translate-y-1"
+              >
+                Subir Ropa Ahora
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* EXPLORE BUBBLE */}
+        <div id="explore-section" className="!bg-transparent border-none shadow-none rounded-[2.5rem] p-4 animate-slide-up space-y-4 relative overflow-hidden" style={{ animationDelay: '300ms' }}>
+          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-gray-100 dark:via-slate-800 to-transparent opacity-50" />
+
+          <div className="flex items-center gap-3 px-2">
+            <div className="p-2 rounded-xl bg-primary/10 text-primary">
+              <span className="material-symbols-outlined text-2xl">explore</span>
+            </div>
+            <h2 className="font-serif font-bold text-text-primary text-2xl">Explorar Todo</h2>
+          </div>
+
+          {/* Tabs Scrollable - Pill Style */}
+          <div className="flex items-center gap-3 overflow-x-auto pb-2 -mx-2 px-2 scrollbar-hide">
+            {[
+              { id: 'all', label: 'Todos', icon: 'apps' },
+              { id: 'essential', label: 'Esenciales', icon: 'star' },
+              { id: 'create', label: 'Crear', icon: 'palette' },
+              { id: 'social', label: 'Social', icon: 'group' },
+              { id: 'advanced', label: 'Avanzadas', icon: 'science' },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`
+                  flex items-center gap-2 px-5 py-2.5 rounded-full font-bold text-sm whitespace-nowrap transition-all duration-300
+                  ${(activeTab === tab.id || (tab.id === 'all' && !['essential', 'create', 'social', 'advanced'].includes(activeTab)))
+                    ? 'bg-primary text-white shadow-lg shadow-primary/30 scale-105'
+                    : 'bg-gray-50 dark:bg-slate-800 text-text-secondary hover:bg-gray-100 dark:hover:bg-slate-700 border border-gray-200 dark:border-slate-700'
+                  }
+                `}
+              >
+                <span className="material-symbols-outlined text-lg">{tab.icon}</span>
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Features Grid - 4 columns on desktop for better space use */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
+            {filteredFeatures
+              .filter(f => activeTab === 'all' || f.category === activeTab)
+              .map((feature, idx) => (
+                <div key={feature.id} style={{ animationDelay: `${idx * 50}ms` }} className="animate-fade-in">
+                  <HomeFeatureCard feature={feature} />
+                </div>
+              ))}
+          </div>
+        </div>
+
       </main>
     </div>
   );

@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
+import toast from 'react-hot-toast';
 import type { ClothingItem } from '../types';
 import Loader from './Loader';
 
@@ -101,7 +102,7 @@ const ShareOutfitView = ({ outfitItems, onClose }: ShareOutfitViewProps) => {
       }
     } catch (err) {
       console.error('Error sharing:', err);
-      alert('No se pudo compartir el outfit.');
+      toast.error('No se pudo compartir el outfit.');
     }
   };
 

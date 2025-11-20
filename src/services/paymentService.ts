@@ -5,6 +5,7 @@
  */
 
 import { supabase } from '../lib/supabase';
+import { logger } from '../utils/logger';
 import type {
   Subscription,
   SubscriptionTier,
@@ -133,7 +134,7 @@ export async function getCurrentSubscription(): Promise<Subscription | null> {
 
     return data as Subscription;
   } catch (error) {
-    console.error('Error getting subscription:', error);
+    logger.error('Error getting subscription:', error);
     return null;
   }
 }
@@ -216,7 +217,7 @@ export async function createPaymentPreference(
 
     return data as MercadoPagoPreference;
   } catch (error: any) {
-    console.error('Error creating payment preference:', error);
+    logger.error('Error creating payment preference:', error);
 
     // Try to extract more details from the error
     let errorMessage = 'No se pudo crear la preferencia de pago. Intentá de nuevo.';
@@ -226,12 +227,12 @@ export async function createPaymentPreference(
       if (error.context && error.context.json) {
         try {
           const errorBody = await error.context.json();
-          console.error('Edge Function Error Body:', errorBody);
+          logger.error('Edge Function Error Body:', errorBody);
           if (errorBody.error) {
             errorMessage = `Error del servidor: ${errorBody.error}`;
           }
         } catch (e) {
-          console.error('Could not parse error body', e);
+          logger.error('Could not parse error body', e);
         }
       }
     }
@@ -262,7 +263,7 @@ export async function handlePaymentSuccess(
 
     if (error) throw error;
   } catch (error) {
-    console.error('Error handling payment success:', error);
+    logger.error('Error handling payment success:', error);
     throw new Error('Error al procesar el pago. Contactá a soporte.');
   }
 }
@@ -297,7 +298,7 @@ export async function hasFeatureAccess(featureName: string): Promise<boolean> {
   try {
     // Admins have full access to everything
     if (await isAdmin()) {
-      console.log('🔑 Admin detected, granting full access');
+      logger.log('🔑 Admin detected, granting full access');
       return true;
     }
 
@@ -323,7 +324,7 @@ export async function hasFeatureAccess(featureName: string): Promise<boolean> {
         return true; // Unknown features are allowed by default
     }
   } catch (error) {
-    console.error('Error checking feature access:', error);
+    logger.error('Error checking feature access:', error);
     return false;
   }
 }
@@ -335,7 +336,7 @@ export async function canGenerateOutfit(): Promise<boolean> {
   try {
     // Admins have unlimited generations
     if (await isAdmin()) {
-      console.log('🔑 Admin detected, unlimited AI generations');
+      logger.log('🔑 Admin detected, unlimited AI generations');
       return true;
     }
 
@@ -351,7 +352,7 @@ export async function canGenerateOutfit(): Promise<boolean> {
     // Check if under limit
     return subscription.ai_generations_used < plan.limits.ai_generations_per_month;
   } catch (error) {
-    console.error('Error checking outfit generation limit:', error);
+    logger.error('Error checking outfit generation limit:', error);
     return false;
   }
 }
@@ -371,7 +372,7 @@ export async function incrementAIGenerationUsage(): Promise<void> {
 
     if (error) throw error;
   } catch (error) {
-    console.error('Error incrementing AI generation usage:', error);
+    logger.error('Error incrementing AI generation usage:', error);
   }
 }
 
@@ -407,7 +408,7 @@ export async function getUsageMetrics(): Promise<UsageMetrics | null> {
 
     return data as UsageMetrics;
   } catch (error) {
-    console.error('Error getting usage metrics:', error);
+    logger.error('Error getting usage metrics:', error);
     return null;
   }
 }
@@ -470,7 +471,7 @@ export async function getRemainingGenerations(): Promise<number> {
 
     return Math.max(0, plan.limits.ai_generations_per_month - subscription.ai_generations_used);
   } catch (error) {
-    console.error('Error getting remaining generations:', error);
+    logger.error('Error getting remaining generations:', error);
     return 0;
   }
 }
@@ -493,7 +494,7 @@ export async function upgradeSubscription(newTier: SubscriptionTier): Promise<vo
     // Redirect to MercadoPago checkout
     window.location.href = preference.init_point;
   } catch (error) {
-    console.error('Error upgrading subscription:', error);
+    logger.error('Error upgrading subscription:', error);
     throw error;
   }
 }
@@ -518,7 +519,7 @@ export async function cancelSubscription(): Promise<void> {
 
     if (error) throw error;
   } catch (error) {
-    console.error('Error canceling subscription:', error);
+    logger.error('Error canceling subscription:', error);
     throw new Error('Error al cancelar la suscripción. Intentá de nuevo.');
   }
 }
@@ -541,7 +542,7 @@ export async function reactivateSubscription(): Promise<void> {
 
     if (error) throw error;
   } catch (error) {
-    console.error('Error reactivating subscription:', error);
+    logger.error('Error reactivating subscription:', error);
     throw new Error('Error al reactivar la suscripción. Intentá de nuevo.');
   }
 }

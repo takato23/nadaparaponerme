@@ -77,8 +77,13 @@ export default function ClosetSidebar({
 
   return (
     <aside
-      className="hidden md:flex flex-col bg-white/40 dark:bg-black/20 border-r border-white/10 backdrop-blur-xl overflow-hidden shadow-xl h-full transition-all duration-300"
-      style={{ width: `${width}px` }}
+      className="hidden md:flex flex-col border-r border-white/10 overflow-hidden shadow-xl h-full transition-all duration-300"
+      style={{
+        width: `${width}px`,
+        backdropFilter: `blur(var(--glass-blur)) saturate(var(--glass-saturation))`,
+        WebkitBackdropFilter: `blur(var(--glass-blur)) saturate(var(--glass-saturation))`,
+        backgroundColor: `rgba(255, 255, 255, var(--glass-opacity))`
+      }}
     >
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-5 border-b border-white/10 bg-white/20 dark:bg-black/20">

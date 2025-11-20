@@ -3,6 +3,7 @@ import type { ClothingItem, StyleDNAProfile } from '../types';
 import { analyzeStyleDNA } from '../src/services/aiService';
 import Loader from './Loader';
 import { Card } from './ui/Card';
+import { HelpIcon } from './ui/HelpIcon';
 
 interface StyleDNAProfileViewProps {
     closet: ClothingItem[];
@@ -44,7 +45,13 @@ const StyleDNAProfileView = ({ closet, onClose }: StyleDNAProfileViewProps) => {
 
                 <div className="absolute inset-0 bg-white/90 dark:bg-background-dark/90 backdrop-blur-xl flex flex-col md:inset-y-4 md:inset-x-4 md:rounded-3xl md:border md:border-white/20">
                     <header className="p-6 flex items-center justify-between border-b border-gray-200 dark:border-gray-700">
-                        <h2 className="text-2xl font-bold dark:text-gray-200">Tu Style DNA</h2>
+                        <div className="flex items-center gap-2">
+                            <h2 className="text-2xl font-bold dark:text-gray-200">Tu Style DNA</h2>
+                            <HelpIcon
+                                content="Style DNA analiza todas tus prendas para identificar patrones de estilo, arquetipos de personalidad y preferencias únicas"
+                                position="bottom"
+                            />
+                        </div>
                         <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl dark:text-gray-200">
                             <span className="material-symbols-outlined">close</span>
                         </button>

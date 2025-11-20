@@ -265,9 +265,9 @@ export default function ClosetGridVirtualized({
   }
 
   return (
-    <div className="h-full w-full overflow-y-auto p-4" onContextMenu={(e) => e.preventDefault()}>
+    <div className="h-full w-full overflow-y-auto px-1 sm:px-4 py-2 sm:py-4" onContextMenu={(e) => e.preventDefault()}>
       {/* Standard CSS Grid (Virtualization temporarily disabled due to import issues) */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-1 sm:gap-4">
         {items.map((item, index) => {
           const isSelected = selectedIds.has(item.id);
           const versatilityScore = getItemVersatilityScore?.(item.id) || 0;

@@ -10,6 +10,7 @@
  */
 
 import React, { useState, useMemo } from 'react';
+import toast from 'react-hot-toast';
 import type { ClothingItem } from '../types';
 import {
   generateOutfitEnhancedV1,
@@ -18,7 +19,6 @@ import {
   type EnhancedFitResult,
   type MultiStageFitResult
 } from '../../services/generateOutfit-enhanced';
-import { getAIClient, retryWithBackoff } from '../../services/geminiService';
 import { generateOutfit } from '../../services/geminiService';
 import { sampleData } from '../../data/sampleData';
 
@@ -126,7 +126,7 @@ export default function OutfitGenerationTestingPlayground({
 
   async function runAllTests() {
     if (activeCloset.length < 3) {
-      alert('Necesitás al menos 3 prendas para testear. Click en "Load Sample Data" para usar datos de prueba.');
+      toast.error('Necesitás al menos 3 prendas para testear. Click en "Load Sample Data" para usar datos de prueba.');
       return;
     }
 

@@ -978,5 +978,110 @@ export interface ChallengeNotification {
   action_url?: string;                  // Link to challenge
 }
 
+// =====================================================
+// Professional Stylist System Types
+// =====================================================
+
+// Morfología corporal (5 tipos base)
+export type BodyShape =
+  | 'triangulo'            // Cadera > Hombros (pera)
+  | 'triangulo_invertido'  // Hombros > Cadera
+  | 'rectangulo'           // Hombros ≈ Cadera, sin cintura definida
+  | 'reloj_arena'          // Hombros ≈ Cadera, cintura marcada
+  | 'oval';                // Sin definición de cintura
+
+// Paletas estacionales (sistema 12 estaciones)
+export type ColorSeason =
+  | 'primavera_clara'      // Light Spring
+  | 'primavera_brillante'  // Bright Spring
+  | 'primavera_calida'     // Warm Spring
+  | 'verano_claro'         // Light Summer
+  | 'verano_suave'         // Soft Summer
+  | 'verano_frio'          // Cool Summer
+  | 'otoño_suave'          // Soft Autumn
+  | 'otoño_calido'         // Warm Autumn
+  | 'otoño_profundo'       // Deep Autumn
+  | 'invierno_profundo'    // Deep Winter
+  | 'invierno_frio'        // Cool Winter
+  | 'invierno_brillante';  // Bright Winter
+
+// Nivel de contraste (piel vs pelo)
+export type ContrastLevel = 'alto' | 'medio' | 'bajo';
+
+// Preferencias de fit por categoría
+export interface FitPreferences {
+  tops: 'fitted' | 'relaxed' | 'structured' | 'oversized';
+  bottoms: 'fitted' | 'relaxed' | 'wide-leg';
+  dresses: 'fitted' | 'relaxed' | 'structured' | 'oversized';
+}
+
+// Perfil de morfología
+export interface MorphologyProfile {
+  body_shape: BodyShape;
+  fit_preferences: FitPreferences;
+  height_cm?: number;
+  has_accessibility_needs?: boolean;
+}
+
+// Perfil de colorimetría personal
+export interface ColorimetryProfile {
+  color_season: ColorSeason;
+  contrast_level: ContrastLevel;
+  undertone?: 'cool' | 'warm' | 'neutral' | 'olive';
+  skin_tone?: 'fair' | 'medium' | 'deep';
+  recommended_palette?: string[]; // Hex colors
+}
+
+// Perfil de estilo de vida
+export interface LifestyleProfile {
+  primary_context: 'corporate' | 'creative' | 'casual' | 'mixed';
+  climate_zone?: 'tropical' | 'temperate' | 'cold';
+  budget_tier?: 'budget' | 'mid-range' | 'premium' | 'luxury';
+  fabric_constraints?: string[]; // Alergias, sensibilidades
+  maintenance_tolerance?: 'low' | 'medium' | 'high'; // Dry-clean vs lavable
+}
+
+// Perfil profesional completo
+export interface ProfessionalProfile {
+  id?: string;
+  morphology: MorphologyProfile;
+  colorimetry: ColorimetryProfile;
+  preferences: {
+    loves: string[]; // Tags o subcategorías que ama
+    hates: string[]; // Tags o subcategorías que evita
+  };
+  lifestyle?: LifestyleProfile;
+  completed_at?: string; // ISO timestamp
+  profile_completeness_score?: number; // 0-100
+}
+
+// Resultado de outfit mejorado con explicaciones educativas
+export interface ProfessionalFitResult extends FitResult {
+  // Campos heredados de FitResult:
+  // top_id, bottom_id, shoes_id, explanation, missing_piece_suggestion, aiGeneratedItems
+
+  // Nuevos campos educativos
+  educational?: {
+    morphology_explanation: string;   // Por qué favorece tu cuerpo
+    colorimetry_explanation: string;  // Por qué estos colores te quedan bien
+    mood_explanation: string;         // Por qué encaja con la ocasión
+  };
+
+  // Metadata visual para UI
+  ui_metadata?: {
+    mood_color_hex: string;  // Color para orbes de fondo
+    vibe: 'elegante' | 'casual' | 'sporty' | 'bohemian' | 'minimalist' | 'edgy' | 'romantic';
+    formality_level: number; // 1-5
+  };
+
+  // Nombres descriptivos para mostrar en UI
+  item_names?: {
+    top_name: string;
+    bottom_name: string;
+    shoes_name: string;
+    accessories_name?: string;
+  };
+}
+
 // Export payment and subscription types
 export * from './types-payment';

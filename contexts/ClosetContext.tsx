@@ -40,6 +40,11 @@ interface ClosetContextValue {
   sortOption: ExtendedSortOption;
   setSortOption: (option: ExtendedSortOption) => void;
 
+  // Color Filter
+  selectedColor: string | null;
+  setSelectedColor: (color: string | null) => void;
+  availableColors: string[];
+
   // Bulk selection
   selection: BulkSelectionState;
   selectItem: (id: string) => void;
@@ -79,6 +84,20 @@ export function ClosetProvider({ children, items }: ClosetProviderProps) {
     direction: 'desc'
   });
 
+  // Color filter state
+  const [selectedColor, setSelectedColor] = useState<string | null>(null);
+
+  // Extract unique colors from items
+  const availableColors = useMemo(() => {
+    const colors = new Set<string>();
+    items.forEach(item => {
+      if (item.metadata?.color_primary || item.color_primary) {
+        colors.add(item.metadata?.color_primary || item.color_primary);
+      }
+    });
+    return Array.from(colors);
+  }, [items]);
+
   // Bulk selection state
   const [selection, setSelection] = useState<BulkSelectionState>({
     selectedIds: new Set(),
@@ -93,9 +112,18 @@ export function ClosetProvider({ children, items }: ClosetProviderProps) {
       ? items
       : collections.activeCollection.items;
 
+    // Apply color filter first if selected
+    let filteredByColor = baseItems;
+    if (selectedColor) {
+      filteredByColor = baseItems.filter(item => {
+        const itemColor = item.metadata?.color_primary || item.color_primary;
+        return itemColor === selectedColor;
+      });
+    }
+
     // Apply filters and sorting
-    return filterAndSortItems(baseItems, filters.filters, sortOption);
-  }, [items, collections.activeCollection, filters.filters, sortOption]);
+    return filterAndSortItems(filteredByColor, filters.filters, sortOption);
+  }, [items, collections.activeCollection, filters.filters, sortOption, selectedColor]);
 
   // Bulk selection functions
   const selectItem = useCallback((id: string) => {
@@ -202,6 +230,11 @@ export function ClosetProvider({ children, items }: ClosetProviderProps) {
     sortOption,
     setSortOption,
 
+    // Color Filter
+    selectedColor,
+    setSelectedColor,
+    availableColors,
+
     // Bulk selection
     selection,
     selectItem,
@@ -227,6 +260,8 @@ export function ClosetProvider({ children, items }: ClosetProviderProps) {
     stats,
     viewPreferences,
     sortOption,
+    selectedColor,
+    availableColors,
     selection,
     selectItem,
     deselectItem,

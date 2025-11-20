@@ -8,6 +8,7 @@
 import { supabase, uploadImage, compressImage, createThumbnail } from '../lib/supabase';
 import type { ClothingItem, SavedOutfit } from '../../types';
 import type { Database } from '../types/api';
+import { logger } from '../../utils/logger';
 
 type ClothingItemInsert = Database['public']['Tables']['clothing_items']['Insert'];
 type OutfitInsert = Database['public']['Tables']['outfits']['Insert'];
@@ -54,7 +55,7 @@ async function uploadBase64Image(
 
     return imageUrl; // Return the main image URL
   } catch (error) {
-    console.error('Failed to upload image:', error);
+    logger.error('Failed to upload image:', error);
     throw new Error('Failed to upload image to storage');
   }
 }
@@ -150,7 +151,7 @@ async function migrateCloset(
         .insert(supabaseItem);
 
       if (error) {
-        console.error('Failed to insert item:', error);
+        logger.error('Failed to insert item:', error);
         throw error;
       }
 
@@ -162,7 +163,7 @@ async function migrateCloset(
         message: `Migrado: ${item.metadata.subcategory} (${current}/${total})`,
       });
     } catch (error) {
-      console.error('Failed to migrate item:', item, error);
+      logger.error('Failed to migrate item:', item, error);
       throw new Error(`Error migrando ${item.metadata.subcategory}`);
     }
   }
@@ -205,7 +206,7 @@ async function migrateOutfits(
         .insert(supabaseOutfit);
 
       if (error) {
-        console.error('Failed to insert outfit:', error);
+        logger.error('Failed to insert outfit:', error);
         throw error;
       }
 
@@ -217,7 +218,7 @@ async function migrateOutfits(
         message: `Migrado: Outfit ${current}/${total}`,
       });
     } catch (error) {
-      console.error('Failed to migrate outfit:', outfit, error);
+      logger.error('Failed to migrate outfit:', outfit, error);
       throw new Error(`Error migrando outfit ${outfit.id}`);
     }
   }
@@ -316,7 +317,7 @@ export async function migrateUserData(
       );
     }
   } catch (error) {
-    console.error('Migration failed:', error);
+    logger.error('Migration failed:', error);
     onProgress({
       phase: 'error',
       current: 0,
@@ -353,7 +354,7 @@ export async function needsMigration(): Promise<boolean> {
     // Need migration if localStorage has data but Supabase doesn't
     return !existingItems || existingItems.length === 0;
   } catch (error) {
-    console.error('Failed to check migration status:', error);
+    logger.error('Failed to check migration status:', error);
     return false;
   }
 }

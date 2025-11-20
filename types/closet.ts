@@ -126,7 +126,7 @@ export interface ExtendedSortOption {
 // SAVED VIEWS SYSTEM
 // =====================================================
 
-export type ViewMode = 'grid' | 'list' | 'masonry';
+export type ViewMode = 'grid' | 'list' | 'masonry' | 'carousel';
 
 export type GridDensity = 'compact' | 'normal' | 'comfortable';
 

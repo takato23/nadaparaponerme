@@ -39,6 +39,7 @@ export default function MetadataEditModal({ imageDataUrl, metadata, onSave, onCa
   const [editedMetadata, setEditedMetadata] = useState<ClothingItemMetadata>(metadata);
   const [customColor, setCustomColor] = useState('');
   const [customTag, setCustomTag] = useState('');
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   const handleCategoryChange = (category: string) => {
     setEditedMetadata(prev => ({ ...prev, category: category as any }));
@@ -88,9 +89,10 @@ export default function MetadataEditModal({ imageDataUrl, metadata, onSave, onCa
   const handleSave = () => {
     // Validación básica
     if (!editedMetadata.category || !editedMetadata.subcategory || !editedMetadata.color_primary) {
-      alert('Por favor completa los campos requeridos: categoría, tipo y color');
+      setValidationError('Por favor completa los campos requeridos: categoría, tipo y color');
       return;
     }
+    setValidationError(null);
     onSave(editedMetadata);
   };
 
@@ -274,19 +276,28 @@ export default function MetadataEditModal({ imageDataUrl, metadata, onSave, onCa
         </div>
 
         {/* Footer */}
-        <div className="border-t border-white/10 p-6 flex gap-3">
-          <button
-            onClick={onCancel}
-            className="flex-1 bg-white/10 font-bold py-3 rounded-2xl hover:bg-white/20 transition-colors"
-          >
-            Cancelar
-          </button>
-          <button
-            onClick={handleSave}
-            className="flex-1 bg-primary text-white font-bold py-3 rounded-2xl hover:scale-105 transition-transform"
-          >
-            Guardar Cambios
-          </button>
+        <div className="border-t border-white/10 p-6">
+          {/* Validation Error */}
+          {validationError && (
+            <div className="mb-4 p-3 bg-red-500/20 border border-red-500/30 rounded-xl text-red-200 text-sm">
+              {validationError}
+            </div>
+          )}
+
+          <div className="flex gap-3">
+            <button
+              onClick={onCancel}
+              className="flex-1 bg-white/10 font-bold py-3 rounded-2xl hover:bg-white/20 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleSave}
+              className="flex-1 bg-primary text-white font-bold py-3 rounded-2xl hover:scale-105 transition-transform"
+            >
+              Guardar Cambios
+            </button>
+          </div>
         </div>
       </div>
     </div>

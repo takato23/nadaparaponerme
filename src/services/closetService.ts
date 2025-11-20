@@ -6,6 +6,7 @@
  */
 
 import { supabase, uploadImage, compressImage, createThumbnail } from '../lib/supabase';
+import { logger } from '../utils/logger';
 import type { ClothingItem as LegacyClothingItem, ClothingItemMetadata } from '../../types';
 import type { Database } from '../types/api';
 
@@ -83,7 +84,7 @@ export async function getClothingItems(): Promise<LegacyClothingItem[]> {
 
     return data.map(convertToLegacyFormat);
   } catch (error) {
-    console.error('Failed to fetch closet items:', error);
+    logger.error('Failed to fetch closet items:', error);
     throw error;
   }
 }
@@ -111,7 +112,7 @@ export async function getClothingItem(id: string): Promise<LegacyClothingItem | 
 
     return convertToLegacyFormat(data);
   } catch (error) {
-    console.error('Failed to fetch closet item:', error);
+    logger.error('Failed to fetch closet item:', error);
     throw error;
   }
 }
@@ -171,7 +172,7 @@ export async function addClothingItem(
 
     return convertToLegacyFormat(data);
   } catch (error) {
-    console.error('Failed to add closet item:', error);
+    logger.error('Failed to add closet item:', error);
     throw error;
   }
 }
@@ -214,7 +215,7 @@ export async function updateClothingItem(
 
     return convertToLegacyFormat(data);
   } catch (error) {
-    console.error('Failed to update closet item:', error);
+    logger.error('Failed to update closet item:', error);
     throw error;
   }
 }
@@ -235,7 +236,7 @@ export async function deleteClothingItem(id: string): Promise<void> {
 
     if (error) throw error;
   } catch (error) {
-    console.error('Failed to delete closet item:', error);
+    logger.error('Failed to delete closet item:', error);
     throw error;
   }
 }
@@ -270,7 +271,7 @@ export async function incrementTimesWorn(id: string): Promise<void> {
 
     if (error) throw error;
   } catch (error) {
-    console.error('Failed to increment times worn:', error);
+    logger.error('Failed to increment times worn:', error);
     throw error;
   }
 }
@@ -306,7 +307,7 @@ export async function toggleFavorite(id: string): Promise<boolean> {
 
     return newFavoriteStatus;
   } catch (error) {
-    console.error('Failed to toggle favorite:', error);
+    logger.error('Failed to toggle favorite:', error);
     throw error;
   }
 }

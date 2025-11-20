@@ -112,11 +112,13 @@ const Modal = ({
             </div>
             {showCloseButton && (
               <button
+                type="button"
                 onClick={onClose}
-                className="ml-4 p-2 min-w-[44px] min-h-[44px] rounded-full hover:bg-gray-200/50 dark:hover:bg-gray-700/50 transition-colors touch-manipulation"
+                className="ml-4 p-2 min-w-[44px] min-h-[44px] rounded-full hover:bg-gray-200/50 dark:hover:bg-gray-700/50 transition-colors touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
                 aria-label="Cerrar modal"
+                title="Cerrar"
               >
-                <span className="material-symbols-outlined text-gray-500 dark:text-gray-400">
+                <span className="material-symbols-outlined text-gray-500 dark:text-gray-400" aria-hidden="true">
                   close
                 </span>
               </button>

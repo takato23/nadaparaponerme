@@ -5,6 +5,7 @@
 
 import { supabase } from '../lib/supabase';
 import { getSessionUser } from './authService';
+import { logger } from '../utils/logger';
 import type { OutfitRating, RatingStats, SavedOutfit } from '../../types';
 import type { OutfitRatingInsert, OutfitRatingUpdate } from '../types/api';
 
@@ -23,7 +24,7 @@ export async function getUserRatings(): Promise<OutfitRating[]> {
     .order('created_at', { ascending: false });
 
   if (error) {
-    console.error('Error fetching ratings:', error);
+    logger.error('Error fetching ratings:', error);
     throw new Error('Error al obtener calificaciones');
   }
 
@@ -47,7 +48,7 @@ export async function getOutfitRating(outfitId: string): Promise<OutfitRating | 
     .maybeSingle();
 
   if (error) {
-    console.error('Error fetching outfit rating:', error);
+    logger.error('Error fetching outfit rating:', error);
     throw new Error('Error al obtener calificación');
   }
 
@@ -90,7 +91,7 @@ export async function createOrUpdateRating(
     .single();
 
   if (error) {
-    console.error('Error creating/updating rating:', error);
+    logger.error('Error creating/updating rating:', error);
     throw new Error('Error al guardar calificación');
   }
 
@@ -123,7 +124,7 @@ export async function updateRating(
     .single();
 
   if (error) {
-    console.error('Error updating rating:', error);
+    logger.error('Error updating rating:', error);
     throw new Error('Error al actualizar calificación');
   }
 
@@ -145,7 +146,7 @@ export async function deleteRating(ratingId: string): Promise<void> {
     .eq('user_id', user.id);
 
   if (error) {
-    console.error('Error deleting rating:', error);
+    logger.error('Error deleting rating:', error);
     throw new Error('Error al eliminar calificación');
   }
 }
@@ -165,7 +166,7 @@ export async function getRatingStats(savedOutfits: SavedOutfit[]): Promise<Ratin
     .eq('user_id', user.id);
 
   if (error) {
-    console.error('Error fetching rating stats:', error);
+    logger.error('Error fetching rating stats:', error);
     throw new Error('Error al obtener estadísticas');
   }
 

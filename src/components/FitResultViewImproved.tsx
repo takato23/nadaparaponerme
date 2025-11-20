@@ -1,36 +1,10 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import toast from 'react-hot-toast';
 import ConfettiEffect from './ConfettiEffect';
+import * as paymentService from '../services/paymentService';
+import { MONETIZATION_FLAGS, getFeatureFlag, getAffiliateLink, shouldShowWatermark } from '../services/monetizationService';
 
-interface ClothingItem {
-  id: string;
-  imageDataUrl: string;
-  metadata: {
-    category: 'top' | 'bottom' | 'shoes' | 'accessory' | 'outerwear';
-    subcategory: string;
-    color_primary: string;
-    vibe_tags: string[];
-    seasons: string[];
-  };
-}
-
-interface FitResult {
-  top_id: string;
-  bottom_id: string;
-  shoes_id: string;
-  explanation: string;
-  missing_piece_suggestion?: {
-    item_name: string;
-    reason: string;
-  };
-}
-
-interface SavedOutfit {
-  id: string;
-  top_id: string;
-  bottom_id: string;
-  shoes_id: string;
-  explanation: string;
-}
+import type { ClothingItem, FitResult, SavedOutfit } from '../../types';
 
 interface FitResultViewImprovedProps {
   result: FitResult;
@@ -74,6 +48,13 @@ const FitResultViewImproved: React.FC<FitResultViewImprovedProps> = ({
   const [showComparison, setShowComparison] = useState(false);
   const [comparisonOutfit, setComparisonOutfit] = useState<FitResult | null>(null);
   const [showConfetti, setShowConfetti] = useState(false);
+
+  // Monetization features
+  const [userTier, setUserTier] = useState<string>('free');
+  const [hasSharedForReward, setHasSharedForReward] = useState(() => {
+    return localStorage.getItem('ojodeloca-shared-for-reward') === 'true';
+  });
+  const [showShareRewardSuccess, setShowShareRewardSuccess] = useState(false);
 
   // Swipe gesture states
   const [touchStart, setTouchStart] = useState(0);
@@ -158,6 +139,50 @@ const FitResultViewImproved: React.FC<FitResultViewImprovedProps> = ({
     }
   }, [currentOutfit]);
 
+  // Load user subscription tier
+  useEffect(() => {
+    const loadSubscription = async () => {
+      const subscription = await paymentService.getCurrentSubscription();
+      setUserTier(subscription?.tier || 'free');
+    };
+    loadSubscription();
+  }, []);
+
+  // Share to Unlock handler
+  const handleShareForReward = () => {
+    if (hasSharedForReward) {
+      toast.success('¡Ya reclamaste tu recompensa por compartir!');
+      return;
+    }
+
+    // In a real app, this would integrate with Web Share API or Instagram Stories API
+    // For now, we simulate the share and grant the reward
+    if (navigator.share) {
+      navigator.share({
+        title: '¡Mirá mi outfit!',
+        text: `Creado con Ojo de Loca 👗✨`,
+        url: window.location.href,
+      }).then(() => {
+        // Mark as shared and show success
+        localStorage.setItem('ojodeloca-shared-for-reward', 'true');
+        setHasSharedForReward(true);
+        setShowShareRewardSuccess(true);
+
+        // In a real implementation, call backend to increment AI generations
+        console.log('✅ Share reward granted: +1 AI Generation');
+      }).catch((err) => {
+        console.log('Share canceled', err);
+      });
+    } else {
+      // Fallback: Just open share sheet simulation
+      toast.success('📱 Compartí este outfit en tus Instagram Stories para desbloquear 1 generación de IA gratis!');
+      // For demo purposes, grant reward anyway
+      localStorage.setItem('ojodeloca-shared-for-reward', 'true');
+      setHasSharedForReward(true);
+      setShowShareRewardSuccess(true);
+    }
+  };
+
   const handleRating = (newRating: number) => {
     setRating(newRating);
     onRateOutfit(newRating);
@@ -228,7 +253,17 @@ const FitResultViewImproved: React.FC<FitResultViewImprovedProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-fade-in">
-      <div className="w-full max-w-4xl bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
+      <div className="w-full max-w-4xl bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto relative">
+        {/* Mood Color Background */}
+        {(currentOutfit as any).ui_metadata?.mood_color_hex && (
+          <div
+            className="absolute inset-0 -z-10 opacity-20 dark:opacity-10 pointer-events-none rounded-2xl"
+            style={{
+              background: `radial-gradient(circle at 20% 80%, ${(currentOutfit as any).ui_metadata.mood_color_hex}80, transparent 70%)`
+            }}
+          />
+        )}
+
         {/* Header */}
         <div className="sticky top-0 z-10 glass-panel border-b border-white/20 dark:border-gray-700 px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -314,9 +349,32 @@ const FitResultViewImproved: React.FC<FitResultViewImprovedProps> = ({
                         Prestado
                       </div>
                     )}
+
+                    {/* Watermark for Free Users */}
+                    {shouldShowWatermark(userTier !== 'free') && (
+                      <div className="absolute bottom-2 right-2 px-2 py-1 bg-black/60 backdrop-blur-sm text-white text-[9px] font-bold rounded opacity-70">
+                        Ojo de Loca
+                      </div>
+                    )}
+
+
                     <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-4 pt-12 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                       <p className="text-white text-base font-bold">{topItem.metadata.subcategory}</p>
                       <p className="text-white/90 text-xs font-medium">{topItem.metadata.color_primary}</p>
+
+                      {/* Affiliate Link Button */}
+                      {getFeatureFlag(MONETIZATION_FLAGS.ENABLE_AFFILIATES) && getAffiliateLink(topItem) && (
+                        <a
+                          href={getAffiliateLink(topItem)!}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="mt-2 inline-flex items-center gap-1 px-3 py-1.5 bg-green-500 hover:bg-green-600 text-white text-xs font-bold rounded-full transition-colors"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <span className="material-symbols-outlined text-sm">shopping_bag</span>
+                          Comprar Similar
+                        </a>
+                      )}
                     </div>
                   </div>
                 )}
@@ -414,6 +472,61 @@ const FitResultViewImproved: React.FC<FitResultViewImprovedProps> = ({
                 </p>
               </div>
 
+              {/* Professional Educational Section */}
+              {(currentOutfit as any).educational && (
+                <div className="glass-card p-5 rounded-2xl space-y-4">
+                  <h3 className="text-sm font-bold text-text-primary dark:text-white mb-3 flex items-center gap-2">
+                    <span className="material-symbols-outlined text-purple-500 text-xl">psychology</span>
+                    💡 ¿Por qué te favorece?
+                  </h3>
+
+                  {/* Morfología */}
+                  {(currentOutfit as any).educational.morphology_explanation && (
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="material-symbols-outlined text-purple-400 text-base">checkroom</span>
+                        <h4 className="text-xs font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wide">
+                          Tu Cuerpo
+                        </h4>
+                      </div>
+                      <p className="text-sm text-text-secondary dark:text-gray-300 leading-relaxed pl-6">
+                        {(currentOutfit as any).educational.morphology_explanation}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Colorimetría */}
+                  {(currentOutfit as any).educational.colorimetry_explanation && (
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="material-symbols-outlined text-pink-400 text-base">palette</span>
+                        <h4 className="text-xs font-bold text-pink-600 dark:text-pink-400 uppercase tracking-wide">
+                          Tus Colores
+                        </h4>
+                      </div>
+                      <p className="text-sm text-text-secondary dark:text-gray-300 leading-relaxed pl-6">
+                        {(currentOutfit as any).educational.colorimetry_explanation}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Mood */}
+                  {(currentOutfit as any).educational.mood_explanation && (
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="material-symbols-outlined text-blue-400 text-base">mood</span>
+                        <h4 className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wide">
+                          El Mood
+                        </h4>
+                      </div>
+                      <p className="text-sm text-text-secondary dark:text-gray-300 leading-relaxed pl-6">
+                        {(currentOutfit as any).educational.mood_explanation}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Missing Piece Suggestion */}
               {currentOutfit.missing_piece_suggestion && (
                 <div className="bg-amber-50/80 dark:bg-amber-900/30 border border-amber-200/50 dark:border-amber-700/50 p-4 rounded-2xl backdrop-blur-sm">
@@ -495,13 +608,28 @@ const FitResultViewImproved: React.FC<FitResultViewImprovedProps> = ({
                   <span className="material-symbols-outlined text-xl">share</span>
                   Compartir
                 </button>
-                <button
-                  onClick={() => setShowCalendar(!showCalendar)}
-                  className="px-4 py-3 bg-white dark:bg-slate-800 text-text-primary dark:text-white border border-gray-200 dark:border-slate-700 rounded-xl text-sm font-bold hover:bg-gray-50 dark:hover:bg-slate-700 transition-all flex items-center justify-center gap-2"
-                >
-                  <span className="material-symbols-outlined text-xl">calendar_month</span>
-                  Calendario
-                </button>
+
+                {/* Share to Unlock - Only for Free users */}
+                {getFeatureFlag(MONETIZATION_FLAGS.ENABLE_SHARE_REWARD) && userTier === 'free' && !hasSharedForReward && (
+                  <button
+                    onClick={handleShareForReward}
+                    className="px-4 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl text-sm font-bold hover:shadow-lg hover:shadow-green-500/30 hover:-translate-y-0.5 active:scale-95 transition-all flex items-center justify-center gap-2 animate-pulse"
+                  >
+                    <span className="material-symbols-outlined text-xl">star</span>
+                    Desbloquear +1 Gen
+                  </button>
+                )}
+
+                {/* Calendar button - only show if Share to Unlock not visible */}
+                {(!getFeatureFlag(MONETIZATION_FLAGS.ENABLE_SHARE_REWARD) || userTier !== 'free' || hasSharedForReward) && (
+                  <button
+                    onClick={() => setShowCalendar(!showCalendar)}
+                    className="px-4 py-3 bg-white dark:bg-slate-800 text-text-primary dark:text-white border border-gray-200 dark:border-slate-700 rounded-xl text-sm font-bold hover:bg-gray-50 dark:hover:bg-slate-700 transition-all flex items-center justify-center gap-2"
+                  >
+                    <span className="material-symbols-outlined text-xl">calendar_month</span>
+                    Calendario
+                  </button>
+                )}
               </div>
             </div>
           </div>
