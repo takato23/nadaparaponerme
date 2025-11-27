@@ -405,8 +405,8 @@ export async function generateProfessionalOutfit(
   profile: ProfessionalProfile,
   occasion: string,
   weather?: WeatherData,
-  tonePreference: 'concise' | 'balanced' | 'detailed' = 'balanced',
-  apiKey?: string
+  tonePreference: 'concise' | 'balanced' | 'detailed' = 'balanced'
+  // ⛔ SECURITY: apiKey parameter removed - service must use Edge Functions or pre-configured API
 ): Promise<ProfessionalFitResult> {
   console.log('🔵 [PROFESSIONAL] Iniciando generación profesional...');
   console.log('🔵 [PROFESSIONAL] Closet size:', closet?.length || 0);
@@ -438,12 +438,8 @@ export async function generateProfessionalOutfit(
   const systemPrompt = buildProfessionalPrompt(profile, formalityLevel, occasion, weather, tonePreference);
   console.log('🔵 [PROFESSIONAL] System prompt construido');
 
-  // 5. Llamar a Gemini usando el servicio configurado con prompt personalizado
-  // Configurar API key si se proporciona
-  if (apiKey) {
-    console.log('🔵 [PROFESSIONAL] Configurando API key...');
-    geminiService.configureGeminiAPI(apiKey);
-  }
+  // 5. Llamar a Gemini usando el servicio pre-configurado (via Edge Functions)
+  // ⛔ SECURITY: API key must be configured server-side via Edge Functions, not passed from client
 
   console.log('🔵 [PROFESSIONAL] Llamando a Gemini API...');
   // Usar el servicio con el system prompt profesional y schema extendido

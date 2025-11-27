@@ -2,16 +2,23 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useCloset } from '../contexts/ClosetContext';
 import { ClothingItem } from '../types';
+import { useNavigate } from 'react-router-dom';
 
 export default function InstantOutfitView() {
     const { items } = useCloset();
+    const navigate = useNavigate();
     const [isSpinning, setIsSpinning] = useState(false);
     const [result, setResult] = useState<string | null>(null);
+    const [selectedOutfit, setSelectedOutfit] = useState<{
+        top: ClothingItem | null;
+        bottom: ClothingItem | null;
+        shoes: ClothingItem | null;
+    }>({ top: null, bottom: null, shoes: null });
 
     // Filter items by category for the slot machine
-    const tops = items.filter(i => i.category === 'tops');
-    const bottoms = items.filter(i => i.category === 'bottoms');
-    const shoes = items.filter(i => i.category === 'shoes');
+    const tops = items.filter(i => i.metadata.category === 'top');
+    const bottoms = items.filter(i => i.metadata.category === 'bottom');
+    const shoes = items.filter(i => i.metadata.category === 'shoes');
 
     // Fallback images if closet is empty
     const fallbackItems = {
@@ -34,17 +41,30 @@ export default function InstantOutfitView() {
 
     // Prepare data for the slots
     const slotData = {
-        tops: tops.length > 0 ? tops.map(i => i.image_url || i.imageUrl) : fallbackItems.tops,
-        bottoms: bottoms.length > 0 ? bottoms.map(i => i.image_url || i.imageUrl) : fallbackItems.bottoms,
-        shoes: shoes.length > 0 ? shoes.map(i => i.image_url || i.imageUrl) : fallbackItems.shoes,
+        tops: tops.length > 0 ? tops.map(i => i.imageDataUrl) : fallbackItems.tops,
+        bottoms: bottoms.length > 0 ? bottoms.map(i => i.imageDataUrl) : fallbackItems.bottoms,
+        shoes: shoes.length > 0 ? shoes.map(i => i.imageDataUrl) : fallbackItems.shoes,
     };
 
     const spin = () => {
         setIsSpinning(true);
         setResult(null);
+        setSelectedOutfit({ top: null, bottom: null, shoes: null });
+
         setTimeout(() => {
             setIsSpinning(false);
             setResult('✨ Outfit Match! ✨');
+
+            // Select random items from each category
+            const selectedTop = tops.length > 0 ? tops[Math.floor(Math.random() * tops.length)] : null;
+            const selectedBottom = bottoms.length > 0 ? bottoms[Math.floor(Math.random() * bottoms.length)] : null;
+            const selectedShoes = shoes.length > 0 ? shoes[Math.floor(Math.random() * shoes.length)] : null;
+
+            setSelectedOutfit({
+                top: selectedTop,
+                bottom: selectedBottom,
+                shoes: selectedShoes
+            });
         }, 2500);
     };
 
@@ -116,9 +136,58 @@ export default function InstantOutfitView() {
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="text-2xl font-bold text-primary animate-pulse"
+                        className="flex flex-col items-center gap-6 w-full max-w-md"
                     >
-                        {result}
+                        <div className="text-2xl font-bold text-primary animate-pulse">
+                            {result}
+                        </div>
+
+                        {/* Action Buttons */}
+                        {selectedOutfit.top && selectedOutfit.bottom && selectedOutfit.shoes && (
+                            <div className="flex flex-wrap gap-3 justify-center w-full">
+                                {/* Brand Detection Button */}
+                                <button
+                                    onClick={() => {
+                                        // For now, analyze the top item, but we could let user choose
+                                        const itemToAnalyze = selectedOutfit.top;
+                                        if (itemToAnalyze) {
+                                            navigate('/armario'); // Navigate to closet which has the brand recognition integration
+                                            // TODO: Store item in state to auto-open brand recognition modal
+                                        }
+                                    }}
+                                    className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold shadow-lg hover:scale-105 active:scale-95 transition-all"
+                                >
+                                    <span className="material-symbols-outlined">label</span>
+                                    Analizar Marca
+                                </button>
+
+                                {/* Dupe Finder Button */}
+                                <button
+                                    onClick={() => {
+                                        const itemToAnalyze = selectedOutfit.bottom;
+                                        if (itemToAnalyze) {
+                                            navigate('/armario');
+                                        }
+                                    }}
+                                    className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-bold shadow-lg hover:scale-105 active:scale-95 transition-all"
+                                >
+                                    <span className="material-symbols-outlined">shopping_bag</span>
+                                    Buscar Dupes
+                                </button>
+
+                                {/* Save Outfit Button */}
+                                <button
+                                    onClick={() => {
+                                        // TODO: Implement save outfit functionality
+                                        alert('Guardar outfit - próximamente!');
+                                    }}
+                                    className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-bold shadow-lg hover:scale-105 active:scale-95 transition-all"
+                                >
+                                    <span className="material-symbols-outlined">favorite</span>
+                                    Guardar Outfit
+                                </button>
+                            </div>
+                        )}
                     </motion.div>
                 )}
             </div>

@@ -147,68 +147,67 @@ const GenerateFitViewImproved: React.FC<GenerateFitViewImprovedProps> = ({
   const activeCategory = CATEGORIES.find(c => c.value === activeTab);
 
   return (
-    <div className="fixed inset-0 bg-gradient-to-br from-gray-900/95 via-gray-800/95 to-gray-900/95 backdrop-blur-xl z-50 flex items-center justify-center p-4 animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in overflow-hidden">
+      {/* Background with Iridescent Effect */}
+      <div className="absolute inset-0 bg-gray-50 dark:bg-gray-900 transition-colors duration-500"></div>
+      <div className="absolute inset-0 opacity-60 dark:opacity-40 iridescent-gradient"></div>
+      <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 brightness-100 contrast-150 mix-blend-overlay"></div>
+
       {/* Main Card */}
-      <div className="w-full max-w-2xl bg-gradient-to-br from-white via-gray-50 to-white dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 rounded-3xl shadow-2xl max-h-[90vh] overflow-hidden flex flex-col">
+      <div className="relative w-full max-w-2xl liquid-glass shadow-2xl max-h-[90vh] overflow-hidden flex flex-col animate-scale-in">
 
         {/* Premium Header */}
-        <div className="relative overflow-hidden">
-          {/* Animated Background Gradient */}
-          <div className={`absolute inset-0 bg-gradient-to-r ${activeCategory?.color} opacity-10 animate-gradient`}></div>
-
-          <div className="relative backdrop-blur-xl bg-white/80 dark:bg-gray-900/80 border-b border-gray-200/50 dark:border-gray-700/50 px-6 py-5">
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex items-center gap-3">
+        <div className="relative z-10">
+          <div className="bg-white/40 dark:bg-gray-900/40 border-b border-white/20 dark:border-gray-700/30 px-6 py-5 backdrop-blur-md">
+            <div className="flex items-start justify-between mb-6">
+              <div className="flex items-center gap-4">
                 <button
                   onClick={onBack}
-                  className="p-2.5 hover:bg-black/5 dark:hover:bg-white/10 rounded-xl transition-all active:scale-95 group"
+                  className="w-10 h-10 rounded-full bg-white/50 dark:bg-gray-800/50 hover:bg-white/80 dark:hover:bg-gray-700/80 flex items-center justify-center transition-all active:scale-95 shadow-sm border border-white/40 group"
                 >
-                  <span className="material-symbols-outlined text-xl group-hover:-translate-x-0.5 transition-transform">arrow_back</span>
+                  <span className="material-symbols-outlined text-xl text-gray-700 dark:text-gray-200 group-hover:-translate-x-0.5 transition-transform">arrow_back</span>
                 </button>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h2 className="text-2xl font-bold bg-gradient-to-r from-primary via-purple-600 to-pink-600 bg-clip-text text-transparent">
-                      Estilista IA
+                    <h2 className="text-3xl font-bold text-gray-900 dark:text-white font-serif tracking-tight">
+                      Estilista <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-pink-600">AI</span>
                     </h2>
-                    <div className={`px-2 py-0.5 rounded-full bg-gradient-to-r ${timeOfDay.gradient} flex items-center gap-1`}>
+                    <div className={`px-2.5 py-0.5 rounded-full bg-gradient-to-r ${timeOfDay.gradient} flex items-center gap-1.5 shadow-sm ring-1 ring-white/50`}>
                       <span className="text-xs">{timeOfDay.icon}</span>
-                      <span className="text-[10px] font-bold text-white">{timeOfDay.label}</span>
+                      <span className="text-[10px] font-bold text-white tracking-wide uppercase">{timeOfDay.label}</span>
                     </div>
                   </div>
-                  <p className="text-xs text-text-secondary dark:text-gray-400 font-medium mt-1">
-                    {closet.length} prendas disponibles · Powered by AI
+                  <p className="text-sm text-gray-500 dark:text-gray-400 font-medium mt-1 tracking-wide">
+                    {closet.length} prendas disponibles para combinar
                   </p>
                 </div>
               </div>
               <button
                 onClick={handleSurpriseMe}
                 disabled={isGenerating || closet.length === 0}
-                className="px-4 py-2.5 bg-gradient-to-r from-purple-500 via-pink-500 to-rose-500 text-white rounded-full text-sm font-bold shadow-lg hover:shadow-xl hover:scale-105 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 active:scale-95 relative overflow-hidden group"
+                className="px-4 py-2 bg-white/50 dark:bg-gray-800/50 hover:bg-white/80 dark:hover:bg-gray-700/80 rounded-full text-sm font-semibold text-purple-700 dark:text-purple-300 shadow-sm hover:shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 active:scale-95 border border-white/40 backdrop-blur-sm group"
               >
-                <div className="absolute inset-0 bg-white/20 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
-                <span className="material-symbols-outlined text-lg relative">shuffle</span>
-                <span className="relative">Sorpréndeme</span>
+                <span className="material-symbols-outlined text-xl group-hover:rotate-180 transition-transform duration-500">auto_awesome</span>
+                <span>Sorpréndeme</span>
               </button>
             </div>
 
-            {/* Compact Stats */}
-            <div className="grid grid-cols-5 gap-2">
+            {/* Elegant Stats */}
+            <div className="flex justify-between gap-2 px-1">
               {[
-                { count: closetStats.tops, label: 'Tops', icon: 'checkroom', color: 'from-blue-500 to-cyan-500' },
-                { count: closetStats.bottoms, label: 'Bottoms', icon: 'diamond', color: 'from-purple-500 to-pink-500' },
-                { count: closetStats.shoes, label: 'Zapatos', icon: 'counter_1', color: 'from-green-500 to-emerald-500' },
-                { count: closetStats.accessories, label: 'Acces.', icon: 'category', color: 'from-yellow-500 to-orange-500' },
-                { count: closetStats.outerwear, label: 'Abrigos', icon: 'ac_unit', color: 'from-red-500 to-rose-500' },
+                { count: closetStats.tops, label: 'Tops', icon: 'checkroom' },
+                { count: closetStats.bottoms, label: 'Bottoms', icon: 'dresser' },
+                { count: closetStats.shoes, label: 'Calzado', icon: 'steps' },
+                { count: closetStats.accessories, label: 'Accesorios', icon: 'diamond' },
+                { count: closetStats.outerwear, label: 'Abrigos', icon: 'apparel' },
               ].map((stat, i) => (
-                <div key={i} className="group relative overflow-hidden rounded-xl bg-white/50 dark:bg-gray-800/50 p-2.5 backdrop-blur-sm border border-gray-200/50 dark:border-gray-700/50 hover:scale-105 transition-transform cursor-default">
-                  <div className={`absolute inset-0 bg-gradient-to-br ${stat.color} opacity-0 group-hover:opacity-10 transition-opacity`}></div>
-                  <div className="relative text-center">
-                    <span className={`material-symbols-outlined text-lg mb-1 bg-gradient-to-br ${stat.color} bg-clip-text text-transparent`}>
+                <div key={i} className="flex flex-col items-center gap-1 group cursor-default">
+                  <div className="w-10 h-10 rounded-2xl bg-white/40 dark:bg-gray-800/40 flex items-center justify-center shadow-sm border border-white/30 group-hover:scale-110 transition-transform duration-300 group-hover:bg-white/60 dark:group-hover:bg-gray-700/60">
+                    <span className="material-symbols-outlined text-lg text-gray-600 dark:text-gray-300 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
                       {stat.icon}
                     </span>
-                    <p className={`text-base font-bold bg-gradient-to-br ${stat.color} bg-clip-text text-transparent`}>{stat.count}</p>
-                    <p className="text-[9px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking wider">{stat.label}</p>
                   </div>
+                  <span className="text-xs font-bold text-gray-700 dark:text-gray-300">{stat.count}</span>
                 </div>
               ))}
             </div>
@@ -216,32 +215,31 @@ const GenerateFitViewImproved: React.FC<GenerateFitViewImprovedProps> = ({
         </div>
 
         {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          {/* Category Pills - Premium Design */}
-          <div>
-            <h3 className="text-xs font-bold text-text-secondary dark:text-gray-400 uppercase tracking-wider mb-3 ml-1 flex items-center gap-2">
-              <span className="material-symbols-outlined text-sm text-primary">style</span>
-              <span>Estilo</span>
+        <div className="flex-1 overflow-y-auto p-6 space-y-8 bg-white/30 dark:bg-black/10 backdrop-blur-sm custom-scrollbar">
+
+          {/* Category Selection */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest ml-1 flex items-center gap-2">
+              <span className="w-1 h-4 bg-purple-500 rounded-full"></span>
+              Ocasión
             </h3>
             <div className="grid grid-cols-3 gap-3">
               {CATEGORIES.map((category) => (
                 <button
                   key={category.value}
                   onClick={() => setActiveTab(category.value)}
-                  className={`group relative overflow-hidden p-4 rounded-2xl transition-all duration-300 ${activeTab === category.value
-                      ? 'bg-gradient-to-br ' + category.color + ' shadow-lg scale-105'
-                      : 'bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 border-2 border-gray-100 dark:border-gray-700'
+                  className={`group relative overflow-hidden p-4 rounded-2xl transition-all duration-300 border ${activeTab === category.value
+                    ? 'bg-white dark:bg-gray-800 shadow-lg border-purple-200 dark:border-purple-800 scale-[1.02]'
+                    : 'bg-white/40 dark:bg-gray-800/40 hover:bg-white/60 dark:hover:bg-gray-700/60 border-white/30 dark:border-gray-600/30'
                     }`}
                 >
-                  {activeTab === category.value && (
-                    <div className="absolute inset-0 bg-white/20 animate-pulse-slow"></div>
-                  )}
+                  <div className={`absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 bg-gradient-to-br ${category.color} opacity-10`}></div>
                   <div className="relative flex flex-col items-center gap-2">
-                    <span className={`material-symbols-outlined text-2xl ${activeTab === category.value ? 'text-white' : 'text-gray-600 dark:text-gray-400'
-                      } group-hover:scale-110 transition-transform`}>
+                    <span className={`material-symbols-outlined text-2xl transition-colors duration-300 ${activeTab === category.value ? 'text-purple-600 dark:text-purple-400' : 'text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-200'
+                      }`}>
                       {category.icon}
                     </span>
-                    <span className={`text-xs font-bold ${activeTab === category.value ? 'text-white' : 'text-gray-700 dark:text-gray-300'
+                    <span className={`text-xs font-bold tracking-wide ${activeTab === category.value ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-400'
                       }`}>
                       {category.value}
                     </span>
@@ -251,31 +249,28 @@ const GenerateFitViewImproved: React.FC<GenerateFitViewImprovedProps> = ({
             </div>
           </div>
 
-          {/* Mood Selector - Enhanced */}
-          <div>
-            <h3 className="text-xs font-bold text-text-secondary dark:text-gray-400 uppercase tracking-wider mb-3 ml-1 flex items-center gap-2">
-              <span className="material-symbols-outlined text-sm text-primary">sentiment_satisfied</span>
-              <span>¿Cómo te sientes?</span>
+          {/* Mood Selection */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest ml-1 flex items-center gap-2">
+              <span className="w-1 h-4 bg-pink-500 rounded-full"></span>
+              Vibe
             </h3>
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-4 gap-3">
               {MOODS.map((mood) => (
                 <button
                   key={mood.value}
                   onClick={() => setSelectedMood(selectedMood === mood.value ? null : mood.value)}
-                  className={`group relative overflow-hidden p-3 rounded-2xl transition-all duration-300 ${selectedMood === mood.value
-                      ? 'bg-gradient-to-br ' + mood.gradient + ' shadow-lg scale-105'
-                      : 'bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 border-2 border-gray-100 dark:border-gray-700'
+                  className={`group relative overflow-hidden p-3 rounded-2xl transition-all duration-300 border ${selectedMood === mood.value
+                    ? 'bg-white dark:bg-gray-800 shadow-md border-pink-200 dark:border-pink-800 scale-105'
+                    : 'bg-white/40 dark:bg-gray-800/40 hover:bg-white/60 dark:hover:bg-gray-700/60 border-white/30 dark:border-gray-600/30'
                     }`}
                 >
-                  {selectedMood === mood.value && (
-                    <div className="absolute inset-0 bg-white/10"></div>
-                  )}
                   <div className="relative text-center">
-                    <div className={`text-2xl mb-1 transform group-hover:scale-125 transition-transform ${selectedMood === mood.value ? 'animate-bounce-slow' : ''
+                    <div className={`text-2xl mb-2 transform transition-transform duration-300 ${selectedMood === mood.value ? 'scale-110' : 'group-hover:scale-110'
                       }`}>
                       {mood.emoji}
                     </div>
-                    <p className={`text-[10px] font-bold ${selectedMood === mood.value ? 'text-white' : 'text-gray-700 dark:text-gray-300'
+                    <p className={`text-[10px] font-bold uppercase tracking-wide ${selectedMood === mood.value ? 'text-pink-600 dark:text-pink-400' : 'text-gray-600 dark:text-gray-400'
                       }`}>
                       {mood.label}
                     </p>
@@ -287,17 +282,14 @@ const GenerateFitViewImproved: React.FC<GenerateFitViewImprovedProps> = ({
 
           {/* Recent Searches */}
           {recentSearches.length > 0 && (
-            <div>
-              <h3 className="text-xs font-bold text-text-secondary dark:text-gray-400 uppercase tracking-wider mb-3 ml-1 flex items-center gap-2">
-                <span className="material-symbols-outlined text-sm text-primary">history</span>
-                <span>Recientes</span>
-              </h3>
+            <div className="space-y-3">
+              <h3 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest ml-1">Recientes</h3>
               <div className="flex gap-2 flex-wrap">
                 {recentSearches.slice(0, 3).map((search, index) => (
                   <button
                     key={index}
                     onClick={() => handleRecentSearch(search)}
-                    className="px-3 py-2 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 border border-gray-200 dark:border-gray-600 text-text-secondary dark:text-gray-300 rounded-full text-xs font-medium hover:from-primary/10 hover:to-primary/5 hover:border-primary/30 transition-all hover:scale-105 active:scale-95"
+                    className="px-4 py-2 bg-white/40 dark:bg-gray-800/40 border border-white/30 dark:border-gray-600/30 text-gray-600 dark:text-gray-300 rounded-full text-xs font-medium hover:bg-white/60 hover:border-purple-300 transition-all hover:shadow-sm active:scale-95"
                   >
                     {search}
                   </button>
@@ -307,85 +299,79 @@ const GenerateFitViewImproved: React.FC<GenerateFitViewImprovedProps> = ({
           )}
 
           {/* Advanced Toggle */}
-          <button
-            onClick={() => setShowAdvanced(!showAdvanced)}
-            className="w-full flex items-center justify-between p-4 rounded-2xl bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 hover:from-primary/10 hover:to-primary/5 transition-all group border border-gray-200 dark:border-gray-700"
-          >
-            <span className="text-sm font-bold text-text-secondary dark:text-gray-300 group-hover:text-primary transition-colors flex items-center gap-2">
-              <span className="material-symbols-outlined text-lg">tune</span>
-              Opciones Avanzadas
-            </span>
-            <span className={`material-symbols-outlined text-lg text-text-secondary transition-transform duration-300 ${showAdvanced ? 'rotate-180' : ''}`}>
-              expand_more
-            </span>
-          </button>
+          <div className="pt-2">
+            <button
+              onClick={() => setShowAdvanced(!showAdvanced)}
+              className="w-full flex items-center justify-between p-4 rounded-2xl bg-white/40 dark:bg-gray-800/40 hover:bg-white/60 dark:hover:bg-gray-700/60 transition-all group border border-white/30 dark:border-gray-600/30"
+            >
+              <span className="text-sm font-bold text-gray-700 dark:text-gray-200 group-hover:text-purple-600 transition-colors flex items-center gap-2">
+                <span className="material-symbols-outlined text-lg text-purple-500">tune</span>
+                Configuración Avanzada
+              </span>
+              <span className={`material-symbols-outlined text-lg text-gray-400 transition-transform duration-300 ${showAdvanced ? 'rotate-180' : ''}`}>
+                expand_more
+              </span>
+            </button>
 
-          {/* Custom Prompt */}
-          {showAdvanced && (
-            <div className="space-y-3 animate-fade-in">
-              <label className="block text-sm font-bold text-text-primary dark:text-white ml-1 flex items-center gap-2">
-                <span className="material-symbols-outlined text-base text-primary">edit_note</span>
-                Describe tu outfit ideal
-              </label>
-              <textarea
-                value={customPrompt}
-                onChange={(e) => setCustomPrompt(e.target.value)}
-                placeholder="Ej: Un outfit casual con jeans azules y colores neutros..."
-                className="w-full p-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm text-text-primary dark:text-white placeholder-text-secondary/50 focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all resize-none shadow-inner"
-                rows={3}
-                disabled={isGenerating}
-              />
-              <p className="text-xs text-text-secondary dark:text-gray-400 ml-1 flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
-                Sé específico para mejores resultados
-              </p>
+            {/* Custom Prompt */}
+            <div className={`grid transition-all duration-300 ease-in-out ${showAdvanced ? 'grid-rows-[1fr] opacity-100 mt-4' : 'grid-rows-[0fr] opacity-0'}`}>
+              <div className="overflow-hidden">
+                <div className="relative">
+                  <textarea
+                    value={customPrompt}
+                    onChange={(e) => setCustomPrompt(e.target.value)}
+                    placeholder="Describe exactamente qué buscas (ej: 'Outfit para una entrevista de trabajo en verano')..."
+                    className="w-full p-5 rounded-2xl border border-purple-100 dark:border-gray-700 bg-white/60 dark:bg-gray-800/60 text-sm text-gray-800 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-all resize-none shadow-inner backdrop-blur-sm outline-none"
+                    rows={3}
+                    disabled={isGenerating}
+                  />
+                  <div className="absolute bottom-3 right-3">
+                    <span className="material-symbols-outlined text-gray-400 text-lg">edit</span>
+                  </div>
+                </div>
+              </div>
             </div>
-          )}
+          </div>
 
           {/* Error Message */}
           {error && (
-            <div className="p-4 bg-gradient-to-r from-red-50 to-rose-50 dark:from-red-900/20 dark:to-rose-900/20 border-2 border-red-200 dark:border-red-800 rounded-2xl animate-shake">
-              <div className="flex items-start gap-3">
-                <div className="p-2 bg-red-100 dark:bg-red-800/30 rounded-xl text-red-600 dark:text-red-400">
-                  <span className="material-symbols-outlined text-xl">error</span>
+            <div className="p-4 bg-red-50/90 dark:bg-red-900/30 border border-red-100 dark:border-red-800 rounded-2xl animate-shake backdrop-blur-sm shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-red-100 dark:bg-red-800/50 flex items-center justify-center text-red-500 dark:text-red-400 shrink-0">
+                  <span className="material-symbols-outlined text-lg">error_outline</span>
                 </div>
-                <div>
-                  <p className="text-sm font-bold text-red-900 dark:text-red-200">Algo salió mal</p>
-                  <p className="text-xs text-red-700 dark:text-red-300 mt-1">{error}</p>
-                </div>
+                <p className="text-sm text-red-700 dark:text-red-200 font-medium">{error}</p>
               </div>
             </div>
           )}
         </div>
 
         {/* Premium CTA */}
-        <div className="sticky bottom-0 p-6 bg-gradient-to-t from-white via-white/95 to-transparent dark:from-gray-900 dark:via-gray-900/95 dark:to-transparent backdrop-blur-sm border-t border-gray-200/50 dark:border-gray-700/50">
+        <div className="sticky bottom-0 p-6 bg-white/60 dark:bg-gray-900/60 backdrop-blur-xl border-t border-white/40 dark:border-gray-700/40 z-20">
           <button
             onClick={handleGenerate}
             disabled={isGenerating || closet.length === 0}
-            className="w-full py-4 bg-gradient-to-r from-primary via-purple-600 to-pink-600 text-white rounded-2xl font-bold text-lg shadow-2xl shadow-primary/30 hover:shadow-primary/50 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3 group relative overflow-hidden"
+            className="w-full py-4 rounded-2xl font-bold text-lg text-white shadow-lg shadow-purple-500/20 hover:shadow-purple-500/40 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3 group relative overflow-hidden bg-gradient-to-r from-purple-600 via-pink-600 to-purple-600 bg-[length:200%_auto] hover:bg-right transition-[background-position] duration-500"
           >
-            {/* Shine effect */}
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/25 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
-
-            <div className="relative flex items-center gap-3">
+            <div className="relative flex items-center gap-2">
               {isGenerating ? (
                 <>
-                  <div className="w-5 h-5 border-3 border-white/30 border-t-white rounded-full animate-spin" />
-                  <span>{loadingMessage}</span>
+                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  <span className="tracking-wide font-medium">{loadingMessage}</span>
                 </>
               ) : (
                 <>
-                  <span className="material-symbols-outlined text-2xl">auto_awesome</span>
-                  <span>Generar Outfit Perfecto</span>
+                  <span className="material-symbols-outlined text-2xl animate-pulse-glow">auto_awesome</span>
+                  <span className="tracking-wide font-serif italic">Diseñar mi Outfit</span>
                 </>
               )}
             </div>
           </button>
 
           {closet.length === 0 && (
-            <p className="text-center text-xs font-medium text-text-secondary dark:text-gray-400 mt-3">
-              Agrega prendas a tu armario para generar outfits
+            <p className="text-center text-xs font-medium text-gray-500 dark:text-gray-400 mt-3 flex items-center justify-center gap-1">
+              <span className="material-symbols-outlined text-sm">info</span>
+              Necesitas agregar prendas a tu armario primero
             </p>
           )}
         </div>

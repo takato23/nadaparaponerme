@@ -3,11 +3,9 @@ import './src/index.css';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import { ThemeProvider } from './contexts/ThemeContext';
-import { initGeminiForDevelopment } from './src/lib/gemini-dev-init';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
-// Initialize Gemini API for development (no-op in production)
-initGeminiForDevelopment();
+// ⛔ SECURITY: Gemini API initialization removed - all AI calls go through Edge Functions
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

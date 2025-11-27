@@ -6,6 +6,8 @@ export interface SortOption {
   direction: SortDirection;
 }
 
+export type CategoryFilter = 'all' | 'top' | 'bottom' | 'shoes' | 'accessory' | 'outerwear';
+
 export interface ClothingItemMetadata {
   description?: string;
   category: string;
@@ -15,6 +17,13 @@ export interface ClothingItemMetadata {
   sleeve_type?: string;
   vibe_tags: string[];
   seasons: string[];
+  // Premium Analysis Fields
+  fashion_score?: number; // 1-10
+  occasion_tags?: string[];
+  color_palette?: string[]; // Hex codes
+  styling_tips?: string;
+  care_instructions?: string;
+  fabric_composition?: string;
 }
 
 export interface ClothingItem {
@@ -169,9 +178,8 @@ export interface Lookbook {
   theme_description: string;
 }
 
-export type ChallengeType = 'color' | 'style' | 'occasion' | 'seasonal' | 'creativity' | 'minimalist';
-export type ChallengeDifficulty = 'easy' | 'medium' | 'hard';
-export type ChallengeStatus = 'active' | 'completed' | 'skipped';
+// Types moved to Multiplayer Challenges section
+
 
 export interface StyleChallenge {
   id: string;
@@ -966,12 +974,12 @@ export interface ChallengeNotification {
   user_id: string;                      // Recipient
   challenge_id: string;                 // Related challenge
   notification_type:
-    | 'challenge_invite'                // Invited to challenge
-    | 'voting_started'                  // Voting phase began
-    | 'challenge_won'                   // You won!
-    | 'new_submission'                  // Someone submitted
-    | 'challenge_ending_soon'           // 1 hour before deadline
-    | 'achievement_unlocked';           // New achievement
+  | 'challenge_invite'                // Invited to challenge
+  | 'voting_started'                  // Voting phase began
+  | 'challenge_won'                   // You won!
+  | 'new_submission'                  // Someone submitted
+  | 'challenge_ending_soon'           // 1 hour before deadline
+  | 'achievement_unlocked';           // New achievement
   message: string;                      // Notification text
   created_at: string;                   // ISO 8601
   is_read: boolean;                     // Read status

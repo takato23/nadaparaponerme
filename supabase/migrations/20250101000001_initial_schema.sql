@@ -53,7 +53,7 @@ CREATE TRIGGER on_auth_user_created
 -- =====================================================
 
 CREATE TABLE clothing_items (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
 
   -- Basic metadata
@@ -105,7 +105,7 @@ CREATE INDEX idx_clothing_created ON clothing_items(user_id, created_at DESC) WH
 -- =====================================================
 
 CREATE TABLE outfits (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
 
   name TEXT NOT NULL,
@@ -149,7 +149,7 @@ CREATE INDEX idx_outfits_clothing_items ON outfits USING GIN(clothing_item_ids);
 -- =====================================================
 
 CREATE TABLE friendships (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   requester_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   addressee_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   status TEXT NOT NULL DEFAULT 'pending',
@@ -170,7 +170,7 @@ CREATE INDEX idx_friendships_accepted ON friendships(requester_id, addressee_id)
 -- =====================================================
 
 CREATE TABLE outfit_likes (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   outfit_id UUID NOT NULL REFERENCES outfits(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -186,7 +186,7 @@ CREATE INDEX idx_outfit_likes_user ON outfit_likes(user_id);
 -- =====================================================
 
 CREATE TABLE outfit_comments (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   outfit_id UUID NOT NULL REFERENCES outfits(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   content TEXT NOT NULL,
@@ -206,7 +206,7 @@ CREATE INDEX idx_outfit_comments_user ON outfit_comments(user_id);
 -- =====================================================
 
 CREATE TABLE borrowed_items (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   clothing_item_id UUID NOT NULL REFERENCES clothing_items(id) ON DELETE CASCADE,
   owner_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   borrower_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
@@ -236,7 +236,7 @@ CREATE INDEX idx_borrowed_active ON borrowed_items(status) WHERE status IN ('req
 -- =====================================================
 
 CREATE TABLE packing_lists (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
 
   trip_name TEXT NOT NULL,
@@ -266,7 +266,7 @@ CREATE INDEX idx_packing_active ON packing_lists(user_id, is_archived) WHERE is_
 -- =====================================================
 
 CREATE TABLE activity_feed (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   actor_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
 

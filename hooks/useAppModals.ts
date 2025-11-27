@@ -37,11 +37,15 @@ export function useAppModals() {
   const [showCapsuleBuilder, setShowCapsuleBuilder] = useState(false);
   const [showStyleDNA, setShowStyleDNA] = useState(false);
   const [showAIDesigner, setShowAIDesigner] = useState(false);
+  const [showGenerationHistory, setShowGenerationHistory] = useState(false);
   const [showStyleEvolution, setShowStyleEvolution] = useState(false);
   const [showCalendarSync, setShowCalendarSync] = useState(false);
   const [showActivityFeed, setShowActivityFeed] = useState(false);
   const [showVirtualShopping, setShowVirtualShopping] = useState(false);
   const [showMultiplayerChallenges, setShowMultiplayerChallenges] = useState(false);
+  const [showQuickCamera, setShowQuickCamera] = useState(false);
+  const [showProfessionalWizard, setShowProfessionalWizard] = useState(false);
+  const [showMigrationModal, setShowMigrationModal] = useState(false);
 
   // Paywall modals
   const [showPaywall, setShowPaywall] = useState(false);
@@ -121,6 +125,8 @@ export function useAppModals() {
     setShowStyleDNA,
     showAIDesigner,
     setShowAIDesigner,
+    showGenerationHistory,
+    setShowGenerationHistory,
     showStyleEvolution,
     setShowStyleEvolution,
     showCalendarSync,
@@ -131,6 +137,12 @@ export function useAppModals() {
     setShowVirtualShopping,
     showMultiplayerChallenges,
     setShowMultiplayerChallenges,
+    showQuickCamera,
+    setShowQuickCamera,
+    showProfessionalWizard,
+    setShowProfessionalWizard,
+    showMigrationModal,
+    setShowMigrationModal,
 
     // Paywall
     showPaywall,

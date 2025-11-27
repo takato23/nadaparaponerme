@@ -1,4 +1,5 @@
 // Supabase Edge Function: MercadoPago Webhook Handler
+// With idempotency protection to prevent duplicate processing
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -69,6 +70,29 @@ serve(async (req) => {
 
     // Get payment details from MercadoPago
     const paymentId = payload.data.id;
+
+    // ============================================================================
+    // IDEMPOTENCY CHECK: Prevent duplicate webhook processing
+    // ============================================================================
+    const { data: existingTx } = await supabase
+      .from('payment_transactions')
+      .select('id, status')
+      .eq('provider_transaction_id', String(paymentId))
+      .single();
+
+    // If already processed (approved/rejected), skip
+    if (existingTx && existingTx.status !== 'pending') {
+      console.log(`Payment ${paymentId} already processed with status: ${existingTx.status}. Skipping.`);
+      return new Response(JSON.stringify({
+        success: true,
+        message: 'Payment already processed (idempotency check)',
+        status: existingTx.status,
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    // ============================================================================
     const paymentResponse = await fetch(
       `https://api.mercadopago.com/v1/payments/${paymentId}`,
       {

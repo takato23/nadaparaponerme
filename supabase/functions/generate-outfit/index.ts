@@ -107,7 +107,7 @@ serve(async (req) => {
 
     // Generate outfit with Gemini
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-pro',
+      model: 'gemini-2.5-flash',
       contents: { parts: [{ text: `Aquí está la petición del usuario: "${prompt}"` }] },
       config: {
         systemInstruction,

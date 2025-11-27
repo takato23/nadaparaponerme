@@ -19,23 +19,31 @@ const Loader = ({ size = 'medium', text, fullScreen = false }: LoaderProps) => {
     large: 'h-16 w-16'
   };
 
+  const textSize = {
+    small: 'text-xs',
+    medium: 'text-sm',
+    large: 'text-base'
+  };
+
   const content = (
-    <div className="flex flex-col items-center justify-center gap-4 animate-fade-in">
+    <div
+      className="flex flex-col items-center justify-center gap-4 animate-fade-in"
+      role="status"
+      aria-label={text || "Cargando"}
+    >
       <div className="relative">
         {/* Outer ring */}
         <div className={`${spinnerSize[size]} rounded-full border-4 border-primary/20`}></div>
-        {/* Spinning ring */}
-        <div className={`absolute inset-0 ${spinnerSize[size]} rounded-full border-4 border-transparent border-t-primary animate-spin`}></div>
-        {/* Inner pulse */}
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="h-2 w-2 rounded-full bg-primary animate-pulse"></div>
-        </div>
+        {/* Inner ring (animated) */}
+        <div className={`absolute top-0 left-0 ${spinnerSize[size]} rounded-full border-4 border-primary border-t-transparent animate-spin`}></div>
       </div>
+
       {text && (
-        <p className="text-sm font-medium text-text-secondary dark:text-gray-400 animate-pulse">
+        <p className={`text-text-secondary dark:text-gray-400 font-medium animate-pulse ${textSize[size]}`}>
           {text}
         </p>
       )}
+      <span className="sr-only">{text || "Cargando contenido..."}</span>
     </div>
   );
 

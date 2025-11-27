@@ -1,40 +1,82 @@
 import React from 'react';
 import { Feature } from './types';
 import { TooltipWrapper } from '../ui/TooltipWrapper';
+import { CATEGORY_COLORS, BADGE_STYLES, type FeatureCategory, type BadgeType } from './featuresConfig';
 
 interface HomeFeatureCardProps {
-    feature: Feature;
-    variant?: 'default' | 'compact';
+    feature: Feature & {
+        badge?: BadgeType;
+        featured?: boolean;
+    };
+    variant?: 'default' | 'compact' | 'featured';
 }
 
 export const HomeFeatureCard = ({ feature, variant = 'default' }: HomeFeatureCardProps) => {
+    // Obtener colores de categoría
+    const categoryColors = CATEGORY_COLORS[feature.category as FeatureCategory] || CATEGORY_COLORS.essential;
+
+    // Obtener estilo de badge si existe
+    const badgeStyle = feature.badge ? BADGE_STYLES[feature.badge] : null;
+
     const card = (
         <button
             onClick={feature.onClick}
             className={`
-          relative w-full text-left overflow-hidden
-          glass-card
-          transition-all duration-300 ease-out
-          touch-manipulation
-          hover:shadow-glow hover:-translate-y-1
-          active:scale-[0.98]
-          ${variant === 'compact' ? 'p-3 min-h-[72px]' : 'p-5 min-h-[100px]'}
-          group
-        `}
+                relative w-full text-left overflow-hidden
+                bg-white dark:bg-slate-800/90
+                rounded-2xl
+                border border-gray-100 dark:border-slate-700/50
+                shadow-sm hover:shadow-lg
+                transition-all duration-300 ease-out
+                touch-manipulation
+                hover:-translate-y-1
+                active:scale-[0.98]
+                ${variant === 'compact' ? 'p-3 h-[72px]' : ''}
+                ${variant === 'default' ? 'p-4 h-[100px]' : ''}
+                ${variant === 'featured' ? 'p-4 h-[100px]' : ''}
+                group
+            `}
         >
-            <div className={`absolute inset-0 bg-gradient-to-br from-white/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none`} />
+            {/* Gradient overlay on hover */}
+            <div className={`absolute inset-0 bg-gradient-to-br ${categoryColors.gradient} opacity-0 group-hover:opacity-5 transition-opacity duration-500 pointer-events-none`} />
 
-            <div className={`relative z-10 flex items-start gap-${variant === 'compact' ? '3' : '4'}`}>
-                <div className={`${variant === 'compact' ? 'w-10 h-10' : 'w-12 h-12'} rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center shrink-0 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-3`}>
-                    <span className={`material-symbols-outlined text-primary ${variant === 'compact' ? 'text-xl' : 'text-2xl'}`}>
+            {/* Badge */}
+            {badgeStyle && (
+                <div className={`absolute top-2 right-2 px-1.5 py-0.5 rounded-full text-[9px] font-bold ${badgeStyle.bg} ${badgeStyle.text} z-20`}>
+                    {badgeStyle.label}
+                </div>
+            )}
+
+            <div className={`relative z-10 flex items-center h-full ${variant === 'compact' ? 'gap-2.5' : 'gap-3'}`}>
+                {/* Icon container with category color */}
+                <div className={`
+                    ${variant === 'compact' ? 'w-10 h-10' : 'w-12 h-12'}
+                    rounded-xl
+                    ${categoryColors.bg}
+                    flex items-center justify-center shrink-0
+                    transition-transform duration-300
+                    group-hover:scale-110 group-hover:rotate-3
+                `}>
+                    <span className={`material-symbols-outlined ${categoryColors.text} ${variant === 'compact' ? 'text-xl' : 'text-2xl'}`}>
                         {feature.icon}
                     </span>
                 </div>
-                <div className="flex-1 min-w-0 pt-0.5">
-                    <h3 className={`font-bold text-text-primary dark:text-gray-100 ${variant === 'compact' ? 'text-sm' : 'text-lg'} mb-0.5 leading-tight group-hover:text-primary transition-colors`}>
+
+                <div className="flex-1 min-w-0 flex flex-col justify-center">
+                    <h3 className={`
+                        font-bold text-text-primary dark:text-gray-100
+                        ${variant === 'compact' ? 'text-sm' : 'text-sm'}
+                        leading-tight
+                        group-hover:text-primary transition-colors
+                        line-clamp-1
+                    `}>
                         {feature.title}
                     </h3>
-                    <p className={`text-text-secondary dark:text-gray-400 ${variant === 'compact' ? 'text-xs' : 'text-sm'} leading-relaxed line-clamp-2 font-medium opacity-90`}>
+                    <p className={`
+                        text-text-secondary dark:text-gray-400
+                        ${variant === 'compact' ? 'text-[11px] line-clamp-1' : 'text-xs line-clamp-2'}
+                        leading-snug font-medium opacity-80 mt-0.5
+                    `}>
                         {feature.description}
                     </p>
                 </div>

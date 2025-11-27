@@ -1,0 +1,329 @@
+import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import type { ClothingItem, BrandRecognitionResult, DupeFinderResult } from '../../types';
+import * as aiService from '../../src/services/aiService';
+import Loader from '../Loader';
+import { isRealImage } from '../../src/utils/imagePlaceholder';
+
+interface LiquidDetailModalProps {
+    item: ClothingItem | null;
+    isOpen: boolean;
+    onClose: () => void;
+}
+
+export default function LiquidDetailModal({ item, isOpen, onClose }: LiquidDetailModalProps) {
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [brandResult, setBrandResult] = useState<BrandRecognitionResult | null>(null);
+    const [dupeResult, setDupeResult] = useState<DupeFinderResult | null>(null);
+    const [activeTab, setActiveTab] = useState<'details' | 'brand' | 'dupes'>('details');
+    const [error, setError] = useState<string | null>(null);
+
+    if (!item) return null;
+
+    const hasRealImage = isRealImage(item.imageDataUrl || (item as any).image_url);
+
+    const handleAnalyzeBrand = async () => {
+        if (!item || brandResult) {
+            // If already analyzed, just show the results
+            setActiveTab('brand');
+            return;
+        }
+
+        setIsAnalyzing(true);
+        setActiveTab('brand');
+        setError(null);
+        try {
+            const result = await aiService.recognizeBrandAndPrice(item.imageDataUrl);
+            setBrandResult(result);
+        } catch (error) {
+            console.error('Error analyzing brand:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Error al analizar la prenda';
+            setError(errorMessage);
+        } finally {
+            setIsAnalyzing(false);
+        }
+    };
+
+    const handleFindDupes = async () => {
+        if (!item) return;
+
+        setIsAnalyzing(true);
+        setActiveTab('dupes');
+        setError(null);
+        try {
+            // Get brand result first if not available
+            let brandInfo = brandResult;
+            if (!brandInfo) {
+                brandInfo = await aiService.recognizeBrandAndPrice(item.imageDataUrl);
+                setBrandResult(brandInfo);
+            }
+
+            const result = await aiService.findDupeAlternatives(item, brandInfo);
+            setDupeResult(result);
+        } catch (error) {
+            console.error('Error finding dupes:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Error al buscar alternativas';
+            setError(errorMessage);
+        } finally {
+            setIsAnalyzing(false);
+        }
+    };
+
+    return (
+        <AnimatePresence>
+            {isOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                    {/* Backdrop with blur */}
+                    <motion.div
+                        initial={{ opacity: 0, backdropFilter: "blur(0px)" }}
+                        animate={{ opacity: 1, backdropFilter: "blur(10px)" }}
+                        exit={{ opacity: 0, backdropFilter: "blur(0px)" }}
+                        onClick={onClose}
+                        className="absolute inset-0 bg-black/40"
+                    />
+
+                    {/* Modal Content - Peep-hole effect */}
+                    <motion.div
+                        layoutId={`item-${item.id}`}
+                        className="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-[3rem] overflow-hidden shadow-2xl z-10 max-h-[90vh] overflow-y-auto"
+                        initial={{ scale: 0.8, opacity: 0, borderRadius: "100%" }}
+                        animate={{ scale: 1, opacity: 1, borderRadius: "3rem" }}
+                        exit={{ scale: 0.8, opacity: 0, borderRadius: "100%" }}
+                        transition={{ type: "spring", damping: 25, stiffness: 300 }}
+                    >
+                        {/* Image Section */}
+                        <div className="relative h-96 w-full">
+                            <img
+                                src={item.imageDataUrl}
+                                alt={item.metadata?.subcategory}
+                                className="w-full h-full object-cover"
+                            />
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+
+                            <button
+                                onClick={onClose}
+                                className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white hover:bg-white/40 transition-colors"
+                            >
+                                <span className="material-symbols-outlined">close</span>
+                            </button>
+                        </div>
+
+                        {/* Tab Navigation */}
+                        <div className="flex border-b border-gray-200 dark:border-gray-700 px-8 pt-6">
+                            <button
+                                onClick={() => setActiveTab('details')}
+                                className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${activeTab === 'details'
+                                    ? 'border-primary text-primary'
+                                    : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+                                    }`}
+                            >
+                                Detalles
+                            </button>
+                            <button
+                                onClick={handleAnalyzeBrand}
+                                className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${activeTab === 'brand'
+                                    ? 'border-purple-500 text-purple-500'
+                                    : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+                                    }`}
+                            >
+                                🏷️ Marca & Precio
+                            </button>
+                            <button
+                                onClick={handleFindDupes}
+                                className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${activeTab === 'dupes'
+                                    ? 'border-blue-500 text-blue-500'
+                                    : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+                                    }`}
+                            >
+                                🛍️ Dónde Comprar
+                            </button>
+                        </div>
+
+                        {/* Tab Content */}
+                        <div className="p-8">
+                            {/* Details Tab */}
+                            {activeTab === 'details' && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: -10 }}
+                                >
+                                    <h2 className="text-3xl font-serif font-bold text-slate-900 dark:text-white mb-2 capitalize">
+                                        {item.metadata?.subcategory || 'Prenda'}
+                                    </h2>
+
+                                    <div className="flex flex-wrap gap-2 mb-6">
+                                        <span className="px-3 py-1 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 text-sm font-medium capitalize">
+                                            {item.metadata?.color_primary}
+                                        </span>
+                                        <span className="px-3 py-1 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-300 text-sm font-medium capitalize">
+                                            {item.metadata?.category}
+                                        </span>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-4 mb-6">
+                                        <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50">
+                                            <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Categoría</p>
+                                            <p className="font-medium text-slate-900 dark:text-white capitalize">{item.metadata?.category || '-'}</p>
+                                        </div>
+                                        <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50">
+                                            <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Subcategoría</p>
+                                            <p className="font-medium text-slate-900 dark:text-white capitalize">{item.metadata?.subcategory || '-'}</p>
+                                        </div>
+                                    </div>
+                                </motion.div>
+                            )}
+
+                            {/* Brand Analysis Tab */}
+                            {activeTab === 'brand' && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: -10 }}
+                                    className="min-h-[200px]"
+                                >
+                                    {isAnalyzing ? (
+                                        <div className="flex flex-col items-center justify-center py-12">
+                                            <Loader size="large" />
+                                            <p className="text-gray-500 mt-4">Analizando marca y precio...</p>
+                                        </div>
+                                    ) : error ? (
+                                        <div className="flex flex-col items-center justify-center py-12">
+                                            <span className="material-symbols-outlined text-6xl text-red-300 mb-4">error</span>
+                                            <p className="text-red-600 dark:text-red-400 font-medium mb-2">Error al analizar</p>
+                                            <p className="text-gray-500 text-sm text-center max-w-md">{error}</p>
+                                            {item.isAIGenerated && (
+                                                <div className="mt-4 p-4 rounded-xl bg-yellow-50 dark:bg-yellow-900/20 max-w-md">
+                                                    <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                                                        💡 Esta prenda fue generada por IA. El análisis de marca solo funciona con fotos reales de prendas.
+                                                    </p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ) : brandResult ? (
+                                        <div className="space-y-4">
+                                            <div className="p-6 rounded-2xl bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20">
+                                                <div className="flex items-center justify-between mb-4">
+                                                    <h3 className="text-2xl font-bold text-gray-900 dark:text-white">{brandResult.brand.name}</h3>
+                                                    <span className="px-3 py-1 rounded-full bg-purple-500 text-white text-sm font-bold">
+                                                        {brandResult.brand.confidence}% seguro
+                                                    </span>
+                                                </div>
+
+                                                <div className="flex items-baseline gap-2 mb-2">
+                                                    <span className="text-4xl font-bold text-gray-900 dark:text-white">
+                                                        ${brandResult.price_estimate.average_price}
+                                                    </span>
+                                                    <span className="text-gray-600 dark:text-gray-400">{brandResult.price_estimate.currency}</span>
+                                                </div>
+
+                                                <p className="text-sm text-gray-600 dark:text-gray-400">
+                                                    Rango: ${brandResult.price_estimate.min_price} - ${brandResult.price_estimate.max_price}
+                                                </p>
+                                            </div>
+
+                                            <div className="p-4 rounded-xl bg-blue-50 dark:bg-blue-900/20">
+                                                <p className="text-sm text-gray-700 dark:text-gray-300">
+                                                    💡 {brandResult.market_insights}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="flex flex-col items-center justify-center py-12">
+                                            <span className="material-symbols-outlined text-6xl text-gray-300 mb-4">label</span>
+                                            <p className="text-gray-500">Toca "Marca & Precio" para analizar</p>
+                                        </div>
+                                    )}
+                                </motion.div>
+                            )}
+
+                            {/* Dupes Tab */}
+                            {activeTab === 'dupes' && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: -10 }}
+                                    className="min-h-[200px]"
+                                >
+                                    {isAnalyzing ? (
+                                        <div className="flex flex-col items-center justify-center py-12">
+                                            <Loader size="large" />
+                                            <p className="text-gray-500 mt-4">Buscando alternativas...</p>
+                                        </div>
+                                    ) : dupeResult && dupeResult.dupes.length > 0 ? (
+                                        <div className="space-y-3">
+                                            <h3 className="font-bold text-lg mb-4">Alternativas más baratas:</h3>
+                                            {dupeResult.dupes.slice(0, 5).map((dupe, idx) => (
+                                                <a
+                                                    key={idx}
+                                                    href={dupe.shop_url}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="block p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                                                >
+                                                    <div className="flex justify-between items-start mb-2">
+                                                        <div>
+                                                            <p className="font-bold text-gray-900 dark:text-white">{dupe.title}</p>
+                                                            <p className="text-sm text-gray-600 dark:text-gray-400">{dupe.brand} · {dupe.shop_name}</p>
+                                                        </div>
+                                                        <div className="text-right">
+                                                            <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">${dupe.price}</p>
+                                                            <p className="text-xs text-emerald-600 dark:text-emerald-400">Ahorrás {dupe.savings_percentage}%</p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                                                        <span className="material-symbols-outlined text-sm">verified</span>
+                                                        {dupe.similarity_score}% similar
+                                                    </div>
+                                                </a>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="flex flex-col items-center justify-center py-12">
+                                            <span className="material-symbols-outlined text-6xl text-gray-300 mb-4">shopping_bag</span>
+                                            <p className="text-gray-500">Toca "Dónde Comprar" para buscar</p>
+                                        </div>
+                                    )}
+                                </motion.div>
+                            )}
+
+                            {/* Action Buttons */}
+                            <div className="flex gap-3 mt-6">
+                                {activeTab === 'details' && (
+                                    <>
+                                        <button
+                                            onClick={handleAnalyzeBrand}
+                                            disabled={!hasRealImage}
+                                            title={!hasRealImage ? 'Necesitás una foto real de la prenda para analizar la marca' : ''}
+                                            className={`flex-1 py-3 rounded-xl text-white font-bold shadow-lg transition-all flex items-center justify-center gap-2 ${
+                                                hasRealImage
+                                                    ? 'bg-gradient-to-r from-purple-500 to-pink-500 hover:scale-[1.02]'
+                                                    : 'bg-gray-400 cursor-not-allowed opacity-60'
+                                            }`}
+                                        >
+                                            <span className="material-symbols-outlined">label</span>
+                                            Analizar Marca
+                                        </button>
+                                        <button
+                                            onClick={handleFindDupes}
+                                            disabled={!hasRealImage}
+                                            title={!hasRealImage ? 'Necesitás una foto real de la prenda para buscar alternativas' : ''}
+                                            className={`flex-1 py-3 rounded-xl text-white font-bold transition-all flex items-center justify-center gap-2 ${
+                                                hasRealImage
+                                                    ? 'bg-gradient-to-r from-blue-500 to-cyan-500 hover:scale-[1.02]'
+                                                    : 'bg-gray-400 cursor-not-allowed opacity-60'
+                                            }`}
+                                        >
+                                            <span className="material-symbols-outlined">shopping_bag</span>
+                                            Buscar Dupes
+                                        </button>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    </motion.div>
+                </div>
+            )}
+        </AnimatePresence>
+    );
+}

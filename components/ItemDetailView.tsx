@@ -5,6 +5,9 @@ import { findSimilarItems } from '../src/services/aiService';
 // FIX: The Loader component is now correctly created and exported, resolving the 'not a module' error.
 import Loader from './Loader';
 import { Card } from './ui/Card';
+import { SwipeableModal } from '../src/components/ui/SwipeableModal';
+import { PremiumAnalysisCard } from './PremiumAnalysisCard';
+import { useToast } from '../hooks/useToast';
 
 interface ItemDetailViewProps {
     item: ClothingItem;
@@ -24,6 +27,7 @@ export const ItemDetailView = ({ item, inventory, onUpdate, onDelete, onBack, on
     const [editableMetadata, setEditableMetadata] = useState(item.metadata);
     const [similarItems, setSimilarItems] = useState<ClothingItem[]>([]);
     const [isLoadingSimilar, setIsLoadingSimilar] = useState(true);
+    const toast = useToast();
 
     useEffect(() => {
         setEditableMetadata(item.metadata);
@@ -36,6 +40,7 @@ export const ItemDetailView = ({ item, inventory, onUpdate, onDelete, onBack, on
                 setSimilarItems(items);
             } catch (error) {
                 console.error('Error finding similar items:', error);
+                toast.error('No se pudieron cargar prendas similares');
                 setSimilarItems([]);
             }
             setIsLoadingSimilar(false);
@@ -53,112 +58,136 @@ export const ItemDetailView = ({ item, inventory, onUpdate, onDelete, onBack, on
     };
 
     return (
-        <div className="fixed inset-0 z-20 animate-fade-in">
-            <div onClick={onBack} className="absolute inset-0 bg-black/30 backdrop-blur-sm hidden md:block" />
-
-            <motion.div
-                layoutId={`item-${item.id}`}
-                className="absolute inset-0 bg-white/80 dark:bg-background-dark/80 backdrop-blur-xl flex flex-col md:inset-y-0 md:right-0 md:left-auto md:w-full md:max-w-sm md:border-l md:border-white/20 animate-scale-in md:animate-slide-in-right"
-            >
-                <header className="p-4 flex items-center justify-between">
-                    <button onClick={onBack} className="p-2 dark:text-gray-200">
-                        <span className="material-symbols-outlined">arrow_back</span>
+        <SwipeableModal
+            isOpen={true}
+            onClose={onBack}
+            title={isEditing ? 'Editar Prenda' : item.metadata.subcategory}
+            headerActions={
+                <div className="flex items-center gap-2">
+                    <button onClick={() => onShareItem(item)} className="p-2 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors">
+                        <span className="material-symbols-outlined">share</span>
                     </button>
-                    <div className="flex items-center gap-2">
-                        <button onClick={() => onShareItem(item)} className="p-2 dark:text-gray-200">
-                            <span className="material-symbols-outlined">share</span>
+                    <button onClick={() => setIsEditing(!isEditing)} className="p-2 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors">
+                        <span className="material-symbols-outlined">{isEditing ? 'close' : 'edit'}</span>
+                    </button>
+                </div>
+            }
+            footer={
+                isEditing ? (
+                    <div className="flex gap-3">
+                        <button onClick={() => onDelete(item.id)} className="w-16 h-16 rounded-2xl bg-red-100 dark:bg-red-900/40 flex items-center justify-center hover:bg-red-200 dark:hover:bg-red-900/60 transition-colors">
+                            <span className="material-symbols-outlined text-red-600 dark:text-red-400">delete</span>
                         </button>
-                        <button onClick={() => setIsEditing(!isEditing)} className="p-2 dark:text-gray-200">
-                            <span className="material-symbols-outlined">{isEditing ? 'close' : 'edit'}</span>
+                        <button onClick={handleSave} className="flex-grow bg-primary text-white font-bold rounded-2xl hover:bg-primary-dark transition-colors shadow-lg shadow-primary/30">
+                            Guardar Cambios
                         </button>
                     </div>
-                </header>
+                ) : (
+                    <div className="space-y-2">
+                        <button onClick={() => onGenerateOutfitWithItem(item)} className="w-full bg-primary text-white font-bold py-4 rounded-2xl hover:bg-primary-dark transition-colors shadow-lg shadow-primary/30">
+                            Crear Outfit con esta Prenda
+                        </button>
+                        {onStartBrandRecognition && (
+                            <button
+                                onClick={() => onStartBrandRecognition(item)}
+                                className="w-full bg-white dark:bg-gray-800 border-2 border-primary text-primary dark:text-primary font-bold py-4 rounded-2xl transition-transform active:scale-95 flex items-center justify-center gap-2 hover:bg-gray-50 dark:hover:bg-gray-700"
+                            >
+                                <span className="material-symbols-outlined">label</span>
+                                Detectar Marca y Precio
+                            </button>
+                        )}
+                        {onStartDupeFinder && (
+                            <button
+                                onClick={() => onStartDupeFinder(item)}
+                                className="w-full bg-white dark:bg-gray-800 border-2 border-primary text-primary dark:text-primary font-bold py-4 rounded-2xl transition-transform active:scale-95 flex items-center justify-center gap-2 hover:bg-gray-50 dark:hover:bg-gray-700"
+                            >
+                                <span className="material-symbols-outlined">shopping_bag</span>
+                                Buscar Dupes
+                            </button>
+                        )}
+                    </div>
+                )
+            }
+        >
+            <div className="space-y-6">
+                <Card variant="glass" padding="none" rounded="3xl" className="aspect-[4/5] w-full overflow-hidden shadow-md relative group">
+                    <img src={item.imageDataUrl} alt={item.metadata.subcategory} className="w-full h-full object-cover" />
 
-                <div className="flex-grow overflow-y-auto px-4 pb-24">
-                    <Card variant="glass" padding="none" rounded="3xl" className="aspect-[4/5] w-full overflow-hidden mb-4">
-                        <img src={item.imageDataUrl} alt={item.metadata.subcategory} className="w-full h-full object-cover" />
-                    </Card>
-
-                    {isEditing ? (
-                        <div className="space-y-2">
-                            <input type="text" value={editableMetadata.subcategory} onChange={e => updateMetadataField('subcategory', e.target.value)} className="w-full p-2 border dark:border-gray-600 bg-transparent rounded dark:text-white" placeholder="Subcategory" />
-                            <input type="text" value={editableMetadata.color_primary} onChange={e => updateMetadataField('color_primary', e.target.value)} className="w-full p-2 border dark:border-gray-600 bg-transparent rounded dark:text-white" placeholder="Color" />
-                            <input type="text" value={editableMetadata.neckline || ''} onChange={e => updateMetadataField('neckline', e.target.value)} className="w-full p-2 border dark:border-gray-600 bg-transparent rounded dark:text-white" placeholder="Tipo de cuello" />
-                            <input type="text" value={editableMetadata.sleeve_type || ''} onChange={e => updateMetadataField('sleeve_type', e.target.value)} className="w-full p-2 border dark:border-gray-600 bg-transparent rounded dark:text-white" placeholder="Tipo de manga" />
-                        </div>
-                    ) : (
-                        <div className="text-center mb-4">
-                            <h2 className="text-2xl font-bold capitalize dark:text-gray-200">{item.metadata.subcategory}</h2>
-                            <p className="text-text-secondary dark:text-gray-400 capitalize">{item.metadata.color_primary}</p>
-                            {(item.metadata.neckline || item.metadata.sleeve_type) && (
-                                <p className="text-text-secondary dark:text-gray-400 text-sm capitalize mt-1">
-                                    {item.metadata.neckline && <span>{item.metadata.neckline}</span>}
-                                    {item.metadata.neckline && item.metadata.sleeve_type && <span> &middot; </span>}
-                                    {item.metadata.sleeve_type && <span>{item.metadata.sleeve_type}</span>}
-                                </p>
-                            )}
+                    {/* Fashion Score Badge Overlay */}
+                    {item.metadata.fashion_score && (
+                        <div className="absolute bottom-4 right-4 bg-black/60 backdrop-blur-md border border-white/20 rounded-2xl px-3 py-1.5 flex items-center gap-2">
+                            <span className="text-xs font-bold text-white/80 uppercase">Score</span>
+                            <span className="text-xl font-black text-white">{item.metadata.fashion_score}</span>
                         </div>
                     )}
+                </Card>
 
-                    <div className="flex flex-wrap justify-center gap-2 mb-6">
-                        {item.metadata.vibe_tags.map(tag => <span key={tag} className="bg-gray-200 dark:bg-gray-700 dark:text-gray-300 px-3 py-1 rounded-full text-sm">{tag}</span>)}
-                        {item.metadata.seasons.map(season => <span key={season} className="bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300 px-3 py-1 rounded-full text-sm">{season}</span>)}
-                    </div>
-
-                    {similarItems.length > 0 && (
-                        <div>
-                            <h3 className="font-bold text-lg mb-2 dark:text-gray-200">Similar Items</h3>
-                            <div className="grid grid-cols-3 gap-2">
-                                {similarItems.slice(0, 3).map(simItem => (
-                                    <button key={simItem.id} onClick={() => onSelectItem(simItem.id)} className="aspect-square rounded-xl overflow-hidden">
-                                        <img src={simItem.imageDataUrl} alt={simItem.metadata.subcategory} className="w-full h-full object-cover" />
-                                    </button>
-                                ))}
+                {isEditing ? (
+                    <div className="space-y-4">
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Subcategoría</label>
+                            <input type="text" value={editableMetadata.subcategory} onChange={e => updateMetadataField('subcategory', e.target.value)} className="w-full p-3 border dark:border-gray-600 bg-gray-50 dark:bg-gray-800 rounded-xl dark:text-white focus:ring-2 focus:ring-primary outline-none transition-all" placeholder="Subcategory" />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Color</label>
+                            <input type="text" value={editableMetadata.color_primary} onChange={e => updateMetadataField('color_primary', e.target.value)} className="w-full p-3 border dark:border-gray-600 bg-gray-50 dark:bg-gray-800 rounded-xl dark:text-white focus:ring-2 focus:ring-primary outline-none transition-all" placeholder="Color" />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Cuello</label>
+                                <input type="text" value={editableMetadata.neckline || ''} onChange={e => updateMetadataField('neckline', e.target.value)} className="w-full p-3 border dark:border-gray-600 bg-gray-50 dark:bg-gray-800 rounded-xl dark:text-white focus:ring-2 focus:ring-primary outline-none transition-all" placeholder="Tipo de cuello" />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Manga</label>
+                                <input type="text" value={editableMetadata.sleeve_type || ''} onChange={e => updateMetadataField('sleeve_type', e.target.value)} className="w-full p-3 border dark:border-gray-600 bg-gray-50 dark:bg-gray-800 rounded-xl dark:text-white focus:ring-2 focus:ring-primary outline-none transition-all" placeholder="Tipo de manga" />
                             </div>
                         </div>
-                    )}
-                    {isLoadingSimilar && <div className="flex justify-center"><Loader /></div>}
-
-                </div>
-
-                <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-white/90 to-transparent dark:from-background-dark/90">
-                    {isEditing ? (
-                        <div className="flex gap-3">
-                            <button onClick={() => onDelete(item.id)} className="w-16 h-16 rounded-2xl bg-red-100 dark:bg-red-900/40 flex items-center justify-center">
-                                <span className="material-symbols-outlined text-red-600 dark:text-red-400">delete</span>
-                            </button>
-                            <button onClick={handleSave} className="flex-grow bg-primary text-white font-bold rounded-2xl">
-                                Guardar Cambios
-                            </button>
+                    </div>
+                ) : (
+                    <div className="space-y-6">
+                        {/* Basic Info */}
+                        <div className="text-center space-y-2">
+                            <h2 className="text-2xl font-bold capitalize dark:text-gray-200">{item.metadata.subcategory}</h2>
+                            <div className="flex items-center justify-center gap-2 text-text-secondary dark:text-gray-400 capitalize">
+                                <span>{item.metadata.color_primary}</span>
+                                {(item.metadata.neckline || item.metadata.sleeve_type) && (
+                                    <>
+                                        <span>&middot;</span>
+                                        {item.metadata.neckline && <span>{item.metadata.neckline}</span>}
+                                        {item.metadata.neckline && item.metadata.sleeve_type && <span>&middot;</span>}
+                                        {item.metadata.sleeve_type && <span>{item.metadata.sleeve_type}</span>}
+                                    </>
+                                )}
+                            </div>
                         </div>
-                    ) : (
-                        <div className="space-y-2">
-                            <button onClick={() => onGenerateOutfitWithItem(item)} className="w-full bg-primary text-white font-bold py-4 rounded-2xl">
-                                Crear Outfit con esta Prenda
-                            </button>
-                            {onStartBrandRecognition && (
-                                <button
-                                    onClick={() => onStartBrandRecognition(item)}
-                                    className="w-full bg-white dark:bg-gray-800 border-2 border-primary text-primary dark:text-primary font-bold py-4 rounded-2xl transition-transform active:scale-95 flex items-center justify-center gap-2"
-                                >
-                                    <span className="material-symbols-outlined">label</span>
-                                    Detectar Marca y Precio
-                                </button>
-                            )}
-                            {onStartDupeFinder && (
-                                <button
-                                    onClick={() => onStartDupeFinder(item)}
-                                    className="w-full bg-white dark:bg-gray-800 border-2 border-primary text-primary dark:text-primary font-bold py-4 rounded-2xl transition-transform active:scale-95 flex items-center justify-center gap-2"
-                                >
-                                    <span className="material-symbols-outlined">shopping_bag</span>
-                                    Buscar Dupes
-                                </button>
-                            )}
+
+                        {/* Tags */}
+                        <div className="flex flex-wrap justify-center gap-2">
+                            {item.metadata.vibe_tags.map(tag => <span key={tag} className="bg-gray-100 dark:bg-gray-800 dark:text-gray-300 px-3 py-1.5 rounded-full text-sm font-medium border border-gray-200 dark:border-gray-700">#{tag}</span>)}
+                            {item.metadata.occasion_tags?.map(tag => <span key={tag} className="bg-primary/5 text-primary dark:text-primary-light px-3 py-1.5 rounded-full text-sm font-medium border border-primary/20">{tag}</span>)}
+                            {item.metadata.seasons.map(season => <span key={season} className="bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 px-3 py-1.5 rounded-full text-sm font-medium border border-blue-100 dark:border-blue-800">{season}</span>)}
                         </div>
-                    )}
-                </div>
-            </motion.div>
-        </div >
+
+                        {/* Premium Analysis Section */}
+                        <PremiumAnalysisCard metadata={item.metadata} />
+                    </div>
+                )}
+
+                {similarItems.length > 0 && (
+                    <div className="pt-4 border-t border-gray-100 dark:border-gray-800">
+                        <h3 className="font-bold text-lg mb-4 dark:text-gray-200">Prendas Similares</h3>
+                        <div className="grid grid-cols-3 gap-3">
+                            {similarItems.slice(0, 3).map(simItem => (
+                                <button key={simItem.id} onClick={() => onSelectItem(simItem.id)} className="aspect-square rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow border border-gray-100 dark:border-gray-800">
+                                    <img src={simItem.imageDataUrl} alt={simItem.metadata.subcategory} className="w-full h-full object-cover" />
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
+                {isLoadingSimilar && <div className="flex justify-center py-4"><Loader /></div>}
+            </div>
+        </SwipeableModal>
     );
 };
 

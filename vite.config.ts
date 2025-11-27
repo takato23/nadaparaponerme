@@ -51,11 +51,11 @@ export default defineConfig(({ mode }) => {
             if (id.includes('node_modules')) {
               // React core + React UI libraries that depend on React context
               if (id.includes('react') ||
-                  id.includes('react-dom') ||
-                  id.includes('scheduler') ||
-                  id.includes('framer-motion') ||
-                  id.includes('lucide-react') ||
-                  id.includes('@use-gesture/react')) {
+                id.includes('react-dom') ||
+                id.includes('scheduler') ||
+                id.includes('framer-motion') ||
+                id.includes('lucide-react') ||
+                id.includes('@use-gesture/react')) {
                 return 'vendor-react';
               }
               // Supabase + PostgREST

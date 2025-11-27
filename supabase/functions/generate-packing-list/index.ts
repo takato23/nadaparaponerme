@@ -105,7 +105,7 @@ serve(async (req) => {
 
     // Generate packing list with Gemini
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-pro',
+      model: 'gemini-2.5-flash',
       contents: { parts: [{ text: `Detalles del viaje: "${prompt}"` }] },
       config: {
         systemInstruction,

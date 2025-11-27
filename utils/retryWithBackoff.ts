@@ -202,7 +202,15 @@ export async function retryAIOperation<T>(
     shouldRetry: (error) => {
       const message = error.message.toLowerCase();
 
-      // Always retry on rate limits and server overload
+      // Don't retry if quota is exceeded (different from rate limiting)
+      if (
+        message.includes('exceeded your current quota') ||
+        message.includes('billing')
+      ) {
+        return false; // Don't retry quota exhaustion - user needs to wait or upgrade
+      }
+
+      // Retry on temporary rate limits and server overload
       if (
         message.includes('429') ||
         message.includes('rate limit') ||

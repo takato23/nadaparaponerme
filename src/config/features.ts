@@ -26,14 +26,14 @@ export interface FeatureFlags {
 }
 
 // Default feature flags - Supabase enabled for production use
-// In development, useSupabaseAI can be disabled if VITE_GEMINI_API_KEY is available
+// ⚠️ SECURITY: useSupabaseAI should be TRUE in production to route AI calls through Edge Functions
 const defaultFlags: FeatureFlags = {
-  useSupabaseAuth: true,
-  useSupabaseCloset: true,
-  useSupabaseOutfits: true,
-  useSupabaseAI: true, // Always use Edge Functions for production readiness
-  useSupabasePreferences: true,
-  autoMigration: true,
+  useSupabaseAuth: true, // ✅ Enabled - AuthView uses Supabase authentication
+  useSupabaseCloset: false, // TODO: Enable after migration
+  useSupabaseOutfits: false, // TODO: Enable after migration
+  useSupabaseAI: true, // ✅ SECURITY: Must be true - routes AI through Edge Functions (no exposed API key)
+  useSupabasePreferences: false,
+  autoMigration: false,
 };
 
 // Load flags from localStorage, falling back to defaults

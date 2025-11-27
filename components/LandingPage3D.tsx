@@ -31,9 +31,9 @@ const LandingPage3D = ({ onGetStarted, onLogin }: LandingPage3DProps) => {
     const magicY = useTransform(scrollYProgress, [0.75, 0.85], [50, 0]);
 
     return (
-        <div ref={containerRef} className="relative w-full bg-transparent text-[#1D1D1F] font-sans selection:bg-pink-200 selection:text-pink-900 pointer-events-none">
+        <div ref={containerRef} className="relative w-full h-full overflow-y-auto bg-transparent text-[#1D1D1F] font-sans selection:bg-pink-200 selection:text-pink-900 pointer-events-none">
             {/* Scroll Spacer - Defines the total scroll height */}
-            <div className="h-[500vh]">
+            <div className="relative h-[500vh]">
 
                 {/* Sticky Container for Content */}
                 <div className="sticky top-0 h-screen w-full overflow-hidden flex flex-col items-center justify-center">

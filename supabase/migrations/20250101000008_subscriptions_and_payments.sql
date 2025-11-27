@@ -6,7 +6,7 @@
 -- ============================================================================
 
 CREATE TABLE subscriptions (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
 
   -- Subscription tier and status
@@ -77,7 +77,7 @@ CREATE TRIGGER subscriptions_updated_at
 -- ============================================================================
 
 CREATE TABLE payment_transactions (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   subscription_id UUID REFERENCES subscriptions(id) ON DELETE SET NULL,
 
@@ -141,7 +141,7 @@ CREATE TRIGGER payment_transactions_updated_at
 -- ============================================================================
 
 CREATE TABLE payment_methods (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
 
   -- Payment method type
@@ -213,7 +213,7 @@ CREATE TRIGGER payment_methods_single_default
 -- ============================================================================
 
 CREATE TABLE usage_metrics (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   subscription_tier TEXT NOT NULL CHECK (subscription_tier IN ('free', 'pro', 'premium')),
 

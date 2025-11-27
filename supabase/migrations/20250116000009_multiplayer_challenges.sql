@@ -8,7 +8,7 @@
 -- =====================================================
 
 CREATE TABLE challenges (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   creator_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
 
   title TEXT NOT NULL,
@@ -75,7 +75,7 @@ CREATE INDEX idx_challenges_tags ON challenges USING GIN(tags);
 -- =====================================================
 
 CREATE TABLE challenge_participants (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   challenge_id UUID NOT NULL REFERENCES challenges(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
 
@@ -93,7 +93,7 @@ CREATE INDEX idx_participants_user ON challenge_participants(user_id);
 -- =====================================================
 
 CREATE TABLE challenge_submissions (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   challenge_id UUID NOT NULL REFERENCES challenges(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
 
@@ -130,7 +130,7 @@ CREATE INDEX idx_submissions_winners ON challenge_submissions(challenge_id) WHER
 -- =====================================================
 
 CREATE TABLE challenge_votes (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   submission_id UUID NOT NULL REFERENCES challenge_submissions(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   challenge_id UUID NOT NULL REFERENCES challenges(id) ON DELETE CASCADE,
@@ -177,7 +177,7 @@ CREATE INDEX idx_stats_rank ON user_challenge_stats(global_rank) WHERE global_ra
 -- =====================================================
 
 CREATE TABLE challenge_achievements (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   achievement_key TEXT UNIQUE NOT NULL,
   name TEXT NOT NULL,
@@ -206,7 +206,7 @@ INSERT INTO challenge_achievements (achievement_key, name, description, icon, ba
 -- =====================================================
 
 CREATE TABLE user_achievements (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   achievement_id UUID NOT NULL REFERENCES challenge_achievements(id) ON DELETE CASCADE,
 

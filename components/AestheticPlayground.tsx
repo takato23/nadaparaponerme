@@ -7,7 +7,8 @@ interface AestheticPlaygroundProps {
 }
 
 export default function AestheticPlayground({ onClose }: AestheticPlaygroundProps) {
-    const [activeTab, setActiveTab] = useState<'hero' | 'slots' | 'dock' | 'morph' | 'swipe' | 'board' | 'theme' | 'color' | 'weather' | 'packing' | 'analytics' | 'ar' | 'duel' | 'holo' | 'liquid-btn' | 'glass-modal' | 'cloth' | 'cursor' | 'neon' | 'mesh'>('hero');
+    const [activeTab, setActiveTab] = useState<'hero' | 'slots' | 'dock' | 'morph' | 'swipe' | 'board' | 'theme' | 'color' | 'weather' | 'packing' | 'analytics' | 'ar' | 'duel' | 'holo' | 'liquid-btn' | 'glass-modal' | 'cloth' | 'cursor' | 'neon' | 'mesh' | 'liquid-scroll' | 'closet-3d' | 'closet-peephole' | 'closet-magnetic' | 'closet-glass'>('closet-3d');
+
 
     return (
         <div className="fixed inset-0 z-[100] bg-gray-50 dark:bg-slate-950 overflow-y-auto">
@@ -28,44 +29,52 @@ export default function AestheticPlayground({ onClose }: AestheticPlaygroundProp
                     </button>
                 </div>
 
-                {/* Tabs */}
-                <div className="flex gap-2 mb-8 p-1 bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 w-fit">
+                {/* Tabs - Grid Layout */}
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 gap-2 mb-8 w-full">
                     {[
-                        { id: 'hero', label: '3D Hero', icon: 'view_in_ar' },
-                        { id: 'slots', label: 'Slot Machine', icon: 'casino' },
-                        { id: 'dock', label: 'Floating Dock', icon: 'dock_to_bottom' },
-                        { id: 'morph', label: 'Morphing', icon: 'animation' },
+                        // Closet-Specific Prototypes (New)
+                        { id: 'closet-3d', label: '3D Grid', icon: 'view_in_ar', category: 'closet' },
+                        { id: 'closet-peephole', label: 'Peephole', icon: 'circle', category: 'closet' },
+                        { id: 'closet-magnetic', label: 'Magnetic', icon: 'auto_awesome', category: 'closet' },
+                        { id: 'closet-glass', label: 'Glass Cards', icon: 'diamond', category: 'closet' },
+
+                        // Original Prototypes
+                        { id: 'hero', label: 'Hero', icon: 'view_in_ar' },
+                        { id: 'slots', label: 'Slots', icon: 'casino' },
+                        { id: 'dock', label: 'Dock', icon: 'dock_to_bottom' },
+                        { id: 'morph', label: 'Morph', icon: 'animation' },
                         { id: 'swipe', label: 'Swipe', icon: 'swipe' },
-                        { id: 'board', label: 'Mood Board', icon: 'dashboard_customize' },
-                        { id: 'theme', label: 'Theme Editor', icon: 'palette' },
-                        { id: 'color', label: 'Color Matcher', icon: 'colorize' },
-                        { id: 'weather', label: 'Weather Glass', icon: 'water_drop' },
-                        { id: 'packing', label: 'Smart Packing', icon: 'luggage' },
-                        { id: 'analytics', label: 'Style Analytics', icon: 'bar_chart' },
-                        { id: 'ar', label: 'Magic Mirror', icon: 'face' },
-                        { id: 'duel', label: 'Style Duel', icon: 'thumbs_up_down' },
-                        // New High-End Aesthetics
-                        { id: 'holo', label: 'Holographic', icon: 'diamond' },
-                        { id: 'liquid-btn', label: 'Liquid Button', icon: 'water_drop' },
-                        { id: 'glass-modal', label: 'Glass Modal', icon: 'window' },
-                        { id: 'cloth', label: 'Floating Cloth', icon: 'checkroom' },
-                        { id: 'cursor', label: 'Reactive Cursor', icon: 'mouse' },
-                        { id: 'neon', label: 'Neon Glass', icon: 'lightbulb' },
-                        { id: 'mesh', label: 'Dynamic Mesh', icon: 'gradient' },
+                        { id: 'board', label: 'Board', icon: 'dashboard_customize' },
+                        { id: 'theme', label: 'Theme', icon: 'palette' },
+                        { id: 'color', label: 'Color', icon: 'colorize' },
+                        { id: 'weather', label: 'Weather', icon: 'water_drop' },
+                        { id: 'packing', label: 'Pack', icon: 'luggage' },
+                        { id: 'analytics', label: 'Stats', icon: 'bar_chart' },
+                        { id: 'ar', label: 'Mirror', icon: 'face' },
+                        { id: 'duel', label: 'Duel', icon: 'thumbs_up_down' },
+                        { id: 'holo', label: 'Holo', icon: 'diamond' },
+                        { id: 'liquid-btn', label: 'Button', icon: 'water_drop' },
+                        { id: 'glass-modal', label: 'Modal', icon: 'window' },
+                        { id: 'cloth', label: 'Cloth', icon: 'checkroom' },
+                        { id: 'cursor', label: 'Cursor', icon: 'mouse' },
+                        { id: 'neon', label: 'Neon', icon: 'lightbulb' },
+                        { id: 'mesh', label: 'Mesh', icon: 'gradient' },
+                        { id: 'liquid-scroll', label: 'Scroll', icon: 'water_drop' },
                     ].map((tab) => (
                         <button
                             key={tab.id}
                             onClick={() => setActiveTab(tab.id as any)}
                             className={`
-                flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all
+                flex flex-col items-center gap-1 px-3 py-2 rounded-lg font-medium transition-all text-xs
                 ${activeTab === tab.id
                                     ? 'bg-primary text-white shadow-lg shadow-primary/30'
                                     : 'text-text-secondary hover:bg-gray-50 dark:hover:bg-slate-800'
                                 }
+                ${tab.category === 'closet' ? 'ring-2 ring-purple-500/50' : ''}
               `}
                         >
-                            <span className="material-symbols-outlined text-lg">{tab.icon}</span>
-                            {tab.label}
+                            <span className="material-symbols-outlined text-base">{tab.icon}</span>
+                            <span className="text-[10px] leading-tight text-center">{tab.label}</span>
                         </button>
                     ))}
                 </div>
@@ -82,6 +91,13 @@ export default function AestheticPlayground({ onClose }: AestheticPlaygroundProp
                 >
                     <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: 'radial-gradient(circle, currentColor 1px, transparent 1px)', backgroundSize: '24px 24px' }}></div>
 
+                    {/* Closet-Specific Prototypes */}
+                    {activeTab === 'closet-3d' && <Closet3DGridPrototype />}
+                    {activeTab === 'closet-peephole' && <ClosetPeepholePrototype />}
+                    {activeTab === 'closet-magnetic' && <ClosetMagneticPrototype />}
+                    {activeTab === 'closet-glass' && <ClosetGlassCardsPrototype />}
+
+                    {/* Original Prototypes */}
                     {activeTab === 'hero' && <Hero3DPrototype />}
                     {activeTab === 'slots' && <SlotMachinePrototype />}
                     {activeTab === 'dock' && <FloatingDockPrototype />}
@@ -102,8 +118,160 @@ export default function AestheticPlayground({ onClose }: AestheticPlaygroundProp
                     {activeTab === 'cursor' && <ReactiveCursorPrototype />}
                     {activeTab === 'neon' && <NeonGlassTextPrototype />}
                     {activeTab === 'mesh' && <DynamicMeshPrototype />}
+                    {activeTab === 'liquid-scroll' && <LiquidScrollPrototype />}
                 </div>
             </div>
+        </div>
+    );
+}
+
+// ... (Existing components) ...
+
+// --- 21. Liquid Scroll Prototype ---
+import { Canvas, useFrame } from '@react-three/fiber';
+import { MeshTransmissionMaterial, Environment, Float } from '@react-three/drei';
+import * as THREE from 'three';
+
+function LiquidScrollPrototype() {
+    const scrollRef = useRef<HTMLDivElement>(null);
+    const [scrollProgress, setScrollProgress] = useState(0);
+
+    const handleScroll = () => {
+        if (scrollRef.current) {
+            const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
+            const progress = scrollTop / (scrollHeight - clientHeight);
+            setScrollProgress(progress);
+        }
+    };
+
+    return (
+        <div className="relative w-full h-full min-h-[600px] overflow-hidden rounded-3xl bg-[#f5f5f0] dark:bg-[#1a1a1a]">
+            {/* 1. Fixed 3D Background */}
+            <div className="absolute inset-0 z-0">
+                <Canvas camera={{ position: [0, 0, 5], fov: 45 }}>
+                    <ambientLight intensity={0.5} />
+                    <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} intensity={1} />
+                    <pointLight position={[-10, -10, -10]} intensity={1} />
+
+                    <LiquidScrollScene scrollProgress={scrollProgress} />
+
+                    <Environment preset="city" />
+                </Canvas>
+            </div>
+
+            {/* 2. Peep-hole Overlay */}
+            <div className="absolute inset-0 z-10 pointer-events-none">
+                {/* Dark textured overlay with circular cutout */}
+                <svg width="100%" height="100%" preserveAspectRatio="none">
+                    <defs>
+                        <mask id="hole">
+                            <rect width="100%" height="100%" fill="white" />
+                            <circle cx="50%" cy="50%" r="150" fill="black" />
+                        </mask>
+                    </defs>
+                    <rect
+                        width="100%"
+                        height="100%"
+                        fill="rgba(20, 20, 20, 0.95)"
+                        mask="url(#hole)"
+                    />
+                </svg>
+
+                {/* Glass rim around the hole */}
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] rounded-full border border-white/20 shadow-[inset_0_0_20px_rgba(255,255,255,0.2)] pointer-events-none"></div>
+            </div>
+
+            {/* 3. Scrollable Content */}
+            <div
+                ref={scrollRef}
+                onScroll={handleScroll}
+                className="absolute inset-0 z-20 overflow-y-auto scrollbar-hide snap-y snap-mandatory"
+            >
+                <Section
+                    title="Liquid Time"
+                    subtitle="Redefining the flow of moments."
+                    align="center"
+                />
+                <Section
+                    title="Precision"
+                    subtitle="Crafted with absolute attention to detail."
+                    align="left"
+                />
+                <Section
+                    title="Elegance"
+                    subtitle="A seamless blend of form and function."
+                    align="right"
+                />
+                <Section
+                    title="Future"
+                    subtitle="Experience the next generation of style."
+                    align="center"
+                />
+            </div>
+        </div>
+    );
+}
+
+function LiquidScrollScene({ scrollProgress }: { scrollProgress: number }) {
+    const meshRef = useRef<THREE.Mesh>(null);
+
+    useFrame((state) => {
+        if (meshRef.current) {
+            // Smooth rotation based on scroll
+            const targetRotationY = scrollProgress * Math.PI * 4; // 2 full rotations
+            const targetRotationX = scrollProgress * Math.PI; // 1 full rotation
+
+            meshRef.current.rotation.y = THREE.MathUtils.lerp(meshRef.current.rotation.y, targetRotationY, 0.1);
+            meshRef.current.rotation.x = THREE.MathUtils.lerp(meshRef.current.rotation.x, targetRotationX, 0.1);
+
+            // Floating animation
+            meshRef.current.position.y = Math.sin(state.clock.elapsedTime) * 0.1;
+        }
+    });
+
+    return (
+        <Float speed={2} rotationIntensity={0.5} floatIntensity={0.5}>
+            <mesh ref={meshRef} scale={1.5}>
+                <torusKnotGeometry args={[0.6, 0.2, 128, 32]} />
+                <MeshTransmissionMaterial
+                    backside
+                    backsideThickness={0.3}
+                    thickness={0.5}
+                    roughness={0}
+                    transmission={1}
+                    ior={1.5}
+                    chromaticAberration={0.1}
+                    anisotropy={0.5}
+                    distortion={0.5}
+                    distortionScale={0.5}
+                    temporalDistortion={0.1}
+                    color="#ffffff"
+                    background={new THREE.Color('#f0f0f0')}
+                />
+            </mesh>
+        </Float>
+    );
+}
+
+function Section({ title, subtitle, align }: { title: string, subtitle: string, align: 'left' | 'center' | 'right' }) {
+    const alignmentClasses = {
+        left: 'items-start text-left pl-20',
+        center: 'items-center text-center',
+        right: 'items-end text-right pr-20',
+    };
+
+    return (
+        <div className={`h-full w-full flex flex-col justify-center ${alignmentClasses[align]} snap-center p-10 pointer-events-none`}>
+            <motion.div
+                initial={{ opacity: 0, y: 50 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.8, ease: "easeOut" }}
+                viewport={{ once: false, amount: 0.5 }}
+                className="max-w-lg"
+            >
+                <h2 className="text-6xl md:text-8xl font-bold text-white mb-4 drop-shadow-lg">{title}</h2>
+                <p className="text-xl md:text-2xl text-white/80 font-light drop-shadow-md">{subtitle}</p>
+            </motion.div>
         </div>
     );
 }
@@ -1544,6 +1712,349 @@ function DynamicMeshPrototype() {
                 <button className="mt-8 px-8 py-3 bg-white text-black rounded-full font-bold hover:bg-opacity-90 transition-colors">
                     Get Started
                 </button>
+            </div>
+        </div>
+    );
+}
+
+// ===========================================
+// CLOSET-SPECIFIC PROTOTYPES
+// ===========================================
+
+// --- Prototype 1: 3D Grid Effect for Closet Items ---
+function Closet3DGridPrototype() {
+    const sampleItems = [
+        'https://images.pexels.com/photos/10049570/pexels-photo-10049570.jpeg?auto=compress&cs=tinysrgb&w=300',
+        'https://images.pexels.com/photos/5935754/pexels-photo-5935754.jpeg?auto=compress&cs=tinysrgb&w=300',
+        'https://images.pexels.com/photos/1124468/pexels-photo-1124468.jpeg?auto=compress&cs=tinysrgb&w=300',
+        'https://images.pexels.com/photos/1598507/pexels-photo-1598507.jpeg?auto=compress&cs=tinysrgb&w=300',
+        'https://images.pexels.com/photos/1040424/pexels-photo-1040424.jpeg?auto=compress&cs=tinysrgb&w=300',
+        'https://images.pexels.com/photos/7206287/pexels-photo-7206287.jpeg?auto=compress&cs=tinysrgb&w=300',
+        'https://images.pexels.com/photos/2529148/pexels-photo-2529148.jpeg?auto=compress&cs=tinysrgb&w=300',
+        'https://images.pexels.com/photos/1478442/pexels-photo-1478442.jpeg?auto=compress&cs=tinysrgb&w=300',
+    ];
+
+    return (
+        <div className="w-full h-full flex flex-col gap-6 min-h-[600px] p-4">
+            <div className="text-center">
+                <h3 className="text-2xl font-bold text-gray-800 dark:text-white mb-2">Grilla 3D Interactive</h3>
+                <p className="text-sm text-gray-500">Hover sobre las prendas para ver efecto 3D y zoom</p>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 perspective-1000">
+                {sampleItems.map((img, idx) => (
+                    <motion.div
+                        key={idx}
+                        className="relative aspect-[3/4] rounded-2xl overflow-hidden cursor-pointer group"
+                        whileHover={{
+                            scale: 1.05,
+                            rotateY: 5,
+                            rotateX: -5,
+                            z: 50,
+                        }}
+                        transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                        style={{
+                            transformStyle: "preserve-3d",
+                        }}
+                    >
+                        {/* Item Image */}
+                        <img
+                            src={img}
+                            alt="Clothing item"
+                            className="w-full h-full object-cover"
+                        />
+
+                        {/* Glass Overlay on Hover */}
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            whileHover={{ opacity: 1 }}
+                            className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent pointer-events-none"
+                        >
+                            <div className="absolute bottom-4 left-4 text-white">
+                                <p className="font-bold">Prenda {idx + 1}</p>
+                                <p className="text-xs opacity-80">Click para detalles</p>
+                            </div>
+                        </motion.div>
+
+                        {/* Shine Effect */}
+                        <motion.div
+                            className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/20 to-transparent opacity-0 group-hover:opacity-100 pointer-events-none"
+                            transition={{ duration: 0.5 }}
+                        />
+                    </motion.div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+// --- Prototype 2: Peephole Detail View (FIXED) ---
+function ClosetPeepholePrototype() {
+    const [selectedItem, setSelectedItem] = useState<number | null>(null);
+
+    const sampleItems = [
+        { img: 'https://images.pexels.com/photos/10049570/pexels-photo-10049570.jpeg?auto=compress&cs=tinysrgb&w=600', name: 'Remera Blanca', category: 'Top' },
+        { img: 'https://images.pexels.com/photos/5935754/pexels-photo-5935754.jpeg?auto=compress&cs=tinysrgb&w=600', name: 'Camisa Azul', category: 'Top' },
+        { img: 'https://images.pexels.com/photos/1124468/pexels-photo-1124468.jpeg?auto=compress&cs=tinysrgb&w=600', name: 'Blazer Negro', category: 'Outerwear' },
+    ];
+
+    return (
+        <>
+            <div className="w-full h-full flex flex-col gap-6 min-h-[600px] p-4">
+                <div className="text-center">
+                    <h3 className="text-2xl font-bold text-gray-800 dark:text-white mb-2">Peephole Detail View</h3>
+                    <p className="text-sm text-gray-500">Click en una prenda para ver detalles con efecto "peephole"</p>
+                </div>
+
+                {/* Grid */}
+                <div className="grid grid-cols-3 gap-4">
+                    {sampleItems.map((item, idx) => (
+                        <motion.div
+                            key={idx}
+                            layoutId={`peephole-item-${idx}`}
+                            onClick={() => setSelectedItem(idx)}
+                            className="aspect-[3/4] rounded-xl overflow-hidden cursor-pointer hover:scale-105 transition-transform"
+                        >
+                            <img src={item.img} alt={item.name} className="w-full h-full object-cover" />
+                        </motion.div>
+                    ))}
+                </div>
+            </div>
+
+            {/* Peephole Modal - Rendered outside main container */}
+            <AnimatePresence>
+                {selectedItem !== null && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[9999] flex items-center justify-center"
+                        onClick={() => setSelectedItem(null)}
+                        style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}
+                    >
+                        {/* Dark Overlay with Circular Cutout */}
+                        <div className="absolute inset-0 pointer-events-none">
+                            <svg width="100%" height="100%" preserveAspectRatio="none" className="absolute inset-0">
+                                <defs>
+                                    <mask id="peephole-mask-active">
+                                        <rect width="100%" height="100%" fill="white" />
+                                        <circle cx="50%" cy="50%" r="220" fill="black" />
+                                    </mask>
+                                </defs>
+                                <rect
+                                    width="100%"
+                                    height="100%"
+                                    fill="rgba(0, 0, 0, 0.95)"
+                                    mask="url(#peephole-mask-active)"
+                                />
+                            </svg>
+                        </div>
+
+                        {/* Glass Rim */}
+                        <motion.div
+                            initial={{ scale: 0 }}
+                            animate={{ scale: 1 }}
+                            exit={{ scale: 0 }}
+                            className="absolute w-[440px] h-[440px] rounded-full border-4 border-white/30 shadow-[inset_0_0_30px_rgba(255,255,255,0.3)] pointer-events-none"
+                        />
+
+                        {/* Item Detail */}
+                        <motion.div
+                            layoutId={`peephole-item-${selectedItem}`}
+                            className="relative z-10 w-80 aspect-[3/4] rounded-3xl overflow-hidden shadow-2xl pointer-events-auto"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <img
+                                src={sampleItems[selectedItem].img}
+                                alt={sampleItems[selectedItem].name}
+                                className="w-full h-full object-cover"
+                            />
+
+                            <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/90 to-transparent text-white">
+                                <h3 className="text-2xl font-bold mb-1">{sampleItems[selectedItem].name}</h3>
+                                <p className="text-sm opacity-80">{sampleItems[selectedItem].category}</p>
+                                <button className="mt-4 px-6 py-2 bg-white text-black rounded-full text-sm font-bold hover:bg-opacity-90 transition-colors">
+                                    Ver Detalles
+                                </button>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </>
+    );
+}
+
+// --- Prototype 3: Magnetic Hover Effect ---
+function ClosetMagneticPrototype() {
+    const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+    const containerRef = useRef<HTMLDivElement>(null);
+
+    const sampleItems = [
+        'https://images.pexels.com/photos/10049570/pexels-photo-10049570.jpeg?auto=compress&cs=tinysrgb&w=300',
+        'https://images.pexels.com/photos/5935754/pexels-photo-5935754.jpeg?auto=compress&cs=tinysrgb&w=300',
+        'https://images.pexels.com/photos/1124468/pexels-photo-1124468.jpeg?auto=compress&cs=tinysrgb&w=300',
+        'https://images.pexels.com/photos/1598507/pexels-photo-1598507.jpeg?auto=compress&cs=tinysrgb&w=300',
+        'https://images.pexels.com/photos/1040424/pexels-photo-1040424.jpeg?auto=compress&cs=tinysrgb&w=300',
+        'https://images.pexels.com/photos/7206287/pexels-photo-7206287.jpeg?auto=compress&cs=tinysrgb&w=300',
+    ];
+
+    const handleMouseMove = (e: React.MouseEvent) => {
+        if (containerRef.current) {
+            const rect = containerRef.current.getBoundingClientRect();
+            setMousePosition({
+                x: e.clientX - rect.left,
+                y: e.clientY - rect.top
+            });
+        }
+    };
+
+    return (
+        <div
+            ref={containerRef}
+            onMouseMove={handleMouseMove}
+            className="w-full h-full flex flex-col gap-6 min-h-[600px] p-4 bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-950 rounded-3xl"
+        >
+            <div className="text-center">
+                <h3 className="text-2xl font-bold text-gray-800 dark:text-white mb-2">Magnetic Hover</h3>
+                <p className="text-sm text-gray-500">Las prendas se "pegan" sutilmente al cursor</p>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-8 relative">
+                {sampleItems.map((img, idx) => (
+                    <MagneticItem key={idx} img={img} idx={idx} mousePosition={mousePosition} />
+                ))}
+            </div>
+        </div>
+    );
+}
+
+function MagneticItem({ img, idx, mousePosition }: { img: string, idx: number, mousePosition: { x: number, y: number } }) {
+    const itemRef = useRef<HTMLDivElement>(null);
+    const [offset, setOffset] = useState({ x: 0, y: 0 });
+
+    useEffect(() => {
+        if (itemRef.current) {
+            const rect = itemRef.current.getBoundingClientRect();
+            const itemCenterX = rect.left + rect.width / 2;
+            const itemCenterY = rect.top + rect.height / 2;
+
+            const distance = Math.sqrt(
+                Math.pow(mousePosition.x - itemCenterX, 2) +
+                Math.pow(mousePosition.y - itemCenterY, 2)
+            );
+
+            const magneticRadius = 150;
+
+            if (distance < magneticRadius) {
+                const strength = 1 - (distance / magneticRadius);
+                const dx = (mousePosition.x - itemCenterX) * strength * 0.3;
+                const dy = (mousePosition.y - itemCenterY) * strength * 0.3;
+                setOffset({ x: dx, y: dy });
+            } else {
+                setOffset({ x: 0, y: 0 });
+            }
+        }
+    }, [mousePosition]);
+
+    return (
+        <motion.div
+            ref={itemRef}
+            animate={{ x: offset.x, y: offset.y }}
+            transition={{ type: "spring", stiffness: 150, damping: 15, mass: 0.5 }}
+            className="relative aspect-[3/4] rounded-2xl overflow-hidden cursor-pointer group shadow-xl"
+        >
+            <img src={img} alt="Item" className="w-full h-full object-cover" />
+
+            {/* Glow effect when magnetic */}
+            <motion.div
+                animate={{
+                    opacity: offset.x !== 0 || offset.y !== 0 ? 0.3 : 0,
+                    scale: offset.x !== 0 || offset.y !== 0 ? 1.1 : 1
+                }}
+                className="absolute inset-0 bg-gradient-to-tr from-purple-500 via-pink-500 to-blue-500 mix-blend-overlay"
+            />
+
+            <div className="absolute bottom-4 left-4 text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                <p className="font-bold text-sm">Prenda {idx + 1}</p>
+            </div>
+        </motion.div>
+    );
+}
+
+// --- Prototype 4: Glass Cards with Entrance Animations ---
+function ClosetGlassCardsPrototype() {
+    const sampleItems = [
+        { img: 'https://images.pexels.com/photos/10049570/pexels-photo-10049570.jpeg?auto=compress&cs=tinysrgb&w=400', name: 'Remera Blanca', category: 'Tops' },
+        { img: 'https://images.pexels.com/photos/5935754/pexels-photo-5935754.jpeg?auto=compress&cs=tinysrgb&w=400', name: 'Camisa Azul', category: 'Tops' },
+        { img: 'https://images.pexels.com/photos/1124468/pexels-photo-1124468.jpeg?auto=compress&cs=tinysrgb&w=400', name: 'Blazer', category: 'Outerwear' },
+        { img: 'https://images.pexels.com/photos/1598507/pexels-photo-1598507.jpeg?auto=compress&cs=tinysrgb&w=400', name: 'Jeans', category: 'Bottoms' },
+        { img: 'https://images.pexels.com/photos/1040424/pexels-photo-1040424.jpeg?auto=compress&cs=tinysrgb&w=400', name: 'Pantalón', category: 'Bottoms' },
+        { img: 'https://images.pexels.com/photos/2529148/pexels-photo-2529148.jpeg?auto=compress&cs=tinysrgb&w=400', name: 'Sneakers', category: 'Shoes' },
+    ];
+
+    return (
+        <div className="w-full h-full flex flex-col gap-6 min-h-[600px] p-4 bg-gradient-to-br from-indigo-100 via-purple-100 to-pink-100 dark:from-slate-900 dark:to-purple-950 rounded-3xl">
+            <div className="text-center">
+                <h3 className="text-2xl font-bold text-gray-800 dark:text-white mb-2">Glass Cards</h3>
+                <p className="text-sm text-gray-500">Cards de glassmorphism con animaciones premium</p>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
+                {sampleItems.map((item, idx) => (
+                    <motion.div
+                        key={idx}
+                        initial={{ opacity: 0, y: 50, scale: 0.8 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        transition={{
+                            delay: idx * 0.1,
+                            type: "spring",
+                            stiffness: 100,
+                            damping: 12
+                        }}
+                        whileHover={{
+                            scale: 1.05,
+                            rotate: idx % 2 === 0 ? 2 : -2,
+                            y: -10
+                        }}
+                        className="relative aspect-[3/4] rounded-3xl overflow-hidden cursor-pointer group"
+                        style={{
+                            backdropFilter: 'blur(20px)',
+                            backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                            border: '1px solid rgba(255, 255, 255, 0.2)',
+                            boxShadow: '0 20px 40px rgba(0, 0, 0, 0.1), inset 0 1px 1px rgba(255, 255, 255, 0.3)'
+                        }}
+                    >
+                        {/* Image */}
+                        <div className="absolute inset-0 p-3">
+                            <img
+                                src={item.img}
+                                alt={item.name}
+                                className="w-full h-full object-cover rounded-2xl"
+                            />
+                        </div>
+
+                        {/* Glass gradient overlay */}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-white/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+
+                        {/* Content */}
+                        <div className="absolute bottom-0 left-0 right-0 p-6 transform translate-y-full group-hover:translate-y-0 transition-transform duration-300">
+                            <div className="bg-white/90 dark:bg-black/90 backdrop-blur-xl rounded-2xl p-4 shadow-2xl">
+                                <h4 className="font-bold text-lg text-gray-900 dark:text-white">{item.name}</h4>
+                                <p className="text-sm text-gray-600 dark:text-gray-300">{item.category}</p>
+                                <button className="mt-3 w-full py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl text-sm font-bold hover:shadow-lg transition-shadow">
+                                    Ver Más
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Shine effect */}
+                        <motion.div
+                            className="absolute inset-0 bg-gradient-to-br from-white/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 pointer-events-none"
+                            transition={{ duration: 0.3 }}
+                        />
+                    </motion.div>
+                ))}
             </div>
         </div>
     );

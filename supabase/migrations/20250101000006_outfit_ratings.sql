@@ -3,7 +3,7 @@
 
 -- Create outfit_ratings table
 CREATE TABLE outfit_ratings (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   outfit_id UUID NOT NULL REFERENCES outfits(id) ON DELETE CASCADE,
   rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),

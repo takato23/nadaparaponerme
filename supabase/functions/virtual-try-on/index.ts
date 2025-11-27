@@ -51,7 +51,7 @@ serve(async (req) => {
         const prompt = 'Eres un asistente de moda experto. Viste a la persona en la primera imagen con la ropa de las tres imágenes que le siguen (top, pantalón, zapatos). Combina la ropa de forma realista sobre el cuerpo de la persona, manteniendo su rostro, pose y el fondo original. La salida debe ser solo la imagen final.';
 
         const response = await ai.models.generateContent({
-            model: 'gemini-1.5-flash-image', // Or appropriate model
+            model: 'gemini-2.5-flash-image', // Updated to latest stable model
             contents: {
                 parts: [
                     { text: prompt },
@@ -65,9 +65,9 @@ serve(async (req) => {
         });
 
         // Extract image from response
-        // Note: The structure depends on the SDK version and response. 
+        // Note: The structure depends on the SDK version and response.
         // Assuming standard Gemini response structure for image generation/editing if supported.
-        // If 'gemini-1.5-flash-image' returns an image in the candidates.
+        // If 'gemini-2.5-flash-image' returns an image in the candidates.
 
         const candidate = response.candidates?.[0];
         const part = candidate?.content?.parts?.[0];

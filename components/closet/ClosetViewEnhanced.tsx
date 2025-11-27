@@ -24,9 +24,11 @@ import ClosetGridMasonry from './ClosetGridMasonry';
 import ClosetBulkActions from './ClosetBulkActions';
 import ClosetPresentationMode from './ClosetPresentationMode';
 import VisualSearchModal from './VisualSearchModal';
+import LiquidDetailModal from './LiquidDetailModal';
 import { CoverFlowCarousel } from './CoverFlowCarousel';
 import { useCloset } from '../../contexts/ClosetContext';
 import { getUniqueColors, getUniqueTags, getUniqueSeasons } from '../../utils/closetUtils';
+import { findSimilarByImage } from '../../services/geminiService';
 import type { ClothingItem } from '../../types';
 
 interface ClosetViewEnhancedProps {
@@ -58,7 +60,13 @@ export default function ClosetViewEnhanced({
     toggleSelectAll,
     toggleItemSelection,
     totalItems,
-    filteredCount
+    filteredCount,
+    // Actions from parent
+    onDeleteItem,
+    onDeleteItems,
+    onToggleFavorite,
+    onExportItems,
+    onShareItems
   } = useCloset();
 
   // Presentation mode state
@@ -69,6 +77,14 @@ export default function ClosetViewEnhanced({
 
   // Visual search state
   const [isVisualSearchOpen, setIsVisualSearchOpen] = useState(false);
+  const [visualSearchResults, setVisualSearchResults] = useState<string[] | null>(null);
+  const [isSearching, setIsSearching] = useState(false);
+
+  // Liquid Detail Modal state
+  const [detailModal, setDetailModal] = useState<{ isOpen: boolean; item: ClothingItem | null }>({
+    isOpen: false,
+    item: null
+  });
 
   // Extract unique values for filter options (colors now come from context)
   const availableTags = useMemo(() => getUniqueTags(items), [items]);
@@ -84,6 +100,16 @@ export default function ClosetViewEnhanced({
 
     return counts;
   }, [collections.collectionsWithItems]);
+
+  // Handle Item Click - Opens Liquid Detail Modal
+  const handleItemClick = useCallback((id: string) => {
+    const item = items.find(i => i.id === id);
+    if (item) {
+      setDetailModal({ isOpen: true, item });
+    } else {
+      onItemClick(id); // Fallback to original handler if item not found (shouldn't happen)
+    }
+  }, [items, onItemClick]);
 
   // Bulk actions handlers
   const handleBulkAction = useCallback((actionId: string) => {
@@ -110,56 +136,84 @@ export default function ClosetViewEnhanced({
     // Handle other bulk actions
     switch (actionId) {
       case 'delete':
-        // TODO: Implement delete functionality
-        console.log('Delete items:', selection.selectedIds);
+        if (onDeleteItems) {
+          onDeleteItems(Array.from(selection.selectedIds));
+        }
         exitSelectionMode();
         break;
 
       case 'export':
-        // TODO: Implement export functionality
-        console.log('Export items:', selection.selectedIds);
+        if (onExportItems) {
+          onExportItems(Array.from(selection.selectedIds));
+        } else {
+          // Fallback: Download as JSON
+          const selectedItems = items.filter(i => selection.selectedIds.has(i.id));
+          const dataStr = JSON.stringify(selectedItems, null, 2);
+          const dataBlob = new Blob([dataStr], { type: 'application/json' });
+          const url = URL.createObjectURL(dataBlob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = `armario-${new Date().toISOString().split('T')[0]}.json`;
+          link.click();
+          URL.revokeObjectURL(url);
+        }
         exitSelectionMode();
         break;
 
       case 'share':
-        // TODO: Implement share functionality
-        console.log('Share items:', selection.selectedIds);
+        if (onShareItems) {
+          onShareItems(Array.from(selection.selectedIds));
+        } else {
+          // Fallback: Use Web Share API if available
+          const shareItems = items.filter(i => selection.selectedIds.has(i.id));
+          if (navigator.share) {
+            navigator.share({
+              title: 'Mi Armario',
+              text: `Mira estas ${shareItems.length} prendas de mi armario`,
+            }).catch(() => {});
+          }
+        }
         exitSelectionMode();
         break;
 
       default:
         console.log('Unknown action:', actionId);
     }
-  }, [selection.selectedIds, collections, exitSelectionMode]);
+  }, [selection.selectedIds, collections, exitSelectionMode, onDeleteItems, onExportItems, onShareItems, items]);
 
   // Quick action handlers (from context menu and card hover)
   const handleQuickAction = useCallback((action: string, item: ClothingItem) => {
-    console.log('Quick action:', action, 'Item:', item.id);
-
     switch (action) {
       case 'view':
         // Open Item Detail View
-        onItemClick(item.id);
+        handleItemClick(item.id);
         break;
 
       case 'edit':
-        // TODO: Implement edit functionality
-        console.log('Edit item:', item.id);
+        // Open detail modal in edit mode
+        setDetailModal({ isOpen: true, item });
         break;
 
       case 'favorite':
-        // TODO: Implement favorite toggle
-        console.log('Toggle favorite:', item.id);
+        if (onToggleFavorite) {
+          onToggleFavorite(item.id);
+        }
         break;
 
       case 'delete':
-        // TODO: Implement delete functionality
-        console.log('Delete item:', item.id);
+        if (onDeleteItem) {
+          onDeleteItem(item.id);
+        }
         break;
 
       case 'share':
-        // TODO: Implement share functionality
-        console.log('Share item:', item.id);
+        // Use Web Share API if available
+        if (navigator.share) {
+          navigator.share({
+            title: item.metadata?.subcategory || 'Mi prenda',
+            text: `Mira esta prenda: ${item.metadata?.subcategory || 'prenda'}`,
+          }).catch(() => {});
+        }
         break;
 
       case 'add-to-collection':
@@ -170,7 +224,7 @@ export default function ClosetViewEnhanced({
       default:
         console.log('Unknown quick action:', action);
     }
-  }, [onItemClick, displayItems]);
+  }, [handleItemClick, onDeleteItem, onToggleFavorite]);
 
   return (
     <div className="flex h-full bg-transparent">
@@ -191,8 +245,9 @@ export default function ClosetViewEnhanced({
       />
 
       {/* Main Content */}
-      <div className="flex flex-col h-full relative">
+      <div className="flex flex-col h-full relative w-full">
         <div className="flex-1 flex flex-col overflow-hidden">
+
           {/* Toolbar */}
           <ClosetToolbar
             searchText={filters.filters.searchText || ''}
@@ -218,13 +273,11 @@ export default function ClosetViewEnhanced({
 
           {/* Grid/List Content */}
           <div className="flex-1 overflow-hidden">
-            {/* Debug Log removed */}
-
             {/* Render masonry layout for desktop, virtualized grid for mobile/list */}
             {viewPreferences.currentViewMode === 'masonry' && viewPreferences.isDesktop ? (
               <ClosetGridMasonry
                 items={displayItems}
-                onItemClick={onItemClick}
+                onItemClick={handleItemClick}
                 showVersatilityScore={viewPreferences.preferences.shared.visualTheme.showVersatilityScore}
                 getItemVersatilityScore={(itemId) => stats.getItemVersatilityScore?.(itemId) || 0}
                 isSelectionMode={selection.isSelectionMode}
@@ -248,12 +301,12 @@ export default function ClosetViewEnhanced({
             ) : viewPreferences.currentViewMode === 'carousel' ? (
               <CoverFlowCarousel
                 items={displayItems}
-                onItemClick={onItemClick}
+                onItemClick={handleItemClick}
               />
             ) : (
               <ClosetGridVirtualized
                 items={displayItems}
-                onItemClick={onItemClick}
+                onItemClick={handleItemClick}
                 showVersatilityScore={viewPreferences.preferences.shared.visualTheme.showVersatilityScore}
                 getItemVersatilityScore={(itemId) => stats.getItemVersatilityScore?.(itemId) || 0}
                 isSelectionMode={selection.isSelectionMode}
@@ -322,7 +375,7 @@ export default function ClosetViewEnhanced({
             items={displayItems}
             initialIndex={presentationMode.initialIndex}
             onClose={() => setPresentationMode({ ...presentationMode, isOpen: false })}
-            onItemClick={onItemClick}
+            onItemClick={handleItemClick}
             onToggleFavorite={(id) => handleQuickAction('favorite', displayItems.find(i => i.id === id)!)}
           />
         )}
@@ -330,14 +383,43 @@ export default function ClosetViewEnhanced({
         {/* Visual Search Modal */}
         <VisualSearchModal
           isOpen={isVisualSearchOpen}
-          onClose={() => setIsVisualSearchOpen(false)}
-          onSearch={(imageData, color) => {
-            // Mock search: filter by color if provided, or just show a toast
-            console.log('Visual search for:', color);
-            // In a real app, we would update filters here
-            // filters.setFilters({ ...filters.filters, colors: { colors: ['red'], matchMode: 'similar' } });
+          onClose={() => {
             setIsVisualSearchOpen(false);
+            // Clear results when closing
+            if (visualSearchResults) {
+              setVisualSearchResults(null);
+            }
           }}
+          onSearch={async (imageData) => {
+            setIsSearching(true);
+            try {
+              // Use AI to find similar items in the closet
+              const similarIds = await findSimilarByImage(imageData, items);
+              setVisualSearchResults(similarIds);
+
+              if (similarIds.length > 0) {
+                // Enter selection mode and select found items
+                enterSelectionMode();
+                similarIds.forEach(id => {
+                  if (items.some(item => item.id === id)) {
+                    toggleItemSelection(id);
+                  }
+                });
+              }
+              setIsVisualSearchOpen(false);
+            } catch (error) {
+              console.error('Visual search error:', error);
+            } finally {
+              setIsSearching(false);
+            }
+          }}
+        />
+
+        {/* Liquid Detail Modal */}
+        <LiquidDetailModal
+          item={detailModal.item}
+          isOpen={detailModal.isOpen}
+          onClose={() => setDetailModal({ ...detailModal, isOpen: false })}
         />
       </div>
     </div>

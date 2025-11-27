@@ -5,7 +5,7 @@
 -- 1. Party Mode (Collaborative Wardrobe / Events)
 
 CREATE TABLE events (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
   description TEXT,
   event_date TIMESTAMPTZ NOT NULL,
@@ -26,7 +26,7 @@ CREATE TABLE event_participants (
 );
 
 CREATE TABLE event_outfits (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   event_id UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   outfit_id UUID REFERENCES outfits(id) ON DELETE SET NULL, -- Can be null if just planning
@@ -92,7 +92,7 @@ CREATE INDEX idx_clothing_items_for_exchange ON clothing_items(is_for_exchange) 
 
 -- Marketplace Offers Table
 CREATE TABLE marketplace_offers (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   item_id UUID NOT NULL REFERENCES clothing_items(id) ON DELETE CASCADE,
   buyer_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   seller_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,

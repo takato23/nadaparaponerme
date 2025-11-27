@@ -13,9 +13,10 @@
  * - Premium "Modern Editorial" aesthetic
  */
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { ClothingItem } from '../../types';
+import { PLACEHOLDERS, getImageUrl } from '../../src/utils/imagePlaceholder';
 
 interface ClosetItemCardProps {
   item: ClothingItem;
@@ -51,6 +52,12 @@ export default function ClosetItemCard({
   const [imageLoaded, setImageLoaded] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const [longPressTimer, setLongPressTimer] = useState<NodeJS.Timeout | null>(null);
+
+  // Get safe image URL using centralized helper
+  // preferThumbnail=true for grid views to improve performance
+  const imageUrl = useMemo(() => {
+    return getImageUrl(item as any, viewMode === 'grid');
+  }, [item, viewMode]);
 
   // Handle click
   const handleClick = (e: React.MouseEvent) => {
@@ -225,18 +232,21 @@ export default function ClosetItemCard({
         )}
 
         <img
-          src={item.imageDataUrl || (item as any).image_url || 'https://via.placeholder.com/300?text=No+Image'}
+          src={imageUrl}
           alt={item.metadata?.subcategory || 'Clothing item'}
           className={`
-            w-full h-full object-cover transition-all duration-700 ease-out
+            w-full h-full object-cover transition-all duration-300 ease-out
             ${imageLoaded ? 'opacity-100 shimmer-effect' : 'opacity-0'}
             group-hover:scale-110
           `}
           loading="lazy"
           onLoad={() => setImageLoaded(true)}
           onError={(e) => {
-            // Fallback on error
-            e.currentTarget.src = 'https://via.placeholder.com/300?text=Error';
+            // Fallback on error - only change if not already showing error placeholder
+            if (!e.currentTarget.src.includes('data:image/svg+xml')) {
+              e.currentTarget.src = PLACEHOLDERS.error;
+            }
+            // Always set loaded to make it visible
             setImageLoaded(true);
           }}
         />
@@ -274,6 +284,54 @@ export default function ClosetItemCard({
             </div>
           </motion.div>
         )}
+
+        {/* Glass Info Card on Hover - NEW */}
+        <AnimatePresence>
+          {isHovered && !isSelectionMode && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 20 }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
+              className="absolute bottom-0 left-0 right-0 z-30 p-4 pointer-events-none"
+              style={{
+                backdropFilter: 'blur(24px) saturate(180%)',
+                backgroundColor: 'rgba(255, 255, 255, 0.85)',
+                borderTop: '1px solid rgba(255, 255, 255, 0.3)',
+                boxShadow: '0 -10px 40px rgba(0, 0, 0, 0.1), inset 0 1px 1px rgba(255, 255, 255, 0.5)'
+              }}
+            >
+              {/* Shine effect */}
+              <div className="absolute inset-0 bg-gradient-to-br from-white/40 via-transparent to-transparent opacity-60 pointer-events-none" />
+
+              <div className="relative">
+                <h4 className="font-bold text-base text-gray-900 capitalize mb-1 line-clamp-1">
+                  {item.metadata?.subcategory || 'Sin categoría'}
+                </h4>
+                <p className="text-sm text-gray-700 capitalize mb-2">
+                  {item.metadata?.category || 'Prenda'}
+                </p>
+
+                <div className="flex items-center gap-2 flex-wrap">
+                  {/* Color badge */}
+                  {item.metadata?.color_primary && (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/60 backdrop-blur-sm border border-white/40 text-xs font-medium text-gray-800 shadow-sm">
+                      <span className="w-2.5 h-2.5 rounded-full border border-gray-300" style={{ backgroundColor: item.metadata.color_primary.toLowerCase() }}></span>
+                      {item.metadata.color_primary}
+                    </span>
+                  )}
+
+                  {/* First vibe tag */}
+                  {item.metadata?.vibe_tags && item.metadata.vibe_tags.length > 0 && (
+                    <span className="px-2.5 py-1 rounded-full bg-gradient-to-r from-purple-500/20 to-pink-500/20 backdrop-blur-sm border border-purple-500/30 text-xs font-semibold text-purple-900 uppercase tracking-wide">
+                      {item.metadata.vibe_tags[0]}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Desktop hover overlay */}
         <AnimatePresence>

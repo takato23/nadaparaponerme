@@ -9,12 +9,75 @@ interface DockItemProps {
     label: string;
     isActive: boolean;
     onClick: () => void;
+    isCamera?: boolean;
 }
 
-function DockItem({ icon, label, isActive, onClick }: DockItemProps) {
+function DockItem({ icon, label, isActive, onClick, isCamera }: DockItemProps) {
     const mouseX = useMotionValue(Infinity);
     const [isHovered, setIsHovered] = useState(false);
 
+    // Special styling for camera button
+    if (isCamera) {
+        return (
+            <motion.div
+                onMouseMove={(e) => mouseX.set(e.pageX)}
+                onMouseLeave={() => mouseX.set(Infinity)}
+                onHoverStart={() => setIsHovered(true)}
+                onHoverEnd={() => setIsHovered(false)}
+                onClick={onClick}
+                className="relative group flex flex-col items-center justify-end -mt-4"
+            >
+                <motion.div
+                    animate={{
+                        scale: isHovered ? 1.15 : 1,
+                        y: isHovered ? -8 : 0,
+                    }}
+                    transition={{ type: "spring", stiffness: 400, damping: 25, mass: 0.8 }}
+                    className="
+                        w-16 h-16 rounded-full
+                        flex items-center justify-center
+                        bg-gradient-to-br from-primary via-primary to-secondary
+                        shadow-[0_4px_20px_rgba(var(--primary),0.5)]
+                        group-hover:shadow-[0_8px_30px_rgba(var(--primary),0.6)]
+                        transition-shadow duration-300
+                        cursor-pointer
+                        border-4 border-white/20
+                        relative overflow-hidden
+                    "
+                >
+                    {/* Shine effect */}
+                    <div className="absolute inset-0 bg-gradient-to-tr from-white/30 via-transparent to-transparent opacity-60" />
+
+                    {/* Pulsing ring */}
+                    <div className="absolute inset-0 rounded-full animate-ping bg-primary/30 opacity-0 group-hover:opacity-100" style={{ animationDuration: '2s' }} />
+
+                    <span className="material-symbols-outlined text-3xl text-white relative z-10 drop-shadow-lg">
+                        {icon}
+                    </span>
+                </motion.div>
+
+                {/* Glow effect underneath */}
+                <div className="absolute -bottom-1 w-10 h-2 rounded-full bg-primary/40 blur-md group-hover:bg-primary/60 transition-colors" />
+
+                {/* Tooltip */}
+                <div className={`
+                    absolute -top-14
+                    px-3 py-1.5
+                    bg-gradient-to-r from-primary to-secondary text-white
+                    text-xs font-bold rounded-lg
+                    opacity-0 group-hover:opacity-100
+                    transition-all duration-200 transform translate-y-2 group-hover:translate-y-0
+                    pointer-events-none whitespace-nowrap backdrop-blur-sm
+                    shadow-lg
+                `}>
+                    {label}
+                    <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-secondary rotate-45" />
+                </div>
+            </motion.div>
+        );
+    }
+
+    // Regular dock item
     return (
         <motion.div
             onMouseMove={(e) => mouseX.set(e.pageX)}
@@ -31,8 +94,8 @@ function DockItem({ icon, label, isActive, onClick }: DockItemProps) {
                 }}
                 transition={{ type: "spring", stiffness: 400, damping: 25, mass: 0.8 }}
                 className={`
-          w-14 h-14 rounded-2xl 
-          flex items-center justify-center 
+          w-14 h-14 rounded-2xl
+          flex items-center justify-center
           glass-card
           shadow-lg group-hover:shadow-[0_0_20px_rgba(var(--primary),0.4)]
           transition-shadow duration-300
@@ -41,7 +104,7 @@ function DockItem({ icon, label, isActive, onClick }: DockItemProps) {
         `}
             >
                 <span className={`
-          material-symbols-outlined text-3xl 
+          material-symbols-outlined text-3xl
           ${isActive ? 'text-primary' : 'text-gray-700 dark:text-gray-200'}
           group-hover:text-primary transition-colors duration-300
         `}>
@@ -59,11 +122,11 @@ function DockItem({ icon, label, isActive, onClick }: DockItemProps) {
 
             {/* Tooltip */}
             <div className={`
-        absolute -top-12 
-        px-3 py-1.5 
-        bg-gray-900/90 dark:bg-white/90 text-white dark:text-gray-900 
-        text-xs font-bold rounded-lg 
-        opacity-0 group-hover:opacity-100 
+        absolute -top-12
+        px-3 py-1.5
+        bg-gray-900/90 dark:bg-white/90 text-white dark:text-gray-900
+        text-xs font-bold rounded-lg
+        opacity-0 group-hover:opacity-100
         transition-all duration-200 transform translate-y-2 group-hover:translate-y-0
         pointer-events-none whitespace-nowrap backdrop-blur-sm
       `}>
@@ -73,17 +136,25 @@ function DockItem({ icon, label, isActive, onClick }: DockItemProps) {
     );
 }
 
-export function FloatingDock() {
+export function FloatingDock({ onCameraClick }: { onCameraClick?: () => void }) {
     const navigate = useNavigate();
     const location = useLocation();
 
     const items = [
         { id: 'home', icon: 'home', label: 'Inicio', path: ROUTES.HOME },
         { id: 'closet', icon: 'checkroom', label: 'Armario', path: ROUTES.CLOSET },
-        { id: 'stylist', icon: 'auto_awesome', label: 'Estilista', path: ROUTES.STYLIST },
+        { id: 'camera', icon: 'photo_camera', label: 'Escanear', path: ROUTES.CLOSET, isCamera: true },
         { id: 'community', icon: 'group', label: 'Comunidad', path: ROUTES.COMMUNITY },
         { id: 'profile', icon: 'person', label: 'Perfil', path: ROUTES.PROFILE },
     ];
+
+    const handleItemClick = (item: typeof items[0]) => {
+        if (item.id === 'camera' && onCameraClick) {
+            onCameraClick();
+        } else {
+            navigate(item.path);
+        }
+    };
 
     return (
         <div className="fixed bottom-6 left-0 right-0 z-50 flex justify-center pointer-events-none px-4">
@@ -100,8 +171,9 @@ export function FloatingDock() {
                         id={item.id}
                         icon={item.icon}
                         label={item.label}
-                        isActive={location.pathname === item.path}
-                        onClick={() => navigate(item.path)}
+                        isActive={location.pathname === item.path && item.id !== 'camera'}
+                        onClick={() => handleItemClick(item)}
+                        isCamera={item.isCamera}
                     />
                 ))}
             </div>

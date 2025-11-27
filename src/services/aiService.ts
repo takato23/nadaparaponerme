@@ -14,15 +14,10 @@ import * as edgeClient from './edgeFunctionClient';
 import * as geminiService from '../../services/geminiService-rest';
 import * as geminiServiceFull from '../../services/geminiService';
 import { canGenerateOutfit, incrementAIGeneration } from './subscriptionService';
+import { retryAIOperation } from '../../utils/retryWithBackoff';
 
-// Initialize Gemini API for development if API key is available
-if (import.meta.env.DEV && import.meta.env.VITE_GEMINI_API_KEY) {
-  try {
-    geminiServiceFull.configureGeminiAPI(import.meta.env.VITE_GEMINI_API_KEY);
-  } catch (error) {
-    logger.warn('Failed to configure Gemini API for development:', error);
-  }
-}
+// ⛔ SECURITY: All AI calls MUST go through Edge Functions (server-side)
+// Direct client-side API key configuration is DISABLED for security
 
 /**
  * Analyze a clothing item image
@@ -77,24 +72,26 @@ export async function generateOutfit(
     throw new Error(canGenerate.reason || 'Has alcanzado tu límite de generaciones. Upgradeá tu plan para continuar.');
   }
 
-  // ✅ STEP 2: Generate outfit
+  // ✅ STEP 2: Generate outfit (with retry)
   const useSupabaseAI = getFeatureFlag('useSupabaseAI');
   let result: FitResult;
 
-  if (useSupabaseAI) {
-    try {
-      // Extract IDs for Edge Function
-      const closetItemIds = closet.map(item => item.id);
-      result = await edgeClient.generateOutfitViaEdge(prompt, closetItemIds);
-    } catch (error) {
-      logger.error('Edge Function failed, falling back to direct API:', error);
-      // Fallback to direct API if Edge Function fails
-      result = await geminiServiceFull.generateOutfit(prompt, closet);
+  result = await retryAIOperation(async () => {
+    if (useSupabaseAI) {
+      try {
+        // Extract IDs for Edge Function
+        const closetItemIds = closet.map(item => item.id);
+        return await edgeClient.generateOutfitViaEdge(prompt, closetItemIds);
+      } catch (error) {
+        logger.error('Edge Function failed, falling back to direct API:', error);
+        // Fallback to direct API if Edge Function fails
+        return await geminiServiceFull.generateOutfit(prompt, closet);
+      }
+    } else {
+      // Use direct Gemini API (legacy)
+      return await geminiServiceFull.generateOutfit(prompt, closet);
     }
-  } else {
-    // Use direct Gemini API (legacy)
-    result = await geminiServiceFull.generateOutfit(prompt, closet);
-  }
+  });
 
   // ✅ STEP 3: Increment usage counter (only on success)
   const incremented = await incrementAIGeneration();
@@ -122,24 +119,26 @@ export async function generatePackingList(
     throw new Error(canGenerate.reason || 'Has alcanzado tu límite de generaciones. Upgradeá tu plan para continuar.');
   }
 
-  // ✅ STEP 2: Generate packing list
+  // ✅ STEP 2: Generate packing list (with retry)
   const useSupabaseAI = getFeatureFlag('useSupabaseAI');
   let result: PackingListResult;
 
-  if (useSupabaseAI) {
-    try {
-      // Extract IDs for Edge Function
-      const closetItemIds = closet.map(item => item.id);
-      result = await edgeClient.generatePackingListViaEdge(prompt, closetItemIds);
-    } catch (error) {
-      logger.error('Edge Function failed, falling back to direct API:', error);
-      // Fallback to direct API if Edge Function fails
-      result = await geminiServiceFull.generatePackingList(prompt, closet);
+  result = await retryAIOperation(async () => {
+    if (useSupabaseAI) {
+      try {
+        // Extract IDs for Edge Function
+        const closetItemIds = closet.map(item => item.id);
+        return await edgeClient.generatePackingListViaEdge(prompt, closetItemIds);
+      } catch (error) {
+        logger.error('Edge Function failed, falling back to direct API:', error);
+        // Fallback to direct API if Edge Function fails
+        return await geminiServiceFull.generatePackingList(prompt, closet);
+      }
+    } else {
+      // Use direct Gemini API (legacy)
+      return await geminiServiceFull.generatePackingList(prompt, closet);
     }
-  } else {
-    // Use direct Gemini API (legacy)
-    result = await geminiServiceFull.generatePackingList(prompt, closet);
-  }
+  });
 
   // ✅ STEP 3: Increment usage counter (only on success)
   const incremented = await incrementAIGeneration();
@@ -333,25 +332,20 @@ export async function generateCapsuleWardrobe(
   targetSize: import('../../types').CapsuleSize,
   season?: string
 ): Promise<import('../../types').CapsuleWardrobe> {
-  // Configure API key in development if available
-  if (import.meta.env.DEV) {
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-    if (apiKey) {
-      try {
-        geminiServiceFull.configureGeminiAPI(apiKey);
-        logger.log('✅ Gemini API configured for development');
-      } catch (error) {
-        // API key already configured, ignore
-        logger.log('⚠️ Gemini API configuration skipped (already configured)');
-      }
-    } else {
-      logger.warn('⚠️ VITE_GEMINI_API_KEY not found. Add it to .env.local for development.');
-      throw new Error(
-        'Gemini API key not configured. Please add VITE_GEMINI_API_KEY to your .env.local file for development, ' +
-        'or use Supabase Edge Functions in production.'
-      );
-    }
+  // ⛔ SECURITY: All AI calls MUST go through Edge Functions
+  // Direct client-side API calls are disabled for security
+  const useSupabaseAI = getFeatureFlag('useSupabaseAI');
+
+  if (useSupabaseAI) {
+    // TODO: Implement Edge Function for capsule wardrobe
+    // For now, throw informative error
+    throw new Error(
+      'Capsule Wardrobe generation requires Edge Function implementation. ' +
+      'Please contact support or disable useSupabaseAI flag temporarily.'
+    );
   }
+
+  // Fallback to direct call only if explicitly configured server-side
   return await geminiServiceFull.generateCapsuleWardrobe(closet, theme, targetSize, season);
 }
 

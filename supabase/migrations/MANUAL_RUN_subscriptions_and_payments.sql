@@ -8,7 +8,7 @@
 -- ============================================================================
 
 CREATE TABLE subscriptions (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   tier TEXT NOT NULL CHECK (tier IN ('free', 'pro', 'premium')) DEFAULT 'free',
   status TEXT NOT NULL CHECK (status IN ('active', 'past_due', 'canceled', 'expired', 'trialing', 'paused')) DEFAULT 'active',
@@ -62,7 +62,7 @@ CREATE TRIGGER subscriptions_updated_at
 -- ============================================================================
 
 CREATE TABLE payment_transactions (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   subscription_id UUID REFERENCES subscriptions(id) ON DELETE SET NULL,
   amount DECIMAL(10,2) NOT NULL,
@@ -113,7 +113,7 @@ CREATE TRIGGER payment_transactions_updated_at
 -- ============================================================================
 
 CREATE TABLE payment_methods (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   type TEXT NOT NULL CHECK (type IN ('mercadopago_credit_card', 'mercadopago_debit_card', 'mercadopago_cash', 'mercadopago_bank_transfer', 'stripe_card')),
   last_four TEXT,
@@ -172,7 +172,7 @@ CREATE TRIGGER payment_methods_single_default
 -- ============================================================================
 
 CREATE TABLE usage_metrics (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   subscription_tier TEXT NOT NULL CHECK (subscription_tier IN ('free', 'pro', 'premium')),
   ai_generations_used INTEGER DEFAULT 0,

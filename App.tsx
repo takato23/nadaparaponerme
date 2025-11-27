@@ -7,6 +7,7 @@ import { useDebounce } from './hooks/useDebounce';
 import { useAppModals } from './hooks/useAppModals';
 import { useToast } from './hooks/useToast';
 import { useOptimistic } from './hooks/useOptimistic';
+import { useSubscription } from './hooks/useSubscription';
 import type { ClothingItem, FitResult, ClothingItemMetadata, SavedOutfit, CommunityUser, PackingListResult, SortOption, BrandRecognitionResult, OutfitSuggestionForEvent, ChatConversation, ChatMessage, CategoryFilter, ProfessionalProfile, ProfessionalFitResult } from './types';
 import * as aiService from './src/services/aiService';
 import { generateProfessionalOutfit } from './services/professionalStylistService';
@@ -22,11 +23,20 @@ import * as paymentService from './src/services/paymentService';
 import { usePullToRefresh } from './hooks/usePullToRefresh';
 import PullToRefreshIndicator from './components/ui/PullToRefreshIndicator';
 import { FloatingDock } from './components/ui/FloatingDock';
+import { useFeatureAccess } from './hooks/useFeatureAccess';
+import { useShoppingAssistant } from './hooks/useShoppingAssistant';
+import { useOutfitGeneration } from './hooks/useOutfitGeneration';
 import { ClosetGridSkeleton } from './components/ui/Skeleton';
 import Toast from './components/Toast';
+import { NetworkIndicator } from './components/ui/NetworkIndicator';
+import { CommandPalette } from './components/ui/CommandPalette';
+import { KeyboardShortcutsHelp } from './components/ui/KeyboardShortcutsHelp';
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { ROUTES } from './src/routes';
 import { getErrorMessage } from './utils/errorMessages';
 import { SkipToMainContent } from './utils/accessibility';
+import { PricingModal } from './components/PricingModal';
+import { QuotaIndicator, LimitReachedModal } from './components/QuotaIndicator';
 
 // Eager load critical components (above the fold)
 import ClosetGrid from './components/ClosetGrid';
@@ -48,7 +58,7 @@ const SavedOutfitsView = lazy(() => import('./components/SavedOutfitsView'));
 const OutfitDetailView = lazy(() => import('./components/OutfitDetailView'));
 const VirtualTryOnView = lazy(() => import('./components/VirtualTryOnView'));
 const VirtualShoppingView = lazy(() => import('./components/VirtualShoppingView'));
-const HomeView = lazy(() => import('./components/HomeView'));
+const HomeView = lazy(() => import('./components/HomeViewImproved'));
 const InstantOutfitView = lazy(() => import('./components/InstantOutfitView'));
 const ProfileView = lazy(() => import('./components/ProfileView'));
 const CommunityView = lazy(() => import('./components/CommunityView'));
@@ -77,6 +87,7 @@ const DupeFinderView = lazy(() => import('./components/DupeFinderView'));
 const CapsuleWardrobeBuilderView = lazy(() => import('./components/CapsuleWardrobeBuilderView'));
 const StyleDNAProfileView = lazy(() => import('./components/StyleDNAProfileView'));
 const AIFashionDesignerView = lazy(() => import('./components/AIFashionDesignerView'));
+const GenerationHistoryView = lazy(() => import('./components/GenerationHistoryView'));
 const BulkUploadView = lazy(() => import('./components/BulkUploadView'));
 const StyleEvolutionView = lazy(() => import('./components/StyleEvolutionView'));
 const CalendarSyncView = lazy(() => import('./components/CalendarSyncView'));
@@ -91,6 +102,7 @@ const LandingPage = lazy(() => import('./components/LandingPage3D'));
 const ProfessionalStyleWizardView = lazy(() => import('./components/ProfessionalStyleWizardView'));
 const LiquidMorphDemo = lazy(() => import('./components/LiquidMorphDemo'));
 const ConfirmDeleteModal = lazy(() => import('./components/ui/ConfirmDeleteModal'));
+const PremiumCameraView = lazy(() => import('./components/PremiumCameraView'));
 
 /**
  * AppContent - Main app component with routing logic
@@ -106,12 +118,17 @@ const AppContent = () => {
     const [closet, setCloset] = useLocalStorage<ClothingItem[]>('ojodeloca-closet', []);
     const [savedOutfits, setSavedOutfits] = useLocalStorage<SavedOutfit[]>('ojodeloca-saved-outfits', []);
     const [professionalProfile, setProfessionalProfile] = useLocalStorage<ProfessionalProfile | null>('ojodeloca-professional-profile', null);
-    const [showProfessionalWizard, setShowProfessionalWizard] = useState(false);
-    const [showMigrationModal, setShowMigrationModal] = useState(false);
+    // const [showProfessionalWizard, setShowProfessionalWizard] = useState(false); // Moved to useAppModals
+    // const [showMigrationModal, setShowMigrationModal] = useState(false); // Moved to useAppModals
     const [hasMigratedCloset, setHasMigratedCloset] = useState(() => {
         if (typeof window === 'undefined') return false;
         return localStorage.getItem('ojodeloca-migrated-closet') === 'true';
     });
+
+    // Subscription state
+    const subscription = useSubscription();
+    const [showPricingModal, setShowPricingModal] = useState(false);
+    const [showLimitReachedModal, setShowLimitReachedModal] = useState(false);
 
     // Feature flags
     const useSupabaseCloset = useFeatureFlag('useSupabaseCloset');
@@ -150,7 +167,7 @@ const AppContent = () => {
         // Show migration modal after onboarding is complete
         // ONLY if user has data that needs migration
         if (isAuthenticated && hasOnboarded && !useSupabaseCloset && needsMigration()) {
-            setShowMigrationModal(true);
+            modals.setShowMigrationModal(true);
         }
     }, [isAuthenticated, hasOnboarded, useSupabaseCloset]);
 
@@ -177,6 +194,7 @@ const AppContent = () => {
             setCloset(items);
         } catch (error) {
             console.error('Failed to load closet from Supabase:', error);
+            toast.error('No se pudo cargar tu armario. Revisa tu conexión.');
         }
     };
 
@@ -186,6 +204,7 @@ const AppContent = () => {
             setSavedOutfits(outfits);
         } catch (error) {
             console.error('Failed to load outfits from Supabase:', error);
+            toast.error('No se pudieron cargar tus outfits guardados.');
         }
     };
 
@@ -225,9 +244,20 @@ const AppContent = () => {
     const modals = useAppModals();
 
     const [stylistView, setStylistView] = useState<'generate' | 'result'>('generate');
-    const [fitResult, setFitResult] = useState<FitResult | null>(null);
-    const [isGenerating, setIsGenerating] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const {
+        isGenerating,
+        fitResult,
+        error: generationError,
+        generateOutfit,
+        resetGeneration,
+        setFitResult,
+        setError: setGenerationError
+    } = useOutfitGeneration(closet);
+
+    // We still need a general error state for other things, or we can use the one from the hook if appropriate.
+    // But App.tsx has its own 'error' state for other features.
+    // Let's keep the global error state but use generationError for the stylist view.
+    const [appError, setAppError] = useState<string | null>(null);
     const [fitAlternatives, setFitAlternatives] = useState<FitResult[]>([]);
     const [recentSearches, setRecentSearches] = useLocalStorage<string[]>('ojodeloca-recent-searches', []);
     const [lastPrompt, setLastPrompt] = useState<string>('');
@@ -239,8 +269,9 @@ const AppContent = () => {
     const debouncedSearchTerm = useDebounce(searchTerm, 300);
     const [activeCategory, setActiveCategory] = useState<CategoryFilter | null>(null);
     const [sortOption, setSortOption] = useLocalStorage<SortOption>('ojodeloca-sort-option', { property: 'date', direction: 'desc' });
-    const [showSortOptions, setShowSortOptions] = useState(false);
-    const [showAddItemModal, setShowAddItemModal] = useState(false);
+    // const [showSortOptions, setShowSortOptions] = useState(false); // Moved to useAppModals
+    // const [showAddItemModal, setShowAddItemModal] = useState(false); // Moved to useAppModals
+    // const [showQuickCamera, setShowQuickCamera] = useState(false); // Moved to useAppModals
 
     const handleItemClick = (item: ClothingItem) => {
         // Item detail view implementation deferred - not critical for MVP
@@ -276,7 +307,7 @@ const AppContent = () => {
         };
 
         const newConversation: ChatConversation = {
-            id: `chat_${Date.now()}`,
+            id: `chat_${crypto.randomUUID()}`,
             title: 'Nueva Conversación',
             messages: [welcomeMessage],
             createdAt: Date.now(),
@@ -336,23 +367,32 @@ const AppContent = () => {
         return chatConversations.find(conv => conv.id === currentConversationId) || null;
     };
 
-    const [showSmartPacker, setShowSmartPacker] = useState(false);
+    // const [showSmartPacker, setShowSmartPacker] = useState(false); // Moved to useAppModals
     const [packerStep, setPackerStep] = useState<'generate' | 'result'>('generate');
     const [packingListResult, setPackingListResult] = useState<PackingListResult | null>(null);
     const [isGeneratingPackingList, setIsGeneratingPackingList] = useState(false);
     const [packerError, setPackerError] = useState<string | null>(null);
 
     // Virtual Shopping Assistant states
-    const [shoppingChatMessages, setShoppingChatMessages] = useState<import('./types').ShoppingChatMessage[]>([]);
-    const [shoppingGaps, setShoppingGaps] = useState<import('./types').ShoppingGap[] | undefined>(undefined);
-    const [shoppingRecommendations, setShoppingRecommendations] = useState<import('./types').ShoppingRecommendation[] | undefined>(undefined);
-    const [isShoppingAnalyzing, setIsShoppingAnalyzing] = useState(false);
-    const [isShoppingTyping, setIsShoppingTyping] = useState(false);
+    const {
+        messages: shoppingChatMessages,
+        gaps: shoppingGaps,
+        recommendations: shoppingRecommendations,
+        isAnalyzing: isShoppingAnalyzing,
+        isTyping: isShoppingTyping,
+        analyzeShoppingGaps: handleAnalyzeShoppingGaps,
+        generateRecommendations: handleGenerateShoppingRecommendations,
+        sendMessage: handleSendShoppingMessage
+    } = useShoppingAssistant(closet);
 
     // Testing Playground state (dev tool for comparing outfit generation versions)
     const [showTestingPlayground, setShowTestingPlayground] = useState(false);
     const [showAestheticPlayground, setShowAestheticPlayground] = useState(false);
     const [showLiquidMorphDemo, setShowLiquidMorphDemo] = useState(false);
+
+    // UX Enhancement states: Command Palette and Keyboard Shortcuts Help
+    const [showCommandPalette, setShowCommandPalette] = useState(false);
+    const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
 
     // Delete confirmation state
     const [deleteConfirm, setDeleteConfirm] = useState<{
@@ -420,27 +460,9 @@ const AppContent = () => {
             // Handle AI designer format
             const newItem: ClothingItem = {
                 id: `item-${Date.now()}`,
-                user_id: user?.id || 'local',
-                name: item.metadata?.subcategory || 'Nueva Prenda',
-                category: item.metadata?.category || 'top',
-                subcategory: item.metadata?.subcategory,
-                color_primary: item.metadata?.color_primary || 'unknown',
-                image_url: item.imageDataUrl, // Use data URL as image URL for local
                 imageDataUrl: item.imageDataUrl,
-                ai_metadata: item.metadata,
-                metadata: item.metadata, // Legacy support
-                brand: null,
-                size: null,
-                purchase_date: new Date().toISOString(),
-                purchase_price: null,
-                tags: [],
-                notes: null,
-                times_worn: 0,
-                last_worn_at: null,
-                is_favorite: false,
-                deleted_at: null,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString()
+                metadata: item.metadata,
+                isAIGenerated: true
             };
             handleLocalItemAdd(newItem);
         } else {
@@ -513,9 +535,51 @@ const AppContent = () => {
         );
     };
 
+    // Bulk delete multiple items
+    const handleDeleteItems = async (ids: string[]) => {
+        if (ids.length === 0) return;
+
+        const originalCloset = closet;
+        const count = ids.length;
+
+        await optimistic.update(
+            // Optimistic update: Remove items immediately
+            () => {
+                setCloset(prev => prev.filter(item => !ids.includes(item.id)));
+            },
+            // API call
+            async () => {
+                if (useSupabaseCloset) {
+                    await Promise.all(ids.map(id => closetService.deleteClothingItem(id)));
+                }
+            },
+            // Rollback on error
+            () => {
+                setCloset(originalCloset);
+            },
+            // Callbacks
+            {
+                onSuccess: () => toast.success(`${count} prendas eliminadas`),
+                onError: () => toast.error('Error al eliminar. Intentá de nuevo.')
+            }
+        );
+    };
+
+    // Toggle favorite status
+    const handleToggleFavorite = async (id: string) => {
+        if (useSupabaseCloset) {
+            try {
+                await closetService.toggleFavorite(id);
+                toast.success('Favorito actualizado');
+            } catch {
+                toast.error('Error al actualizar favorito');
+            }
+        }
+    };
+
     const handleGenerateFit = async (prompt: string, mood?: string, category?: string) => {
-        setIsGenerating(true);
-        setError(null);
+        // setIsGenerating(true); // Handled by hook
+        // setError(null); // Handled by hook
         setLastPrompt(prompt);
         setBorrowedItemIds(new Set(modals.borrowedItems.map(item => item.id)));
 
@@ -537,8 +601,8 @@ const AppContent = () => {
                 // Will integrate with OpenWeatherMap API for location-based outfit suggestions
                 const weatherData = undefined;
 
-                // Obtener API key de Gemini (ya está configurado en aiService)
-                const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+                // ⛔ SECURITY: API key removed - professionalStylistService must use Edge Functions
+                // The service should get the key from Supabase secrets, not client-side env
 
                 // Generar outfit profesional
                 const professionalResult = await generateProfessionalOutfit(
@@ -546,14 +610,15 @@ const AppContent = () => {
                     professionalProfile,
                     prompt,
                     weatherData,
-                    'balanced', // Usar tono balanceado por defecto
-                    apiKey
+                    'balanced' // Usar tono balanceado por defecto
+                    // apiKey removed - service must use Edge Functions
                 );
 
                 result = professionalResult as FitResult;
             } else {
                 // Fallback al servicio básico
-                result = await aiService.generateOutfit(prompt, uniqueInventory);
+                // Fallback al servicio básico
+                result = await generateOutfit(prompt); // Use hook's generateOutfit
             }
 
             setFitResult(result);
@@ -573,10 +638,10 @@ const AppContent = () => {
                 }
             }, 100);
         } catch (e) {
-            const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
-            setError(errorMessage);
+            // const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.'; // Handled by hook
+            // setError(errorMessage); // Handled by hook
         } finally {
-            setIsGenerating(false);
+            // setIsGenerating(false); // Handled by hook
             modals.setBorrowedItems([]);
             modals.setViewingFriend(null);
         }
@@ -615,7 +680,7 @@ const AppContent = () => {
         handleGenerateFit(newPrompt);
     };
 
-    const handleRateOutfit = (rating: number) => {
+    const handleRateOutfit = (outfitId: string, rating: number) => {
         // Analytics tracking deferred to future iteration
         // Will integrate with Google Analytics or Mixpanel for user feedback tracking
     };
@@ -657,7 +722,7 @@ const AppContent = () => {
 
     const handleDeleteOutfitClick = (id: string) => {
         const outfit = savedOutfits.find(o => o.id === id);
-        const outfitName = outfit?.name || 'este outfit';
+        const outfitName = 'este outfit';
         setDeleteConfirm({
             isOpen: true,
             type: 'outfit',
@@ -687,8 +752,7 @@ const AppContent = () => {
     };
 
     const resetStylist = () => {
-        setFitResult(null);
-        setError(null);
+        resetGeneration(); // Use hook's resetGeneration
         setStylistView('generate');
     };
 
@@ -706,120 +770,64 @@ const AppContent = () => {
 
     const handlePackerClick = () => {
         resetPacker();
-        setShowSmartPacker(true);
+        modals.setShowSmartPacker(true);
     };
 
-    // Virtual Shopping Assistant handlers
-    const handleAnalyzeShoppingGaps = async () => {
-        setIsShoppingAnalyzing(true);
-        try {
-            const gaps = await aiService.analyzeShoppingGaps(closet);
-            setShoppingGaps(gaps);
-
-            // Add system message about gaps
-            const systemMessage: import('./types').ShoppingChatMessage = {
-                id: `msg-${Date.now()}`,
-                role: 'assistant',
-                content: `✨ Analicé tu armario y encontré ${gaps.length} oportunidades de compra:\n\n` +
-                    `• ${gaps.filter(g => g.priority === 'essential').length} esenciales\n` +
-                    `• ${gaps.filter(g => g.priority === 'recommended').length} recomendados\n` +
-                    `• ${gaps.filter(g => g.priority === 'optional').length} opcionales\n\n` +
-                    `Andá a la pestaña "Gaps" para ver el análisis completo, o preguntame sobre algún gap específico!`,
-                timestamp: new Date().toISOString(),
-                gap_analysis: gaps
-            };
-            setShoppingChatMessages(prev => [...prev, systemMessage]);
-        } catch (error) {
-            console.error('Error analyzing shopping gaps:', error);
-            const errorMessage: import('./types').ShoppingChatMessage = {
-                id: `msg-${Date.now()}`,
-                role: 'assistant',
-                content: '❌ Hubo un error al analizar los gaps. Por favor intentá de nuevo.',
-                timestamp: new Date().toISOString()
-            };
-            setShoppingChatMessages(prev => [...prev, errorMessage]);
-        } finally {
-            setIsShoppingAnalyzing(false);
+    // Global keyboard shortcuts (must be after resetStylist is defined)
+    useKeyboardShortcuts([
+        // Command Palette (Cmd+K)
+        {
+            key: 'k',
+            modifiers: ['meta'],
+            action: () => setShowCommandPalette(true),
+            description: 'Abrir búsqueda rápida'
+        },
+        // Quick Navigation (1-4)
+        {
+            key: '1',
+            action: () => navigate(ROUTES.HOME),
+            description: 'Ir a Inicio'
+        },
+        {
+            key: '2',
+            action: () => navigate(ROUTES.CLOSET),
+            description: 'Ir a Armario'
+        },
+        {
+            key: '3',
+            action: () => navigate(ROUTES.COMMUNITY),
+            description: 'Ir a Comunidad'
+        },
+        {
+            key: '4',
+            action: () => navigate(ROUTES.PROFILE),
+            description: 'Ir a Perfil'
+        },
+        // Add Item (Cmd+B)
+        {
+            key: 'b',
+            modifiers: ['meta'],
+            action: () => modals.setShowAddItemModal(true),
+            description: 'Agregar prenda'
+        },
+        // Generate Outfit (Cmd+G)
+        {
+            key: 'g',
+            modifiers: ['meta'],
+            action: () => {
+                resetStylist();
+                modals.setShowStylist(true);
+            },
+            description: 'Generar outfit'
+        },
+        // Shortcuts Help (Cmd+/)
+        {
+            key: '/',
+            modifiers: ['meta'],
+            action: () => setShowShortcutsHelp(true),
+            description: 'Ver atajos de teclado'
         }
-    };
-
-    const handleGenerateShoppingRecommendations = async () => {
-        if (!shoppingGaps) {
-            toast.warning('Primero tenés que analizar los gaps del armario');
-            return;
-        }
-
-        setIsShoppingAnalyzing(true);
-        try {
-            const recommendations = await aiService.generateShoppingRecommendations(
-                shoppingGaps,
-                closet
-            );
-            setShoppingRecommendations(recommendations);
-
-            const totalProducts = recommendations.reduce((sum, rec) => sum + rec.products.length, 0);
-            const totalBudget = recommendations.reduce((sum, rec) => sum + rec.total_budget_estimate, 0);
-
-            // Add system message about recommendations
-            const systemMessage: import('./types').ShoppingChatMessage = {
-                id: `msg-${Date.now()}`,
-                role: 'assistant',
-                content: `🎯 Generé ${recommendations.length} recomendaciones estratégicas con ${totalProducts} productos:\n\n` +
-                    `💰 Presupuesto total: $${totalBudget.toLocaleString('es-AR')}\n\n` +
-                    `Andá a la pestaña "Recomendaciones" para explorar los productos sugeridos!`,
-                timestamp: new Date().toISOString(),
-                recommendations
-            };
-            setShoppingChatMessages(prev => [...prev, systemMessage]);
-        } catch (error) {
-            console.error('Error generating shopping recommendations:', error);
-            const errorMessage: import('./types').ShoppingChatMessage = {
-                id: `msg-${Date.now()}`,
-                role: 'assistant',
-                content: '❌ Hubo un error al generar recomendaciones. Por favor intentá de nuevo.',
-                timestamp: new Date().toISOString()
-            };
-            setShoppingChatMessages(prev => [...prev, errorMessage]);
-        } finally {
-            setIsShoppingAnalyzing(false);
-        }
-    };
-
-    const handleSendShoppingMessage = async (message: string) => {
-        // Add user message
-        const userMessage: import('./types').ShoppingChatMessage = {
-            id: `msg-${Date.now()}`,
-            role: 'user',
-            content: message,
-            timestamp: new Date().toISOString()
-        };
-        setShoppingChatMessages(prev => [...prev, userMessage]);
-
-        // Show typing indicator
-        setIsShoppingTyping(true);
-
-        try {
-            const assistantMessage = await aiService.conversationalShoppingAssistant(
-                message,
-                shoppingChatMessages,
-                closet,
-                shoppingGaps,
-                shoppingRecommendations
-            );
-            setShoppingChatMessages(prev => [...prev, assistantMessage]);
-        } catch (error) {
-            console.error('Error in shopping assistant chat:', error);
-            const errorMessage: import('./types').ShoppingChatMessage = {
-                id: `msg-${Date.now()}`,
-                role: 'assistant',
-                content: '❌ Ups, no pude procesar tu mensaje. Intentá de nuevo.',
-                timestamp: new Date().toISOString()
-            };
-            setShoppingChatMessages(prev => [...prev, errorMessage]);
-        } finally {
-            setIsShoppingTyping(false);
-        }
-    };
+    ]);
 
     // Feature access control for premium features
     const checkFeatureAccess = async (
@@ -911,19 +919,18 @@ const AppContent = () => {
         resetStylist();
 
         // Set loading state and open stylist modal
-        setIsGenerating(true);
-        setError(null);
+        // setIsGenerating(true); // Handled by hook
+        // setError(null); // Handled by hook
         modals.setShowStylist(true);
 
         try {
-            const result = await aiService.generateOutfit(prompt, closet);
-            setFitResult(result);
+            await generateOutfit(prompt); // Use hook's generateOutfit
             setStylistView('result');
         } catch (e) {
-            const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
-            setError(errorMessage);
+            // const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.'; // Handled by hook
+            // setError(errorMessage); // Handled by hook
         } finally {
-            setIsGenerating(false);
+            // setIsGenerating(false); // Handled by hook
         }
     };
 
@@ -1013,12 +1020,14 @@ const AppContent = () => {
         return (
             <>
                 <GlobalCanvas isAuth={false} />
-                <Suspense fallback={<LazyLoader type="view" />}>
-                    <LandingPage
-                        onGetStarted={() => setShowAuthView(true)}
-                        onLogin={() => setShowAuthView(true)}
-                    />
-                </Suspense>
+                <div className="relative w-full h-dvh overflow-hidden">
+                    <Suspense fallback={<LazyLoader type="view" />}>
+                        <LandingPage
+                            onGetStarted={() => setShowAuthView(true)}
+                            onLogin={() => setShowAuthView(true)}
+                        />
+                    </Suspense>
+                </div>
             </>
         );
     }
@@ -1075,15 +1084,25 @@ const AppContent = () => {
                                                 onStartDupeFinder={() => navigate(ROUTES.CLOSET)}
                                                 onStartStyleDNA={handleStartStyleDNA}
                                                 onStartAIDesigner={handleStartAIDesigner}
+                                                onShowGenerationHistory={() => modals.setShowGenerationHistory(true)}
                                                 onStartStyleEvolution={() => modals.setShowStyleEvolution(true)}
                                                 onStartCalendarSync={() => modals.setShowCalendarSync(true)}
                                                 onStartOutfitTesting={() => setShowTestingPlayground(true)}
                                                 hasProfessionalProfile={!!professionalProfile}
-                                                onShowProfessionalWizard={() => setShowProfessionalWizard(true)}
+                                                onShowProfessionalWizard={() => modals.setShowProfessionalWizard(true)}
+                                                onShowAnalytics={() => modals.setShowAnalytics(true)}
+                                                // Subscription props
+                                                subscription={subscription}
+                                                onShowPricing={() => setShowPricingModal(true)}
                                             />
                                         } />
                                         <Route path={ROUTES.CLOSET} element={
-                                            <ClosetProvider items={closet}>
+                                            <ClosetProvider
+                                                items={closet}
+                                                onDeleteItem={handleDeleteItemClick}
+                                                onDeleteItems={handleDeleteItems}
+                                                onToggleFavorite={handleToggleFavorite}
+                                            >
                                                 <ClosetViewEnhanced
                                                     onItemClick={modals.setSelectedItemId}
                                                     onAddItem={() => modals.setShowAddItem(true)}
@@ -1122,8 +1141,12 @@ const AppContent = () => {
                                         } />
                                         <Route path={ROUTES.VIRTUAL_TRY_ON} element={
                                             <VirtualTryOnView
-                                                closet={closet}
-                                                onClose={() => navigate(ROUTES.HOME)}
+                                                onBack={() => navigate(ROUTES.HOME)}
+                                                outfitItems={{
+                                                    top: closet.find(i => i.metadata.category === 'top')!,
+                                                    bottom: closet.find(i => i.metadata.category === 'bottom')!,
+                                                    shoes: closet.find(i => i.metadata.category === 'shoes')!
+                                                }}
                                             />
                                         } />
                                         <Route path={ROUTES.SMART_PACKER} element={
@@ -1132,13 +1155,34 @@ const AppContent = () => {
                                                 onClose={() => navigate(ROUTES.HOME)}
                                             />
                                         } />
-                                        <Route path={ROUTES.ACTIVITY} element={<ActivityFeedView />} />
+                                        <Route path={ROUTES.ACTIVITY} element={
+                                            <ActivityFeedView
+                                                closet={closet}
+                                                savedOutfits={savedOutfits}
+                                                onClose={() => navigate(ROUTES.HOME)}
+                                            />
+                                        } />
                                         <Route path={ROUTES.VIRTUAL_SHOPPING} element={<VirtualShoppingView />} />
                                         <Route path={ROUTES.BULK_UPLOAD} element={
-                                            <BulkUploadView onUploadComplete={() => refreshCloset()} />
+                                            <BulkUploadView
+                                                onClose={() => navigate(ROUTES.HOME)}
+                                                onAddItemsLocal={handleLocalBulkAdd}
+                                                onClosetSync={handleClosetSync}
+                                                useSupabaseCloset={useSupabaseCloset}
+                                            />
                                         } />
-                                        <Route path={ROUTES.MULTIPLAYER_CHALLENGES} element={<MultiplayerChallengesView />} />
-                                        <Route path={ROUTES.CAPSULE_BUILDER} element={<CapsuleWardrobeBuilderView />} />
+                                        <Route path={ROUTES.MULTIPLAYER_CHALLENGES} element={
+                                            <MultiplayerChallengesView
+                                                closet={closet}
+                                                onClose={() => navigate(ROUTES.HOME)}
+                                            />
+                                        } />
+                                        <Route path={ROUTES.CAPSULE_BUILDER} element={
+                                            <CapsuleWardrobeBuilderView
+                                                closet={closet}
+                                                onClose={() => navigate(ROUTES.HOME)}
+                                            />
+                                        } />
 
                                         {/* Redirect unknown routes to home */}
                                         <Route path="*" element={<Navigate to={ROUTES.HOME} replace />} />
@@ -1147,7 +1191,7 @@ const AppContent = () => {
                             </AnimatePresence>
 
                             {/* Floating Dock Navigation */}
-                            <FloatingDock />
+                            <FloatingDock onCameraClick={() => modals.setShowQuickCamera(true)} />
 
                         </Suspense>
                     </main>
@@ -1162,15 +1206,36 @@ const AppContent = () => {
                 }
 
                 {
-                    showMigrationModal && (
+                    modals.showMigrationModal && (
                         <Suspense fallback={<LazyLoader type="modal" />}>
                             <MigrationModal
-                                onComplete={() => setShowMigrationModal(false)}
-                                onSkip={() => setShowMigrationModal(false)}
+                                onComplete={() => modals.setShowMigrationModal(false)}
+                                onSkip={() => modals.setShowMigrationModal(false)}
                             />
                         </Suspense>
                     )
                 }
+
+                {/* Pricing Modal */}
+                <PricingModal
+                    isOpen={showPricingModal}
+                    onClose={() => setShowPricingModal(false)}
+                    currentTier={subscription.tier}
+                    aiGenerationsUsed={subscription.aiGenerationsUsed}
+                    aiGenerationsLimit={subscription.aiGenerationsLimit}
+                    onRefresh={subscription.refresh}
+                />
+
+                {/* Limit Reached Modal */}
+                <LimitReachedModal
+                    isOpen={showLimitReachedModal}
+                    onClose={() => setShowLimitReachedModal(false)}
+                    onUpgrade={() => {
+                        setShowLimitReachedModal(false);
+                        setShowPricingModal(true);
+                    }}
+                    tier={subscription.tier}
+                />
 
                 {
                     itemToShare && (
@@ -1191,6 +1256,41 @@ const AppContent = () => {
                             <ShareOutfitView
                                 outfitItems={outfitToShareItems}
                                 onClose={() => setOutfitToShare(null)}
+                            />
+                        </Suspense>
+                    )
+                }
+
+                {
+                    modals.showQuickCamera && (
+                        <Suspense fallback={<LazyLoader type="modal" />}>
+                            <PremiumCameraView
+                                onClose={() => modals.setShowQuickCamera(false)}
+                                onAddToCloset={async (imageDataUrl: string, metadata: ClothingItemMetadata) => {
+                                    // Add to closet with already analyzed metadata
+                                    try {
+                                        const newItem: ClothingItem = {
+                                            id: `item_${Date.now()}`,
+                                            imageDataUrl,
+                                            metadata
+                                        };
+
+                                        if (useSupabaseCloset && user) {
+                                            // Upload to Supabase
+                                            const file = dataUrlToFile(imageDataUrl, `${newItem.id}.jpg`);
+                                            await closetService.addClothingItem(file, metadata);
+                                            await loadClosetFromSupabase();
+                                        } else {
+                                            // Add to local storage
+                                            setCloset(prev => [newItem, ...prev]);
+                                        }
+
+                                        toast.success('✨ Prenda agregada al armario!');
+                                    } catch (error) {
+                                        console.error('Error adding item:', error);
+                                        toast.error('Error al agregar la prenda');
+                                    }
+                                }}
                             />
                         </Suspense>
                     )
@@ -1274,8 +1374,8 @@ const AppContent = () => {
                                     modals.setBorrowedItems([]);
                                 }}
                                 isGenerating={isGenerating}
-                                error={error}
-                                closet={closet}
+                                error={generationError}
+                                closet={closet as any} // Cast to any to resolve type mismatch
                                 recentSearches={recentSearches}
                             />
                         </Suspense>
@@ -1293,7 +1393,7 @@ const AppContent = () => {
                                 onVirtualTryOn={handleStartVirtualTryOn}
                                 onShareOutfit={setOutfitToShare}
                                 onRegenerateWithAdjustment={handleRegenerateWithAdjustment}
-                                onRateOutfit={handleRateOutfit}
+                                onRateOutfit={(rating) => handleRateOutfit('current-fit', rating)}
                                 borrowedItemIds={borrowedItemIds}
                                 alternatives={fitAlternatives}
                                 onBack={() => {
@@ -1372,9 +1472,11 @@ const AppContent = () => {
                 }
 
                 {
-                    showSmartPacker && packerStep === 'generate' && (
+                    modals.showSmartPacker && packerStep === 'generate' && (
                         <SmartPackerView
-                            onBack={() => setShowSmartPacker(false)}
+                            closet={closet}
+                            onClose={() => modals.setShowSmartPacker(false)}
+                            onBack={() => modals.setShowSmartPacker(false)}
                             onGenerate={handleGeneratePackingList}
                             isGenerating={isGeneratingPackingList}
                             error={packerError}
@@ -1383,24 +1485,24 @@ const AppContent = () => {
                 }
 
                 {
-                    showSmartPacker && packerStep === 'result' && packingListResult && (
+                    modals.showSmartPacker && packerStep === 'result' && packingListResult && (
                         <PackingListView
                             result={packingListResult}
                             inventory={closet}
                             onBack={() => {
                                 resetPacker();
-                                setShowSmartPacker(false);
+                                modals.setShowSmartPacker(false);
                             }}
                         />
                     )
                 }
 
                 {
-                    showSortOptions && (
+                    modals.showSortOptions && (
                         <SortOptionsView
                             currentSort={sortOption}
                             onSortChange={handleSortOptionChange}
-                            onClose={() => setShowSortOptions(false)}
+                            onClose={() => modals.setShowSortOptions(false)}
                         />
                     )
                 }
@@ -1433,37 +1535,40 @@ const AppContent = () => {
                     )
                 }
 
-                {
-                    modals.showChat && getCurrentConversation() && (
-                        <FashionChatViewImproved
-                            closet={closet}
-                            onClose={() => modals.setShowChat(false)}
-                            conversations={chatConversations}
-                            currentConversationId={currentConversationId}
-                            onSelectConversation={selectConversation}
-                            onNewConversation={createNewConversation}
-                            onDeleteConversation={deleteConversation}
-                            onMessagesUpdate={updateConversationMessages}
-                            onUpdateTitle={updateConversationTitle}
-                            onViewOutfit={(topId, bottomId, shoesId) => {
-                                console.log('App.tsx - Ver Outfit Completo handler called:', { topId, bottomId, shoesId });
+                <AnimatePresence>
+                    {
+                        modals.showChat && getCurrentConversation() && (
+                            <FashionChatViewImproved
+                                key="chat-modal"
+                                closet={closet}
+                                onClose={() => modals.setShowChat(false)}
+                                conversations={chatConversations}
+                                currentConversationId={currentConversationId}
+                                onSelectConversation={selectConversation}
+                                onNewConversation={createNewConversation}
+                                onDeleteConversation={deleteConversation}
+                                onMessagesUpdate={updateConversationMessages}
+                                onUpdateTitle={updateConversationTitle}
+                                onViewOutfit={(topId, bottomId, shoesId) => {
+                                    console.log('App.tsx - Ver Outfit Completo handler called:', { topId, bottomId, shoesId });
 
-                                // Create outfit result to view
-                                const chatOutfit: FitResult = {
-                                    top_id: topId,
-                                    bottom_id: bottomId,
-                                    shoes_id: shoesId,
-                                    explanation: 'Outfit sugerido por el asistente de moda'
-                                };
+                                    // Create outfit result to view
+                                    const chatOutfit: FitResult = {
+                                        top_id: topId,
+                                        bottom_id: bottomId,
+                                        shoes_id: shoesId,
+                                        explanation: 'Outfit sugerido por el asistente de moda'
+                                    };
 
-                                setFitResult(chatOutfit);
-                                setStylistView('result');
-                                modals.setShowStylist(true);
-                                // Keep chat open in background (don't close)
-                            }}
-                        />
-                    )
-                }
+                                    setFitResult(chatOutfit);
+                                    setStylistView('result');
+                                    modals.setShowStylist(true);
+                                    // Keep chat open in background (don't close)
+                                }}
+                            />
+                        )
+                    }
+                </AnimatePresence>
 
                 {
                     modals.showWeatherOutfit && (
@@ -1530,10 +1635,7 @@ const AppContent = () => {
                             closet={closet}
                             savedOutfits={savedOutfits}
                             onClose={() => modals.setShowRatingView(false)}
-                            onViewOutfit={(outfit) => {
-                                modals.setSelectedOutfitId(outfit.id);
-                                modals.setShowRatingView(false);
-                            }}
+                            onRateOutfit={handleRateOutfit}
                         />
                     )
                 }
@@ -1632,6 +1734,21 @@ const AppContent = () => {
                             onAddToCloset={(imageDataUrl, metadata) => {
                                 handleAddItem({ imageDataUrl, metadata });
                             }}
+                            onShowHistory={() => {
+                                modals.setShowAIDesigner(false);
+                                modals.setShowGenerationHistory(true);
+                            }}
+                        />
+                    )
+                }
+
+                {
+                    modals.showGenerationHistory && (
+                        <GenerationHistoryView
+                            onClose={() => modals.setShowGenerationHistory(false)}
+                            onAddToCloset={(imageDataUrl, metadata) => {
+                                handleAddItem({ imageDataUrl, metadata });
+                            }}
                         />
                     )
                 }
@@ -1708,20 +1825,20 @@ const AppContent = () => {
                 {
                     modals.currentEventSuggestion && fitResult && (
                         <FitResultView
-                            fit={fitResult}
-                            closet={closet}
-                            onClose={() => {
+                            result={fitResult}
+                            inventory={closet}
+                            onBack={() => {
                                 modals.setCurrentEventSuggestion(null);
                                 setFitResult(null);
                                 modals.setShowCalendarSync(true);
                             }}
-                            onSave={() => {
+                            onSaveOutfit={() => {
                                 if (fitResult) handleSaveOutfit(fitResult);
                                 modals.setCurrentEventSuggestion(null);
                                 setFitResult(null);
                                 modals.setShowCalendarSync(true);
                             }}
-                            onStartVirtualTryOn={() => {
+                            onVirtualTryOn={() => {
                                 if (fitResult) {
                                     handleStartVirtualTryOn();
                                     modals.setCurrentEventSuggestion(null);
@@ -1729,6 +1846,9 @@ const AppContent = () => {
                                     modals.setShowCalendarSync(false);
                                 }
                             }}
+                            savedOutfits={savedOutfits}
+                            onShareOutfit={setOutfitToShare}
+                            borrowedItemIds={new Set()}
                         />
                     )
                 }
@@ -1783,15 +1903,15 @@ const AppContent = () => {
 
                 {/* Professional Style Wizard */}
                 {
-                    showProfessionalWizard && (
+                    modals.showProfessionalWizard && (
                         <Suspense fallback={<LazyLoader type="modal" />}>
                             <ProfessionalStyleWizardView
+                                onClose={() => modals.setShowProfessionalWizard(false)}
                                 onComplete={(profile) => {
                                     setProfessionalProfile(profile);
-                                    setShowProfessionalWizard(false);
-                                    toast.showToast('¡Perfil profesional guardado! Ahora tus outfits serán personalizados.', 'success');
+                                    modals.setShowProfessionalWizard(false);
+                                    toast.success('¡Perfil profesional creado!');
                                 }}
-                                onClose={() => setShowProfessionalWizard(false)}
                                 existingProfile={professionalProfile || undefined}
                             />
                         </Suspense>
@@ -1824,6 +1944,28 @@ const AppContent = () => {
                         ))
                     }
                 </div>
+
+                {/* Network Status Indicator */}
+                <NetworkIndicator />
+
+                {/* Command Palette (Cmd+K) */}
+                <CommandPalette
+                    isOpen={showCommandPalette}
+                    onClose={() => setShowCommandPalette(false)}
+                    onOpenCamera={() => modals.setShowQuickCamera(true)}
+                    onOpenAddItem={() => modals.setShowAddItemModal(true)}
+                    onOpenGenerateOutfit={() => {
+                        resetStylist();
+                        modals.setShowStylist(true);
+                    }}
+                    onOpenShortcutsHelp={() => setShowShortcutsHelp(true)}
+                />
+
+                {/* Keyboard Shortcuts Help Modal */}
+                <KeyboardShortcutsHelp
+                    isOpen={showShortcutsHelp}
+                    onClose={() => setShowShortcutsHelp(false)}
+                />
 
                 {/* Delete Confirmation Modal */}
                 <Suspense fallback={null}>

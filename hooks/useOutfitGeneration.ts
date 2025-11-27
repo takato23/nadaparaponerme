@@ -1,0 +1,43 @@
+import { useState } from 'react';
+import type { ClothingItem, FitResult } from '../types';
+import * as aiService from '../src/services/aiService';
+
+export const useOutfitGeneration = (closet: ClothingItem[]) => {
+    const [isGenerating, setIsGenerating] = useState(false);
+    const [fitResult, setFitResult] = useState<FitResult | null>(null);
+    const [error, setError] = useState<string | null>(null);
+
+    const generateOutfit = async (prompt: string) => {
+        setIsGenerating(true);
+        setError(null);
+        setFitResult(null);
+
+        try {
+            const result = await aiService.generateOutfit(prompt, closet);
+            setFitResult(result);
+            return result;
+        } catch (e) {
+            const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
+            setError(errorMessage);
+            throw e;
+        } finally {
+            setIsGenerating(false);
+        }
+    };
+
+    const resetGeneration = () => {
+        setFitResult(null);
+        setError(null);
+        setIsGenerating(false);
+    };
+
+    return {
+        isGenerating,
+        fitResult,
+        error,
+        generateOutfit,
+        resetGeneration,
+        setFitResult, // Exposed for manual updates if needed
+        setError
+    };
+};

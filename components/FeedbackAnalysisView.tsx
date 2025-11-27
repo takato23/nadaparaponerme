@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import type { ClothingItem, SavedOutfit, OutfitRating, FeedbackAnalysisResult, FeedbackInsights, PreferencePattern } from '../types';
-import * as geminiService from '../src/services/aiService';
-import * as ratingService from '../src/services/ratingService';
+import { useFeedbackAnalysis } from '../hooks/useFeedbackAnalysis';
 import Loader from './Loader';
 import { Card } from './ui/Card';
 
@@ -11,79 +10,15 @@ interface FeedbackAnalysisViewProps {
   onClose: () => void;
 }
 
-type ViewStep = 'intro' | 'analyzing' | 'results';
-
 const FeedbackAnalysisView = ({ closet, savedOutfits, onClose }: FeedbackAnalysisViewProps) => {
-  const [currentStep, setCurrentStep] = useState<ViewStep>('intro');
-  const [analysisResult, setAnalysisResult] = useState<FeedbackAnalysisResult | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    // Check if user has enough data for analysis
-    const checkDataAvailability = async () => {
-      try {
-        const ratings = await ratingService.getUserRatings();
-        if (ratings.length < 3) {
-          setError('Necesitás al menos 3 calificaciones de outfits para generar un análisis personalizado.');
-        }
-      } catch (err) {
-        console.error('Error checking ratings:', err);
-      }
-    };
-
-    checkDataAvailability();
-  }, []);
-
-  const handleGenerateAnalysis = async () => {
-    setLoading(true);
-    setError(null);
-    setCurrentStep('analyzing');
-
-    try {
-      // Fetch all ratings
-      const ratings = await ratingService.getUserRatings();
-
-      if (ratings.length < 3) {
-        throw new Error('Necesitás al menos 3 calificaciones para generar insights.');
-      }
-
-      if (savedOutfits.length < 3) {
-        throw new Error('Necesitás al menos 3 outfits guardados para generar insights.');
-      }
-
-      // Call AI service
-      const insights = await geminiService.analyzeFeedbackPatterns({
-        ratings,
-        outfits: savedOutfits,
-        closet,
-      });
-
-      // Calculate date range
-      const sortedRatings = [...ratings].sort((a, b) =>
-        new Date(a.created_at || '').getTime() - new Date(b.created_at || '').getTime()
-      );
-
-      const result: FeedbackAnalysisResult = {
-        insights,
-        analyzed_ratings_count: ratings.length,
-        analyzed_outfits_count: savedOutfits.length,
-        date_range: {
-          from: sortedRatings[0]?.created_at || new Date().toISOString(),
-          to: sortedRatings[sortedRatings.length - 1]?.created_at || new Date().toISOString(),
-        },
-        confidence_level: ratings.length >= 10 ? 'high' : ratings.length >= 5 ? 'medium' : 'low',
-      };
-
-      setAnalysisResult(result);
-      setCurrentStep('results');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al generar análisis');
-      setCurrentStep('intro');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const {
+    currentStep,
+    analysisResult,
+    loading,
+    error,
+    generateAnalysis,
+    resetAnalysis
+  } = useFeedbackAnalysis(closet, savedOutfits);
 
   const renderSatisfactionScore = (score: number) => {
     const percentage = score;
@@ -198,7 +133,7 @@ const FeedbackAnalysisView = ({ closet, savedOutfits, onClose }: FeedbackAnalysi
       </Card>
 
       <button
-        onClick={handleGenerateAnalysis}
+        onClick={generateAnalysis}
         disabled={!!error || loading}
         className="w-full bg-primary text-white font-bold py-3 px-4 rounded-xl transition-transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
       >
@@ -237,7 +172,7 @@ const FeedbackAnalysisView = ({ closet, savedOutfits, onClose }: FeedbackAnalysi
         {/* Header */}
         <div className="text-center">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold mb-4"
-               style={{ backgroundColor: confidenceBadge.color.split(' ')[0].replace('bg-', ''), color: confidenceBadge.color.split(' ')[1].replace('text-', '') }}>
+            style={{ backgroundColor: confidenceBadge.color.split(' ')[0].replace('bg-', ''), color: confidenceBadge.color.split(' ')[1].replace('text-', '') }}>
             {confidenceBadge.label}
           </div>
           <h2 className="text-2xl font-bold text-text-primary dark:text-gray-200 mb-2">
@@ -338,10 +273,7 @@ const FeedbackAnalysisView = ({ closet, savedOutfits, onClose }: FeedbackAnalysi
         {/* Actions */}
         <div className="flex gap-3">
           <button
-            onClick={() => {
-              setCurrentStep('intro');
-              setAnalysisResult(null);
-            }}
+            onClick={resetAnalysis}
             className="flex-1 bg-gray-200 dark:bg-gray-700 text-text-primary dark:text-gray-200 font-bold py-3 px-4 rounded-xl transition-transform active:scale-95"
           >
             Generar Nuevo

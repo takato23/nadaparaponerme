@@ -25,6 +25,38 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
   },
 });
 
+// Handle auth errors globally
+supabase.auth.onAuthStateChange((event, session) => {
+  if (event === 'TOKEN_REFRESHED') {
+    console.log('✅ Auth token refreshed successfully');
+  } else if (event === 'SIGNED_OUT') {
+    console.log('👋 User signed out');
+  }
+});
+
+// Clear invalid auth state on initialization
+(async () => {
+  try {
+    const { data, error } = await supabase.auth.getSession();
+    if (error) {
+      // Silently clear auth state if refresh token is invalid (expected behavior)
+      if (error.message.includes('Refresh Token') || error.status === 400) {
+        await supabase.auth.signOut();
+        // Clear all auth-related localStorage items
+        Object.keys(localStorage).forEach(key => {
+          if (key.startsWith('sb-')) {
+            localStorage.removeItem(key);
+          }
+        });
+      } else {
+        console.warn('⚠️ Auth session error:', error.message);
+      }
+    }
+  } catch (err) {
+    // Suppress initialization errors - auth state will be fresh
+  }
+})();
+
 // Helper functions for common operations
 
 /**
@@ -87,7 +119,21 @@ export function dataUrlToFile(dataUrl: string, filename: string): File {
 }
 
 /**
+ * Check if browser supports WebP format
+ */
+function supportsWebP(): boolean {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1;
+  canvas.height = 1;
+  return canvas.toDataURL('image/webp').indexOf('data:image/webp') === 0;
+}
+
+// Cache WebP support check
+const webpSupported = typeof document !== 'undefined' ? supportsWebP() : false;
+
+/**
  * Compress image before upload
+ * Uses WebP format when available (30% smaller files), falls back to JPEG
  */
 export async function compressImage(file: File, maxWidth = 1920, quality = 0.85): Promise<File> {
   return new Promise((resolve, reject) => {
@@ -118,19 +164,24 @@ export async function compressImage(file: File, maxWidth = 1920, quality = 0.85)
 
         ctx.drawImage(img, 0, 0, width, height);
 
+        // Use WebP if supported (30% smaller files), otherwise JPEG
+        const format = webpSupported ? 'image/webp' : 'image/jpeg';
+        const extension = webpSupported ? '.webp' : '.jpg';
+        const filename = file.name.replace(/\.[^.]+$/, extension);
+
         canvas.toBlob(
           (blob) => {
             if (!blob) {
               reject(new Error('Failed to compress image'));
               return;
             }
-            const compressedFile = new File([blob], file.name, {
-              type: 'image/jpeg',
+            const compressedFile = new File([blob], filename, {
+              type: format,
               lastModified: Date.now(),
             });
             resolve(compressedFile);
           },
-          'image/jpeg',
+          format,
           quality
         );
       };

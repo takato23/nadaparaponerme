@@ -28,6 +28,7 @@ interface HomeViewProps {
   onStartCapsuleBuilder: () => void;
   onStartStyleDNA: () => void;
   onStartAIDesigner: () => void;
+  onShowGenerationHistory: () => void;
   onStartStyleEvolution: () => void;
   onStartCalendarSync: () => void;
   onStartActivityFeed: () => void;
@@ -59,6 +60,7 @@ const HomeView = ({
   onStartCapsuleBuilder,
   onStartStyleDNA,
   onStartAIDesigner,
+  onShowGenerationHistory,
   onStartStyleEvolution,
   onStartCalendarSync,
   onStartActivityFeed,
@@ -189,7 +191,8 @@ const HomeView = ({
       description: 'Crea lookbooks temáticos con tu ropa',
       onClick: () => { trackFeatureUse('lookbook'); onStartLookbookCreator(); },
       category: 'create',
-      keywords: ['lookbook', 'colección', 'álbum', 'temático']
+      keywords: ['lookbook', 'colección', 'álbum', 'temático'],
+      tooltip: 'Organizá tus mejores looks en colecciones temáticas para eventos, temporadas o estilos'
     },
     {
       id: 'calendar',
@@ -198,7 +201,8 @@ const HomeView = ({
       description: 'Outfits basados en tus próximos eventos',
       onClick: () => { trackFeatureUse('calendar'); onStartCalendarSync(); },
       category: 'create',
-      keywords: ['calendario', 'eventos', 'planear', 'agenda']
+      keywords: ['calendario', 'eventos', 'planear', 'agenda'],
+      tooltip: 'Conectá tu calendario y recibí sugerencias de outfits para cada evento'
     },
     {
       id: 'capsule',
@@ -207,7 +211,8 @@ const HomeView = ({
       description: 'Crea una cápsula minimalista versátil',
       onClick: () => { trackFeatureUse('capsule'); onStartCapsuleBuilder(); },
       category: 'create',
-      keywords: ['cápsula', 'minimalista', 'esencial', 'versátil']
+      keywords: ['cápsula', 'minimalista', 'esencial', 'versátil'],
+      tooltip: 'Creá un armario esencial con prendas que combinan entre sí para máxima versatilidad'
     },
     {
       id: 'ai-designer',
@@ -216,7 +221,18 @@ const HomeView = ({
       description: 'Diseña prendas personalizadas con IA',
       onClick: () => { trackFeatureUse('ai-designer'); onStartAIDesigner(); },
       category: 'create',
-      keywords: ['diseñar', 'crear', 'personalizar', 'IA', 'diseño']
+      keywords: ['diseñar', 'crear', 'personalizar', 'IA', 'diseño'],
+      tooltip: 'Describí la prenda de tus sueños y la IA la diseñará para vos'
+    },
+    {
+      id: 'generation-history',
+      icon: 'photo_library',
+      title: 'Mis Diseños AI',
+      description: 'Galería de prendas generadas con IA',
+      onClick: () => { trackFeatureUse('generation-history'); onShowGenerationHistory(); },
+      category: 'discover',
+      keywords: ['galería', 'historial', 'generaciones', 'IA', 'diseños'],
+      tooltip: 'Accedé a tu historial completo de prendas diseñadas con IA'
     },
     {
       id: 'virtual-tryon',
@@ -235,7 +251,8 @@ const HomeView = ({
       description: 'Califica tus outfits y ve tus mejores looks',
       onClick: () => { trackFeatureUse('ratings'); onStartRatingView(); },
       category: 'create',
-      keywords: ['calificar', 'rating', 'votar', 'evaluar', 'mejores']
+      keywords: ['calificar', 'rating', 'votar', 'evaluar', 'mejores'],
+      tooltip: 'Calificá cada outfit que uses para mejorar las futuras sugerencias de IA'
     },
     {
       id: 'feedback',
@@ -244,7 +261,8 @@ const HomeView = ({
       description: 'Descubre tus preferencias de estilo',
       onClick: () => { trackFeatureUse('feedback'); onStartFeedbackAnalysis(); },
       category: 'create',
-      keywords: ['feedback', 'análisis', 'preferencias', 'insights']
+      keywords: ['feedback', 'análisis', 'preferencias', 'insights'],
+      tooltip: 'La IA analiza tus calificaciones para descubrir patrones en tus gustos'
     },
 
     // SOCIAL (4)
@@ -255,7 +273,8 @@ const HomeView = ({
       description: 'Compite con amigos en desafíos de estilo',
       onClick: () => { trackFeatureUse('multiplayer'); onStartMultiplayerChallenges(); },
       category: 'social',
-      keywords: ['desafíos', 'competir', 'multiplayer', 'amigos', 'puntos']
+      keywords: ['desafíos', 'competir', 'multiplayer', 'amigos', 'puntos'],
+      tooltip: 'Enfrentate a tus amigos en desafíos de moda y subí en el ranking'
     },
     {
       id: 'style-challenges',
@@ -264,7 +283,8 @@ const HomeView = ({
       description: 'Completa retos creativos y gana puntos',
       onClick: () => { trackFeatureUse('style-challenges'); onStartStyleChallenges(); },
       category: 'social',
-      keywords: ['desafíos', 'retos', 'creativos', 'puntos', 'completar']
+      keywords: ['desafíos', 'retos', 'creativos', 'puntos', 'completar'],
+      tooltip: 'Retos semanales para explorar tu armario de formas creativas'
     },
     {
       id: 'community',
@@ -273,7 +293,8 @@ const HomeView = ({
       description: 'Explora estilos de otros usuarios',
       onClick: () => { trackFeatureUse('community'); onNavigateToCommunity(); },
       category: 'social',
-      keywords: ['comunidad', 'explorar', 'usuarios', 'estilos']
+      keywords: ['comunidad', 'explorar', 'usuarios', 'estilos'],
+      tooltip: 'Descubrí nuevos estilos y seguí usuarios con gustos similares'
     },
     {
       id: 'activity-feed-full',
@@ -282,7 +303,8 @@ const HomeView = ({
       description: 'Ve toda la actividad de tu red',
       onClick: () => { trackFeatureUse('activity-feed-full'); onStartActivityFeed(); },
       category: 'social',
-      keywords: ['feed', 'actividad', 'red', 'amigos', 'social']
+      keywords: ['feed', 'actividad', 'red', 'amigos', 'social'],
+      tooltip: 'Mirá los últimos outfits y logros de las personas que seguís'
     },
 
     // ADVANCED (9)
@@ -293,7 +315,8 @@ const HomeView = ({
       description: 'Identifica qué prendas te faltan',
       onClick: () => { trackFeatureUse('gap-analysis'); onStartGapAnalysis(); },
       category: 'advanced',
-      keywords: ['gaps', 'faltan', 'análisis', 'armario', 'falta']
+      keywords: ['gaps', 'faltan', 'análisis', 'armario', 'falta'],
+      tooltip: 'La IA detecta qué prendas básicas te faltan para un armario más versátil'
     },
     {
       id: 'brand-recognition',
@@ -302,7 +325,8 @@ const HomeView = ({
       description: 'Identifica marcas y precios de tus prendas',
       onClick: () => { trackFeatureUse('brand-recognition'); onStartBrandRecognition(); },
       category: 'advanced',
-      keywords: ['marca', 'precio', 'detector', 'identificar']
+      keywords: ['marca', 'precio', 'detector', 'identificar'],
+      tooltip: 'La IA identifica marcas y estima el valor de mercado de tus prendas'
     },
     {
       id: 'dupe-finder',
@@ -311,7 +335,8 @@ const HomeView = ({
       description: 'Encuentra alternativas más baratas',
       onClick: () => { trackFeatureUse('dupe-finder'); onStartDupeFinder(); },
       category: 'advanced',
-      keywords: ['dupes', 'alternativas', 'baratas', 'similar', 'buscar']
+      keywords: ['dupes', 'alternativas', 'baratas', 'similar', 'buscar'],
+      tooltip: 'Encontrá alternativas más económicas a prendas de diseñador'
     },
     {
       id: 'style-dna',
@@ -320,7 +345,8 @@ const HomeView = ({
       description: 'Descubre tu ADN de estilo único',
       onClick: () => { trackFeatureUse('style-dna'); onStartStyleDNA(); },
       category: 'advanced',
-      keywords: ['DNA', 'ADN', 'perfil', 'estilo', 'único', 'personalidad']
+      keywords: ['DNA', 'ADN', 'perfil', 'estilo', 'único', 'personalidad'],
+      tooltip: 'Descubrí tu arquetipo de estilo y colores dominantes en tu armario'
     },
     {
       id: 'evolution',
@@ -329,7 +355,8 @@ const HomeView = ({
       description: 'Descubre cómo ha evolucionado tu estilo',
       onClick: () => { trackFeatureUse('evolution'); onStartStyleEvolution(); },
       category: 'advanced',
-      keywords: ['evolución', 'timeline', 'historia', 'cambio', 'tiempo']
+      keywords: ['evolución', 'timeline', 'historia', 'cambio', 'tiempo'],
+      tooltip: 'Viajá en el tiempo y mirá cómo cambió tu estilo a lo largo del tiempo'
     },
     {
       id: 'virtual-shopping',
@@ -338,7 +365,8 @@ const HomeView = ({
       description: 'Sugerencias personalizadas de compras',
       onClick: () => { trackFeatureUse('virtual-shopping'); onStartVirtualShopping(); },
       category: 'advanced',
-      keywords: ['compras', 'shopping', 'asistente', 'sugerencias', 'comprar']
+      keywords: ['compras', 'shopping', 'asistente', 'sugerencias', 'comprar'],
+      tooltip: 'Recomendaciones inteligentes basadas en tu armario y gaps'
     }
   ], [closet.length, onStartChat, onStartStylist, onStartWeatherOutfit, onNavigateToCloset, onStartActivityFeed, onStartBulkUpload, onStartSmartPacker, onStartLookbookCreator, onStartCalendarSync, onStartCapsuleBuilder, onStartAIDesigner, onStartVirtualTryOn, onStartRatingView, onStartFeedbackAnalysis, onStartMultiplayerChallenges, onStartStyleChallenges, onNavigateToCommunity, onStartGapAnalysis, onStartBrandRecognition, onStartDupeFinder, onStartStyleDNA, onStartStyleEvolution, onStartVirtualShopping]);
 

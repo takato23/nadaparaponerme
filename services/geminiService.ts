@@ -2,7 +2,7 @@ import { GoogleGenAI, Type, Part, Modality } from "@google/genai";
 import type { ClothingItemMetadata, ClothingItem, FitResult, PackingListResult, GroundingChunk, ColorPaletteAnalysis, ChatMessage, WeatherData, WeatherOutfitResult, Lookbook, LookbookTheme, ChallengeType, ChallengeDifficulty, FeedbackInsights, FeedbackPatternData, OutfitRating, SavedOutfit, ShoppingGap, ShoppingRecommendation, ShoppingChatMessage } from '../types';
 import { getSeason } from './weatherService';
 import { getToneInstructions } from './aiToneHelper';
-import { retryAIOperation } from '../utils/retryWithBackoff';
+import { retryAIOperation, retryAIOperation as retryWithBackoff } from '../utils/retryWithBackoff';
 
 /**
  * SECURITY NOTICE: API Key Management
@@ -17,10 +17,11 @@ import { retryAIOperation } from '../utils/retryWithBackoff';
  * Direct usage from this file will fail unless an API key is explicitly provided.
  */
 
-// API key must be explicitly provided (for Edge Functions only)
+// ⛔ SECURITY: API key MUST only be configured via Edge Functions (server-side)
+// NEVER read from VITE_ environment variables - they are exposed in client bundle
 let _apiKey: string | undefined = undefined;
 
-// Lazy initialization - only creates client when needed AND key is available
+// Lazy initialization - only creates client when explicitly configured via configureGeminiAPI()
 let _aiClient: GoogleGenAI | null = null;
 
 /**
@@ -37,13 +38,16 @@ export function configureGeminiAPI(apiKey: string) {
  * Throws error if called without proper configuration
  */
 function getAIClient(): GoogleGenAI {
-  if (!_aiClient || !_apiKey) {
-    throw new Error(
-      'Gemini API not configured. This service must be called from Edge Functions only. ' +
-      'Use src/services/aiService.ts from client code, which routes through Edge Functions.'
-    );
+  // If already configured from environment or explicit config, return it
+  if (_aiClient && _apiKey) {
+    return _aiClient;
   }
-  return _aiClient;
+
+  // If not configured, throw error
+  throw new Error(
+    'Gemini API not configured. This service must be called from Edge Functions only. ' +
+    'Use src/services/aiService.ts from client code, which routes through Edge Functions.'
+  );
 }
 
 /**
@@ -134,7 +138,7 @@ export async function analyzeClothingItem(imageDataUrl: string): Promise<Clothin
 
     const response = await retryAIOperation(async () => {
       return await getAIClient().models.generateContent({
-        model: 'gemini-1.5-flash',
+        model: 'gemini-2.5-flash',
         contents: { parts: [imagePart] },
         config: {
           systemInstruction: systemInstruction,
@@ -270,15 +274,15 @@ export async function generateOutfit(userPrompt: string, inventory: ClothingItem
         throw new Error("No hay suficientes prendas en tu armario. Añade al menos un top, un pantalón y un par de zapatos.");
     }
 
-    const systemInstruction = `Eres un estilista personal con un 'ojo de loca' para la moda. Tienes acceso al siguiente inventario de ropa: ${JSON.stringify(simplifiedInventory)}. El usuario quiere un outfit para: "${userPrompt}". 
-    Selecciona la mejor combinación (Top + Bottom + Shoes) del inventario. 
+    const systemInstruction = `Eres un estilista personal con un 'ojo de loca' para la moda. Tienes acceso al siguiente inventario de ropa: ${JSON.stringify(simplifiedInventory)}. El usuario quiere un outfit para: "${userPrompt}".
+    Selecciona la mejor combinación (Top + Bottom + Shoes) del inventario.
     Si crees que falta una pieza clave en el inventario para que el outfit sea perfecto (ej: los zapatos disponibles no combinan bien), puedes sugerir una pieza que el usuario podría comprar. Para ello, incluye el campo opcional 'missing_piece_suggestion'.
     Devuelve siempre un JSON con los IDs de las prendas seleccionadas del inventario y una breve explicación de por qué funciona este outfit.`;
 
     try {
         const response = await retryWithBackoff(async () => {
           return await getAIClient().models.generateContent({
-            model: 'gemini-2.5-pro',
+            model: 'gemini-2.5-flash', // Usando 2.5-flash: modelo estable más reciente
             contents: { parts: [{ text: `Aquí está la petición del usuario: "${userPrompt}"` }] },
             config: {
               systemInstruction,
@@ -295,11 +299,23 @@ export async function generateOutfit(userPrompt: string, inventory: ClothingItem
         } else {
             throw new Error("La IA no pudo crear un outfit válido con las prendas disponibles.");
         }
-    } catch (error) {
+    } catch (error: any) {
         console.error("Error generating outfit:", error);
 
+        const errorMessage = error?.message || String(error);
+
+        // Handle quota exceeded (429 with billing message)
+        if (errorMessage.includes('exceeded your current quota') || errorMessage.includes('billing')) {
+            throw new Error("⏱️ Has alcanzado el límite gratuito de la API de Gemini. Esperá unos minutos e intentá de nuevo, o conseguí una API key con más cuota en https://aistudio.google.com/app/apikey");
+        }
+
+        // Handle rate limiting (temporary 429)
+        if (errorMessage.includes('429') || errorMessage.includes('rate limit') || errorMessage.includes('RESOURCE_EXHAUSTED')) {
+            throw new Error("⏱️ Demasiadas solicitudes. Esperá 30-60 segundos e intentá de nuevo.");
+        }
+
         // Provide more specific error message for API overload
-        if (error?.message?.includes('503') || error?.message?.includes('overloaded')) {
+        if (errorMessage.includes('503') || errorMessage.includes('overloaded')) {
             throw new Error("El servicio de IA está temporalmente sobrecargado. Por favor, intenta nuevamente en unos segundos.");
         }
 
@@ -338,7 +354,7 @@ export async function generateOutfitWithCustomPrompt(
     const response = await retryWithBackoff(async () => {
       console.log('🟢 [GEMINI] Dentro de retryWithBackoff, llamando a getAIClient()...');
       return await getAIClient().models.generateContent({
-        model: 'gemini-2.5-pro',
+        model: 'gemini-2.5-flash',
         contents: { parts: [{ text: `Aquí está la petición del usuario: "${userPrompt}"\n\nINVENTARIO DISPONIBLE:\n${JSON.stringify(simplifiedInventory, null, 2)}` }] },
         config: {
           systemInstruction: customSystemPrompt,
@@ -411,7 +427,7 @@ ${toneInstructions}
     try {
         const response = await retryWithBackoff(async () => {
           return await getAIClient().models.generateContent({
-            model: 'gemini-2.5-pro',
+            model: 'gemini-2.5-flash',
             contents: { parts: [{ text: `Detalles del viaje: "${prompt}"` }] },
             config: {
               systemInstruction,
@@ -485,7 +501,7 @@ export async function findSimilarItems(currentItem: ClothingItem, inventory: Clo
 
     try {
         const response = await getAIClient().models.generateContent({
-                model: 'gemini-1.5-flash',
+                model: 'gemini-2.5-flash',
                 contents: { parts },
                 config: {
                     systemInstruction,
@@ -509,6 +525,71 @@ export async function findSimilarItems(currentItem: ClothingItem, inventory: Clo
     }
 }
 
+/**
+ * Find similar items in inventory using an uploaded image
+ * Used for visual search feature
+ */
+export async function findSimilarByImage(searchImage: string, inventory: ClothingItem[]): Promise<string[]> {
+    if (inventory.length === 0) {
+        return [];
+    }
+
+    // Extract base64 from data URL
+    const [searchMime, searchBase64] = searchImage.split(';base64,');
+    if (!searchBase64 || !searchMime) {
+        throw new Error('Invalid image data URL');
+    }
+
+    const parts: Part[] = [
+        { text: "You are a visual search engine for a fashion closet app. The first image is a reference photo uploaded by the user. From the following list of clothing items (each prefixed with its ID), identify up to 5 items that are visually similar in style, color, pattern, or silhouette. Respond ONLY with a JSON object containing their IDs." },
+        base64ToGenerativePart(searchBase64, searchMime.split(':')[1]),
+        { text: "--- CLOSET INVENTORY ---" },
+    ];
+
+    // Add inventory items
+    for (const item of inventory) {
+        const imageUrl = item.imageDataUrl || (item as any).image_url;
+        if (!imageUrl) continue;
+
+        // Handle both base64 and URL images
+        if (imageUrl.startsWith('data:')) {
+            const [mime, base64] = imageUrl.split(';base64,');
+            if (base64 && mime) {
+                parts.push({ text: `ID: ${item.id}` });
+                parts.push(base64ToGenerativePart(base64, mime.split(':')[1]));
+            }
+        }
+        // Note: For Supabase URLs, we would need to fetch and convert to base64
+        // or use a different approach (like using the URL directly with Gemini)
+    }
+
+    const systemInstruction = "Analyze the provided images and return a JSON object with the IDs of items similar to the reference image. Consider color, style, pattern, and silhouette when determining similarity. Do not include any other text or explanations in your response.";
+
+    try {
+        const response = await getAIClient().models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: { parts },
+            config: {
+                systemInstruction,
+                responseMimeType: "application/json",
+                responseSchema: similarItemsSchema,
+            }
+        });
+
+        const parsedJson = JSON.parse(response.text);
+
+        if (parsedJson.similar_item_ids && Array.isArray(parsedJson.similar_item_ids)) {
+            return parsedJson.similar_item_ids as string[];
+        } else {
+            return [];
+        }
+
+    } catch (error) {
+        console.error("Error finding similar items by image:", error);
+        return [];
+    }
+}
+
 // --- Search Shopping Suggestions Service ---
 
 export async function searchShoppingSuggestions(itemName: string): Promise<GroundingChunk[]> {
@@ -516,7 +597,7 @@ export async function searchShoppingSuggestions(itemName: string): Promise<Groun
 
     try {
         const response = await getAIClient().models.generateContent({
-                model: "gemini-1.5-flash",
+                model: "gemini-2.5-flash",
                 contents: prompt,
                 config: {
                     tools: [{googleSearch: {}}],
@@ -568,7 +649,7 @@ export async function generateVirtualTryOn(
 
     try {
         const response = await getAIClient().models.generateContent({
-            model: 'gemini-1.5-flash-image',
+            model: 'gemini-2.5-flash-image',
             contents: {
                 parts: [
                     { text: prompt },
@@ -660,7 +741,7 @@ export async function analyzeColorPalette(inventory: ClothingItem[]): Promise<Co
 
     try {
         const response = await getAIClient().models.generateContent({
-            model: 'gemini-1.5-flash',
+            model: 'gemini-2.5-flash',
             contents: { parts: [{ text: "Analiza la paleta de colores de mi armario" }] },
             config: {
                 systemInstruction,
@@ -1028,7 +1109,7 @@ IMPORTANTE: Devuelve SIEMPRE los IDs exactos de prendas que existen en el invent
 
     try {
         const response = await getAIClient().models.generateContent({
-            model: 'gemini-2.5-pro',
+            model: 'gemini-2.5-flash',
             contents: { parts: [{ text: `Genera el outfit perfecto para el clima de hoy` }] },
             config: {
                 systemInstruction,
@@ -1147,7 +1228,7 @@ ESTILO DE RESPUESTA:
 - Lenguaje entusiasta pero profesional`;
 
         const response = await getAIClient().models.generateContent({
-            model: 'gemini-2.5-pro',
+            model: 'gemini-2.5-flash',
             contents: { parts: [{ text: `Crea un lookbook completo de ${themeDescription}` }] },
             config: {
                 systemInstruction,
@@ -1302,7 +1383,7 @@ IMPORTANTE:
 - Considera la diversidad del armario al crear restricciones`;
 
         const response = await getAIClient().models.generateContent({
-            model: 'gemini-2.5-pro',
+            model: 'gemini-2.5-flash',
             contents: { parts: [{ text: `Genera un desafío de estilo personalizado y creativo` }] },
             config: {
                 systemInstruction,
@@ -1496,7 +1577,7 @@ IMPORTANTE:
 
     try {
         const response = await getAIClient().models.generateContent({
-            model: 'gemini-2.5-pro',
+            model: 'gemini-2.5-flash',
             contents: { parts: [{ text: `Analiza los patrones de feedback del usuario` }] },
             config: {
                 systemInstruction,
@@ -1719,7 +1800,7 @@ IMPORTANTE:
 
     try {
         const response = await getAIClient().models.generateContent({
-            model: 'gemini-2.5-pro',
+            model: 'gemini-2.5-flash',
             contents: { parts: [{ text: `Analiza el armario y genera un reporte completo de gaps` }] },
             config: {
                 systemInstruction,
@@ -1858,9 +1939,16 @@ const brandRecognitionSchema = {
 };
 
 export async function recognizeBrandAndPrice(imageDataUrl: string): Promise<import('../types').BrandRecognitionResult> {
-    // Validate image data
+    // Validate image data - must be a real photo, not a placeholder
     if (!imageDataUrl || !imageDataUrl.startsWith('data:image')) {
         throw new Error('La imagen no es válida. Usá una foto de la prenda.');
+    }
+
+    // Reject SVG placeholders and external placeholder URLs
+    if (imageDataUrl.startsWith('data:image/svg+xml') ||
+        imageDataUrl.includes('placeholder.com') ||
+        imageDataUrl.includes('text=')) {
+        throw new Error('No podés analizar una prenda sin imagen. Subí una foto real de la prenda.');
     }
 
     const systemInstruction = `Eres un experto en reconocimiento de marcas de moda y tasación de prendas con 15+ años de experiencia en retail, luxury fashion y mercado secundario.
@@ -1993,7 +2081,7 @@ IMPORTANTE:
         };
 
         const response = await getAIClient().models.generateContent({
-            model: 'gemini-1.5-flash', // Good balance for vision + structured output
+            model: 'gemini-2.5-flash', // Good balance for vision + structured output
             contents: {
                 parts: [
                     imagePart,
@@ -2211,7 +2299,7 @@ REGLAS CRÍTICAS:
     try {
         // Step 1: Search for dupes using Google Search grounding
         const searchResponse = await getAIClient().models.generateContent({
-            model: "gemini-1.5-flash",
+            model: "gemini-2.5-flash",
             contents: `Buscar productos similares más baratos: ${searchQuery}. Devolver enlaces de shopping online.`,
             config: {
                 tools: [{googleSearch: {}}],
@@ -2254,7 +2342,7 @@ ${shoppingResultsText}
 Selecciona 3-5 dupes que sean visualmente similares y significativamente más baratos. Genera análisis completo.`;
 
         const analysisResponse = await getAIClient().models.generateContent({
-            model: 'gemini-1.5-flash',
+            model: 'gemini-2.5-flash',
             contents: {
                 parts: [
                     imagePart,
@@ -3149,7 +3237,7 @@ Structured JSON con todos los campos requeridos del schema StyleEvolutionTimelin
 
     try {
         const model = getAIClient().models.generate({
-            model: 'gemini-1.5-flash',
+            model: 'gemini-2.5-flash',
             config: {
                 temperature: 0.6, // Balance between creativity and consistency
                 responseMimeType: 'application/json',
@@ -3196,7 +3284,7 @@ Structured JSON con todos los campos requeridos del schema StyleEvolutionTimelin
 export async function generateContent(prompt: string): Promise<string> {
     try {
         const response = await getAIClient().models.generateContent({
-            model: "gemini-1.5-flash",
+            model: "gemini-2.5-flash",
             contents: { parts: [{ text: prompt }] },
             config: {
                 temperature: 0.7,
@@ -3298,7 +3386,7 @@ Retorna un análisis de gaps priorizados.`;
 
     try {
         const model = getAIClient().models.generate({
-            model: 'gemini-2.5-pro',
+            model: 'gemini-2.5-flash',
             config: {
                 temperature: 0.5,
                 responseMimeType: 'application/json',
@@ -3412,7 +3500,7 @@ Sugiere 2-4 productos específicos por gap prioritario. Sé realista con precios
 
     try {
         const model = getAIClient().models.generate({
-            model: 'gemini-2.5-pro',
+            model: 'gemini-2.5-flash',
             config: {
                 temperature: 0.6,
                 responseMimeType: 'application/json',
@@ -3525,7 +3613,7 @@ Respondé de forma conversacional, útil y accionable.`;
 
     try {
         const response = await getAIClient().models.generateContent({
-            model: "gemini-1.5-flash",
+            model: "gemini-2.5-flash",
             contents: { parts: [{ text: prompt }] },
             config: {
                 systemInstruction,
@@ -3563,4 +3651,4 @@ Respondé de forma conversacional, útil y accionable.`;
  * Export helpers for enhanced outfit generation
  * These are needed by the enhanced generators in generateOutfit-enhanced.ts
  */
-export { getAIClient, retryWithBackoff };
+export { getAIClient, retryAIOperation as retryWithBackoff };

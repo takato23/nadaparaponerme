@@ -13,9 +13,7 @@
  * - Infinite scroll ready
  */
 
-import React, { useMemo, useRef, useCallback } from 'react';
-// import { FixedSizeGrid } from 'react-window';
-// import AutoSizer from 'react-virtualized-auto-sizer';
+import React, { useMemo, useRef, useCallback, useState, useEffect } from 'react';
 import ClosetItemCard from './ClosetItemCard';
 import ClosetQuickActions, { useContextMenu, QuickAction } from './ClosetQuickActions';
 import type { ClothingItem } from '../../types';
@@ -264,16 +262,74 @@ export default function ClosetGridVirtualized({
     );
   }
 
+  // Scroll-based virtualization state
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [visibleRange, setVisibleRange] = useState({ start: 0, end: 50 });
+
+  // Calculate visible items based on scroll position
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const handleScroll = () => {
+      const scrollTop = container.scrollTop;
+      const containerHeight = container.clientHeight;
+
+      // Estimate items per row (responsive)
+      const containerWidth = container.clientWidth;
+      const itemWidth = columnWidth + gapSize;
+      const itemsPerRow = Math.max(2, Math.floor(containerWidth / itemWidth));
+
+      // Calculate visible range with overscan
+      const itemsPerScreen = Math.ceil(containerHeight / rowHeight) * itemsPerRow;
+      const startRow = Math.floor(scrollTop / rowHeight);
+      const startIndex = Math.max(0, (startRow - overscanRowCount) * itemsPerRow);
+      const endIndex = Math.min(items.length, startIndex + itemsPerScreen + (overscanRowCount * 2 * itemsPerRow));
+
+      setVisibleRange({ start: startIndex, end: endIndex });
+    };
+
+    // Initial calculation
+    handleScroll();
+
+    container.addEventListener('scroll', handleScroll, { passive: true });
+    window.addEventListener('resize', handleScroll);
+
+    return () => {
+      container.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('resize', handleScroll);
+    };
+  }, [items.length, columnWidth, rowHeight, gapSize, overscanRowCount]);
+
+  // Get visible items
+  const visibleItems = useMemo(() => {
+    return items.slice(visibleRange.start, visibleRange.end);
+  }, [items, visibleRange]);
+
   return (
-    <div className="h-full w-full overflow-y-auto px-1 sm:px-4 py-2 sm:py-4" onContextMenu={(e) => e.preventDefault()}>
-      {/* Standard CSS Grid (Virtualization temporarily disabled due to import issues) */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-1 sm:gap-4">
-        {items.map((item, index) => {
+    <div
+      ref={containerRef}
+      className="h-full w-full overflow-y-auto px-1 sm:px-4 py-2 sm:py-4 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600"
+      onContextMenu={(e) => e.preventDefault()}
+    >
+      {/* Spacer for items above viewport */}
+      {visibleRange.start > 0 && (
+        <div
+          style={{
+            height: Math.floor(visibleRange.start / Math.max(2, Math.floor((containerRef.current?.clientWidth || 300) / (columnWidth + gapSize)))) * rowHeight
+          }}
+        />
+      )}
+
+      {/* Visible items grid */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-4">
+        {visibleItems.map((item, index) => {
+          const actualIndex = visibleRange.start + index;
           const isSelected = selectedIds.has(item.id);
           const versatilityScore = getItemVersatilityScore?.(item.id) || 0;
 
           return (
-            <div key={item.id} style={{ minHeight: '50px', position: 'relative' }}>
+            <div key={item.id} style={{ minHeight: '50px' }}>
               <ClosetItemCard
                 item={item}
                 onClick={onItemClick}
@@ -281,7 +337,7 @@ export default function ClosetGridVirtualized({
                   const fakeEvent = {
                     clientX: window.innerWidth / 2,
                     clientY: window.innerHeight / 2,
-                    preventDefault: () => { }
+                    preventDefault: () => {}
                   } as React.MouseEvent;
                   openContextMenu(fakeEvent, item);
                 }}
@@ -297,13 +353,22 @@ export default function ClosetGridVirtualized({
                     onQuickAction(action, item);
                   }
                 }}
-                index={index}
+                index={actualIndex}
                 isSelectionMode={isSelectionMode}
               />
             </div>
           );
         })}
       </div>
+
+      {/* Spacer for items below viewport */}
+      {visibleRange.end < items.length && (
+        <div
+          style={{
+            height: Math.ceil((items.length - visibleRange.end) / Math.max(2, Math.floor((containerRef.current?.clientWidth || 300) / (columnWidth + gapSize)))) * rowHeight
+          }}
+        />
+      )}
 
       {/* Context menu */}
       <ClosetQuickActions

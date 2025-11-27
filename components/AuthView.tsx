@@ -136,8 +136,7 @@ const AuthView = ({ onLogin }: AuthViewProps) => {
                             <motion.path
                                 d={blobPaths[blobIndex]}
                                 fill="black"
-                                animate={{ d: blobPaths[blobIndex] }}
-                                transition={{ duration: 2, repeat: Infinity, repeatType: "reverse", ease: "easeInOut" }}
+                                transition={{ duration: 1, ease: "easeInOut" }}
                                 transform="translate(0.5, 0.5) scale(0.002)" // Scale down to fit 0-1 coordinate space
                             />
                         </motion.g>
@@ -163,8 +162,7 @@ const AuthView = ({ onLogin }: AuthViewProps) => {
                     stroke="url(#liquid-gradient)"
                     strokeWidth="0.5"
                     filter="url(#glow)"
-                    animate={{ d: blobPaths[blobIndex] }}
-                    transition={{ duration: 2, repeat: Infinity, repeatType: "reverse", ease: "easeInOut" }}
+                    transition={{ duration: 1, ease: "easeInOut" }}
                     transform="translate(50, 50) scale(0.2)" // Adjust scale to match the hole visual size
                 />
                 <defs>

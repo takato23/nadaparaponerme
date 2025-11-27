@@ -726,3 +726,55 @@ export function isAPIError<T>(response: APIResponse<T>): response is APIError {
 export function isAPISuccess<T>(response: APIResponse<T>): response is APISuccess<T> {
   return response.error === null && response.data !== null;
 }
+
+// ==================== AI Image Generation Types ====================
+
+export interface AIGeneratedImage {
+  id: string;
+  user_id: string;
+  prompt: string;
+  image_url: string;
+  model_used: 'flash' | 'pro';
+  generation_time_ms: number;
+  created_at: string;
+}
+
+export interface DailyGenerationQuota {
+  id: string;
+  user_id: string;
+  date: string;
+  flash_count: number;
+  pro_count: number;
+  plan_type: 'free' | 'pro' | 'premium';
+  last_reset_at: string;
+}
+
+export interface GenerateImageRequest {
+  prompt: string;
+  model_type?: 'flash' | 'pro';
+  style_preferences?: {
+    color_palette?: string[];
+    vibe_tags?: string[];
+    season?: string;
+    category?: 'top' | 'bottom' | 'shoes' | 'accessory';
+  };
+}
+
+export interface GenerateImageResponse {
+  success: boolean;
+  image_url?: string;
+  generation_time_ms?: number;
+  remaining_quota?: number;
+  error?: string;
+  error_code?: 'QUOTA_EXCEEDED' | 'INVALID_PROMPT' | 'API_ERROR' | 'NETWORK_ERROR';
+  upgrade_prompt?: boolean;
+}
+
+export interface GenerationStats {
+  total_generated: number;
+  flash_used: number;
+  pro_used: number;
+  favorite_prompts: string[];
+  peak_generation_hour: number;
+  success_rate: number;
+}

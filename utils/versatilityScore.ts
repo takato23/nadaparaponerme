@@ -1,4 +1,3 @@
-
 import type { ClothingItem } from '../types';
 
 /**
@@ -49,9 +48,6 @@ export function calculateVersatilityScore(item: ClothingItem, allItems: Clothing
   }
 
   // Calculate potential combinations
-  // For a top: count compatible bottoms and shoes
-  // For a bottom: count compatible tops and shoes
-  // For shoes: count compatible tops and bottoms
   const combinations = calculatePotentialCombinations(item, allItems);
 
   // +1 point per 2 potential combinations (capped at 30 points)
@@ -70,36 +66,40 @@ export function calculateVersatilityScore(item: ClothingItem, allItems: Clothing
 /**
  * Calculate how many potential outfit combinations this item can be part of
  */
-function calculatePotentialCombinations(item: ClothingItem, allItems: ClothingItem[]): number {
+export const calculatePotentialCombinations = (item: ClothingItem, allItems: ClothingItem[]): number => {
+  // Optimization: Single pass to count categories
+  const counts = allItems.reduce((acc, i) => {
+    if (i.id === item.id) return acc; // Skip self
+
+    // Simple category matching using metadata.category
+    const cat = i.metadata.category;
+    if (cat === 'top') acc.tops++;
+    else if (cat === 'bottom') acc.bottoms++;
+    else if (cat === 'shoes') acc.shoes++;
+
+    return acc;
+  }, { tops: 0, bottoms: 0, shoes: 0 });
+
   const category = item.metadata.category;
 
-  if (category === 'top') {
-    const bottoms = allItems.filter(i => i.metadata.category === 'bottom');
-    const shoes = allItems.filter(i => i.metadata.category === 'shoes');
-    // Each top can combine with any bottom and any shoe
-    return bottoms.length * shoes.length;
+  switch (category) {
+    case 'top':
+      return counts.bottoms * counts.shoes;
+    case 'bottom':
+      return counts.tops * counts.shoes;
+    case 'shoes':
+      return counts.tops * counts.bottoms;
+    case 'one-piece':
+      return counts.shoes;
+    case 'accessory':
+    case 'outerwear':
+      // Approximate: can be worn with any full outfit (top+bottom+shoes)
+      // We ignore one-pieces here for simplicity to match previous logic approximately
+      return counts.tops * counts.bottoms * counts.shoes;
+    default:
+      return 0;
   }
-
-  if (category === 'bottom') {
-    const tops = allItems.filter(i => i.metadata.category === 'top');
-    const shoes = allItems.filter(i => i.metadata.category === 'shoes');
-    // Each bottom can combine with any top and any shoe
-    return tops.length * shoes.length;
-  }
-
-  if (category === 'shoes') {
-    const tops = allItems.filter(i => i.metadata.category === 'top');
-    const bottoms = allItems.filter(i => i.metadata.category === 'bottom');
-    // Each shoe can combine with any top and any bottom
-    return tops.length * bottoms.length;
-  }
-
-  // For other categories (outerwear, accessories, one-piece)
-  // Return a base combination count
-  const tops = allItems.filter(i => i.metadata.category === 'top');
-  const bottoms = allItems.filter(i => i.metadata.category === 'bottom');
-  return tops.length + bottoms.length;
-}
+};
 
 /**
  * Get top N most versatile items from closet

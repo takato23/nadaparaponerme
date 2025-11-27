@@ -1,0 +1,270 @@
+import { supabase } from '../lib/supabase';
+import type {
+  GenerateImageRequest,
+  GenerateImageResponse,
+  AIGeneratedImage,
+  DailyGenerationQuota,
+} from '../types/api';
+
+/**
+ * AI Image Generation Service
+ * Frontend service layer for managing AI-generated fashion images
+ */
+
+export const aiImageService = {
+  /**
+   * Generate fashion image via Supabase Edge Function
+   */
+  async generateFashionImage(
+    prompt: string,
+    stylePreferences?: GenerateImageRequest['style_preferences']
+  ): Promise<GenerateImageResponse> {
+    // Validate prompt
+    if (!prompt.trim()) {
+      throw new Error('El prompt no puede estar vacío');
+    }
+
+    if (prompt.trim().length < 10) {
+      throw new Error('El prompt debe tener al menos 10 caracteres');
+    }
+
+    // TEMPORALMENTE DESHABILITADO: Check quota
+    // TODO: Re-habilitar cuando las tablas de database estén funcionando
+    // const quotaCheck = await this.checkDailyQuota();
+    // if (quotaCheck.remaining <= 0) {
+    //   throw new Error(
+    //     `Has alcanzado tu límite diario de ${quotaCheck.limit} generaciones. Vuelve mañana o actualiza a Premium.`
+    //   );
+    // }
+
+    try {
+      // Get current session token
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('Debes iniciar sesión para generar imágenes');
+      }
+
+      // Call Edge Function with auth header
+      const { data, error } = await supabase.functions.invoke<GenerateImageResponse>(
+        'generate-fashion-image',
+        {
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: {
+            prompt: prompt.trim(),
+            style_preferences: stylePreferences,
+          },
+        }
+      );
+
+      if (error) {
+        console.error('Edge Function error:', error);
+        throw new Error(error.message || 'Error al generar la imagen');
+      }
+
+      if (!data) {
+        throw new Error('No se recibió respuesta del servidor');
+      }
+
+      if (!data.success) {
+        // Handle specific error codes
+        switch (data.error_code) {
+          case 'QUOTA_EXCEEDED':
+            throw new Error('Has alcanzado tu límite diario de generaciones');
+          case 'INVALID_PROMPT':
+            throw new Error('El prompt contiene contenido no permitido');
+          case 'API_ERROR':
+            throw new Error('Error en la API de generación de imágenes');
+          case 'NETWORK_ERROR':
+            throw new Error('Error de conexión. Verifica tu internet.');
+          default:
+            throw new Error(data.error || 'Error desconocido al generar imagen');
+        }
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Generate image error:', error);
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error('Error inesperado al generar la imagen');
+    }
+  },
+
+  /**
+   * Check daily generation quota
+   */
+  async checkDailyQuota(): Promise<{
+    remaining: number;
+    limit: number;
+    plan_type: string;
+  }> {
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        throw new Error('Usuario no autenticado');
+      }
+
+      const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+
+      // Query daily_generation_quota table
+      const { data, error } = await supabase
+        .from('daily_generation_quota')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('date', today)
+        .single();
+
+      if (error && error.code !== 'PGRST116') {
+        // PGRST116 = no rows returned (expected on first query of the day)
+        console.error('Quota check error:', error);
+        throw error;
+      }
+
+      // If no quota record exists for today, return defaults based on plan
+      if (!data) {
+        return {
+          remaining: 3, // Free tier default
+          limit: 3,
+          plan_type: 'free',
+        };
+      }
+
+      // Calculate remaining
+      const quota = data as DailyGenerationQuota;
+      const flashRemaining = Math.max(0, 3 - quota.flash_count); // Free: 3 flash/day
+      const proRemaining = quota.plan_type === 'free' ? 0 : Math.max(0, 10 - quota.pro_count); // Pro: 10 pro/day
+
+      return {
+        remaining: flashRemaining + proRemaining,
+        limit: quota.plan_type === 'free' ? 3 : 13, // Free: 3, Pro+: 13 (3 flash + 10 pro)
+        plan_type: quota.plan_type,
+      };
+    } catch (error) {
+      console.error('Check quota error:', error);
+      // Return defaults on error to allow continuation
+      return {
+        remaining: 3,
+        limit: 3,
+        plan_type: 'free',
+      };
+    }
+  },
+
+  /**
+   * Get generation history
+   */
+  async getGenerationHistory(limit = 20): Promise<AIGeneratedImage[]> {
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        return []; // Return empty if not authenticated
+      }
+
+      const { data, error } = await supabase
+        .from('ai_generated_images')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(limit);
+
+      if (error) {
+        console.error('Get history error:', error);
+        // Return empty array on table missing (graceful degradation)
+        if (error.code === '42P01') {
+          // Table doesn't exist
+          return [];
+        }
+        throw error;
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('Get generation history error:', error);
+      return []; // Graceful degradation
+    }
+  },
+
+  /**
+   * Save generated image to closet (localStorage)
+   */
+  async saveToCloset(imageUrl: string, prompt: string): Promise<void> {
+    try {
+      // Get current closet from localStorage
+      const closetJson = localStorage.getItem('ojodeloca-closet');
+      const closet = closetJson ? JSON.parse(closetJson) : [];
+
+      // Create new clothing item
+      const newItem = {
+        id: `ai-${Date.now()}`,
+        imageDataUrl: imageUrl,
+        metadata: {
+          category: 'top', // Default, should be detected from metadata
+          subcategory: 'AI Generated Item',
+          color_primary: '#000000', // Default, should come from analysis
+          vibe_tags: ['ai-generated'],
+          seasons: ['spring', 'summer', 'fall', 'winter'],
+        },
+        isAIGenerated: true,
+        aiGenerationPrompt: prompt,
+      };
+
+      // Add to closet
+      closet.push(newItem);
+
+      // Save back to localStorage
+      localStorage.setItem('ojodeloca-closet', JSON.stringify(closet));
+
+      // Mark as added in database (if table exists)
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (user) {
+        // Find the generation record by image_url
+        const { data: generations } = await supabase
+          .from('ai_generated_images')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('image_url', imageUrl)
+          .limit(1);
+
+        if (generations && generations.length > 0) {
+          // Update added_to_closet flag
+          await supabase
+            .from('ai_generated_images')
+            .update({ added_to_closet: true })
+            .eq('id', generations[0].id);
+        }
+      }
+    } catch (error) {
+      console.error('Save to closet error:', error);
+      throw new Error('Error al guardar la imagen en tu armario');
+    }
+  },
+
+  /**
+   * Delete a generated image from history
+   */
+  async deleteGeneration(generationId: string): Promise<void> {
+    try {
+      const { error } = await supabase
+        .from('ai_generated_images')
+        .delete()
+        .eq('id', generationId);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Delete generation error:', error);
+      throw new Error('Error al eliminar la imagen');
+    }
+  },
+};

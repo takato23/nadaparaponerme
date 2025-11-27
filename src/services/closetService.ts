@@ -128,14 +128,17 @@ export async function addClothingItem(
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Not authenticated');
 
-    // Compress image
+    // Compress image (uses WebP when available, falls back to JPEG)
     const compressedImage = await compressImage(imageFile, 1200, 0.85);
     const thumbnail = await createThumbnail(compressedImage, 400);
 
-    // Generate unique filename
+    // Get file extension from compressed file (will be .webp or .jpg)
+    const extension = compressedImage.name.match(/\.[^.]+$/)?.[0] || '.jpg';
+
+    // Generate unique filename with correct extension
     const timestamp = Date.now();
-    const imagePath = `${user.id}/${timestamp}/image.jpg`;
-    const thumbnailPath = `${user.id}/${timestamp}/thumbnail.jpg`;
+    const imagePath = `${user.id}/${timestamp}/image${extension}`;
+    const thumbnailPath = `${user.id}/${timestamp}/thumbnail${extension}`;
 
     // Upload to storage
     const [imageUrl, thumbnailUrl] = await Promise.all([
@@ -168,7 +171,11 @@ export async function addClothingItem(
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      // Cleanup uploaded images if database insert fails
+      await supabase.storage.from('clothing-images').remove([imagePath, thumbnailPath]);
+      throw error;
+    }
 
     return convertToLegacyFormat(data);
   } catch (error) {
@@ -249,30 +256,34 @@ export async function incrementTimesWorn(id: string): Promise<void> {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Not authenticated');
 
-    // Get current times_worn
-    const { data: item, error: fetchError } = await supabase
-      .from('clothing_items')
-      .select('times_worn')
-      .eq('id', id)
-      .eq('user_id', user.id)
-      .single();
+    // Increment (atomic update)
+    const { error } = await supabase.rpc('increment_times_worn', { item_id: id });
 
-    if (fetchError) throw fetchError;
+    if (error) {
+      // Fallback to manual update if RPC fails (or doesn't exist yet)
+      const { data: item, error: fetchError } = await supabase
+        .from('clothing_items')
+        .select('times_worn')
+        .eq('id', id)
+        .eq('user_id', user.id)
+        .single();
 
-    // Increment
-    const { error } = await supabase
-      .from('clothing_items')
-      .update({
-        times_worn: (item.times_worn || 0) + 1,
-        last_worn_at: new Date().toISOString(),
-      })
-      .eq('id', id)
-      .eq('user_id', user.id);
+      if (fetchError) throw fetchError;
 
-    if (error) throw error;
+      const { error: updateError } = await supabase
+        .from('clothing_items')
+        .update({
+          times_worn: (item.times_worn || 0) + 1,
+          last_worn_at: new Date().toISOString(),
+        })
+        .eq('id', id)
+        .eq('user_id', user.id);
+
+      if (updateError) throw updateError;
+    }
   } catch (error) {
     logger.error('Failed to increment times worn:', error);
-    throw error;
+    // Don't throw, just log - this is a non-critical operation
   }
 }
 

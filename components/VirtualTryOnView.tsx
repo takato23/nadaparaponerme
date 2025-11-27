@@ -19,11 +19,11 @@ const VirtualTryOnView: React.FC<VirtualTryOnViewProps> = ({ outfitItems, onBack
   const videoRef = useRef<HTMLVideoElement>(null);
 
   // Convert outfit items to array for AR overlay
-  const arItems: ClothingItem[] = [
+  const arItems: ClothingItem[] = outfitItems ? [
     outfitItems.top,
     outfitItems.bottom,
     outfitItems.shoes,
-  ].filter(Boolean); // Remove any null/undefined items
+  ].filter(Boolean) : []; // Remove any null/undefined items
 
   const selectedItem = arItems.find(i => i.id === selectedItemId);
 

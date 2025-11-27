@@ -204,9 +204,19 @@ function generateMockClothingItem(): ClothingItem {
   const categories = ['top', 'bottom', 'shoes', 'outerwear', 'accessories'];
   const subcategories = ['Camiseta', 'Jeans', 'Zapatillas', 'Chaqueta', 'Bufanda'];
 
+  // Generate random color for placeholder
+  const bgColor = `#${Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0')}`;
+  const placeholderSvg = `data:image/svg+xml;base64,${btoa(`
+    <svg width="400" height="600" xmlns="http://www.w3.org/2000/svg">
+      <rect width="100%" height="100%" fill="${bgColor}"/>
+      <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle"
+            font-family="system-ui" font-size="24" fill="#fff">Mock Item</text>
+    </svg>
+  `)}`;
+
   return {
     id: `item-${Date.now()}-${Math.random()}`,
-    imageDataUrl: `https://via.placeholder.com/400x600/${Math.floor(Math.random() * 16777215).toString(16)}/FFFFFF?text=Item`,
+    imageDataUrl: placeholderSvg,
     metadata: {
       category: categories[Math.floor(Math.random() * categories.length)],
       subcategory: subcategories[Math.floor(Math.random() * subcategories.length)],

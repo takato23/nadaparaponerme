@@ -244,9 +244,86 @@
   .animate-bounce-small {
     animation: bounce-small 2s ease-in-out infinite;
   }
+
+  /* --- LIQUID AI THEME --- */
+
+  /* Liquid Gradient Background */
+  .bg-liquid-ai {
+    background: linear-gradient(135deg, #e0e7ff 0%, #f0f9ff 25%, #fae8ff 50%, #f3e8ff 75%, #e0e7ff 100%);
+    background-size: 400% 400%;
+    animation: liquid-gradient 15s ease infinite;
+  }
+
+  .dark .bg-liquid-ai {
+    background: linear-gradient(135deg, #1e1b4b 0%, #172554 25%, #312e81 50%, #4c1d95 75%, #1e1b4b 100%);
+    background-size: 400% 400%;
+    animation: liquid-gradient 15s ease infinite;
+  }
+
+  /* Holographic Text */
+  .text-liquid-ai {
+    background: linear-gradient(90deg, #06b6d4, #8b5cf6, #ec4899);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    background-size: 200% auto;
+    animation: shine 3s linear infinite;
+  }
+
+  /* AI Glass Panel */
+  .glass-ai {
+    @apply relative overflow-hidden;
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+  }
+
+  .dark .glass-ai {
+    background: rgba(17, 25, 40, 0.75);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+  }
+
+  /* Liquid Border */
+  .border-liquid-ai {
+    position: relative;
+    border: 1px solid transparent;
+    background: linear-gradient(white, white) padding-box,
+      linear-gradient(45deg, #06b6d4, #8b5cf6, #ec4899) border-box;
+  }
+
+  .dark .border-liquid-ai {
+    background: linear-gradient(#0f172a, #0f172a) padding-box,
+      linear-gradient(45deg, #06b6d4, #8b5cf6, #ec4899) border-box;
+  }
+
+  /* AI Button */
+  .btn-ai {
+    @apply relative overflow-hidden font-bold text-white transition-all duration-300;
+    background: linear-gradient(90deg, #06b6d4, #8b5cf6, #ec4899);
+    background-size: 200% auto;
+    box-shadow: 0 0 20px rgba(139, 92, 246, 0.5);
+  }
+
+  .btn-ai:hover {
+    background-position: right center;
+    box-shadow: 0 0 30px rgba(139, 92, 246, 0.7);
+    transform: translateY(-1px);
+  }
+
+  .btn-ai:active {
+    transform: translateY(1px);
+  }
 }
 
 @layer utilities {
+  .font-mono-ai {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    letter-spacing: -0.02em;
+  }
+
 
   /* Accessibility - Screen Reader Only */
   .sr-only {
@@ -466,6 +543,20 @@
 
   100% {
     background-position: 200% center;
+  }
+}
+
+@keyframes liquid-gradient {
+  0% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+
+  100% {
+    background-position: 0% 50%;
   }
 }
 

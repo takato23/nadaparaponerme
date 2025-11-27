@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 
 /**
  * Hook for optimistic UI updates with automatic rollback on error
@@ -23,6 +23,8 @@ import { useCallback } from 'react';
  * };
  */
 export const useOptimistic = () => {
+  const [isLoading, setIsLoading] = useState(false);
+
   const update = useCallback(async <T,>(
     optimisticUpdate: () => void,
     apiCall: () => Promise<T>,
@@ -32,6 +34,7 @@ export const useOptimistic = () => {
       onError?: (error: Error) => void;
     }
   ): Promise<void> => {
+    setIsLoading(true);
     // 1. Apply optimistic update immediately
     optimisticUpdate();
 
@@ -49,10 +52,12 @@ export const useOptimistic = () => {
       callbacks?.onError?.(error as Error);
 
       throw error; // Re-throw for caller to handle if needed
+    } finally {
+      setIsLoading(false);
     }
   }, []);
 
-  return { update };
+  return { update, isLoading };
 };
 
 /**

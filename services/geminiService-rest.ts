@@ -54,7 +54,7 @@ const clothingItemSchema = {
     },
     vibe_tags: {
       type: "array",
-      description: 'ej: ["streetwear", "casual", "sporty"]',
+      description: 'ej: ["streetwear", "casual", "sporty", "vintage", "minimalist"]',
       items: {
         type: "string",
       },
@@ -66,8 +66,35 @@ const clothingItemSchema = {
         type: "string",
       },
     },
+    // Premium Fields
+    fashion_score: {
+      type: "number",
+      description: "Puntaje de moda del 1 al 10 basado en tendencias actuales y calidad visual",
+    },
+    occasion_tags: {
+      type: "array",
+      description: 'ej: ["work", "party", "date", "gym", "travel"]',
+      items: { type: "string" },
+    },
+    color_palette: {
+      type: "array",
+      description: "Array de códigos hex de los colores prominentes en la prenda",
+      items: { type: "string" },
+    },
+    styling_tips: {
+      type: "string",
+      description: "Consejo corto y experto de cómo combinar esta prenda",
+    },
+    care_instructions: {
+      type: "string",
+      description: "Instrucciones de cuidado inferidas (ej: 'Lavar en frío', 'Limpieza en seco')",
+    },
+    fabric_composition: {
+      type: "string",
+      description: "Composición de tela estimada (ej: '100% Algodón', 'Mezcla de Poliéster')",
+    },
   },
-  required: ['category', 'subcategory', 'color_primary', 'vibe_tags', 'seasons'],
+  required: ['category', 'subcategory', 'color_primary', 'vibe_tags', 'seasons', 'fashion_score', 'occasion_tags', 'styling_tips'],
 };
 
 /**
@@ -91,7 +118,7 @@ export async function analyzeClothingItem(imageDataUrl: string): Promise<Clothin
         contents: [{
           parts: [
             {
-              text: 'Analiza esta prenda de ropa y proporciona su categoría, subcategoría, color principal, tipo de cuello y manga (si aplica), etiquetas de estilo y temporadas apropiadas. Responde en formato JSON estructurado.'
+              text: 'Analiza esta prenda como un Estilista de Moda de Alto Nivel. Provee: categoría, subcategoría, color, detalles técnicos, vibe tags, temporadas, puntaje de moda (1-10), ocasiones de uso, paleta de colores (hex), tips de estilismo expertos, cuidados y composición estimada. Responde en JSON.'
             },
             {
               inlineData: {
@@ -103,7 +130,7 @@ export async function analyzeClothingItem(imageDataUrl: string): Promise<Clothin
         }],
         systemInstruction: {
           parts: [{
-            text: 'Eres un experto en moda. Analiza prendas de ropa en imágenes y describe sus características detalladamente.'
+            text: 'Eres un Estilista de Moda de clase mundial y experto en análisis de prendas. Tu trabajo es analizar ropa con precisión técnica y gusto exquisito. Identifica tendencias, calidad y estilo.'
           }]
         },
         generationConfig: {
@@ -282,7 +309,7 @@ IMPORTANTE: Responde con un array JSON de ${imageDataUrls.length} objetos, uno p
  * Stub: Find similar items
  * TODO: Implement using Gemini API or move to Edge Function
  */
-export async function findSimilarItems(): Promise<string[]> {
+export async function findSimilarItems(item: any, inventory: any[]): Promise<string[]> {
   console.warn('findSimilarItems not implemented in REST client');
   return [];
 }

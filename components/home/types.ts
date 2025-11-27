@@ -1,11 +1,15 @@
+import type { BadgeType, FeatureCategory } from './featuresConfig';
+
 export interface Feature {
     id: string;
     icon: string;
     title: string;
     description: string;
     onClick: () => void;
-    category: 'essential' | 'create' | 'social' | 'advanced';
+    category: FeatureCategory;
     keywords: string[];
     tooltip?: string;
-    badge?: string;
+    badge?: BadgeType;
+    featured?: boolean;
+    popularity?: number;
 }

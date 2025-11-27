@@ -56,6 +56,13 @@ interface ClosetContextValue {
   enterSelectionMode: () => void;
   exitSelectionMode: () => void;
 
+  // Actions (from parent)
+  onDeleteItem?: (id: string) => void;
+  onDeleteItems?: (ids: string[]) => void;
+  onToggleFavorite?: (id: string) => void;
+  onExportItems?: (ids: string[]) => void;
+  onShareItems?: (ids: string[]) => void;
+
   // Computed values
   hasSelection: boolean;
   selectedCount: number;
@@ -69,9 +76,23 @@ const ClosetContext = createContext<ClosetContextValue | undefined>(undefined);
 interface ClosetProviderProps {
   children: ReactNode;
   items: ClothingItem[];                  // Items from parent (App.tsx)
+  // Action callbacks from parent
+  onDeleteItem?: (id: string) => void;
+  onDeleteItems?: (ids: string[]) => void;
+  onToggleFavorite?: (id: string) => void;
+  onExportItems?: (ids: string[]) => void;
+  onShareItems?: (ids: string[]) => void;
 }
 
-export function ClosetProvider({ children, items }: ClosetProviderProps) {
+export function ClosetProvider({
+  children,
+  items,
+  onDeleteItem,
+  onDeleteItems,
+  onToggleFavorite,
+  onExportItems,
+  onShareItems
+}: ClosetProviderProps) {
   // Initialize all hooks
   const filters = useClosetFilters(items);
   const collections = useCollections(items);
@@ -246,6 +267,13 @@ export function ClosetProvider({ children, items }: ClosetProviderProps) {
     enterSelectionMode,
     exitSelectionMode,
 
+    // Actions (from parent)
+    onDeleteItem,
+    onDeleteItems,
+    onToggleFavorite,
+    onExportItems,
+    onShareItems,
+
     // Computed values
     hasSelection,
     selectedCount,
@@ -271,6 +299,11 @@ export function ClosetProvider({ children, items }: ClosetProviderProps) {
     toggleSelectAll,
     enterSelectionMode,
     exitSelectionMode,
+    onDeleteItem,
+    onDeleteItems,
+    onToggleFavorite,
+    onExportItems,
+    onShareItems,
     hasSelection,
     selectedCount,
     selectedItems
