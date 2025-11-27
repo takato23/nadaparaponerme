@@ -88,7 +88,7 @@ export default defineConfig(({ mode }) => {
             if (id.includes('/components/LookbookCreatorView')) {
               return 'feature-lookbook';
             }
-            if (id.includes('/components/ActivityFeedView')) {
+            if (id.includes('/components/ActivityFeedView') || id.includes('/components/ActivityCard')) {
               return 'feature-activity';
             }
             if (id.includes('/components/CalendarSyncView')) {

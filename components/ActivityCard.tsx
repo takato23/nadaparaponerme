@@ -357,4 +357,5 @@ const ActivityCard = ({
   );
 };
 
+export { ActivityCard };
 export default ActivityCard;
