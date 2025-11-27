@@ -8,7 +8,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { ActivityFeedItem, ActivityComment } from '../types';
 import {
-  generateMockComments,
+  fetchActivityComments,
   formatRelativeTime,
   getActivityDescription
 } from '../services/activityFeedService';
@@ -42,11 +42,13 @@ const ActivityCommentsDrawer = ({
 
   const loadComments = async () => {
     setLoading(true);
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 500));
-
-    const mockComments = generateMockComments(activity.id, activity.comments_count || 3);
-    setComments(mockComments);
+    try {
+      const fetchedComments = await fetchActivityComments(activity.id);
+      setComments(fetchedComments);
+    } catch (error) {
+      console.error('Error loading comments:', error);
+      setComments([]);
+    }
     setLoading(false);
   };
 

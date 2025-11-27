@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { motion, useMotionValue } from 'framer-motion';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { ROUTES } from '../../src/routes';
+import { useNavigateTransition } from '../../hooks/useNavigateTransition';
 
 interface DockItemProps {
     id: string;
@@ -137,7 +138,7 @@ function DockItem({ icon, label, isActive, onClick, isCamera }: DockItemProps) {
 }
 
 export function FloatingDock({ onCameraClick }: { onCameraClick?: () => void }) {
-    const navigate = useNavigate();
+    const navigate = useNavigateTransition();
     const location = useLocation();
 
     const items = [

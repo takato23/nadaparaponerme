@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
 import { ROUTES } from '../../src/routes';
+import { useNavigateTransition } from '../../hooks/useNavigateTransition';
 
 interface CommandItem {
     id: string;
@@ -33,7 +33,7 @@ export function CommandPalette({
     const [query, setQuery] = useState('');
     const [selectedIndex, setSelectedIndex] = useState(0);
     const inputRef = useRef<HTMLInputElement>(null);
-    const navigate = useNavigate();
+    const navigate = useNavigateTransition();
 
     // Define all available commands
     const commands: CommandItem[] = useMemo(() => [

@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X } from 'lucide-react';
+// Use direct import to avoid barrel file issues with lucide-react
+import X from 'lucide-react/dist/esm/icons/x';
 
 interface SwipeableModalProps {
     isOpen: boolean;

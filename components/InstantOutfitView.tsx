@@ -2,11 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useCloset } from '../contexts/ClosetContext';
 import { ClothingItem } from '../types';
-import { useNavigate } from 'react-router-dom';
+import { useNavigateTransition } from '../hooks/useNavigateTransition';
 
 export default function InstantOutfitView() {
     const { items } = useCloset();
-    const navigate = useNavigate();
+    const navigate = useNavigateTransition();
     const [isSpinning, setIsSpinning] = useState(false);
     const [result, setResult] = useState<string | null>(null);
     const [selectedOutfit, setSelectedOutfit] = useState<{

@@ -1,6 +1,7 @@
 
-import React, { useState, useMemo, useEffect, lazy, Suspense } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
+
+import React, { useState, useMemo, useEffect, lazy, Suspense, startTransition, useCallback } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import useLocalStorage from './hooks/useLocalStorage';
 import { useDebounce } from './hooks/useDebounce';
@@ -8,6 +9,7 @@ import { useAppModals } from './hooks/useAppModals';
 import { useToast } from './hooks/useToast';
 import { useOptimistic } from './hooks/useOptimistic';
 import { useSubscription } from './hooks/useSubscription';
+import { useNavigateTransition } from './hooks/useNavigateTransition';
 import type { ClothingItem, FitResult, ClothingItemMetadata, SavedOutfit, CommunityUser, PackingListResult, SortOption, BrandRecognitionResult, OutfitSuggestionForEvent, ChatConversation, ChatMessage, CategoryFilter, ProfessionalProfile, ProfessionalFitResult } from './types';
 import * as aiService from './src/services/aiService';
 import { generateProfessionalOutfit } from './services/professionalStylistService';
@@ -110,7 +112,7 @@ const PremiumCameraView = lazy(() => import('./components/PremiumCameraView'));
  */
 const AppContent = () => {
     const location = useLocation();
-    const navigate = useNavigate();
+    const navigate = useNavigateTransition();
     // Authentication
     const { user, signOut: authSignOut } = useAuth();
     const isAuthenticated = !!user;

@@ -325,7 +325,7 @@ const HomeViewImproved: React.FC<HomeViewImprovedProps> = (props) => {
       <main className="relative z-10 flex-grow w-full max-w-6xl mx-auto px-3 sm:px-4 md:px-6 pt-14 sm:pt-16 md:pt-20 pb-20 sm:pb-24">
         {/* Grid principal: 2 columnas en desktop */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 mb-4">
-          {/* Columna izquierda: Hero + Weather */}
+          {/* Columna izquierda: Hero + Weather + Quota */}
           <div className="space-y-3">
             <Hero3DImproved
               displayName={displayName}
@@ -335,6 +335,20 @@ const HomeViewImproved: React.FC<HomeViewImprovedProps> = (props) => {
               daysActive={userStats.daysActive}
             />
             <WeatherCardImproved />
+
+            {/* Quota Indicator en desktop (solo si hay suscripción) */}
+            {!searchQuery && props.subscription && (
+              <div className="hidden lg:block">
+                <QuotaIndicator
+                  used={props.subscription.aiGenerationsUsed}
+                  limit={props.subscription.aiGenerationsLimit}
+                  tier={props.subscription.tier}
+                  variant="full"
+                  onUpgradeClick={props.onShowPricing}
+                  className="animate-fade-in"
+                />
+              </div>
+            )}
           </div>
 
           {/* Columna derecha: Search + Quick Actions + Stats */}
@@ -382,16 +396,18 @@ const HomeViewImproved: React.FC<HomeViewImprovedProps> = (props) => {
               />
             )}
 
-            {/* Quota Indicator (solo si hay suscripción) */}
+            {/* Quota Indicator en móvil (solo si hay suscripción) */}
             {!searchQuery && props.subscription && (
-              <QuotaIndicator
-                used={props.subscription.aiGenerationsUsed}
-                limit={props.subscription.aiGenerationsLimit}
-                tier={props.subscription.tier}
-                variant="full"
-                onUpgradeClick={props.onShowPricing}
-                className="animate-fade-in"
-              />
+              <div className="lg:hidden">
+                <QuotaIndicator
+                  used={props.subscription.aiGenerationsUsed}
+                  limit={props.subscription.aiGenerationsLimit}
+                  tier={props.subscription.tier}
+                  variant="full"
+                  onUpgradeClick={props.onShowPricing}
+                  className="animate-fade-in"
+                />
+              </div>
             )}
           </div>
         </div>
