@@ -45,6 +45,15 @@ const FILTERS: Array<{ id: FilterStatus; label: string }> = [
   { id: 'virtual', label: 'Prestadas' }
 ];
 
+// Quick categories for items from screenshots
+const QUICK_CATEGORIES: Array<{ id: string; label: string; icon: string }> = [
+  { id: 'top', label: 'Remera/Top', icon: '👕' },
+  { id: 'bottom', label: 'Pantalón/Falda', icon: '👖' },
+  { id: 'one_piece', label: 'Vestido/Enterito', icon: '👗' },
+  { id: 'outerwear', label: 'Campera/Abrigo', icon: '🧥' },
+  { id: 'shoes', label: 'Zapatos', icon: '👟' },
+];
+
 const containerVariants = {
   hidden: { opacity: 0 },
   show: {
@@ -106,6 +115,12 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
   const [userBaseImage, setUserBaseImage] = useState<string | null>(null);
   const [isUploadingBase, setIsUploadingBase] = useState(false);
   const [autoSave, setAutoSave] = useState(false);
+
+  // Quick Try-On: temporary items from screenshots (not saved to closet)
+  const [quickItems, setQuickItems] = useState<ClothingItem[]>([]);
+  const [isUploadingQuickItem, setIsUploadingQuickItem] = useState(false);
+  const [showQuickItemCategoryPicker, setShowQuickItemCategoryPicker] = useState<string | null>(null);
+  const quickItemInputRef = useRef<HTMLInputElement>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [activeSlotPicker, setActiveSlotPicker] = useState<string | null>(null);
   const [selectedImage, setSelectedImage] = useState<GeneratedImageRecord | null>(null);
@@ -282,14 +297,21 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
 
   const safeCloset = closet || [];
 
+  // Merge closet with quick items for display
+  const allItems = useMemo(() => {
+    return [...quickItems, ...safeCloset];
+  }, [quickItems, safeCloset]);
+
   const filteredCloset = useMemo(() => {
-    return safeCloset.filter(item => {
+    return allItems.filter(item => {
       const status = item.status || 'owned';
+      // Quick items always show
+      if (status === 'quick') return true;
       if (filterStatus === 'owned') return status === 'owned';
       if (filterStatus === 'virtual') return status === 'virtual' || status === 'wishlist';
       return true;
     });
-  }, [safeCloset, filterStatus]);
+  }, [allItems, filterStatus]);
 
   const activePreset = useMemo(() => {
     return GENERATION_PRESETS.find(preset => preset.id === presetId) || GENERATION_PRESETS[0];
@@ -365,6 +387,75 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
     setSlotSelections(prev => {
       const newMap = new Map(prev);
       newMap.delete(slot);
+      return newMap;
+    });
+  };
+
+  // Quick Try-On: Upload an item from screenshot
+  const handleQuickItemUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploadingQuickItem(true);
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error('No se pudo leer la imagen.'));
+        reader.onload = () => resolve(String(reader.result));
+        reader.readAsDataURL(file);
+      });
+
+      // Create temporary ID for this quick item
+      const tempId = `quick_${Date.now()}`;
+      setShowQuickItemCategoryPicker(tempId);
+
+      // Store the image temporarily until category is selected
+      sessionStorage.setItem(`quick-item-${tempId}`, dataUrl);
+    } catch (err) {
+      toast.error('Error al cargar la imagen');
+    } finally {
+      setIsUploadingQuickItem(false);
+      if (quickItemInputRef.current) {
+        quickItemInputRef.current.value = '';
+      }
+    }
+  };
+
+  // Confirm quick item with category
+  const confirmQuickItemCategory = (tempId: string, category: string) => {
+    const dataUrl = sessionStorage.getItem(`quick-item-${tempId}`);
+    if (!dataUrl) return;
+
+    const newQuickItem: ClothingItem = {
+      id: tempId,
+      imageDataUrl: dataUrl,
+      status: 'quick' as any, // Mark as quick item
+      metadata: {
+        category: category as any,
+        subcategory: 'Prenda de internet',
+        color_primary: 'desconocido',
+        vibe_tags: ['quick-try-on'],
+        seasons: ['all'],
+      },
+    };
+
+    setQuickItems(prev => [newQuickItem, ...prev]);
+    setShowQuickItemCategoryPicker(null);
+    sessionStorage.removeItem(`quick-item-${tempId}`);
+    toast.success('Prenda agregada para probar', { icon: '✨' });
+  };
+
+  // Remove quick item
+  const removeQuickItem = (itemId: string) => {
+    setQuickItems(prev => prev.filter(i => i.id !== itemId));
+    // Also remove from slot selections if selected
+    setSlotSelections(prev => {
+      const newMap = new Map(prev);
+      for (const [slot, selection] of newMap) {
+        if (selection.itemId === itemId) {
+          newMap.delete(slot);
+        }
+      }
       return newMap;
     });
   };
@@ -698,17 +789,32 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
                   {/* Options row - Keep pose + Use face refs */}
                   <div className="mt-2 flex items-center gap-4 flex-wrap">
                     {/* Keep pose toggle */}
-                    <label className="flex items-center gap-1.5 cursor-pointer group" title="Mantiene tu pose exacta de la foto. Mejora la consistencia de la cara.">
-                      <input
-                        type="checkbox"
-                        checked={keepPose}
-                        onChange={(e) => setKeepPose(e.target.checked)}
-                        className="w-3.5 h-3.5 rounded border-gray-300 text-[color:var(--studio-ink)] focus:ring-[color:var(--studio-ink)]"
-                      />
-                      <span className="text-[10px] font-medium text-[color:var(--studio-ink-muted)] group-hover:text-[color:var(--studio-ink)]">
-                        Mantener pose
-                      </span>
-                    </label>
+                    <div className="relative group">
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={keepPose}
+                          onChange={(e) => setKeepPose(e.target.checked)}
+                          className="w-3.5 h-3.5 rounded border-gray-300 text-[color:var(--studio-ink)] focus:ring-[color:var(--studio-ink)]"
+                        />
+                        <span className="text-[10px] font-medium text-[color:var(--studio-ink-muted)] group-hover:text-[color:var(--studio-ink)]">
+                          Mantener pose
+                        </span>
+                        <span className="material-symbols-rounded text-[12px] text-purple-400 group-hover:text-purple-600">
+                          info
+                        </span>
+                      </label>
+                      {/* Tooltip */}
+                      <div className="absolute bottom-full left-0 mb-2 w-48 p-2 bg-gray-900 text-white text-[10px] rounded-lg
+                                      opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 shadow-lg">
+                        <p className="font-semibold mb-1">Mejora la cara</p>
+                        <p className="text-gray-300">
+                          Al activar esta opción, la IA mantiene tu pose y expresión original,
+                          lo que hace que <span className="text-purple-300 font-medium">tu cara se vea más parecida</span>.
+                        </p>
+                        <div className="absolute bottom-0 left-4 transform translate-y-1/2 rotate-45 w-2 h-2 bg-gray-900" />
+                      </div>
+                    </div>
 
                     {/* Face references toggle with count and preview */}
                     <div className="flex items-center gap-1.5">
@@ -964,9 +1070,41 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
 
             {/* Closet grid */}
             <motion.section variants={itemVariants} className="mb-6">
+              {/* Hidden input for quick item upload */}
+              <input
+                type="file"
+                ref={quickItemInputRef}
+                className="hidden"
+                accept="image/*"
+                onChange={handleQuickItemUpload}
+              />
+
               <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                {/* Quick Try-On upload button - always first */}
+                <button
+                  onClick={() => quickItemInputRef.current?.click()}
+                  disabled={isUploadingQuickItem}
+                  className="aspect-[3/4] rounded-xl border-2 border-dashed border-purple-300 hover:border-purple-400
+                             bg-gradient-to-br from-purple-50 to-pink-50 hover:from-purple-100 hover:to-pink-100
+                             flex flex-col items-center justify-center gap-2 transition-all group"
+                >
+                  {isUploadingQuickItem ? (
+                    <div className="animate-spin w-6 h-6 border-2 border-purple-400 border-t-transparent rounded-full" />
+                  ) : (
+                    <>
+                      <div className="w-10 h-10 rounded-full bg-purple-100 group-hover:bg-purple-200 flex items-center justify-center transition">
+                        <span className="material-symbols-rounded text-purple-600 text-xl">add_photo_alternate</span>
+                      </div>
+                      <div className="text-center px-2">
+                        <p className="text-[10px] font-semibold text-purple-700">Quick Try-On</p>
+                        <p className="text-[8px] text-purple-500">Subí captura de Instagram</p>
+                      </div>
+                    </>
+                  )}
+                </button>
+
                 {filteredCloset.length === 0 ? (
-                  <div className="col-span-full rounded-2xl border border-white/60 bg-white/40 p-6 text-center">
+                  <div className="col-span-2 sm:col-span-3 rounded-2xl border border-white/60 bg-white/40 p-6 text-center">
                     <p className="text-sm text-[color:var(--studio-ink-muted)]">No hay prendas en esta sección.</p>
                   </div>
                 ) : (
@@ -974,6 +1112,7 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
                     const isSelected = isItemSelected(item.id);
                     const validSlots = getValidSlotsForItem(item);
                     const showSlotPicker = activeSlotPicker === item.id;
+                    const isQuickItem = item.status === 'quick';
 
                     return (
                       <div key={item.id} className="relative">
@@ -981,7 +1120,9 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
                           onClick={() => handleItemClick(item)}
                           className={`w-full aspect-[3/4] rounded-xl overflow-hidden border-2 transition ${isSelected
                             ? 'border-[color:var(--studio-ink)] ring-2 ring-[color:var(--studio-ink)]/20'
-                            : 'border-transparent hover:border-white/80'
+                            : isQuickItem
+                              ? 'border-purple-300 hover:border-purple-400'
+                              : 'border-transparent hover:border-white/80'
                             }`}
                         >
                           {item.imageDataUrl ? (
@@ -1001,7 +1142,24 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
                               ✓
                             </div>
                           )}
+                          {/* Quick item badge */}
+                          {isQuickItem && !isSelected && (
+                            <div className="absolute top-1 left-1 px-1.5 py-0.5 rounded-full bg-purple-500 text-white text-[8px] font-bold">
+                              QUICK
+                            </div>
+                          )}
                         </button>
+
+                        {/* Remove quick item button */}
+                        {isQuickItem && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); removeQuickItem(item.id); }}
+                            className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 text-white
+                                       flex items-center justify-center text-xs shadow-md hover:bg-red-600 z-10"
+                          >
+                            ×
+                          </button>
+                        )}
 
                         {/* Slot picker dropdown */}
                         {showSlotPicker && validSlots.length > 1 && (
@@ -1406,6 +1564,76 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
         onProceed={handleGenerateNow}
         onCancel={() => setShowCompatibilityWarning(false)}
       />
+
+      {/* Quick Item Category Picker Modal */}
+      <AnimatePresence>
+        {showQuickItemCategoryPicker && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+            onClick={() => {
+              setShowQuickItemCategoryPicker(null);
+              if (showQuickItemCategoryPicker) {
+                sessionStorage.removeItem(`quick-item-${showQuickItemCategoryPicker}`);
+              }
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-2xl shadow-2xl p-5 w-full max-w-sm"
+            >
+              <h3 className="text-lg font-bold text-gray-900 mb-1">
+                ¿Qué tipo de prenda es?
+              </h3>
+              <p className="text-sm text-gray-500 mb-4">
+                Seleccioná la categoría para poder usarla en tu look
+              </p>
+
+              {/* Preview of the uploaded image */}
+              {showQuickItemCategoryPicker && (
+                <div className="mb-4 flex justify-center">
+                  <img
+                    src={sessionStorage.getItem(`quick-item-${showQuickItemCategoryPicker}`) || ''}
+                    alt="Preview"
+                    className="w-24 h-32 object-cover rounded-xl border-2 border-purple-200"
+                  />
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-2">
+                {QUICK_CATEGORIES.map(cat => (
+                  <button
+                    key={cat.id}
+                    onClick={() => confirmQuickItemCategory(showQuickItemCategoryPicker!, cat.id)}
+                    className="flex items-center gap-2 p-3 rounded-xl border border-gray-200
+                               hover:border-purple-400 hover:bg-purple-50 transition-all text-left"
+                  >
+                    <span className="text-2xl">{cat.icon}</span>
+                    <span className="text-sm font-medium text-gray-700">{cat.label}</span>
+                  </button>
+                ))}
+              </div>
+
+              <button
+                onClick={() => {
+                  if (showQuickItemCategoryPicker) {
+                    sessionStorage.removeItem(`quick-item-${showQuickItemCategoryPicker}`);
+                  }
+                  setShowQuickItemCategoryPicker(null);
+                }}
+                className="mt-4 w-full py-2 text-sm text-gray-500 hover:text-gray-700"
+              >
+                Cancelar
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
