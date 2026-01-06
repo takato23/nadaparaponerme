@@ -38,8 +38,8 @@ export default defineConfig(({ mode }) => {
           manualChunks: (id) => {
             // Vendor chunks for heavy dependencies
             if (id.includes('node_modules')) {
-              // React core
-              if (id.includes('react-dom') || id.includes('react-router') || id.includes('scheduler')) {
+              // React core - include react itself to avoid R3F reconciler issues
+              if (id.includes('node_modules/react/') || id.includes('react-dom') || id.includes('react-router') || id.includes('scheduler') || id.includes('react-reconciler')) {
                 return 'vendor-react';
               }
               // Animation
