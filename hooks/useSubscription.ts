@@ -7,7 +7,15 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../src/lib/supabase';
+import { PAYMENTS_ENABLED, V1_SAFE_MODE } from '../src/config/runtime';
 import type { SubscriptionTier, SubscriptionPlan } from '../types-payment';
+import {
+  getMonthlyUsage,
+  recordUsage as recordLocalUsage,
+  canUseFeature as canUseLocalFeature,
+  getUserTier as getLocalTier,
+  type FeatureType,
+} from '../services/usageTrackingService';
 
 // ============================================================================
 // TYPES
@@ -37,6 +45,8 @@ export interface UseSubscriptionReturn extends SubscriptionState {
   refresh: () => Promise<void>;
   canUseFeature: (feature: FeatureName) => boolean;
   canGenerate: () => boolean;
+  incrementUsage: (feature?: FeatureType) => Promise<boolean>;
+  canUseAIFeature: (feature: FeatureType) => { canUse: boolean; reason?: string };
 
   // Plan info
   currentPlan: SubscriptionPlan;
@@ -70,7 +80,7 @@ const PLANS: SubscriptionPlan[] = [
       'Compartir en comunidad',
     ],
     limits: {
-      ai_generations_per_month: 10,
+      ai_generations_per_month: 10, // Source of truth: DB function can_user_generate_outfit()
       max_closet_items: 50,
       max_saved_outfits: -1,
       can_use_virtual_tryon: false,
@@ -288,6 +298,9 @@ export function useSubscription(): UseSubscriptionReturn {
       case 'ai_designer':
         return plan.limits.can_use_ai_designer;
       case 'virtual_tryon':
+        // V1 SAFE: habilitamos Try-On como “beta” aunque pagos estén apagados.
+        // La protección real de costos la hace el server (RPC quota + Edge).
+        if (V1_SAFE_MODE && !PAYMENTS_ENABLED) return true;
         return plan.limits.can_use_virtual_tryon;
       case 'lookbook':
         return plan.limits.can_use_lookbook;
@@ -308,6 +321,59 @@ export function useSubscription(): UseSubscriptionReturn {
     return state.aiGenerationsUsed < state.aiGenerationsLimit;
   }, [state.aiGenerationsUsed, state.aiGenerationsLimit, isAdmin]);
 
+  /**
+   * Increment usage counter (local tracking + Supabase)
+   * Returns true if usage was recorded successfully
+   */
+  const incrementUsage = useCallback(async (feature: FeatureType = 'outfit_generation'): Promise<boolean> => {
+    if (isAdmin) return true;
+
+    // Always record locally first (works offline)
+    const localStatus = canUseLocalFeature(feature);
+    if (!localStatus.canUse) {
+      return false;
+    }
+    recordLocalUsage(feature);
+
+    // Update local state immediately
+    setState(prev => ({
+      ...prev,
+      aiGenerationsUsed: prev.aiGenerationsUsed + 1,
+    }));
+
+    // Try to sync with Supabase (non-blocking)
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase.rpc('increment_ai_generation_usage', { p_user_id: user.id });
+      }
+    } catch (error) {
+      // Supabase sync failed, but local tracking succeeded
+      console.warn('Failed to sync usage to Supabase:', error);
+    }
+
+    return true;
+  }, [isAdmin]);
+
+  /**
+   * Check if specific AI feature can be used (with local fallback)
+   */
+  const canUseAIFeature = useCallback((feature: FeatureType): { canUse: boolean; reason?: string } => {
+    if (isAdmin) return { canUse: true };
+
+    const localStatus = canUseLocalFeature(feature);
+    if (!localStatus.canUse) {
+      return {
+        canUse: false,
+        reason: localStatus.isPremiumLocked
+          ? 'Esta función requiere un plan Pro o Premium'
+          : `Límite alcanzado (${localStatus.used}/${localStatus.limit})`,
+      };
+    }
+
+    return { canUse: true };
+  }, [isAdmin]);
+
   return {
     // State
     ...state,
@@ -325,6 +391,8 @@ export function useSubscription(): UseSubscriptionReturn {
     refresh,
     canUseFeature,
     canGenerate,
+    incrementUsage,
+    canUseAIFeature,
 
     // Plan info
     currentPlan,

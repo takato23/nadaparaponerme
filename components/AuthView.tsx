@@ -5,6 +5,8 @@ import { motion, useMotionValue, useSpring, animate } from 'framer-motion';
 
 interface AuthViewProps {
     onLogin: () => void;
+    initialMode?: 'login' | 'signup';
+    variant?: 'default' | 'eye';
 }
 
 // Blob paths (normalized roughly to 100x100 viewbox centered)
@@ -14,11 +16,12 @@ const blobPaths = [
     "M39.6,-69.5C51.1,-63.2,60.5,-52.4,67.3,-40.1C74.1,-27.8,78.3,-14,76.9,-0.8C75.5,12.4,68.5,25,60.5,36.4C52.5,47.8,43.5,58,32.6,64.3C21.7,70.6,8.9,73,-3.6,71.3C-16.1,69.6,-29.6,63.8,-40.6,56.2C-51.6,48.6,-60.1,39.2,-66.4,28.2C-72.7,17.2,-76.8,4.6,-75.3,-7.3C-73.8,-19.2,-66.7,-30.4,-57.9,-39.8C-49.1,-49.2,-38.6,-56.8,-27.6,-63.3C-16.6,-69.8,-5.1,-75.2,4.5,-72.8L39.6,-69.5Z"
 ];
 
-const AuthView = ({ onLogin }: AuthViewProps) => {
-    const [isLoginView, setIsLoginView] = useState(true);
+const AuthView = ({ onLogin, initialMode = 'login', variant = 'default' }: AuthViewProps) => {
+    const [isLoginView, setIsLoginView] = useState(initialMode === 'login');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
+    const [reducedMotion, setReducedMotion] = useState(false);
 
     // Form states
     const [email, setEmail] = useState('');
@@ -42,18 +45,37 @@ const AuthView = ({ onLogin }: AuthViewProps) => {
     const portalScale = useMotionValue(0);
 
     useEffect(() => {
+        if (typeof window === 'undefined' || typeof window.matchMedia === 'undefined') return;
+        const mql = window.matchMedia('(prefers-reduced-motion: reduce)');
+        const onChange = (e: MediaQueryListEvent) => setReducedMotion(e.matches);
+        setReducedMotion(mql.matches);
+        if (typeof mql.addEventListener === 'function') mql.addEventListener('change', onChange);
+        else mql.addListener(onChange);
+        return () => {
+            if (typeof mql.removeEventListener === 'function') mql.removeEventListener('change', onChange);
+            else mql.removeListener(onChange);
+        };
+    }, []);
+
+    useEffect(() => {
+        if (reducedMotion) {
+            portalScale.set(1);
+            return;
+        }
+
         // Entrance animation
         animate(portalScale, 1, { duration: 1.5, ease: "easeOut" });
 
         // Continuous morphing
-        const interval = setInterval(() => {
+        const interval = window.setInterval(() => {
             setBlobIndex((prev) => (prev + 1) % blobPaths.length);
         }, 3000);
 
-        return () => clearInterval(interval);
-    }, []);
+        return () => window.clearInterval(interval);
+    }, [portalScale, reducedMotion]);
 
     const handleMouseMove = (e: React.MouseEvent) => {
+        if (reducedMotion) return;
         const { clientX, clientY, currentTarget } = e;
         const { width, height } = currentTarget.getBoundingClientRect();
         const centerX = width / 2;
@@ -98,9 +120,29 @@ const AuthView = ({ onLogin }: AuthViewProps) => {
         }
     };
 
+    const isEyeVariant = variant === 'eye';
+
+    const portalOverlayClassName = isEyeVariant
+        ? 'w-full h-full bg-black/45 backdrop-blur-xl border border-white/10 shadow-2xl'
+        : 'w-full h-full bg-white/80 backdrop-blur-xl border border-white/20 shadow-2xl';
+
+    const cardClassName = isEyeVariant
+        ? 'bg-white/6 backdrop-blur-2xl rounded-3xl shadow-[0_18px_60px_rgba(0,0,0,0.65)] border border-white/12 p-8 text-center text-white'
+        : 'bg-white/90 backdrop-blur-2xl rounded-3xl shadow-[0_8px_32px_rgba(0,0,0,0.1)] border border-white/50 p-8 text-center';
+
+    const inputClassName = isEyeVariant
+        ? 'w-full p-4 bg-white/8 text-white placeholder-white/45 rounded-2xl border border-white/12 focus:ring-2 focus:ring-white/20 focus:border-white/25 focus:outline-none transition-all'
+        : 'w-full p-4 bg-gray-50 text-gray-900 placeholder-gray-400 rounded-2xl border border-gray-200 focus:ring-2 focus:ring-black/10 focus:border-black focus:outline-none transition-all';
+
+    const submitClassName = isEyeVariant
+        ? 'w-full bg-white text-black font-bold py-4 px-4 rounded-2xl transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_18px_40px_rgba(0,0,0,0.45)] mt-4'
+        : 'w-full bg-black text-white font-bold py-4 px-4 rounded-2xl transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed shadow-lg mt-4';
+
+    const toggleClassName = isEyeVariant ? 'text-sm text-white/70 hover:text-white transition-colors' : 'text-sm text-gray-500 hover:text-black transition-colors';
+
     return (
         <div
-            className="relative w-full h-full flex items-center justify-center overflow-hidden"
+            className={`relative w-full h-full flex items-center justify-center overflow-hidden ${isEyeVariant ? 'text-white' : ''}`}
             onMouseMove={handleMouseMove}
         >
             {/* Fluid Portal Mask Container */}
@@ -120,7 +162,7 @@ const AuthView = ({ onLogin }: AuthViewProps) => {
                 }}
             >
                 {/* The Overlay - Light/Frosted Glass */}
-                <div className="w-full h-full bg-white/80 backdrop-blur-xl border border-white/20 shadow-2xl"></div>
+                <div className={portalOverlayClassName}></div>
             </div>
 
             {/* SVG Definition for the Mask */}
@@ -129,8 +171,7 @@ const AuthView = ({ onLogin }: AuthViewProps) => {
                     <mask id="fluid-portal-mask" maskUnits="objectBoundingBox" maskContentUnits="objectBoundingBox">
                         <rect x="0" y="0" width="1" height="1" fill="white" />
                         <motion.g
-                            style={{ x: blobX, y: blobY, scale: portalScale }}
-                            transformOrigin="center"
+                            style={{ x: blobX, y: blobY, scale: portalScale, transformOrigin: "center" }}
                         >
                             {/* The Blob Hole - Black makes it transparent in the mask */}
                             <motion.path
@@ -187,14 +228,14 @@ const AuthView = ({ onLogin }: AuthViewProps) => {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.5 }}
-                    className="bg-white/90 backdrop-blur-2xl rounded-3xl shadow-[0_8px_32px_rgba(0,0,0,0.1)] border border-white/50 p-8 text-center"
+                    className={cardClassName}
                 >
                     <div className="flex flex-col items-center mb-8">
-                        <OjoDeLocaLogo className="w-16 h-16 text-black mb-4" />
-                        <h1 className="text-3xl font-bold text-gray-900">
+                        <OjoDeLocaLogo className={`w-16 h-16 mb-4 ${isEyeVariant ? 'text-white' : 'text-black'}`} />
+                        <h1 className={`text-3xl font-bold ${isEyeVariant ? 'text-white' : 'text-gray-900'}`}>
                             {isLoginView ? 'Bienvenido' : 'Crear Cuenta'}
                         </h1>
-                        <p className="text-gray-500 mt-2">Tu laboratorio de estilo te espera.</p>
+                        <p className={`${isEyeVariant ? 'text-white/70' : 'text-gray-500'} mt-2`}>Tu laboratorio de estilo te espera.</p>
                     </div>
 
                     <form onSubmit={handleSubmit} className="w-full space-y-4">
@@ -205,14 +246,14 @@ const AuthView = ({ onLogin }: AuthViewProps) => {
                                     placeholder="Nombre completo"
                                     value={name}
                                     onChange={(e) => setName(e.target.value)}
-                                    className="w-full p-4 bg-gray-50 text-gray-900 placeholder-gray-400 rounded-2xl border border-gray-200 focus:ring-2 focus:ring-black/10 focus:border-black focus:outline-none transition-all"
+                                    className={inputClassName}
                                 />
                                 <input
                                     type="text"
                                     placeholder="Usuario (opcional)"
                                     value={username}
                                     onChange={(e) => setUsername(e.target.value)}
-                                    className="w-full p-4 bg-gray-50 text-gray-900 placeholder-gray-400 rounded-2xl border border-gray-200 focus:ring-2 focus:ring-black/10 focus:border-black focus:outline-none transition-all"
+                                    className={inputClassName}
                                 />
                             </>
                         )}
@@ -222,7 +263,7 @@ const AuthView = ({ onLogin }: AuthViewProps) => {
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
                             required
-                            className="w-full p-4 bg-gray-50 text-gray-900 placeholder-gray-400 rounded-2xl border border-gray-200 focus:ring-2 focus:ring-black/10 focus:border-black focus:outline-none transition-all"
+                            className={inputClassName}
                         />
                         <input
                             type="password"
@@ -231,7 +272,7 @@ const AuthView = ({ onLogin }: AuthViewProps) => {
                             onChange={(e) => setPassword(e.target.value)}
                             required
                             minLength={6}
-                            className="w-full p-4 bg-gray-50 text-gray-900 placeholder-gray-400 rounded-2xl border border-gray-200 focus:ring-2 focus:ring-black/10 focus:border-black focus:outline-none transition-all"
+                            className={inputClassName}
                         />
 
                         {error && (
@@ -249,7 +290,7 @@ const AuthView = ({ onLogin }: AuthViewProps) => {
                         <button
                             type="submit"
                             disabled={loading}
-                            className="w-full bg-black text-white font-bold py-4 px-4 rounded-2xl transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed shadow-lg mt-4"
+                            className={submitClassName}
                         >
                             {loading ? 'Procesando...' : (isLoginView ? 'Entrar' : 'Unirse')}
                         </button>
@@ -262,7 +303,7 @@ const AuthView = ({ onLogin }: AuthViewProps) => {
                                 setError(null);
                                 setSuccessMessage(null);
                             }}
-                            className="text-sm text-gray-500 hover:text-black transition-colors"
+                            className={toggleClassName}
                         >
                             {isLoginView ? '¿No tienes cuenta? Regístrate' : '¿Ya tienes cuenta? Inicia sesión'}
                         </button>

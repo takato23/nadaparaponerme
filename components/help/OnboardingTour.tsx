@@ -113,7 +113,7 @@ const OnboardingTour: React.FC<OnboardingTourProps> = ({
     const tooltipWidth = 360;
     const tooltipHeight = 280;
 
-    let style: React.CSSProperties = { position: 'fixed' };
+    const style: React.CSSProperties = { position: 'fixed' };
 
     switch (step.position) {
       case 'top':

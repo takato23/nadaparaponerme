@@ -29,7 +29,7 @@ export interface FeatureFlags {
 // ⚠️ SECURITY: useSupabaseAI should be TRUE in production to route AI calls through Edge Functions
 const defaultFlags: FeatureFlags = {
   useSupabaseAuth: true, // ✅ Enabled - AuthView uses Supabase authentication
-  useSupabaseCloset: false, // TODO: Enable after migration
+  useSupabaseCloset: false, // ✅ Keep local closet until migration is ready
   useSupabaseOutfits: false, // TODO: Enable after migration
   useSupabaseAI: true, // ✅ SECURITY: Must be true - routes AI through Edge Functions (no exposed API key)
   useSupabasePreferences: false,
@@ -41,7 +41,8 @@ const loadFlags = (): FeatureFlags => {
   try {
     const stored = localStorage.getItem('ojodeloca-feature-flags');
     if (stored) {
-      return { ...defaultFlags, ...JSON.parse(stored) };
+      const parsed = JSON.parse(stored);
+      return { ...defaultFlags, ...parsed, useSupabaseCloset: false };
     }
   } catch (error) {
     console.error('Failed to load feature flags:', error);

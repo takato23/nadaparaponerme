@@ -3,19 +3,22 @@ import type { CommunityUser, ClothingItem, ActivityFeedItem } from '../types';
 import ClosetGrid from './ClosetGrid';
 import ActivityCard from './ActivityCard';
 import { fetchActivityFeed } from '../services/activityFeedService';
-import { isCloseFriend, toggleCloseFriend } from '@/services/socialService';
+import { isCloseFriend, toggleCloseFriend } from '../services/socialService';
+import { requestToBorrowMultiple, getItemBorrowStatus } from '../src/services/borrowedItemsService';
 import { Card } from './ui/Card';
 import Loader from './Loader';
 
 interface FriendProfileViewProps {
     friend: CommunityUser;
     onClose: () => void;
-    onGenerateWithItems: (items: ClothingItem[]) => void;
+    onAddBorrowedItems: (items: ClothingItem[]) => void;
+    onTryBorrowedItems: (items: ClothingItem[]) => void;
+    onShowToast?: (message: string, type: 'success' | 'error') => void;
 }
 
 type Tab = 'activity' | 'closet' | 'stats';
 
-const FriendProfileView = ({ friend, onClose, onGenerateWithItems }: FriendProfileViewProps) => {
+const FriendProfileView = ({ friend, onClose, onAddBorrowedItems, onTryBorrowedItems, onShowToast }: FriendProfileViewProps) => {
     const [activeTab, setActiveTab] = useState<Tab>('activity');
     const [isCloseFriendStatus, setIsCloseFriendStatus] = useState(false);
     const [activities, setActivities] = useState<ActivityFeedItem[]>([]);
@@ -25,6 +28,12 @@ const FriendProfileView = ({ friend, onClose, onGenerateWithItems }: FriendProfi
 
     const [selectedItems, setSelectedItems] = useState<ClothingItem[]>([]);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+    // Borrow request state
+    const [showBorrowModal, setShowBorrowModal] = useState(false);
+    const [borrowNotes, setBorrowNotes] = useState('');
+    const [borrowLoading, setBorrowLoading] = useState(false);
+    const [requestedItemIds, setRequestedItemIds] = useState<Set<string>>(new Set());
 
     useEffect(() => {
         checkCloseFriendStatus();
@@ -56,6 +65,42 @@ const FriendProfileView = ({ friend, onClose, onGenerateWithItems }: FriendProfi
         } catch (error) {
             console.error('Failed to toggle close friend:', error);
             setIsCloseFriendStatus(!newStatus);
+        }
+    };
+
+    const handleRequestBorrow = async () => {
+        if (selectedItems.length === 0) return;
+
+        setBorrowLoading(true);
+        try {
+            const items = selectedItems.map(item => ({
+                itemId: item.id,
+                ownerId: friend.id
+            }));
+
+            const result = await requestToBorrowMultiple(items, borrowNotes || undefined);
+
+            if (result.success) {
+                // Mark items as requested
+                const newRequestedIds = new Set(requestedItemIds);
+                selectedItems.forEach(item => newRequestedIds.add(item.id));
+                setRequestedItemIds(newRequestedIds);
+
+                // Clear selection
+                setSelectedItems([]);
+                setSelectedIds(new Set());
+                setBorrowNotes('');
+                setShowBorrowModal(false);
+
+                onShowToast?.(`${result.count} ${result.count === 1 ? 'prenda solicitada' : 'prendas solicitadas'}`, 'success');
+            } else {
+                onShowToast?.(result.error || 'Error al solicitar', 'error');
+            }
+        } catch (error) {
+            console.error('Error requesting borrow:', error);
+            onShowToast?.('Error inesperado', 'error');
+        } finally {
+            setBorrowLoading(false);
         }
     };
 
@@ -94,6 +139,8 @@ const FriendProfileView = ({ friend, onClose, onGenerateWithItems }: FriendProfi
         { icon: 'checkroom', label: 'Sustentable' },
         { icon: 'star', label: 'Viste bien' },
     ];
+
+    const hasSelection = selectedItems.length > 0;
 
     return (
         // Desktop: Right sidebar | Mobile: Bottom sheet
@@ -366,13 +413,112 @@ const FriendProfileView = ({ friend, onClose, onGenerateWithItems }: FriendProfi
                     )}
                 </div>
 
-                {/* FAB */}
-                {activeTab === 'closet' && selectedItems.length > 0 && (
-                    <div className="absolute bottom-4 left-4 right-4 z-30">
-                        <button onClick={() => onGenerateWithItems(selectedItems)} className="w-full bg-gradient-to-r from-primary to-purple-600 text-white font-bold py-3 px-4 rounded-2xl flex items-center justify-center shadow-xl shadow-primary/40 transition-all active:scale-95">
-                            <span className="material-symbols-outlined mr-1.5 text-lg">auto_awesome</span>
-                            Generar con {selectedItems.length}
-                        </button>
+                {/* Actions */}
+                {activeTab === 'closet' && (
+                    <div className="absolute bottom-4 left-4 right-4 z-30 space-y-2">
+                        <div className="grid grid-cols-2 gap-2">
+                            <button
+                                onClick={() => setShowBorrowModal(true)}
+                                disabled={!hasSelection}
+                                className={`py-3 rounded-2xl font-semibold text-sm transition-all flex items-center justify-center gap-1.5 ${hasSelection
+                                    ? 'bg-white text-text-primary shadow-md active:scale-95'
+                                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                                    }`}
+                            >
+                                <span className="material-symbols-outlined text-base">swap_horiz</span>
+                                Pedir prestado
+                            </button>
+                            <button
+                                onClick={() => onTryBorrowedItems(selectedItems)}
+                                disabled={!hasSelection}
+                                className={`py-3 rounded-2xl font-semibold text-sm transition-all flex items-center justify-center gap-1.5 ${hasSelection
+                                    ? 'bg-gradient-to-r from-primary to-purple-600 text-white shadow-xl shadow-primary/40 active:scale-95'
+                                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                                    }`}
+                            >
+                                <span className="material-symbols-outlined text-base">auto_awesome</span>
+                                Probar ahora
+                            </button>
+                        </div>
+                        {!hasSelection && (
+                            <p className="text-[10px] text-center text-text-secondary">Selecciona prendas para probar.</p>
+                        )}
+                    </div>
+                )}
+
+                {/* Borrow Request Modal */}
+                {showBorrowModal && (
+                    <div className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+                        <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-sm p-4 shadow-xl animate-scale-in">
+                            <div className="flex items-center gap-3 mb-4">
+                                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-teal-500 to-cyan-600 flex items-center justify-center">
+                                    <span className="material-symbols-outlined text-white">swap_horiz</span>
+                                </div>
+                                <div>
+                                    <h3 className="font-bold text-base">Solicitar préstamo</h3>
+                                    <p className="text-xs text-gray-500">{selectedItems.length} {selectedItems.length === 1 ? 'prenda' : 'prendas'} de {friend.name}</p>
+                                </div>
+                            </div>
+
+                            {/* Selected items preview */}
+                            <div className="flex gap-2 overflow-x-auto pb-2 mb-3">
+                                {selectedItems.slice(0, 4).map(item => (
+                                    <img
+                                        key={item.id}
+                                        src={item.imageDataUrl}
+                                        alt=""
+                                        className="w-14 h-14 rounded-lg object-cover flex-shrink-0"
+                                    />
+                                ))}
+                                {selectedItems.length > 4 && (
+                                    <div className="w-14 h-14 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center flex-shrink-0">
+                                        <span className="text-sm font-bold text-gray-500">+{selectedItems.length - 4}</span>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Notes input */}
+                            <div className="mb-4">
+                                <label className="text-xs font-medium text-gray-600 dark:text-gray-400 block mb-1">
+                                    Mensaje (opcional)
+                                </label>
+                                <textarea
+                                    value={borrowNotes}
+                                    onChange={(e) => setBorrowNotes(e.target.value)}
+                                    placeholder="Ej: Lo necesito para un evento el sábado..."
+                                    className="w-full px-3 py-2 text-sm rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 resize-none focus:outline-none focus:ring-2 focus:ring-teal-500/50"
+                                    rows={2}
+                                    maxLength={200}
+                                />
+                            </div>
+
+                            {/* Actions */}
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={() => {
+                                        setShowBorrowModal(false);
+                                        setBorrowNotes('');
+                                    }}
+                                    className="flex-1 py-2.5 rounded-xl font-semibold text-sm border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    onClick={handleRequestBorrow}
+                                    disabled={borrowLoading}
+                                    className="flex-1 py-2.5 rounded-xl font-semibold text-sm bg-gradient-to-r from-teal-500 to-cyan-600 text-white hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-1.5"
+                                >
+                                    {borrowLoading ? (
+                                        <span className="animate-spin">⏳</span>
+                                    ) : (
+                                        <>
+                                            <span className="material-symbols-outlined text-base">send</span>
+                                            Enviar solicitud
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 )}
             </div>

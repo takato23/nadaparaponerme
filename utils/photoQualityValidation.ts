@@ -236,3 +236,63 @@ export function getTipsForWarnings(warnings: string[]): string[] {
 
   return tips;
 }
+
+// Stricter gate for try-on selfies (full-body, clear lighting)
+const TRY_ON_MIN_SHORT_SIDE = 720;
+const TRY_ON_MIN_FILE_SIZE = 80 * 1024; // 80KB
+const TRY_ON_MIN_BRIGHTNESS = 45;
+const TRY_ON_MAX_BRIGHTNESS = 220;
+const TRY_ON_MIN_ASPECT = 0.4;
+const TRY_ON_MAX_ASPECT = 0.9;
+
+export interface TryOnQualityGate extends PhotoQualityResult {
+  isAllowed: boolean;
+  reasons: string[];
+  tips: string[];
+}
+
+export async function analyzeTryOnPhotoQuality(dataUrl: string): Promise<TryOnQualityGate> {
+  const base = await analyzePhotoQuality(dataUrl);
+  const reasons: string[] = [];
+
+  const width = base.metadata.width;
+  const height = base.metadata.height;
+  const sizeBytes = base.metadata.sizeBytes;
+  const brightness = base.metadata.brightness;
+
+  if (width && height) {
+    const shortSide = Math.min(width, height);
+    if (shortSide < TRY_ON_MIN_SHORT_SIDE) {
+      reasons.push(`Resolución baja. Mínimo ${TRY_ON_MIN_SHORT_SIDE}px en el lado corto.`);
+    }
+
+    const aspectRatio = width / height;
+    if (aspectRatio < TRY_ON_MIN_ASPECT || aspectRatio > TRY_ON_MAX_ASPECT) {
+      reasons.push('La selfie debe ser vertical y de cuerpo completo.');
+    }
+  }
+
+  if (sizeBytes && sizeBytes < TRY_ON_MIN_FILE_SIZE) {
+    reasons.push('El archivo es muy liviano. Puede estar borroso o muy comprimido.');
+  }
+
+  if (typeof brightness === 'number') {
+    if (brightness < TRY_ON_MIN_BRIGHTNESS) {
+      reasons.push('La imagen está muy oscura.');
+    } else if (brightness > TRY_ON_MAX_BRIGHTNESS) {
+      reasons.push('La imagen está muy brillante o quemada.');
+    }
+  }
+
+  const tips = [
+    ...getTipsForWarnings(base.warnings),
+    ...(reasons.some(r => r.includes('vertical')) ? ['Usa la cámara trasera y alejate para capturar cuerpo completo'] : []),
+  ];
+
+  return {
+    ...base,
+    isAllowed: reasons.length === 0,
+    reasons,
+    tips
+  };
+}

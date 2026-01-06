@@ -101,13 +101,14 @@ export async function generatePackingListViaEdge(
 }
 
 /**
- * Generate Virtual Try-On using Edge Function
+ * Generate Virtual Try-On using Edge Function (Legacy format)
  */
 export async function generateVirtualTryOnViaEdge(
   userImage: string,
   topImage: string,
   bottomImage: string,
-  shoesImage: string
+  shoesImage?: string,
+  quality?: 'flash' | 'pro'
 ): Promise<string> {
   try {
     const { data, error } = await supabase.functions.invoke('virtual-try-on', {
@@ -116,6 +117,7 @@ export async function generateVirtualTryOnViaEdge(
         topImage,
         bottomImage,
         shoesImage,
+        quality,
       },
     });
 
@@ -124,6 +126,86 @@ export async function generateVirtualTryOnViaEdge(
     return data.resultImage;
   } catch (error) {
     logger.error('Edge function virtual-try-on failed:', error);
+    throw new Error('Failed to generate virtual try-on via Edge Function');
+  }
+}
+
+/**
+ * Available presets for virtual try-on backgrounds
+ */
+export type VirtualTryOnPreset =
+  | 'overlay'       // Keep original background
+  | 'studio'        // Professional studio, gray backdrop
+  | 'editorial'     // Magazine-style dramatic lighting
+  | 'mirror_selfie' // Mirror selfie in bedroom/closet
+  | 'street'        // Urban street style
+  | 'golden_hour'   // Sunset golden lighting
+  | 'minimalist'    // Clean white background
+  | 'coffee_shop'   // Cozy cafe aesthetic
+  | 'home';         // Modern living room
+
+/**
+ * Preset configurations for UI display
+ */
+export const VIRTUAL_TRYON_PRESETS: Array<{
+  id: VirtualTryOnPreset;
+  name: string;
+  icon: string;
+  description: string;
+}> = [
+  { id: 'overlay', name: 'Original', icon: 'filter_none', description: 'Mantiene tu fondo' },
+  { id: 'mirror_selfie', name: 'Selfie Espejo', icon: 'door_sliding', description: 'Frente al espejo de tu cuarto' },
+  { id: 'studio', name: 'Estudio', icon: 'photo_camera', description: 'Fondo profesional' },
+  { id: 'street', name: 'Calle', icon: 'location_city', description: 'Look urbano' },
+  { id: 'golden_hour', name: 'Atardecer', icon: 'wb_twilight', description: 'Luz dorada' },
+  { id: 'coffee_shop', name: 'Café', icon: 'local_cafe', description: 'Ambiente acogedor' },
+  { id: 'home', name: 'Living', icon: 'weekend', description: 'Tu casa' },
+  { id: 'editorial', name: 'Editorial', icon: 'auto_awesome', description: 'Estilo revista' },
+  { id: 'minimalist', name: 'Minimalista', icon: 'crop_square', description: 'Fondo blanco' },
+];
+
+/**
+ * Generate Virtual Try-On with slot system
+ */
+export async function generateVirtualTryOnWithSlots(
+  userImage: string,
+  slots: Record<string, string>, // slot name -> image URL or base64
+  options: {
+    preset?: VirtualTryOnPreset;
+    quality?: 'flash' | 'pro';
+    customScene?: string; // For 'custom' preset - user-defined scene description
+    keepPose?: boolean; // When true, AI preserves the exact pose from the selfie (better face consistency)
+    useFaceReferences?: boolean; // When true, uses uploaded face reference photos for better identity
+  } = {}
+): Promise<{
+  resultImage: string;
+  model: string;
+  slotsUsed: string[];
+  faceReferencesUsed?: number;
+}> {
+  try {
+    const { data, error } = await supabase.functions.invoke('virtual-try-on', {
+      body: {
+        userImage,
+        slots,
+        preset: options.preset || 'overlay',
+        quality: options.quality || 'flash',
+        customScene: options.customScene,
+        keepPose: options.keepPose ?? false,
+        useFaceReferences: options.useFaceReferences ?? true, // Default to true if not specified
+      },
+    });
+
+    if (error) throw error;
+
+    return {
+      resultImage: data.resultImage,
+      model: data.model,
+      slotsUsed: data.slotsUsed || [],
+      faceReferencesUsed: data.faceReferencesUsed || 0,
+    };
+  } catch (error) {
+    logger.error('Edge function virtual-try-on (slots) failed:', error);
     throw new Error('Failed to generate virtual try-on via Edge Function');
   }
 }

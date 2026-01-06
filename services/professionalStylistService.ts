@@ -408,9 +408,6 @@ export async function generateProfessionalOutfit(
   tonePreference: 'concise' | 'balanced' | 'detailed' = 'balanced'
   // ⛔ SECURITY: apiKey parameter removed - service must use Edge Functions or pre-configured API
 ): Promise<ProfessionalFitResult> {
-  console.log('🔵 [PROFESSIONAL] Iniciando generación profesional...');
-  console.log('🔵 [PROFESSIONAL] Closet size:', closet?.length || 0);
-
   // Validación básica
   if (!closet || closet.length < 3) {
     throw new Error('Se necesitan al menos 3 prendas en el armario para generar un outfit');
@@ -418,11 +415,9 @@ export async function generateProfessionalOutfit(
 
   // 1. Detectar formalidad
   const formalityLevel = detectFormalityLevel(occasion);
-  console.log('🔵 [PROFESSIONAL] Formality level:', formalityLevel);
 
   // 2. Aplicar filtros duros
   const filteredCloset = applyHardFilters(closet, profile, formalityLevel, weather);
-  console.log('🔵 [PROFESSIONAL] Filtered closet size:', filteredCloset.length);
 
   if (filteredCloset.length < 3) {
     throw new Error('No hay suficientes prendas compatibles después de aplicar filtros. Intenta con otra ocasión o revisa tus preferencias.');
@@ -436,12 +431,10 @@ export async function generateProfessionalOutfit(
 
   // 4. Construir prompt profesional
   const systemPrompt = buildProfessionalPrompt(profile, formalityLevel, occasion, weather, tonePreference);
-  console.log('🔵 [PROFESSIONAL] System prompt construido');
 
   // 5. Llamar a Gemini usando el servicio pre-configurado (via Edge Functions)
   // ⛔ SECURITY: API key must be configured server-side via Edge Functions, not passed from client
 
-  console.log('🔵 [PROFESSIONAL] Llamando a Gemini API...');
   // Usar el servicio con el system prompt profesional y schema extendido
   const parsed = await geminiService.generateOutfitWithCustomPrompt(
     occasion,
@@ -450,24 +443,12 @@ export async function generateProfessionalOutfit(
     professionalOutfitSchema
   ) as ProfessionalFitResult;
 
-  console.log('🔵 [PROFESSIONAL] Respuesta recibida de Gemini');
-
   // 6. Validar que los IDs existan en el closet filtrado (que es lo que ve Gemini)
   const topExists = filteredCloset.find(item => item.id === parsed.top_id);
   const bottomExists = filteredCloset.find(item => item.id === parsed.bottom_id);
   const shoesExists = filteredCloset.find(item => item.id === parsed.shoes_id);
 
-  console.log('🔵 [PROFESSIONAL] Validando IDs:', {
-    top_id: parsed.top_id,
-    topExists: !!topExists,
-    bottom_id: parsed.bottom_id,
-    bottomExists: !!bottomExists,
-    shoes_id: parsed.shoes_id,
-    shoesExists: !!shoesExists
-  });
-
   if (!topExists || !bottomExists || !shoesExists) {
-    console.error('🔴 [PROFESSIONAL] IDs inválidos. Parsed:', parsed);
     throw new Error('El modelo generó IDs inválidos. Intenta de nuevo.');
   }
 

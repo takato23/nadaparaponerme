@@ -11,7 +11,7 @@
  * - Premium glassmorphism design
  */
 
-import React, { useState, Suspense, lazy } from 'react';
+import React, { useState, Suspense, lazy, startTransition } from 'react';
 import type { Collection } from '../../types/closet';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -99,23 +99,25 @@ export default function ClosetCollections({
 
   const handleDeleteCollectionClick = (collection: Collection) => {
     if (collection.isDefault) return;
-    setDeleteConfirm({ isOpen: true, collection });
+    startTransition(() => setDeleteConfirm({ isOpen: true, collection }));
   };
 
   const handleConfirmDelete = () => {
     if (deleteConfirm.collection) {
       onDeleteCollection(deleteConfirm.collection.id);
-      setDeleteConfirm({ isOpen: false, collection: null });
+      startTransition(() => setDeleteConfirm({ isOpen: false, collection: null }));
     }
   };
 
   const openEditDialog = (collection: Collection) => {
     if (collection.isDefault) return;
 
-    setEditingCollection(collection);
-    setNewCollectionName(collection.name);
-    setSelectedColor(collection.color);
-    setSelectedIcon(collection.icon || ICON_OPTIONS[0]);
+    startTransition(() => {
+      setEditingCollection(collection);
+      setNewCollectionName(collection.name);
+      setSelectedColor(collection.color);
+      setSelectedIcon(collection.icon || ICON_OPTIONS[0]);
+    });
   };
 
   return (

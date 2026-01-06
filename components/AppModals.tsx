@@ -23,7 +23,7 @@ const OutfitDetailView = lazy(() => import('./OutfitDetailView'));
 const GenerateFitViewImproved = lazy(() => import('../src/components/GenerateFitViewImproved'));
 const FitResultViewImproved = lazy(() => import('../src/components/FitResultViewImproved'));
 const FitResultView = lazy(() => import('./FitResultView'));
-const VirtualTryOnView = lazy(() => import('./VirtualTryOnView'));
+// VirtualTryOnView removed - consolidated into PhotoshootStudio
 const ShareOutfitView = lazy(() => import('./ShareOutfitView'));
 const ShareItemView = lazy(() => import('./ShareItemView'));
 const SortOptionsView = lazy(() => import('./SortOptionsView'));
@@ -40,7 +40,7 @@ const ConfirmDeleteModal = lazy(() => import('./ui/ConfirmDeleteModal'));
 const ClosetAnalyticsView = lazy(() => import('./ClosetAnalyticsView'));
 const ColorPaletteView = lazy(() => import('./ColorPaletteView'));
 const TopVersatileView = lazy(() => import('./TopVersatileView'));
-const FashionChatViewImproved = lazy(() => import('./FashionChatViewImproved'));
+const AIStylistView = lazy(() => import('./AIStylistView'));
 const WeatherOutfitView = lazy(() => import('./WeatherOutfitView'));
 const WeeklyPlannerView = lazy(() => import('./WeeklyPlannerView'));
 const LookbookCreatorView = lazy(() => import('./LookbookCreatorView'));
@@ -65,6 +65,7 @@ const ProfessionalStyleWizardView = lazy(() => import('./ProfessionalStyleWizard
 const OutfitGenerationTestingPlayground = lazy(() => import('../src/components/OutfitGenerationTestingPlayground'));
 const AestheticPlayground = lazy(() => import('./AestheticPlayground'));
 const LiquidMorphDemo = lazy(() => import('./LiquidMorphDemo'));
+const DigitalTwinSetup = lazy(() => import('./digital-twin/DigitalTwinSetup'));
 
 // Types for modal state
 interface ModalState {
@@ -101,6 +102,7 @@ interface ModalState {
   showFeatureLocked: boolean;
   showProfessionalWizard: boolean;
   showMigrationModal: boolean;
+  showDigitalTwinSetup: boolean;
   selectedItemId: string | null;
   selectedOutfitId: string | null;
   selectedItemForBrandRecognition: ClothingItem | null;
@@ -158,6 +160,7 @@ interface AppModalsProps {
     setShowFeatureLocked: (v: boolean) => void;
     setShowProfessionalWizard: (v: boolean) => void;
     setShowMigrationModal: (v: boolean) => void;
+    setShowDigitalTwinSetup: (v: boolean) => void;
     setSelectedItemId: (v: string | null) => void;
     setSelectedOutfitId: (v: string | null) => void;
     setSelectedItemForBrandRecognition: (v: ClothingItem | null) => void;
@@ -234,6 +237,8 @@ interface AppModalsProps {
     onShareItem: (item: ClothingItem) => void;
     onConfirmShareItem: (friendIds: string[]) => void;
     onAddToClosetFromCamera: (imageDataUrl: string, metadata: ClothingItemMetadata) => Promise<void>;
+    onAddBorrowedItems: (items: ClothingItem[]) => void;
+    onTryBorrowedItems: (items: ClothingItem[]) => void;
 
     // Outfits
     onGenerateFit: (prompt: string, mood?: string, category?: string) => void;
@@ -339,14 +344,13 @@ export const AppModals: React.FC<AppModalsProps> = ({
   handlers
 }) => {
   // Use inventory map for O(1) lookups
-  const { getItem, getOutfitItems, hasAllOutfitItems, inventory } = useInventoryMap(
+  const { getItem } = useInventoryMap(
     closet,
     modals.borrowedItems
   );
 
   const selectedItem = modals.selectedItemId ? getItem(modals.selectedItemId) : undefined;
   const selectedOutfit = savedOutfits.find(o => o.id === modals.selectedOutfitId);
-  const virtualTryOnItems = getOutfitItems(fitResult);
 
   // Get outfit items for sharing
   const outfitToShareItems = modals.outfitToShare ? {
@@ -487,44 +491,7 @@ export const AppModals: React.FC<AppModalsProps> = ({
         </Suspense>
       )}
 
-      {/* Virtual Try-On */}
-      {modals.showVirtualTryOn && virtualTryOnItems && (
-        <>
-          {!hasAllOutfitItems(fitResult) ? (
-            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4 animate-fade-in">
-              <div className="bg-white dark:bg-gray-900 rounded-3xl p-6 max-w-md w-full">
-                <div className="text-center">
-                  <span className="material-symbols-outlined text-red-500 text-6xl mb-4">error</span>
-                  <h2 className="text-2xl font-bold text-text-primary dark:text-gray-200 mb-2">
-                    Items no encontrados
-                  </h2>
-                  <p className="text-text-secondary dark:text-gray-400 mb-6">
-                    No se pudieron encontrar todas las prendas del outfit en tu closet.
-                    {!virtualTryOnItems.top && <><br />• Top faltante</>}
-                    {!virtualTryOnItems.bottom && <><br />• Bottom faltante</>}
-                    {!virtualTryOnItems.shoes && <><br />• Zapatos faltantes</>}
-                  </p>
-                  <button
-                    onClick={() => modals.setShowVirtualTryOn(false)}
-                    className="w-full py-3 rounded-xl bg-primary text-white font-semibold hover:bg-primary/90 transition-all active:scale-95"
-                  >
-                    Entendido
-                  </button>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <VirtualTryOnView
-              onBack={() => modals.setShowVirtualTryOn(false)}
-              outfitItems={{
-                top: virtualTryOnItems.top!,
-                bottom: virtualTryOnItems.bottom!,
-                shoes: virtualTryOnItems.shoes!
-              }}
-            />
-          )}
-        </>
-      )}
+      {/* VirtualTryOnView removed - consolidated into PhotoshootStudio */}
 
       {/* Share Modals */}
       {modals.itemToShare && (
@@ -585,7 +552,8 @@ export const AppModals: React.FC<AppModalsProps> = ({
           <FriendProfileView
             friend={modals.viewingFriend}
             onClose={() => modals.setViewingFriend(null)}
-            onGenerateWithItems={handlers.onStartStylistWithBorrowedItems}
+            onAddBorrowedItems={handlers.onAddBorrowedItems}
+            onTryBorrowedItems={handlers.onTryBorrowedItems}
           />
         </Suspense>
       )}
@@ -616,7 +584,7 @@ export const AppModals: React.FC<AppModalsProps> = ({
       {/* Chat */}
       <AnimatePresence>
         {modals.showChat && currentConversation && (
-          <FashionChatViewImproved
+          <AIStylistView
             key="chat-modal"
             closet={closet}
             onClose={() => modals.setShowChat(false)}
@@ -782,6 +750,19 @@ export const AppModals: React.FC<AppModalsProps> = ({
           onClose={() => modals.setShowCalendarSync(false)}
           onViewOutfit={handlers.onViewOutfitFromCalendar}
         />
+      )}
+
+      {/* Digital Twin Setup */}
+      {modals.showDigitalTwinSetup && (
+        <Suspense fallback={<LazyLoader type="modal" />}>
+          <DigitalTwinSetup
+            onComplete={(profile) => {
+              localStorage.setItem('ojodeloca-digital-twin', JSON.stringify(profile));
+              modals.setShowDigitalTwinSetup(false);
+            }}
+            onClose={() => modals.setShowDigitalTwinSetup(false)}
+          />
+        </Suspense>
       )}
 
       {/* Activity Feed */}

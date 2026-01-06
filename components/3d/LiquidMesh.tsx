@@ -109,7 +109,7 @@ export const LiquidMesh: React.FC<LiquidMeshProps> = ({ section }) => {
         } else if (section === 'landing') {
             const scroll = progress;
             let targetDistortion = 0.3;
-            let targetColor = new THREE.Color('#FF9A9E');
+            const targetColor = new THREE.Color('#FF9A9E');
             let targetRoughness = 0.2;
 
             if (scroll < 0.25) {

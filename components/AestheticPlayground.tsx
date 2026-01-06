@@ -1,13 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, useMotionValue, useTransform, useSpring, AnimatePresence } from 'framer-motion';
 import { useTheme } from '../context/ThemeContext';
+import { Eye3DPrototype } from './Eye3D';
 
 interface AestheticPlaygroundProps {
     onClose: () => void;
 }
 
 export default function AestheticPlayground({ onClose }: AestheticPlaygroundProps) {
-    const [activeTab, setActiveTab] = useState<'hero' | 'slots' | 'dock' | 'morph' | 'swipe' | 'board' | 'theme' | 'color' | 'weather' | 'packing' | 'analytics' | 'ar' | 'duel' | 'holo' | 'liquid-btn' | 'glass-modal' | 'cloth' | 'cursor' | 'neon' | 'mesh' | 'liquid-scroll' | 'closet-3d' | 'closet-peephole' | 'closet-magnetic' | 'closet-glass'>('closet-3d');
+    const [activeTab, setActiveTab] = useState<'hero' | 'slots' | 'dock' | 'morph' | 'swipe' | 'board' | 'theme' | 'color' | 'weather' | 'packing' | 'analytics' | 'ar' | 'duel' | 'holo' | 'liquid-btn' | 'glass-modal' | 'cloth' | 'cursor' | 'neon' | 'mesh' | 'liquid-scroll' | 'closet-3d' | 'closet-peephole' | 'closet-magnetic' | 'closet-glass' | 'eye'>('eye');
 
 
     return (
@@ -33,6 +34,7 @@ export default function AestheticPlayground({ onClose }: AestheticPlaygroundProp
                 <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 gap-2 mb-8 w-full">
                     {[
                         // Closet-Specific Prototypes (New)
+                        { id: 'eye', label: 'Ojo 3D', icon: 'visibility', category: 'featured' },
                         { id: 'closet-3d', label: '3D Grid', icon: 'view_in_ar', category: 'closet' },
                         { id: 'closet-peephole', label: 'Peephole', icon: 'circle', category: 'closet' },
                         { id: 'closet-magnetic', label: 'Magnetic', icon: 'auto_awesome', category: 'closet' },
@@ -71,6 +73,7 @@ export default function AestheticPlayground({ onClose }: AestheticPlaygroundProp
                                     : 'text-text-secondary hover:bg-gray-50 dark:hover:bg-slate-800'
                                 }
                 ${tab.category === 'closet' ? 'ring-2 ring-purple-500/50' : ''}
+                ${tab.category === 'featured' ? 'ring-2 ring-amber-500/50' : ''}
               `}
                         >
                             <span className="material-symbols-outlined text-base">{tab.icon}</span>
@@ -90,6 +93,9 @@ export default function AestheticPlayground({ onClose }: AestheticPlaygroundProp
                     }}
                 >
                     <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: 'radial-gradient(circle, currentColor 1px, transparent 1px)', backgroundSize: '24px 24px' }}></div>
+
+                    {/* Featured - Eye3D */}
+                    {activeTab === 'eye' && <Eye3DPrototype />}
 
                     {/* Closet-Specific Prototypes */}
                     {activeTab === 'closet-3d' && <Closet3DGridPrototype />}

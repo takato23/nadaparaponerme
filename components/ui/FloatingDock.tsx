@@ -30,8 +30,8 @@ function DockItem({ icon, label, isActive, onClick, isCamera }: DockItemProps) {
             >
                 <motion.div
                     animate={{
-                        scale: isHovered ? 1.15 : 1,
-                        y: isHovered ? -8 : 0,
+                        scale: isHovered ? 1.08 : 1,
+                        y: isHovered ? -3 : 0,
                     }}
                     transition={{ type: "spring", stiffness: 400, damping: 25, mass: 0.8 }}
                     className="
@@ -158,14 +158,18 @@ export function FloatingDock({ onCameraClick }: { onCameraClick?: () => void }) 
     };
 
     return (
-        <div className="fixed bottom-6 left-0 right-0 z-50 flex justify-center pointer-events-none px-4">
+        <div
+            className="fixed left-0 right-0 z-50 flex justify-center pointer-events-none px-4"
+            style={{ bottom: 'calc(1rem + env(safe-area-inset-bottom))' }}
+        >
             <div className="
         flex items-end gap-2 sm:gap-3 px-4 sm:px-6 py-3 sm:py-4
         liquid-glass
-        shadow-[0_20px_40px_-10px_rgba(0,0,0,0.2)]
+        shadow-[0_20px_40px_-10px_rgba(0,0,0,0.15)] dark:shadow-[0_20px_40px_-10px_rgba(0,0,0,0.4)]
         pointer-events-auto
         max-w-full
-      ">
+        transition-all duration-300
+      " style={{ ['--glass-opacity' as any]: 0.35, ['--glass-blur' as any]: '26px' }}>
                 {items.map((item) => (
                     <DockItem
                         key={item.id}

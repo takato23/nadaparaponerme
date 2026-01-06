@@ -14,6 +14,8 @@ interface HomeQuickActionsImprovedProps {
  * - Diseño responsive mejorado
  */
 export const HomeQuickActionsImproved: React.FC<HomeQuickActionsImprovedProps> = ({ actions }) => {
+  const gridColsClass = actions.length >= 6 ? 'grid-cols-3' : 'grid-cols-2';
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -27,8 +29,8 @@ export const HomeQuickActionsImproved: React.FC<HomeQuickActionsImprovedProps> =
       <div className="absolute top-0 left-0 w-full h-0.5 bg-gradient-to-r from-transparent via-primary/20 to-transparent" />
 
       {/* Header */}
-      <div className="flex items-center justify-between mb-4 md:mb-5 px-1">
-        <h2 className="font-serif font-bold text-text-primary dark:text-gray-100 text-lg md:text-xl flex items-center gap-2">
+      <div className="flex items-center justify-between mb-3 md:mb-4 px-1">
+        <h2 className="font-serif font-bold text-text-primary dark:text-gray-100 text-base md:text-lg flex items-center gap-2">
           <span className="material-symbols-outlined text-primary text-xl md:text-2xl" aria-hidden="true">
             bolt
           </span>
@@ -38,7 +40,7 @@ export const HomeQuickActionsImproved: React.FC<HomeQuickActionsImprovedProps> =
 
       {/* Actions Grid */}
       <div
-        className="grid grid-cols-4 gap-2 sm:gap-3 md:gap-4"
+        className={`grid ${gridColsClass} sm:grid-cols-3 gap-2 sm:gap-3 md:gap-4`}
         role="toolbar"
         aria-label="Botones de acceso rápido"
       >
@@ -49,7 +51,7 @@ export const HomeQuickActionsImproved: React.FC<HomeQuickActionsImprovedProps> =
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: index * 0.05 + 0.2 }}
             onClick={action.onClick}
-            className="flex flex-col items-center gap-1.5 sm:gap-2 md:gap-3 group focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-xl"
+            className="flex flex-col items-center gap-1.5 sm:gap-2 md:gap-3 group focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-2xl"
             aria-label={action.ariaLabel}
           >
             <motion.div
@@ -80,7 +82,7 @@ export const HomeQuickActionsImproved: React.FC<HomeQuickActionsImprovedProps> =
               </motion.span>
             </motion.div>
 
-            <span className="text-[10px] sm:text-xs md:text-sm font-bold text-text-secondary dark:text-gray-400 group-hover:text-text-primary dark:group-hover:text-gray-200 transition-colors text-center leading-tight px-0.5 line-clamp-1">
+            <span className="text-[11px] sm:text-xs md:text-sm font-semibold text-text-secondary dark:text-gray-400 group-hover:text-text-primary dark:group-hover:text-gray-200 transition-colors text-center leading-tight px-0.5 line-clamp-1">
               {action.label}
             </span>
           </motion.button>

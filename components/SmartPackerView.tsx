@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { ClothingItem } from '../types';
 import { SwipeableModal } from '../src/components/ui/SwipeableModal';
+import { getCreditStatus } from '../services/usageTrackingService';
 
 interface SmartPackerViewProps {
   closet: ClothingItem[];
@@ -28,6 +29,9 @@ const SmartPackerView: React.FC<SmartPackerViewProps> = ({ closet, onClose }) =>
   const [activities, setActivities] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [items, setItems] = useState<PackingItem[]>([]);
+
+  // Credits status
+  const creditsStatus = useMemo(() => getCreditStatus(), [items.length]);
 
   // Mock generation for now - in real app, call AI service
   const handleGenerate = async () => {
@@ -98,14 +102,29 @@ const SmartPackerView: React.FC<SmartPackerViewProps> = ({ closet, onClose }) =>
       onClose={onClose}
       title={step === 'form' ? 'Planifica tu Viaje' : `Viaje a ${destination}`}
       headerActions={
-        step === 'list' && (
-          <button
-            onClick={() => setStep('form')}
-            className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline"
-          >
-            Editar
-          </button>
-        )
+        <div className="flex items-center gap-3">
+          {/* Credits Indicator */}
+          <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg ${
+            creditsStatus.remaining <= 2
+              ? 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
+              : 'bg-gray-100 dark:bg-gray-800'
+          }`}>
+            <span className="material-symbols-rounded text-gray-500 text-sm">toll</span>
+            <span className={`text-xs font-medium ${
+              creditsStatus.remaining <= 2 ? 'text-red-600 dark:text-red-400' : 'text-gray-600 dark:text-gray-300'
+            }`}>
+              {creditsStatus.limit === -1 ? '∞' : `${creditsStatus.remaining}/${creditsStatus.limit}`}
+            </span>
+          </div>
+          {step === 'list' && (
+            <button
+              onClick={() => setStep('form')}
+              className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline"
+            >
+              Editar
+            </button>
+          )}
+        </div>
       }
     >
       <div className="space-y-6">

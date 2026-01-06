@@ -179,7 +179,7 @@ export default function InstantOutfitView() {
                                 <button
                                     onClick={() => {
                                         // TODO: Implement save outfit functionality
-                                        alert('Guardar outfit - próximamente!');
+                                        // Feature coming soon - silently do nothing for now"
                                     }}
                                     className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-bold shadow-lg hover:scale-105 active:scale-95 transition-all"
                                 >

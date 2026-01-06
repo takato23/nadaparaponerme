@@ -721,7 +721,6 @@ export async function generateOutfitEnhancedV3(
 
     // Auto-detect or use override
     const occasionType = occasionTypeOverride || detectOccasionType(userPrompt);
-    console.log(`[v3] Detected occasion type: ${occasionType}`);
 
     const systemInstruction = buildTemplatedSystemInstruction(
         occasionType,

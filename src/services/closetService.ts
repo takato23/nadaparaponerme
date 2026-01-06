@@ -62,6 +62,7 @@ function convertToLegacyFormat(item: ClothingItemRow): LegacyClothingItem {
       seasons: safeParseSeasons(item.ai_metadata?.seasons),
       description: item.notes || undefined,
     },
+    status: (item.status as any) || 'owned', // Map status field, default to 'owned'
   };
 }
 

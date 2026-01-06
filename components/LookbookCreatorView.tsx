@@ -1,9 +1,10 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import toast from 'react-hot-toast';
 import type { ClothingItem, Lookbook, LookbookTheme } from '../types';
 import { generateLookbook } from '../src/services/aiService';
 import Loader from './Loader';
 import { Card } from './ui/Card';
+import { getCreditStatus } from '../services/usageTrackingService';
 
 interface LookbookCreatorViewProps {
   closet: ClothingItem[];
@@ -20,6 +21,9 @@ const LookbookCreatorView = ({ closet, onClose }: LookbookCreatorViewProps) => {
   const [error, setError] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const lookbookRef = useRef<HTMLDivElement>(null);
+
+  // Credits status
+  const credits = useMemo(() => getCreditStatus(), [lookbook]);
 
   const themes: { id: LookbookTheme; label: string; icon: string; description: string }[] = [
     { id: 'office', label: 'Oficina', icon: 'work', description: 'Looks profesionales para el trabajo' },
@@ -145,15 +149,30 @@ const LookbookCreatorView = ({ closet, onClose }: LookbookCreatorViewProps) => {
               {currentStep === 'result' && lookbook?.theme}
             </p>
           </div>
-          <Card
-            variant="glass"
-            padding="none"
-            rounded="full"
-            onClick={onClose}
-            className="w-10 h-10 flex items-center justify-center transition-transform active:scale-95 cursor-pointer"
-          >
-            <span className="material-symbols-outlined text-text-primary dark:text-gray-200">close</span>
-          </Card>
+          <div className="flex items-center gap-3">
+            {/* Credits Indicator */}
+            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg ${
+              credits.remaining <= 3
+                ? 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
+                : 'bg-gray-100 dark:bg-gray-800'
+            }`}>
+              <span className="material-symbols-rounded text-gray-500 text-sm">toll</span>
+              <span className={`text-xs font-medium ${
+                credits.remaining <= 3 ? 'text-red-600 dark:text-red-400' : 'text-gray-600 dark:text-gray-300'
+              }`}>
+                {credits.limit === -1 ? '∞' : credits.remaining}
+              </span>
+            </div>
+            <Card
+              variant="glass"
+              padding="none"
+              rounded="full"
+              onClick={onClose}
+              className="w-10 h-10 flex items-center justify-center transition-transform active:scale-95 cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-text-primary dark:text-gray-200">close</span>
+            </Card>
+          </div>
         </div>
 
         {/* Content */}

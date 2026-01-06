@@ -235,6 +235,90 @@ const ActivityCard = ({
           </div>
         );
 
+      case 'borrow_requested':
+        return (
+          <div className="mt-3 p-4 rounded-xl bg-gradient-to-r from-teal-500/10 to-cyan-500/10 border border-teal-200 dark:border-teal-800">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-full bg-teal-100 dark:bg-teal-900 flex items-center justify-center flex-shrink-0">
+                <span className="material-symbols-outlined text-xl text-teal-600 dark:text-teal-400">
+                  swap_horiz
+                </span>
+              </div>
+              <div className="flex-1">
+                <p className="text-text-primary dark:text-gray-200 font-medium">
+                  Solicitud de préstamo
+                </p>
+                <p className="text-sm text-text-secondary dark:text-gray-400 mt-1">
+                  {activity.caption || 'Quiere prestarse una prenda tuya'}
+                </p>
+              </div>
+            </div>
+          </div>
+        );
+
+      case 'borrow_approved':
+        return (
+          <div className="mt-3 p-4 rounded-xl bg-gradient-to-r from-green-500/10 to-emerald-500/10 border border-green-200 dark:border-green-800">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center flex-shrink-0">
+                <span className="material-symbols-outlined text-xl text-green-600 dark:text-green-400">
+                  check_circle
+                </span>
+              </div>
+              <div className="flex-1">
+                <p className="text-text-primary dark:text-gray-200 font-medium">
+                  Préstamo aprobado
+                </p>
+                <p className="text-sm text-text-secondary dark:text-gray-400 mt-1">
+                  {activity.caption || 'Tu solicitud fue aceptada'}
+                </p>
+              </div>
+            </div>
+          </div>
+        );
+
+      case 'borrow_declined':
+        return (
+          <div className="mt-3 p-4 rounded-xl bg-gradient-to-r from-red-500/10 to-orange-500/10 border border-red-200 dark:border-red-800">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900 flex items-center justify-center flex-shrink-0">
+                <span className="material-symbols-outlined text-xl text-red-600 dark:text-red-400">
+                  cancel
+                </span>
+              </div>
+              <div className="flex-1">
+                <p className="text-text-primary dark:text-gray-200 font-medium">
+                  Préstamo rechazado
+                </p>
+                <p className="text-sm text-text-secondary dark:text-gray-400 mt-1">
+                  {activity.caption || 'La solicitud no fue aceptada'}
+                </p>
+              </div>
+            </div>
+          </div>
+        );
+
+      case 'item_returned':
+        return (
+          <div className="mt-3 p-4 rounded-xl bg-gradient-to-r from-blue-500/10 to-indigo-500/10 border border-blue-200 dark:border-blue-800">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center flex-shrink-0">
+                <span className="material-symbols-outlined text-xl text-blue-600 dark:text-blue-400">
+                  assignment_return
+                </span>
+              </div>
+              <div className="flex-1">
+                <p className="text-text-primary dark:text-gray-200 font-medium">
+                  Prenda devuelta
+                </p>
+                <p className="text-sm text-text-secondary dark:text-gray-400 mt-1">
+                  {activity.caption || 'La prenda fue devuelta'}
+                </p>
+              </div>
+            </div>
+          </div>
+        );
+
       default:
         return null;
     }

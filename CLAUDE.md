@@ -8,7 +8,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Development Commands
 
-### Running the Application
 ```bash
 # Install dependencies
 npm install
@@ -20,30 +19,71 @@ npm run dev
 npm run build
 
 # Preview production build
-npm preview
+npm run preview
+
+# Run all unit tests (Vitest + jsdom)
+npm run test
+
+# Run single test file
+npx vitest run tests/usageTrackingService.test.ts
+
+# Run E2E tests (Playwright, requires dev server on localhost:5173)
+npx playwright test
+
+# Lint
+npx eslint .
+
+# Type check (noEmit mode)
+npx tsc --noEmit
+
+# Verify setup
+npm run verify-setup
 ```
 
 ### Backend Setup (Supabase)
 ```bash
-# Deploy Edge Functions
-supabase functions deploy analyze-clothing
-supabase functions deploy generate-outfit
-supabase functions deploy generate-packing-list
-
-# Set secrets for Edge Functions
-supabase secrets set GEMINI_API_KEY=your_api_key
+# Link to remote project
+supabase link --project-ref your-project-ref
 
 # Run migrations
 supabase db push
+
+# Deploy ALL Edge Functions
+supabase functions deploy analyze-clothing
+supabase functions deploy generate-outfit
+supabase functions deploy generate-packing-list
+supabase functions deploy generate-image
+supabase functions deploy generate-fashion-image
+supabase functions deploy virtual-try-on
+supabase functions deploy shopping-assistant
+supabase functions deploy process-payment
+supabase functions deploy create-payment-preference
+supabase functions deploy mercadopago-webhook
+
+# Set secrets for Edge Functions
+supabase secrets set GEMINI_API_KEY=your_api_key
+supabase secrets set MERCADOPAGO_ACCESS_TOKEN=your_token
+supabase secrets set SUPABASE_SERVICE_ROLE_KEY=your_key
+
+# Or use the helper script
+./scripts/fix-backend-secrets.sh
 ```
 
-See `SETUP.md` for complete backend configuration guide.
+See `docs/setup/SETUP.md` for complete backend configuration guide.
 
 ### Environment Setup
-Copy `.env.local.example` to `.env.local` and configure:
-- `GEMINI_API_KEY`: Your Gemini AI API key (for Edge Functions)
+Copy `.env.example` to `.env.local` and configure:
 - `VITE_SUPABASE_URL`: Your Supabase project URL
 - `VITE_SUPABASE_ANON_KEY`: Your Supabase anon key
+- `VITE_MERCADOPAGO_PUBLIC_KEY`: MercadoPago public key (for payments)
+- `VITE_V1_SAFE_MODE`: Set to `true` for conservative first launch
+- `VITE_PAYMENTS_ENABLED`: Set to `false` to disable payments
+
+Edge Function secrets (set via `supabase secrets set`):
+- `GEMINI_API_KEY`: Your Gemini AI API key
+- `MERCADOPAGO_ACCESS_TOKEN`: MercadoPago access token
+- `SUPABASE_SERVICE_ROLE_KEY`: Service role key for admin operations
+- `APP_URL`: Production URL for payment callbacks (e.g., `https://tudominio.com`)
 
 ## Architecture
 
@@ -91,15 +131,27 @@ SavedOutfit (persisted outfit)
 ```
 
 ### Component Organization
-- **Root level**: Main App entry point, top-level views (unused standalone views like `OutfitDetailView.tsx`, `FitResultView.tsx`)
-- **`components/`**: All reusable components and view layers
+- **Root level**: `App.tsx` (main entry), `types.ts` (frontend types)
+- **`components/`**: All view and utility components
   - View components: `*View.tsx` (full-screen modal/page components)
-  - Utility components: `ClosetGrid.tsx`, `TagEditor.tsx`, `Loader.tsx`
-  - **`components/icons/`**: Custom Lucide React icon wrappers
-- **`hooks/`**: Custom React hooks (`useLocalStorage`, `useTheme`)
-- **`services/`**: AI service layer (Gemini API integration)
+  - **`components/closet/`**: Closet-specific components (grid, sidebar, modals)
+  - **`components/home/`**: Home view feature cards and widgets
+  - **`components/ui/`**: Shared UI primitives (FloatingDock, modals, tooltips)
+  - **`components/3d/`**: Three.js/React Three Fiber components
+- **`hooks/`**: Custom React hooks (`useLocalStorage`, `useTheme`, `useUserCredits`)
+- **`services/`** (root): AI services, Gemini integration, community features
+- **`src/services/`**: Supabase CRUD services, payment/subscription services
+- **`src/lib/supabase.ts`**: Supabase client singleton with auth, storage helpers
+- **`src/types/api.ts`**: Database TypeScript types (auto-generated from Supabase)
+- **`src/routes.tsx`**: Route path constants (Spanish URLs like `/armario`, `/perfil`)
 - **`data/`**: Static data files (`sampleData.ts`, `communityData.ts`)
 - **`contexts/`**: React context providers (`ThemeContext.tsx`)
+
+### Path Alias
+The project uses `@/` as an alias to the project root (configured in `vite.config.ts`):
+```typescript
+import { SomeComponent } from '@/components/SomeComponent';
+```
 
 ### Navigation & View System
 The app uses a **single-page application** pattern with:
@@ -184,6 +236,10 @@ All AI operations proxied through Supabase Edge Functions for security:
 - **analyze-clothing**: Gemini AI vision analysis of clothing images
 - **generate-outfit**: AI outfit generation from user's closet
 - **generate-packing-list**: Smart travel packing suggestions
+- **generate-image** / **generate-fashion-image**: AI image generation (Imagen)
+- **virtual-try-on**: Virtual outfit visualization on user photos
+- **shopping-assistant**: Conversational shopping recommendations
+- **process-payment** / **create-payment-preference** / **mercadopago-webhook**: Payment processing (MercadoPago)
 
 ### Authentication
 - Supabase Auth with email/password
@@ -266,3 +322,17 @@ See `CHANGELOG.md` for complete feature documentation and implementation details
 - **Free tier optimization**: Designed to work within Supabase free tier limits (500MB DB, 1GB storage, 2GB bandwidth/month)
 - **Error handling**: Supabase service layers include fallback for missing tables (returns empty arrays instead of throwing)
 - **Migration execution**: All database migrations must be applied via `supabase db push` before features work
+
+## Service Layer Split
+
+The codebase has two service directories:
+
+| Directory | Purpose | Examples |
+|-----------|---------|----------|
+| `services/` (root) | AI/Gemini services, social features | `geminiService.ts`, `communityService.ts`, `weatherService.ts` |
+| `src/services/` | Supabase CRUD, payments, subscriptions | `closetService.ts`, `paymentService.ts`, `authService.ts` |
+
+When adding new features:
+- AI generation logic → `services/geminiService.ts` or new file in `services/`
+- Database CRUD → new file in `src/services/`
+- Edge Function calls → `src/services/edgeFunctionClient.ts`

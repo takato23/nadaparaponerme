@@ -14,6 +14,7 @@ import React, { useState } from 'react';
 import type { ViewMode, ExtendedSortOption, SortProperty } from '../../types/closet';
 import { getSortLabel } from '../../utils/closetUtils';
 import { motion, AnimatePresence } from 'framer-motion';
+import WardrobeGeneratorButton from './WardrobeGeneratorButton';
 
 interface ClosetToolbarProps {
   // Search
@@ -36,6 +37,7 @@ interface ClosetToolbarProps {
 
   // Actions
   onAddItem?: () => void;
+  onRefresh?: () => void;
   onToggleSelection?: () => void;
 
   // Selection state
@@ -75,6 +77,7 @@ export default function ClosetToolbar({
   onViewModeChange,
   onPresentationMode,
   onAddItem,
+  onRefresh,
   onToggleSelection,
   isSelectionMode = false,
   selectedCount = 0,
@@ -143,12 +146,7 @@ export default function ClosetToolbar({
   // Normal Toolbar
   return (
     <div
-      className="space-y-3 px-4 py-3 sticky top-0 z-20 border-b border-white/10 transition-all duration-300"
-      style={{
-        backdropFilter: `blur(var(--glass-blur)) saturate(var(--glass-saturation))`,
-        WebkitBackdropFilter: `blur(var(--glass-blur)) saturate(var(--glass-saturation))`,
-        backgroundColor: `rgba(255, 255, 255, var(--glass-opacity))`
-      }}
+      className="space-y-3 px-4 py-3 sticky top-0 z-20 border-b border-white/10 dark:border-white/5 transition-all duration-300 bg-white/70 dark:bg-gray-900/80 backdrop-blur-xl"
     >
       {/* Top Row: Search + Actions */}
       <div className="flex items-center gap-3">
@@ -379,6 +377,11 @@ export default function ClosetToolbar({
             <span>Seleccionar</span>
           </button>
         )}
+
+        {/* Wardrobe Generator (Dev/Test) */}
+        <div className="hidden md:block">
+          <WardrobeGeneratorButton onGenerationComplete={onRefresh} />
+        </div>
 
         {/* Item Count */}
         <div className="text-xs font-medium text-text-secondary/70 dark:text-gray-500 ml-auto md:ml-0 px-2">

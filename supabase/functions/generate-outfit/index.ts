@@ -53,8 +53,44 @@ serve(async (req) => {
       );
     }
 
+    // Optional closed beta allowlist (protects Google credits)
+    const allowlistRaw = Deno.env.get('BETA_ALLOWLIST_EMAILS');
+    if (allowlistRaw) {
+      const email = (user.email || '').toLowerCase().trim();
+      const allowed = allowlistRaw
+        .split(',')
+        .map((e) => e.toLowerCase().trim())
+        .filter(Boolean);
+      if (!email || !allowed.includes(email)) {
+        return new Response(
+          JSON.stringify({ error: 'Beta cerrada: tu cuenta no está habilitada todavía.' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+
     // Parse request body
     const { prompt, preferences } = await req.json();
+
+    // Enforce quota server-side (prevents bypassing client checks)
+    const { data: canGenerate, error: canGenerateError } = await supabase.rpc('can_user_generate_outfit', {
+      p_user_id: user.id,
+    });
+
+    if (canGenerateError) {
+      console.error('Error checking generation quota:', canGenerateError);
+      return new Response(
+        JSON.stringify({ error: 'Error al verificar tu límite. Intentá de nuevo.' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (!canGenerate) {
+      return new Response(
+        JSON.stringify({ error: 'Has alcanzado tu límite de generaciones. Upgradeá tu plan para continuar.' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     // Get user's clothing items
     const { data: items, error: itemsError } = await supabase
@@ -117,6 +153,16 @@ serve(async (req) => {
     });
 
     const outfit = JSON.parse(response.text);
+
+    // Increment usage only after a successful generation
+    const { data: incremented, error: incrementError } = await supabase.rpc('increment_ai_generation_usage', {
+      p_user_id: user.id,
+    });
+    if (incrementError) {
+      console.error('Failed to increment usage:', incrementError);
+    } else if (!incremented) {
+      console.warn('Usage increment returned false (limit reached race?)');
+    }
 
     return new Response(JSON.stringify(outfit), {
       status: 200,

@@ -25,7 +25,6 @@ export async function fetchActivityFeed(
   try {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
-      console.log('User not authenticated - returning empty feed');
       return [];
     }
 
@@ -85,7 +84,11 @@ export function getActivityIcon(activityType: ActivityType): string {
     capsule_created: 'inventory_2',
     style_milestone: 'stars',
     lookbook_created: 'photo_library',
-    rating_given: 'star'
+    rating_given: 'star',
+    borrow_requested: 'swap_horiz',
+    borrow_approved: 'check_circle',
+    borrow_declined: 'cancel',
+    item_returned: 'assignment_return'
   };
 
   return iconMap[activityType] || 'notifications';
@@ -103,7 +106,11 @@ export function getActivityDescription(activity: ActivityFeedItem): string {
     capsule_created: 'creó una cápsula de armario',
     style_milestone: 'alcanzó un hito de estilo',
     lookbook_created: 'creó un lookbook',
-    rating_given: 'calificó un outfit'
+    rating_given: 'calificó un outfit',
+    borrow_requested: 'te pidió prestada una prenda',
+    borrow_approved: 'aprobó tu solicitud de préstamo',
+    borrow_declined: 'rechazó tu solicitud de préstamo',
+    item_returned: 'devolvió una prenda prestada'
   };
 
   return descriptionMap[activity.activity_type] || 'realizó una actividad';

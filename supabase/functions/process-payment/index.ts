@@ -14,7 +14,7 @@ serve(async (req) => {
 
     try {
         const supabaseUrl = Deno.env.get('SUPABASE_URL');
-        const supabaseServiceKey = Deno.env.get('SERVICE_ROLE_KEY');
+        const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || Deno.env.get('SERVICE_ROLE_KEY');
 
         if (!supabaseUrl || !supabaseServiceKey) {
             throw new Error('Missing Supabase credentials');
@@ -31,9 +31,59 @@ serve(async (req) => {
             );
         }
 
-        // TODO: Verify payment with MercadoPago API using payment_id
-        // const mpAccessToken = Deno.env.get('MERCADOPAGO_ACCESS_TOKEN');
-        // ... verification logic ...
+        // Verify payment with MercadoPago API
+        const mpAccessToken = Deno.env.get('MERCADOPAGO_ACCESS_TOKEN');
+        if (!mpAccessToken) {
+            throw new Error('MERCADOPAGO_ACCESS_TOKEN not configured');
+        }
+
+        const paymentResponse = await fetch(
+            `https://api.mercadopago.com/v1/payments/${payment_id}`,
+            {
+                headers: {
+                    'Authorization': `Bearer ${mpAccessToken}`,
+                },
+            }
+        );
+
+        if (!paymentResponse.ok) {
+            const errorText = await paymentResponse.text();
+            console.error('MercadoPago API error:', errorText);
+            return new Response(
+                JSON.stringify({ error: 'No se pudo verificar el pago con MercadoPago' }),
+                { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+        }
+
+        const paymentData = await paymentResponse.json();
+        console.log('Payment verification:', JSON.stringify({
+            id: paymentData.id,
+            status: paymentData.status,
+            status_detail: paymentData.status_detail,
+            metadata: paymentData.metadata
+        }));
+
+        // Only process approved payments
+        if (paymentData.status !== 'approved') {
+            return new Response(
+                JSON.stringify({
+                    error: 'El pago no fue aprobado',
+                    payment_status: paymentData.status,
+                    status_detail: paymentData.status_detail
+                }),
+                { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+        }
+
+        // Verify metadata matches request (security check)
+        const metadataUserId = paymentData.metadata?.user_id || paymentData.external_reference?.split('_')[0];
+        if (metadataUserId && metadataUserId !== user_id) {
+            console.error('User ID mismatch:', { request: user_id, payment: metadataUserId });
+            return new Response(
+                JSON.stringify({ error: 'Error de seguridad: usuario no coincide' }),
+                { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+        }
 
         // Calculate period dates
         const now = new Date();
@@ -56,7 +106,7 @@ serve(async (req) => {
 
         // Reset usage metrics for the new period
         // Get plan limits (simplified for this function, ideally fetch from DB or config)
-        let limits = { ai_generations_per_month: 10 }; // Default Free
+        const limits = { ai_generations_per_month: 10 }; // Default Free
         if (subscription_tier === 'pro') limits.ai_generations_per_month = 100;
         if (subscription_tier === 'premium') limits.ai_generations_per_month = -1;
 
@@ -73,6 +123,24 @@ serve(async (req) => {
             });
 
         if (metricsError) throw metricsError;
+
+        // Update payment transaction status
+        const { error: txError } = await supabase
+            .from('payment_transactions')
+            .update({
+                status: 'approved',
+                metadata: {
+                    status_detail: paymentData.status_detail,
+                    date_approved: paymentData.date_approved,
+                    payment_method_id: paymentData.payment_method_id,
+                    processed_via: 'process-payment',
+                },
+            })
+            .eq('provider_transaction_id', String(payment_id));
+
+        if (txError) {
+            console.error('Error updating transaction (non-blocking):', txError);
+        }
 
         return new Response(
             JSON.stringify({ success: true, message: 'Subscription updated successfully' }),

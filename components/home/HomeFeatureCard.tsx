@@ -17,23 +17,23 @@ export const HomeFeatureCard = ({ feature, variant = 'default' }: HomeFeatureCar
 
     // Obtener estilo de badge si existe
     const badgeStyle = feature.badge ? BADGE_STYLES[feature.badge] : null;
+    const isFeatured = variant === 'featured';
 
     const card = (
         <button
             onClick={feature.onClick}
             className={`
                 relative w-full text-left overflow-hidden
-                bg-white dark:bg-slate-800/90
+                bg-white/80 dark:bg-slate-900/70 backdrop-blur-md
                 rounded-2xl
-                border border-gray-100 dark:border-slate-700/50
-                shadow-sm hover:shadow-lg
+                border border-white/60 dark:border-slate-700/50
+                shadow-soft hover:shadow-soft-lg
                 transition-all duration-300 ease-out
                 touch-manipulation
-                hover:-translate-y-1
+                hover:-translate-y-0.5
                 active:scale-[0.98]
-                ${variant === 'compact' ? 'p-3 h-[72px]' : ''}
-                ${variant === 'default' ? 'p-4 h-[100px]' : ''}
-                ${variant === 'featured' ? 'p-4 h-[100px]' : ''}
+                h-[104px] p-4
+                ${isFeatured ? 'ring-1 ring-primary/20' : ''}
                 group
             `}
         >
@@ -42,7 +42,7 @@ export const HomeFeatureCard = ({ feature, variant = 'default' }: HomeFeatureCar
 
             {/* Badge */}
             {badgeStyle && (
-                <div className={`absolute top-2 right-2 px-1.5 py-0.5 rounded-full text-[9px] font-bold ${badgeStyle.bg} ${badgeStyle.text} z-20`}>
+                <div className={`absolute top-2 right-2 px-2 py-0.5 rounded-full text-[10px] font-semibold ${badgeStyle.bg} ${badgeStyle.text} z-20 border border-white/60 dark:border-white/10 backdrop-blur-sm`}>
                     {badgeStyle.label}
                 </div>
             )}
@@ -65,7 +65,7 @@ export const HomeFeatureCard = ({ feature, variant = 'default' }: HomeFeatureCar
                 <div className="flex-1 min-w-0 flex flex-col justify-center">
                     <h3 className={`
                         font-bold text-text-primary dark:text-gray-100
-                        ${variant === 'compact' ? 'text-sm' : 'text-sm'}
+                        ${isFeatured ? 'text-base' : 'text-sm'}
                         leading-tight
                         group-hover:text-primary transition-colors
                         line-clamp-1
@@ -75,7 +75,7 @@ export const HomeFeatureCard = ({ feature, variant = 'default' }: HomeFeatureCar
                     <p className={`
                         text-text-secondary dark:text-gray-400
                         ${variant === 'compact' ? 'text-[11px] line-clamp-1' : 'text-xs line-clamp-2'}
-                        leading-snug font-medium opacity-80 mt-0.5
+                        leading-snug font-medium opacity-75 mt-0.5
                     `}>
                         {feature.description}
                     </p>

@@ -7,17 +7,41 @@
  * Includes subscription limits enforcement for AI generations.
  */
 
-import type { ClothingItem, ClothingItemMetadata, FitResult, PackingListResult } from '../../types';
+import type { ClothingItem, ClothingItemMetadata, FitResult, PackingListResult, GenerationPreset } from '../../types';
 import { getFeatureFlag } from '../config/features';
-import { logger } from '../utils/logger';
+import { V1_SAFE_MODE } from '../config/runtime';
 import * as edgeClient from './edgeFunctionClient';
 import * as geminiService from '../../services/geminiService-rest';
 import * as geminiServiceFull from '../../services/geminiService';
-import { canGenerateOutfit, incrementAIGeneration } from './subscriptionService';
+import { canGenerateOutfit } from './subscriptionService';
 import { retryAIOperation } from '../../utils/retryWithBackoff';
 
 // ⛔ SECURITY: All AI calls MUST go through Edge Functions (server-side)
 // Direct client-side API key configuration is DISABLED for security
+
+function assertFeatureAvailable(featureLabel: string): never {
+  throw new Error(`${featureLabel} está temporalmente desactivado en la V1.`);
+}
+
+async function mapWithConcurrency<TIn, TOut>(
+  items: TIn[],
+  concurrency: number,
+  worker: (item: TIn, index: number) => Promise<TOut>
+): Promise<TOut[]> {
+  const results: TOut[] = new Array(items.length);
+  let cursor = 0;
+
+  const workers = Array.from({ length: Math.max(1, concurrency) }).map(async () => {
+    while (cursor < items.length) {
+      const index = cursor;
+      cursor += 1;
+      results[index] = await worker(items[index], index);
+    }
+  });
+
+  await Promise.all(workers);
+  return results;
+}
 
 /**
  * Analyze a clothing item image
@@ -28,13 +52,7 @@ export async function analyzeClothingItem(
   const useSupabaseAI = getFeatureFlag('useSupabaseAI');
 
   if (useSupabaseAI) {
-    try {
-      return await edgeClient.analyzeClothingViaEdge(imageDataUrl);
-    } catch (error) {
-      logger.error('Edge Function failed, falling back to direct API:', error);
-      // Fallback to direct API if Edge Function fails
-      return await geminiService.analyzeClothingItem(imageDataUrl);
-    }
+    return await edgeClient.analyzeClothingViaEdge(imageDataUrl);
   }
 
   // Use direct Gemini API (legacy)
@@ -50,8 +68,16 @@ export async function analyzeClothingItem(
 export async function analyzeBatchClothingItems(
   imageDataUrls: string[]
 ): Promise<ClothingItemMetadata[]> {
-  // Batch analysis only works with direct Gemini API (not Edge Functions yet)
-  // Edge Functions have size limits that make batching impractical
+  const useSupabaseAI = getFeatureFlag('useSupabaseAI');
+
+  // V1 SAFE: route batch through Edge by fan-out (bounded concurrency) to avoid client-side API keys
+  if (useSupabaseAI) {
+    return await mapWithConcurrency(imageDataUrls, 3, async (dataUrl) => {
+      return await edgeClient.analyzeClothingViaEdge(dataUrl);
+    });
+  }
+
+  // Legacy direct path (development only)
   return await geminiService.analyzeBatchClothingItems(imageDataUrls);
 }
 
@@ -72,32 +98,35 @@ export async function generateOutfit(
     throw new Error(canGenerate.reason || 'Has alcanzado tu límite de generaciones. Upgradeá tu plan para continuar.');
   }
 
+  // 🛡️ Safe Mode
+  if (V1_SAFE_MODE) {
+    console.info('🛡️ V1 Safe Mode: Using mock outfit generation');
+    await new Promise(resolve => setTimeout(resolve, 2500));
+    const randomItem = (list: ClothingItem[]) => list.length > 0 ? list[Math.floor(Math.random() * list.length)].id : undefined;
+
+    return {
+      top_id: randomItem(closet.filter(i => i.metadata.category === 'top')),
+      bottom_id: randomItem(closet.filter(i => i.metadata.category === 'bottom')),
+      shoes_id: randomItem(closet.filter(i => i.metadata.category === 'shoes')),
+      explanation: 'Este es un outfit generado en Modo Seguro (sin IA real). Combina tus prendas disponibles de forma aleatoria para testing.',
+      missing_piece_suggestion: 'Accesorio de prueba'
+    };
+  }
+
   // ✅ STEP 2: Generate outfit (with retry)
   const useSupabaseAI = getFeatureFlag('useSupabaseAI');
   let result: FitResult;
 
   result = await retryAIOperation(async () => {
     if (useSupabaseAI) {
-      try {
-        // Extract IDs for Edge Function
-        const closetItemIds = closet.map(item => item.id);
-        return await edgeClient.generateOutfitViaEdge(prompt, closetItemIds);
-      } catch (error) {
-        logger.error('Edge Function failed, falling back to direct API:', error);
-        // Fallback to direct API if Edge Function fails
-        return await geminiServiceFull.generateOutfit(prompt, closet);
-      }
+      // Extract IDs for Edge Function
+      const closetItemIds = closet.map(item => item.id);
+      return await edgeClient.generateOutfitViaEdge(prompt, closetItemIds);
     } else {
       // Use direct Gemini API (legacy)
       return await geminiServiceFull.generateOutfit(prompt, closet);
     }
   });
-
-  // ✅ STEP 3: Increment usage counter (only on success)
-  const incremented = await incrementAIGeneration();
-  if (!incremented) {
-    logger.warn('Failed to increment AI generation counter, but outfit was generated');
-  }
 
   return result;
 }
@@ -119,32 +148,33 @@ export async function generatePackingList(
     throw new Error(canGenerate.reason || 'Has alcanzado tu límite de generaciones. Upgradeá tu plan para continuar.');
   }
 
+  // 🛡️ Safe Mode
+  if (V1_SAFE_MODE) {
+    await new Promise(resolve => setTimeout(resolve, 3000));
+    return {
+      packing_list: [
+        { item: 'Camiseta de prueba', category: 'top', reasoning: 'Básico esencial' },
+        { item: 'Jeans cómodos', category: 'bottom', reasoning: 'Versatilidad' },
+        { item: 'Zapatillas', category: 'shoes', reasoning: 'Caminar mucho' }
+      ],
+      outfit_suggestions: 'Este es un plan de viaje simulado en Modo Seguro.'
+    };
+  }
+
   // ✅ STEP 2: Generate packing list (with retry)
   const useSupabaseAI = getFeatureFlag('useSupabaseAI');
   let result: PackingListResult;
 
   result = await retryAIOperation(async () => {
     if (useSupabaseAI) {
-      try {
-        // Extract IDs for Edge Function
-        const closetItemIds = closet.map(item => item.id);
-        return await edgeClient.generatePackingListViaEdge(prompt, closetItemIds);
-      } catch (error) {
-        logger.error('Edge Function failed, falling back to direct API:', error);
-        // Fallback to direct API if Edge Function fails
-        return await geminiServiceFull.generatePackingList(prompt, closet);
-      }
+      // Extract IDs for Edge Function
+      const closetItemIds = closet.map(item => item.id);
+      return await edgeClient.generatePackingListViaEdge(prompt, closetItemIds);
     } else {
       // Use direct Gemini API (legacy)
       return await geminiServiceFull.generatePackingList(prompt, closet);
     }
   });
-
-  // ✅ STEP 3: Increment usage counter (only on success)
-  const incremented = await incrementAIGeneration();
-  if (!incremented) {
-    logger.warn('Failed to increment AI generation counter, but packing list was generated');
-  }
 
   return result;
 }
@@ -154,15 +184,17 @@ export async function generatePackingList(
  * Note: This still uses direct API as it doesn't need server-side processing
  */
 export async function generateClothingImage(prompt: string): Promise<string> {
+  // 🛡️ Safe Mode
+  if (V1_SAFE_MODE) {
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    // Return a placeholder image
+    return 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjBmMGYwIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGRvbWluYW50LWJhc2VsaW5lPSJtaWRkbGUiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIiBmb250LXNpemU9IjI0IiBmaWxsPSIjODg4Ij5UaGlzIGlzIGEgbW9jayBpbWFnZTwvdGV4dD48L3N2Zz4=';
+  }
+
   const useSupabaseAI = getFeatureFlag('useSupabaseAI');
 
   if (useSupabaseAI) {
-    try {
-      return await edgeClient.generateClothingImageViaEdge(prompt);
-    } catch (error) {
-      logger.error('Edge Function failed, falling back to direct API:', error);
-      return await geminiServiceFull.generateClothingImage(prompt);
-    }
+    return await edgeClient.generateClothingImageViaEdge(prompt);
   }
 
   // Use direct Gemini API (legacy)
@@ -176,20 +208,17 @@ export async function generateClothingImage(prompt: string): Promise<string> {
 export async function analyzeShoppingGaps(
   closet: ClothingItem[]
 ): Promise<import('../../types').ShoppingGap[]> {
+  if (V1_SAFE_MODE) return []; // Mock empty gaps
+
   const useSupabaseAI = getFeatureFlag('useSupabaseAI');
 
   if (useSupabaseAI) {
-    try {
-      // Simplify closet object for transport
-      const simplifiedCloset = closet.map(item => ({
-        id: item.id,
-        metadata: item.metadata
-      }));
-      return await edgeClient.analyzeShoppingGapsViaEdge(simplifiedCloset);
-    } catch (error) {
-      logger.error('Edge Function failed, falling back to direct API:', error);
-      return await geminiServiceFull.analyzeShoppingGaps(closet);
-    }
+    // Simplify closet object for transport
+    const simplifiedCloset = closet.map(item => ({
+      id: item.id,
+      metadata: item.metadata
+    }));
+    return await edgeClient.analyzeShoppingGapsViaEdge(simplifiedCloset);
   }
 
   // Use direct Gemini API (legacy)
@@ -205,19 +234,16 @@ export async function generateShoppingRecommendations(
   closet: ClothingItem[],
   budget?: number
 ): Promise<import('../../types').ShoppingRecommendation[]> {
+  if (V1_SAFE_MODE) return [];
+
   const useSupabaseAI = getFeatureFlag('useSupabaseAI');
 
   if (useSupabaseAI) {
-    try {
-      const simplifiedCloset = closet.map(item => ({
-        id: item.id,
-        metadata: item.metadata
-      }));
-      return await edgeClient.generateShoppingRecommendationsViaEdge(gaps, simplifiedCloset, budget);
-    } catch (error) {
-      logger.error('Edge Function failed, falling back to direct API:', error);
-      return await geminiServiceFull.generateShoppingRecommendations(gaps, closet, budget);
-    }
+    const simplifiedCloset = closet.map(item => ({
+      id: item.id,
+      metadata: item.metadata
+    }));
+    return await edgeClient.generateShoppingRecommendationsViaEdge(gaps, simplifiedCloset, budget);
   }
 
   // Use direct Gemini API (legacy)
@@ -235,26 +261,22 @@ export async function conversationalShoppingAssistant(
   currentGaps?: import('../../types').ShoppingGap[],
   currentRecommendations?: import('../../types').ShoppingRecommendation[]
 ): Promise<import('../../types').ShoppingChatMessage> {
+  if (V1_SAFE_MODE) {
+    return {
+      role: 'assistant',
+      content: 'El asistente de compras está desactivado en Modo Seguro.'
+    };
+  }
+
   const useSupabaseAI = getFeatureFlag('useSupabaseAI');
 
   if (useSupabaseAI) {
-    try {
-      const context = {
-        closet: closet.map(item => ({ id: item.id, metadata: item.metadata })),
-        currentGaps,
-        currentRecommendations
-      };
-      return await edgeClient.conversationalShoppingAssistantViaEdge(userMessage, chatHistory, context);
-    } catch (error) {
-      logger.error('Edge Function failed, falling back to direct API:', error);
-      return await geminiServiceFull.conversationalShoppingAssistant(
-        userMessage,
-        chatHistory,
-        closet,
-        currentGaps,
-        currentRecommendations
-      );
-    }
+    const context = {
+      closet: closet.map(item => ({ id: item.id, metadata: item.metadata })),
+      currentGaps,
+      currentRecommendations
+    };
+    return await edgeClient.conversationalShoppingAssistantViaEdge(userMessage, chatHistory, context);
   }
 
   // Use direct Gemini API (legacy)
@@ -272,58 +294,134 @@ export async function conversationalShoppingAssistant(
  * These don't have Edge Function equivalents yet, so they call geminiService directly
  */
 
-// Virtual Try-On
+// Virtual Try-On (Legacy)
 export async function generateVirtualTryOn(
   userImage: string,
   topImage: string,
   bottomImage: string,
-  shoesImage: string
+  shoesImage?: string,
+  quality?: 'flash' | 'pro'
 ): Promise<string> {
   const useSupabaseAI = getFeatureFlag('useSupabaseAI');
 
   if (useSupabaseAI) {
-    try {
-      return await edgeClient.generateVirtualTryOnViaEdge(userImage, topImage, bottomImage, shoesImage);
-    } catch (error) {
-      logger.error('Edge Function failed, falling back to direct API:', error);
-      return await geminiServiceFull.generateVirtualTryOn(userImage, topImage, bottomImage, shoesImage);
-    }
+    return await edgeClient.generateVirtualTryOnViaEdge(userImage, topImage, bottomImage, shoesImage, quality);
   }
 
   return await geminiServiceFull.generateVirtualTryOn(userImage, topImage, bottomImage, shoesImage);
 }
 
+// Virtual Try-On with Slot System
+export async function generateVirtualTryOnWithSlots(
+  userImage: string,
+  slots: Record<string, string>,
+  options: {
+    preset?: GenerationPreset;
+    quality?: 'flash' | 'pro';
+    customScene?: string;
+  } = {}
+): Promise<{
+  resultImage: string;
+  model: string;
+  slotsUsed: string[];
+  faceReferencesUsed?: number;
+}> {
+  // Always use Edge Function for slot-based try-on
+  return await edgeClient.generateVirtualTryOnWithSlots(userImage, slots, options as any);
+}
+
 // Search and Discovery
-export const findSimilarItems = geminiService.findSimilarItems;
-export const searchShoppingSuggestions = geminiServiceFull.searchShoppingSuggestions;
+export async function findSimilarItems(...args: Parameters<typeof geminiService.findSimilarItems>) {
+  if (V1_SAFE_MODE) return [];
+  if (getFeatureFlag('useSupabaseAI')) return assertFeatureAvailable('Búsqueda de similares');
+  return await geminiService.findSimilarItems(...args);
+}
+
+export async function searchShoppingSuggestions(...args: Parameters<typeof geminiServiceFull.searchShoppingSuggestions>) {
+  if (V1_SAFE_MODE) return [];
+  if (getFeatureFlag('useSupabaseAI')) return assertFeatureAvailable('Sugerencias de compra');
+  return await geminiServiceFull.searchShoppingSuggestions(...args);
+}
 
 // Color Palette Analysis
-export const analyzeColorPalette = geminiServiceFull.analyzeColorPalette;
+export async function analyzeColorPalette(...args: Parameters<typeof geminiServiceFull.analyzeColorPalette>) {
+  if (V1_SAFE_MODE) return { palette: [], harmony: 'Mono', advice: 'Safe Mode' };
+  if (getFeatureFlag('useSupabaseAI')) return assertFeatureAvailable('Análisis de color');
+  return await geminiServiceFull.analyzeColorPalette(...args);
+}
 
 // Chat Services
-export const chatWithFashionAssistant = geminiServiceFull.chatWithFashionAssistant;
-export const parseOutfitFromChat = geminiServiceFull.parseOutfitFromChat;
+export async function chatWithFashionAssistant(...args: Parameters<typeof geminiServiceFull.chatWithFashionAssistant>) {
+  if (V1_SAFE_MODE) return { role: 'assistant', content: 'Safe Mode enabled.' };
+  if (getFeatureFlag('useSupabaseAI')) return assertFeatureAvailable('Chat IA');
+  return await geminiServiceFull.chatWithFashionAssistant(...args);
+}
+
+export async function parseOutfitFromChat(...args: Parameters<typeof geminiServiceFull.parseOutfitFromChat>) {
+  if (V1_SAFE_MODE) return null;
+  if (getFeatureFlag('useSupabaseAI')) return assertFeatureAvailable('Chat IA');
+  return await geminiServiceFull.parseOutfitFromChat(...args);
+}
 
 // Weather Integration
-export const generateWeatherOutfit = geminiServiceFull.generateWeatherOutfit;
+export async function generateWeatherOutfit(...args: Parameters<typeof geminiServiceFull.generateWeatherOutfit>) {
+  if (V1_SAFE_MODE) return null;
+  if (getFeatureFlag('useSupabaseAI')) return assertFeatureAvailable('Outfit del día');
+  return await geminiServiceFull.generateWeatherOutfit(...args);
+}
 
 // Lookbook Creation
-export const generateLookbook = geminiServiceFull.generateLookbook;
+export async function generateLookbook(...args: Parameters<typeof geminiServiceFull.generateLookbook>) {
+  if (V1_SAFE_MODE) return { title: 'Safe Mode', description: '', outfits: [] };
+  if (getFeatureFlag('useSupabaseAI')) return assertFeatureAvailable('Lookbook');
+  return await geminiServiceFull.generateLookbook(...args);
+}
 
 // Style Challenges
-export const generateStyleChallenge = geminiServiceFull.generateStyleChallenge;
+export async function generateStyleChallenge(...args: Parameters<typeof geminiServiceFull.generateStyleChallenge>) {
+  // Return a dummy challenge for safe mode
+  if (V1_SAFE_MODE) {
+    return {
+      id: 'mock-challenge',
+      title: 'Desafío Safe Mode',
+      description: 'Desafío de prueba.',
+      difficulty: 'Easy',
+      xpReward: 100,
+      theme: 'Casual',
+      requirements: ['Usar una prenda azul']
+    };
+  }
+  if (getFeatureFlag('useSupabaseAI')) return assertFeatureAvailable('Desafíos de estilo');
+  return await geminiServiceFull.generateStyleChallenge(...args);
+}
 
 // Feedback Analysis
-export const analyzeFeedbackPatterns = geminiServiceFull.analyzeFeedbackPatterns;
+export async function analyzeFeedbackPatterns(...args: Parameters<typeof geminiServiceFull.analyzeFeedbackPatterns>) {
+  if (V1_SAFE_MODE) return { trends: [], insights: [] };
+  if (getFeatureFlag('useSupabaseAI')) return assertFeatureAvailable('Análisis de feedback');
+  return await geminiServiceFull.analyzeFeedbackPatterns(...args);
+}
 
 // Closet Gap Analysis
-export const analyzeClosetGaps = geminiServiceFull.analyzeClosetGaps;
+export async function analyzeClosetGaps(...args: Parameters<typeof geminiServiceFull.analyzeClosetGaps>) {
+  if (V1_SAFE_MODE) return [];
+  if (getFeatureFlag('useSupabaseAI')) return assertFeatureAvailable('Análisis de gaps');
+  return await geminiServiceFull.analyzeClosetGaps(...args);
+}
 
 // Brand Recognition
-export const recognizeBrandAndPrice = geminiServiceFull.recognizeBrandAndPrice;
+export async function recognizeBrandAndPrice(...args: Parameters<typeof geminiServiceFull.recognizeBrandAndPrice>) {
+  if (V1_SAFE_MODE) return null;
+  // if (getFeatureFlag('useSupabaseAI')) return assertFeatureAvailable('Reconocimiento de marca');
+  return await geminiServiceFull.recognizeBrandAndPrice(...args);
+}
 
 // Dupe Finder
-export const findDupeAlternatives = geminiServiceFull.findDupeAlternatives;
+export async function findDupeAlternatives(...args: Parameters<typeof geminiServiceFull.findDupeAlternatives>) {
+  if (V1_SAFE_MODE) return [];
+  // if (getFeatureFlag('useSupabaseAI')) return assertFeatureAvailable('Dupe finder');
+  return await geminiServiceFull.findDupeAlternatives(...args);
+}
 
 // Capsule Wardrobe
 export async function generateCapsuleWardrobe(
@@ -335,6 +433,17 @@ export async function generateCapsuleWardrobe(
   // ⛔ SECURITY: All AI calls MUST go through Edge Functions
   // Direct client-side API calls are disabled for security
   const useSupabaseAI = getFeatureFlag('useSupabaseAI');
+
+  if (V1_SAFE_MODE) {
+    // Mock response
+    return {
+      name: 'Cápsula Safe Mode',
+      description: 'Generada para testing',
+      items: [],
+      outfits: [],
+      colorPalette: []
+    };
+  }
 
   if (useSupabaseAI) {
     // TODO: Implement Edge Function for capsule wardrobe
@@ -350,13 +459,29 @@ export async function generateCapsuleWardrobe(
 }
 
 // Style DNA
-export const analyzeStyleDNA = geminiServiceFull.analyzeStyleDNA;
+export async function analyzeStyleDNA(...args: Parameters<typeof geminiServiceFull.analyzeStyleDNA>) {
+  if (V1_SAFE_MODE) return { archetypes: [], traits: [], colorProfile: { primary: [], secondary: [], avoid: [] } };
+  if (getFeatureFlag('useSupabaseAI')) return assertFeatureAvailable('Style DNA');
+  return await geminiServiceFull.analyzeStyleDNA(...args);
+}
 
 // AI Fashion Designer
-export const generateFashionDesign = geminiServiceFull.generateFashionDesign;
+export async function generateFashionDesign(...args: Parameters<typeof geminiServiceFull.generateFashionDesign>) {
+  if (V1_SAFE_MODE) return { title: 'Design', description: 'Mock', imageUrl: '' };
+  if (getFeatureFlag('useSupabaseAI')) return assertFeatureAvailable('AI Designer');
+  return await geminiServiceFull.generateFashionDesign(...args);
+}
 
 // Style Evolution
-export const analyzeStyleEvolution = geminiServiceFull.analyzeStyleEvolution;
+export async function analyzeStyleEvolution(...args: Parameters<typeof geminiServiceFull.analyzeStyleEvolution>) {
+  if (V1_SAFE_MODE) return { timeline: [], prediction: '' };
+  if (getFeatureFlag('useSupabaseAI')) return assertFeatureAvailable('Evolución de estilo');
+  return await geminiServiceFull.analyzeStyleEvolution(...args);
+}
 
 // General Content Generation
-export const generateContent = geminiServiceFull.generateContent;
+export async function generateContent(...args: Parameters<typeof geminiServiceFull.generateContent>) {
+  if (V1_SAFE_MODE) return 'Contenido mock en Safe Mode';
+  if (getFeatureFlag('useSupabaseAI')) return assertFeatureAvailable('Generación de contenido');
+  return await geminiServiceFull.generateContent(...args);
+}

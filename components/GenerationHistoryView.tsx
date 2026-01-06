@@ -88,7 +88,7 @@ const GenerationHistoryView = ({ onClose, onAddToCloset }: GenerationHistoryView
 
     // Copy image URL to clipboard
     navigator.clipboard.writeText(selectedImage.image_url);
-    alert('Link copiado al portapapeles');
+    // Silently copy without alert for cleaner UX"
   };
 
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {

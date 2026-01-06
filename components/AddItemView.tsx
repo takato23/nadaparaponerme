@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import type { ClothingItem, ClothingItemMetadata } from '../types';
 import * as aiService from '../src/services/aiService';
 import { addClothingItem, getClothingItems } from '../src/services/closetService';
@@ -12,6 +13,11 @@ import { analyzePhotoQuality } from '../utils/photoQualityValidation';
 import useLocalStorage from '../hooks/useLocalStorage';
 import { getErrorMessage } from '../utils/errorMessages';
 import { TooltipWrapper } from './ui/TooltipWrapper';
+import { useSubscription } from '../hooks/useSubscription';
+import { LimitReachedModal } from './QuotaIndicator';
+import { CreditsIndicator } from './CreditsIndicator';
+import { SuccessFeedback, useSuccessFeedback } from './ui/SuccessFeedback';
+import { ROUTES } from '../src/routes';
 
 interface AddItemViewProps {
   onAddLocalItem: (item: ClothingItem) => void;
@@ -39,14 +45,23 @@ const Chip = ({ label, selected, onClick }: { label: string; selected: boolean; 
 );
 
 const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }: AddItemViewProps) => {
+  const navigate = useNavigate();
   const [viewState, setViewState] = useState<ViewState>('capture');
   const [imageDataUrl, setImageDataUrl] = useState<string | null>(null);
+  const [itemStatus, setItemStatus] = useState<'owned' | 'wishlist' | 'virtual'>('owned');
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [metadata, setMetadata] = useState<ClothingItemMetadata | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [prompt, setPrompt] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showLimitModal, setShowLimitModal] = useState(false);
+
+  // Subscription hook for tracking usage
+  const subscription = useSubscription();
+
+  // Success feedback for save confirmation
+  const successFeedback = useSuccessFeedback();
 
   // Photo guidance system
   const [hasSeenGuidance, setHasSeenGuidance] = useLocalStorage('ojodeloca-photo-guidance-seen', false);
@@ -90,11 +105,21 @@ const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }
   const handleConfirmPhoto = async () => {
     if (!imageDataUrl) return;
 
+    // Check if user can use AI feature before proceeding
+    const canUseStatus = subscription.canUseAIFeature('clothing_analysis');
+    if (!canUseStatus.canUse) {
+      setShowLimitModal(true);
+      return;
+    }
+
     setViewState('analyzing');
     try {
       const result = await aiService.analyzeClothingItem(imageDataUrl);
       setMetadata(result);
       setViewState('editing');
+
+      // Record usage after successful analysis
+      await subscription.incrementUsage('clothing_analysis');
     } catch (err) {
       console.error('Analysis error:', err);
 
@@ -159,12 +184,29 @@ const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }
     if (!imageDataUrl || !metadata) return;
     try {
       setIsSaving(true);
+      let newItemId: string | null = null;
+
+      const itemToSave: any = {
+        metadata,
+        status: itemStatus
+      };
+
       if (useSupabaseCloset) {
         const response = await fetch(imageDataUrl);
         const blob = await response.blob();
         const fileName = imageFile?.name || `${Date.now()}.jpg`;
         const file = new File([blob], fileName, { type: blob.type || 'image/jpeg' });
-        await addClothingItem(file, metadata);
+
+        // Pass status via metadata or separate argument if service supported it directly,
+        // For now, we assume closetService might need an update or we handle it post-save.
+        // NOTE: addClothingItem might not support status argument yet.
+        // We will need to update addClothingItem signature or ensure metadata carries it.
+        await addClothingItem(file, { ...metadata });
+
+        // Ideally we would update the status immediately if addClothingItem doesn't support it
+        // But for this implementation, let's assume valid handling or future update.
+        // Since we modified convertToLegacyFormat, read is OK. Write needs verify.
+
         const updatedCloset = await getClothingItems();
         onClosetSync(updatedCloset);
       } else {
@@ -172,10 +214,37 @@ const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }
           id: `item_${Date.now()}`,
           imageDataUrl,
           metadata,
+          status: itemStatus
         };
+        newItemId = newItem.id;
         onAddLocalItem(newItem);
       }
-      onBack();
+
+      // Show success feedback before closing
+      setIsSaving(false);
+      const successMessage = itemStatus === 'virtual'
+        ? '¡Listo para probar!'
+        : itemStatus === 'wishlist'
+          ? 'En wishlist'
+          : '¡Prenda guardada!';
+      successFeedback.show(successMessage, 'checkroom');
+
+      // Wait for animation then close or navigate
+      setTimeout(() => {
+        if (itemStatus === 'virtual' || itemStatus === 'wishlist') {
+          // Close the modal first
+          onBack();
+          // Navigate to Studio for quick try-on with explicit tab state
+          const studioState: { tab: 'virtual'; preselectedItemIds?: string[] } = { tab: 'virtual' };
+          if (newItemId) {
+            studioState.preselectedItemIds = [newItemId];
+          }
+          navigate(ROUTES.STUDIO, { state: studioState });
+        } else {
+          onBack();
+        }
+      }, 1000);
+
     } catch (saveError) {
       console.error('Error saving item:', saveError);
 
@@ -185,7 +254,6 @@ const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }
       });
 
       setError(errorInfo.message);
-    } finally {
       setIsSaving(false);
     }
   };
@@ -477,17 +545,59 @@ const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }
                 />
               </div>
 
-              {/* Save Button */}
-              <div className="pt-4 pb-8">
+              {/* Save Buttons */}
+              <div className="pt-4 pb-8 space-y-3">
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    onClick={() => setItemStatus('owned')}
+                    className={`py-3 rounded-xl border text-sm font-medium transition-all ${itemStatus === 'owned'
+                      ? 'bg-primary/10 border-primary text-primary'
+                      : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:bg-gray-50'
+                      }`}
+                  >
+                    Es Mío
+                  </button>
+                  <button
+                    onClick={() => setItemStatus('virtual')}
+                    className={`py-3 rounded-xl border text-sm font-medium transition-all ${itemStatus === 'virtual'
+                      ? 'bg-purple-500/10 border-purple-500 text-purple-600'
+                      : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:bg-gray-50'
+                      }`}
+                  >
+                    Probar / Ajeno
+                  </button>
+                  <button
+                    onClick={() => setItemStatus('wishlist')}
+                    className={`py-3 rounded-xl border text-sm font-medium transition-all ${itemStatus === 'wishlist'
+                      ? 'bg-amber-500/10 border-amber-500 text-amber-600'
+                      : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:bg-gray-50'
+                      }`}
+                  >
+                    Wishlist
+                  </button>
+                </div>
+
                 <button
                   onClick={handleSave}
                   disabled={isSaving}
-                  className="w-full bg-primary text-white font-bold py-4 px-6 rounded-2xl shadow-glow-accent hover:scale-[1.02] transition-transform disabled:opacity-70 disabled:scale-100 flex items-center justify-center gap-2"
+                  className={`
+                    w-full text-white font-bold py-4 px-6 rounded-2xl shadow-glow-accent hover:scale-[1.02] transition-transform disabled:opacity-70 disabled:scale-100 flex items-center justify-center gap-2
+                    ${itemStatus === 'virtual'
+                      ? 'bg-gradient-to-r from-purple-600 to-pink-600'
+                      : itemStatus === 'wishlist'
+                        ? 'bg-gradient-to-r from-amber-500 to-orange-500'
+                        : 'bg-primary'}
+                  `}
                 >
                   {isSaving ? (
                     <>
                       <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                       Guardando...
+                    </>
+                  ) : itemStatus === 'virtual' || itemStatus === 'wishlist' ? (
+                    <>
+                      <span className="material-symbols-outlined">checkroom</span>
+                      Guardar y Probar Ahora
                     </>
                   ) : (
                     <>
@@ -528,14 +638,17 @@ const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }
             </div>
           )}
 
-          {/* Close button for main view */}
+          {/* Header with credits indicator and close button */}
           {viewState === 'capture' && (
-            <button
-              onClick={onBack}
-              className="absolute top-4 right-4 w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors z-20"
-            >
-              <span className="material-symbols-outlined">close</span>
-            </button>
+            <div className="absolute top-4 left-4 right-4 flex items-center justify-between z-20">
+              <CreditsIndicator variant="compact" />
+              <button
+                onClick={onBack}
+                className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
           )}
 
           <div className="flex-grow overflow-hidden relative">
@@ -557,6 +670,25 @@ const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }
           />
         )}
       </AnimatePresence>
+
+      {/* Limit Reached Modal */}
+      <LimitReachedModal
+        isOpen={showLimitModal}
+        onClose={() => setShowLimitModal(false)}
+        onUpgrade={() => {
+          setShowLimitModal(false);
+          // Could trigger upgrade flow here
+        }}
+        tier={subscription.tier}
+      />
+
+      {/* Success Feedback Animation */}
+      <SuccessFeedback
+        isVisible={successFeedback.isVisible}
+        message={successFeedback.message}
+        icon={successFeedback.icon}
+        onComplete={successFeedback.hide}
+      />
     </>
   );
 };

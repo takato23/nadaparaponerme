@@ -1,9 +1,10 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import type { ClothingItem, ColorPaletteAnalysis } from '../types';
 import { analyzeColorPalette } from '../src/services/aiService';
 import Loader from './Loader';
 import { Card } from './ui/Card';
+import { getCreditStatus } from '../services/usageTrackingService';
 
 interface ColorPaletteViewProps {
   closet: ClothingItem[];
@@ -14,6 +15,9 @@ const ColorPaletteView = ({ closet, onClose }: ColorPaletteViewProps) => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysis, setAnalysis] = useState<ColorPaletteAnalysis | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Credits status
+  const credits = useMemo(() => getCreditStatus(), [analysis]);
 
   const handleAnalyze = async () => {
     if (closet.length === 0) {
@@ -66,15 +70,30 @@ const ColorPaletteView = ({ closet, onClose }: ColorPaletteViewProps) => {
             <h2 className="text-2xl font-bold text-text-primary dark:text-gray-200">Paleta de Colores</h2>
             <p className="text-sm text-text-secondary dark:text-gray-400">Análisis cromático de tu armario</p>
           </div>
-          <Card
-            variant="glass"
-            padding="none"
-            rounded="full"
-            onClick={onClose}
-            className="w-10 h-10 flex items-center justify-center transition-transform active:scale-95 cursor-pointer"
-          >
-            <span className="material-symbols-outlined text-text-primary dark:text-gray-200">close</span>
-          </Card>
+          <div className="flex items-center gap-3">
+            {/* Credits Indicator */}
+            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg ${
+              credits.remaining <= 3
+                ? 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
+                : 'bg-gray-100 dark:bg-gray-800'
+            }`}>
+              <span className="material-symbols-rounded text-gray-500 text-sm">toll</span>
+              <span className={`text-xs font-medium ${
+                credits.remaining <= 3 ? 'text-red-600 dark:text-red-400' : 'text-gray-600 dark:text-gray-300'
+              }`}>
+                {credits.limit === -1 ? '∞' : credits.remaining}
+              </span>
+            </div>
+            <Card
+              variant="glass"
+              padding="none"
+              rounded="full"
+              onClick={onClose}
+              className="w-10 h-10 flex items-center justify-center transition-transform active:scale-95 cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-text-primary dark:text-gray-200">close</span>
+            </Card>
+          </div>
         </div>
 
         {/* Content */}

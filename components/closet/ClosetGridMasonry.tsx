@@ -171,7 +171,7 @@ export default function ClosetGridMasonry({
   }
 
   return (
-    <div className="w-full h-full overflow-y-auto px-1 sm:px-4 py-2 sm:py-4">
+    <div className="w-full h-full overflow-y-auto px-1 sm:px-4 py-2 sm:py-4 pb-[calc(7rem+env(safe-area-inset-bottom))]">
       {/* Standard Grid for Debugging */}
       <div
         className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-1 sm:gap-4 w-full"

@@ -30,15 +30,19 @@ import { useCloset } from '../../contexts/ClosetContext';
 import { getUniqueColors, getUniqueTags, getUniqueSeasons } from '../../utils/closetUtils';
 import { findSimilarByImage } from '../../services/geminiService';
 import type { ClothingItem } from '../../types';
+import { useNavigateTransition } from '../../hooks/useNavigateTransition';
+import { ROUTES } from '../../src/routes';
 
 interface ClosetViewEnhancedProps {
   onItemClick: (id: string) => void;
   onAddItem?: () => void;
+  onRefresh?: () => void;
 }
 
 export default function ClosetViewEnhanced({
   onItemClick,
-  onAddItem
+  onAddItem,
+  onRefresh
 }: ClosetViewEnhancedProps) {
   const {
     items,
@@ -68,6 +72,7 @@ export default function ClosetViewEnhanced({
     onExportItems,
     onShareItems
   } = useCloset();
+  const navigate = useNavigateTransition();
 
   // Presentation mode state
   const [presentationMode, setPresentationMode] = useState<{ isOpen: boolean; initialIndex: number }>({
@@ -114,6 +119,12 @@ export default function ClosetViewEnhanced({
   // Bulk actions handlers
   const handleBulkAction = useCallback((actionId: string) => {
     console.log('Bulk action:', actionId, 'Selected IDs:', Array.from(selection.selectedIds));
+
+    if (actionId === 'try-look') {
+      const selectedIds = Array.from(selection.selectedIds).slice(0, 3);
+      navigate(ROUTES.STUDIO, { state: { preselectedItemIds: selectedIds } });
+      return;
+    }
 
     // Handle collection-specific actions
     if (actionId.startsWith('add-to-collection-') || actionId.startsWith('move-to-collection-')) {
@@ -170,7 +181,7 @@ export default function ClosetViewEnhanced({
             navigator.share({
               title: 'Mi Armario',
               text: `Mira estas ${shareItems.length} prendas de mi armario`,
-            }).catch(() => {});
+            }).catch(() => { });
           }
         }
         exitSelectionMode();
@@ -179,7 +190,7 @@ export default function ClosetViewEnhanced({
       default:
         console.log('Unknown action:', actionId);
     }
-  }, [selection.selectedIds, collections, exitSelectionMode, onDeleteItems, onExportItems, onShareItems, items]);
+  }, [selection.selectedIds, collections, exitSelectionMode, onDeleteItems, onExportItems, onShareItems, items, navigate]);
 
   // Quick action handlers (from context menu and card hover)
   const handleQuickAction = useCallback((action: string, item: ClothingItem) => {
@@ -212,7 +223,7 @@ export default function ClosetViewEnhanced({
           navigator.share({
             title: item.metadata?.subcategory || 'Mi prenda',
             text: `Mira esta prenda: ${item.metadata?.subcategory || 'prenda'}`,
-          }).catch(() => {});
+          }).catch(() => { });
         }
         break;
 
@@ -225,6 +236,32 @@ export default function ClosetViewEnhanced({
         console.log('Unknown quick action:', action);
     }
   }, [handleItemClick, onDeleteItem, onToggleFavorite]);
+
+  const selectionCount = selection.selectedIds.size;
+  const helperText = useMemo(() => {
+    if (selectionCount === 0) return null;
+    if (selectionCount < 2) {
+      return `Te falta ${2 - selectionCount} prenda${2 - selectionCount === 1 ? '' : 's'} para probar.`;
+    }
+    if (selectionCount > 3) {
+      return 'Elegi hasta 3 prendas para probar.';
+    }
+    return null;
+  }, [selectionCount]);
+
+  const extraActions = useMemo(() => {
+    if (selectionCount >= 2 && selectionCount <= 3) {
+      return [
+        {
+          id: 'try-look',
+          label: 'Probar look',
+          icon: 'auto_awesome',
+          variant: 'primary' as const
+        }
+      ];
+    }
+    return [];
+  }, [selectionCount]);
 
   return (
     <div className="flex h-full bg-transparent">
@@ -261,15 +298,37 @@ export default function ClosetViewEnhanced({
             onPresentationMode={() => viewPreferences.setViewMode('carousel')}
             onVisualSearch={() => setIsVisualSearchOpen(true)}
             onAddItem={onAddItem}
+            onRefresh={onRefresh}
             onToggleSelection={selection.isSelectionMode ? exitSelectionMode : enterSelectionMode}
             isSelectionMode={selection.isSelectionMode}
-            selectedCount={selection.selectedIds.size}
+            selectedCount={selectionCount}
             totalItems={totalItems}
             filteredCount={filteredCount}
             selectedColor={selectedColor}
             onColorFilter={setSelectedColor}
             availableColors={availableColors}
           />
+
+          {viewPreferences.isMobile && (
+            <div className="px-4 pb-2 md:hidden">
+              <button
+                onClick={() => navigate(ROUTES.SAVED_LOOKS)}
+                className="w-full px-4 py-3 rounded-2xl bg-white/70 dark:bg-black/40 border border-white/40 dark:border-white/10 flex items-center justify-between shadow-sm"
+                aria-label="Ir al armario de looks"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center text-white shadow-sm">
+                    <span className="material-symbols-outlined text-sm">photo_library</span>
+                  </div>
+                  <div className="text-left">
+                    <p className="text-sm font-semibold text-text-primary dark:text-gray-100">Armario de looks</p>
+                    <p className="text-[10px] text-text-secondary dark:text-gray-400">Tus looks guardados</p>
+                  </div>
+                </div>
+                <span className="material-symbols-outlined text-text-secondary dark:text-gray-400 text-sm">arrow_forward_ios</span>
+              </button>
+            </div>
+          )}
 
           {/* Grid/List Content */}
           <div className="flex-1 overflow-hidden">
@@ -344,7 +403,7 @@ export default function ClosetViewEnhanced({
 
         {/* Bulk Actions Toolbar */}
         <ClosetBulkActions
-          selectedCount={selection.selectedIds.size}
+          selectedCount={selectionCount}
           totalCount={filteredCount}
           allSelected={selection.selectAll}
           onSelectAll={selectAll}
@@ -353,6 +412,8 @@ export default function ClosetViewEnhanced({
           onAction={handleBulkAction}
           collections={collections.collections}
           position="bottom"
+          extraActions={extraActions}
+          helperText={helperText || undefined}
         />
 
         {/* Filters Modal (Mobile) */}

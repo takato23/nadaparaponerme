@@ -8,7 +8,7 @@
 import type { ClothingItemMetadata } from '../types';
 import { geminiRateLimiter, retryWithBackoff } from '../src/utils/rateLimiter';
 
-const GEMINI_MODEL = "gemini-2.5-flash";
+const GEMINI_MODEL = "gemini-2.0-flash";
 const API_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models";
 
 // Global API key configuration (same pattern as before)
@@ -258,7 +258,6 @@ IMPORTANTE: Responde con un array JSON de ${imageDataUrls.length} objetos, uno p
   };
 
   try {
-    console.log(`🚀 Batch analyzing ${imageDataUrls.length} images in 1 request...`);
     const startTime = performance.now();
 
     const response = await fetch(url, {
@@ -279,7 +278,6 @@ IMPORTANTE: Responde con un array JSON de ${imageDataUrls.length} objetos, uno p
     const parsedJson = JSON.parse(text);
 
     const processingTime = performance.now() - startTime;
-    console.log(`✅ Batch analysis complete: ${imageDataUrls.length} images in ${Math.round(processingTime)}ms (${Math.round(processingTime / imageDataUrls.length)}ms per image)`);
 
     // Validate response is an array with correct length
     if (!Array.isArray(parsedJson)) {
@@ -310,6 +308,5 @@ IMPORTANTE: Responde con un array JSON de ${imageDataUrls.length} objetos, uno p
  * TODO: Implement using Gemini API or move to Edge Function
  */
 export async function findSimilarItems(item: any, inventory: any[]): Promise<string[]> {
-  console.warn('findSimilarItems not implemented in REST client');
   return [];
 }

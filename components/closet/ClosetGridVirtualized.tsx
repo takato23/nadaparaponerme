@@ -94,9 +94,18 @@ export default function ClosetGridVirtualized({
   onEmptyAction,
   emptyActionLabel = 'Agregar Prenda'
 }: ClosetGridVirtualizedProps) {
-  // ALL HOOKS MUST BE CALLED BEFORE ANY CONDITIONAL RETURNS
+  // ============================================
+  // ALL HOOKS MUST BE CALLED UNCONDITIONALLY
+  // (before any conditional logic or returns)
+  // ============================================
+
   const gridRef = useRef<any>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [visibleRange, setVisibleRange] = useState({ start: 0, end: 50 });
   const { contextMenu, openContextMenu, closeContextMenu } = useContextMenu();
+
+  // Safe items array (handle null/undefined)
+  const safeItems = items ?? [];
 
   // Calculate responsive columns
   const getColumnCount = useCallback((containerWidth: number): number => {
@@ -107,9 +116,8 @@ export default function ClosetGridVirtualized({
 
   // Calculate row count based on items and columns
   const getRowCount = useCallback((columnCount: number): number => {
-    if (!items) return 0;
-    return Math.ceil(items.length / columnCount);
-  }, [items?.length]);
+    return Math.ceil(safeItems.length / columnCount);
+  }, [safeItems.length]);
 
   // Handle context menu (right-click or long-press)
   const handleContextMenu = useCallback((e: React.MouseEvent, item: ClothingItem) => {
@@ -122,7 +130,7 @@ export default function ClosetGridVirtualized({
     }
   }, [onQuickAction]);
 
-  // Cell renderer - must be defined before conditional returns
+  // Cell renderer
   const Cell = useCallback(({
     columnIndex,
     rowIndex,
@@ -144,7 +152,6 @@ export default function ClosetGridVirtualized({
     } = data;
     const itemIndex = rowIndex * columnCount + columnIndex;
 
-    // Check if this cell should render (avoid rendering empty cells at the end)
     if (itemIndex >= gridItems.length) {
       return null;
     }
@@ -167,7 +174,6 @@ export default function ClosetGridVirtualized({
           onLongPress={(id) => {
             const itemForMenu = gridItems.find((i: ClothingItem) => i.id === id);
             if (itemForMenu) {
-              // For mobile long-press, use center of screen
               const fakeEvent = {
                 clientX: window.innerWidth / 2,
                 clientY: window.innerHeight / 2,
@@ -196,7 +202,51 @@ export default function ClosetGridVirtualized({
     );
   }, []);
 
-  // NOW CONDITIONAL RETURNS ARE SAFE (after all hooks)
+  // Calculate visible items based on scroll position
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || safeItems.length === 0) return;
+
+    const handleScroll = () => {
+      const scrollTop = container.scrollTop;
+      const containerHeight = container.clientHeight;
+
+      // Estimate items per row (responsive)
+      const containerWidth = container.clientWidth;
+      const itemWidth = columnWidth + gapSize;
+      const itemsPerRow = Math.max(2, Math.floor(containerWidth / itemWidth));
+
+      // Calculate visible range with overscan
+      const itemsPerScreen = Math.ceil(containerHeight / rowHeight) * itemsPerRow;
+      const startRow = Math.floor(scrollTop / rowHeight);
+      const startIndex = Math.max(0, (startRow - overscanRowCount) * itemsPerRow);
+      const endIndex = Math.min(safeItems.length, startIndex + itemsPerScreen + (overscanRowCount * 2 * itemsPerRow));
+
+      setVisibleRange({ start: startIndex, end: endIndex });
+    };
+
+    // Initial calculation
+    handleScroll();
+
+    container.addEventListener('scroll', handleScroll, { passive: true });
+    window.addEventListener('resize', handleScroll);
+
+    return () => {
+      container.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('resize', handleScroll);
+    };
+  }, [safeItems.length, columnWidth, rowHeight, gapSize, overscanRowCount]);
+
+  // Get visible items
+  const visibleItems = useMemo(() => {
+    return safeItems.slice(visibleRange.start, visibleRange.end);
+  }, [safeItems, visibleRange]);
+
+  // ============================================
+  // RENDER LOGIC (conditional rendering in JSX)
+  // ============================================
+
+  // Null/undefined items
   if (!items) {
     console.warn('ClosetGridVirtualized: items prop is null or undefined');
     return null;
@@ -207,17 +257,12 @@ export default function ClosetGridVirtualized({
     return (
       <div className="flex flex-col items-center justify-center h-full text-center px-8 animate-fade-in">
         <div className="relative w-32 h-32 mb-6">
-          {/* Background glow */}
           <div className="absolute inset-0 rounded-full bg-gradient-to-br from-primary/20 to-secondary/20 blur-2xl animate-pulse-glow" />
-
-          {/* Main icon container */}
           <div className="relative w-32 h-32 rounded-full bg-gradient-to-br from-primary/10 to-secondary/10 flex items-center justify-center shadow-glow animate-float">
             <span className="material-symbols-outlined text-primary text-6xl">
               checkroom
             </span>
           </div>
-
-          {/* Orbiting particles */}
           <div className="absolute top-0 right-0 w-3 h-3 rounded-full bg-primary animate-bounce-small" style={{ animationDelay: '0s' }} />
           <div className="absolute bottom-0 left-0 w-2 h-2 rounded-full bg-secondary animate-bounce-small" style={{ animationDelay: '0.3s' }} />
           <div className="absolute top-1/2 right-0 w-2 h-2 rounded-full bg-accent animate-bounce-small" style={{ animationDelay: '0.6s' }} />
@@ -262,54 +307,10 @@ export default function ClosetGridVirtualized({
     );
   }
 
-  // Scroll-based virtualization state
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [visibleRange, setVisibleRange] = useState({ start: 0, end: 50 });
-
-  // Calculate visible items based on scroll position
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    const handleScroll = () => {
-      const scrollTop = container.scrollTop;
-      const containerHeight = container.clientHeight;
-
-      // Estimate items per row (responsive)
-      const containerWidth = container.clientWidth;
-      const itemWidth = columnWidth + gapSize;
-      const itemsPerRow = Math.max(2, Math.floor(containerWidth / itemWidth));
-
-      // Calculate visible range with overscan
-      const itemsPerScreen = Math.ceil(containerHeight / rowHeight) * itemsPerRow;
-      const startRow = Math.floor(scrollTop / rowHeight);
-      const startIndex = Math.max(0, (startRow - overscanRowCount) * itemsPerRow);
-      const endIndex = Math.min(items.length, startIndex + itemsPerScreen + (overscanRowCount * 2 * itemsPerRow));
-
-      setVisibleRange({ start: startIndex, end: endIndex });
-    };
-
-    // Initial calculation
-    handleScroll();
-
-    container.addEventListener('scroll', handleScroll, { passive: true });
-    window.addEventListener('resize', handleScroll);
-
-    return () => {
-      container.removeEventListener('scroll', handleScroll);
-      window.removeEventListener('resize', handleScroll);
-    };
-  }, [items.length, columnWidth, rowHeight, gapSize, overscanRowCount]);
-
-  // Get visible items
-  const visibleItems = useMemo(() => {
-    return items.slice(visibleRange.start, visibleRange.end);
-  }, [items, visibleRange]);
-
   return (
     <div
       ref={containerRef}
-      className="h-full w-full overflow-y-auto px-1 sm:px-4 py-2 sm:py-4 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600"
+      className="h-full w-full overflow-y-auto px-1 sm:px-4 py-2 sm:py-4 pb-[calc(7rem+env(safe-area-inset-bottom))] scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600"
       onContextMenu={(e) => e.preventDefault()}
     >
       {/* Spacer for items above viewport */}
@@ -337,7 +338,7 @@ export default function ClosetGridVirtualized({
                   const fakeEvent = {
                     clientX: window.innerWidth / 2,
                     clientY: window.innerHeight / 2,
-                    preventDefault: () => {}
+                    preventDefault: () => { }
                   } as React.MouseEvent;
                   openContextMenu(fakeEvent, item);
                 }}
@@ -362,10 +363,10 @@ export default function ClosetGridVirtualized({
       </div>
 
       {/* Spacer for items below viewport */}
-      {visibleRange.end < items.length && (
+      {visibleRange.end < safeItems.length && (
         <div
           style={{
-            height: Math.ceil((items.length - visibleRange.end) / Math.max(2, Math.floor((containerRef.current?.clientWidth || 300) / (columnWidth + gapSize)))) * rowHeight
+            height: Math.ceil((safeItems.length - visibleRange.end) / Math.max(2, Math.floor((containerRef.current?.clientWidth || 300) / (columnWidth + gapSize)))) * rowHeight
           }}
         />
       )}

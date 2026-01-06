@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import type { ClothingItem, DupeFinderResult, BrandRecognitionResult } from '../types';
 import * as geminiService from '../src/services/aiService';
 import Loader from './Loader';
+import { getCreditStatus } from '../services/usageTrackingService';
 
 interface DupeFinderViewProps {
   item: ClothingItem;
@@ -16,6 +17,9 @@ const DupeFinderView = ({ item, brandInfo, onClose }: DupeFinderViewProps) => {
   const [dupeResult, setDupeResult] = useState<DupeFinderResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Credits status
+  const credits = useMemo(() => getCreditStatus(), [dupeResult]);
 
   const handleFindDupes = async () => {
     setLoading(true);
@@ -384,14 +388,29 @@ const DupeFinderView = ({ item, brandInfo, onClose }: DupeFinderViewProps) => {
   return (
     <div className="absolute inset-0 bg-white/80 dark:bg-background-dark/80 backdrop-blur-xl z-20">
       {/* Header */}
-      <header className="p-4 flex items-center border-b border-gray-200 dark:border-gray-800">
-        <button
-          onClick={onClose}
-          className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition-colors duration-200"
-        >
-          <span className="material-symbols-outlined">arrow_back</span>
-        </button>
-        <h1 className="ml-4 text-lg font-bold">Buscador de Dupes</h1>
+      <header className="p-4 flex items-center justify-between border-b border-gray-200 dark:border-gray-800">
+        <div className="flex items-center">
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition-colors duration-200"
+          >
+            <span className="material-symbols-outlined">arrow_back</span>
+          </button>
+          <h1 className="ml-4 text-lg font-bold">Buscador de Dupes</h1>
+        </div>
+        {/* Credits Indicator */}
+        <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg ${
+          credits.remaining <= 3
+            ? 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
+            : 'bg-gray-100 dark:bg-gray-800'
+        }`}>
+          <span className="material-symbols-rounded text-gray-500 text-sm">toll</span>
+          <span className={`text-xs font-medium ${
+            credits.remaining <= 3 ? 'text-red-600 dark:text-red-400' : 'text-gray-600 dark:text-gray-300'
+          }`}>
+            {credits.limit === -1 ? '∞' : credits.remaining}
+          </span>
+        </div>
       </header>
 
       {/* Content */}

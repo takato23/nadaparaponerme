@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import type { ClothingItem, StyleDNAProfile } from '../types';
 import { analyzeStyleDNA } from '../src/services/aiService';
 import Loader from './Loader';
 import { Card } from './ui/Card';
 import { HelpIcon } from './ui/HelpIcon';
+import { getCreditStatus } from '../services/usageTrackingService';
 
 interface StyleDNAProfileViewProps {
     closet: ClothingItem[];
@@ -16,6 +17,9 @@ const StyleDNAProfileView = ({ closet, onClose }: StyleDNAProfileViewProps) => {
     const [currentStep, setCurrentStep] = useState<ViewStep>('intro');
     const [dnaProfile, setDnaProfile] = useState<StyleDNAProfile | null>(null);
     const [error, setError] = useState<string>('');
+
+    // Credits status
+    const credits = useMemo(() => getCreditStatus(), [dnaProfile]);
 
     const handleStartAnalysis = async () => {
         if (closet.length < 10) {
@@ -52,9 +56,24 @@ const StyleDNAProfileView = ({ closet, onClose }: StyleDNAProfileViewProps) => {
                                 position="bottom"
                             />
                         </div>
-                        <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl dark:text-gray-200">
-                            <span className="material-symbols-outlined">close</span>
-                        </button>
+                        <div className="flex items-center gap-3">
+                            {/* Credits Indicator */}
+                            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg ${
+                                credits.remaining <= 3
+                                    ? 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
+                                    : 'bg-gray-100 dark:bg-gray-800'
+                            }`}>
+                                <span className="material-symbols-rounded text-gray-500 text-sm">toll</span>
+                                <span className={`text-xs font-medium ${
+                                    credits.remaining <= 3 ? 'text-red-600 dark:text-red-400' : 'text-gray-600 dark:text-gray-300'
+                                }`}>
+                                    {credits.limit === -1 ? '∞' : credits.remaining}
+                                </span>
+                            </div>
+                            <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl dark:text-gray-200">
+                                <span className="material-symbols-outlined">close</span>
+                            </button>
+                        </div>
                     </header>
 
                     <div className="flex-grow overflow-y-auto p-6">
@@ -222,9 +241,24 @@ const StyleDNAProfileView = ({ closet, onClose }: StyleDNAProfileViewProps) => {
                             <span className="material-symbols-outlined">arrow_back</span>
                         </button>
                         <h2 className="text-xl font-bold dark:text-gray-200">Tu Style DNA</h2>
-                        <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl dark:text-gray-200">
-                            <span className="material-symbols-outlined">close</span>
-                        </button>
+                        <div className="flex items-center gap-3">
+                            {/* Credits Indicator */}
+                            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg ${
+                                credits.remaining <= 3
+                                    ? 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
+                                    : 'bg-gray-100 dark:bg-gray-800'
+                            }`}>
+                                <span className="material-symbols-rounded text-gray-500 text-sm">toll</span>
+                                <span className={`text-xs font-medium ${
+                                    credits.remaining <= 3 ? 'text-red-600 dark:text-red-400' : 'text-gray-600 dark:text-gray-300'
+                                }`}>
+                                    {credits.limit === -1 ? '∞' : credits.remaining}
+                                </span>
+                            </div>
+                            <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl dark:text-gray-200">
+                                <span className="material-symbols-outlined">close</span>
+                            </button>
+                        </div>
                     </header>
 
                     <div className="flex-grow overflow-y-auto p-6 pb-24">

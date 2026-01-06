@@ -10,6 +10,8 @@
  */
 
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
+import { ROUTES } from '../../src/routes';
 import ClosetCollections from './ClosetCollections';
 import ClosetQuickStats from './ClosetQuickStats';
 import type { Collection, ClosetStats } from '../../types/closet';
@@ -52,6 +54,8 @@ export default function ClosetSidebar({
   onToggle,
   isOpen = true
 }: ClosetSidebarProps) {
+  const navigate = useNavigate();
+
   if (!isOpen) {
     return (
       <div className="hidden md:flex flex-col items-center py-6 bg-white/30 dark:bg-black/20 border-r border-white/10 backdrop-blur-xl h-full">
@@ -77,13 +81,8 @@ export default function ClosetSidebar({
 
   return (
     <aside
-      className="hidden md:flex flex-col border-r border-white/10 overflow-hidden shadow-xl h-full transition-all duration-300"
-      style={{
-        width: `${width}px`,
-        backdropFilter: `blur(var(--glass-blur)) saturate(var(--glass-saturation))`,
-        WebkitBackdropFilter: `blur(var(--glass-blur)) saturate(var(--glass-saturation))`,
-        backgroundColor: `rgba(255, 255, 255, var(--glass-opacity))`
-      }}
+      className="hidden md:flex flex-col border-r border-white/10 dark:border-white/5 overflow-hidden shadow-xl h-full transition-all duration-300 bg-white/70 dark:bg-gray-900/80 backdrop-blur-xl"
+      style={{ width: `${width}px` }}
     >
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-5 border-b border-white/10 bg-white/20 dark:bg-black/20">
@@ -112,6 +111,44 @@ export default function ClosetSidebar({
         <section>
           <h3 className="text-xs font-bold text-text-secondary/70 dark:text-gray-500 uppercase tracking-wider mb-3 px-1">Resumen</h3>
           <ClosetQuickStats stats={stats} compact />
+        </section>
+
+        {/* Studio Link */}
+        <section className="mb-2">
+          <button
+            onClick={() => navigate(ROUTES.STUDIO)}
+            className="w-full px-4 py-3 rounded-xl bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/20 hover:border-purple-500/40 flex items-center justify-between group transition-all"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white shadow-sm">
+                <span className="material-symbols-outlined text-sm">auto_awesome</span>
+              </div>
+              <div className="text-left">
+                <p className="font-bold text-sm text-gray-800 dark:text-gray-200">Probar look</p>
+                <p className="text-[10px] text-gray-500 dark:text-gray-400">2 prendas + modo foto</p>
+              </div>
+            </div>
+            <span className="material-symbols-outlined text-gray-400 group-hover:translate-x-1 transition-transform text-sm">arrow_forward_ios</span>
+          </button>
+        </section>
+
+        {/* Looks Wardrobe Link */}
+        <section className="mb-2">
+          <button
+            onClick={() => navigate(ROUTES.SAVED_LOOKS)}
+            className="w-full px-4 py-3 rounded-xl bg-gradient-to-r from-emerald-500/10 to-teal-500/10 border border-emerald-500/20 hover:border-emerald-500/40 flex items-center justify-between group transition-all"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center text-white shadow-sm">
+                <span className="material-symbols-outlined text-sm">photo_library</span>
+              </div>
+              <div className="text-left">
+                <p className="font-bold text-sm text-gray-800 dark:text-gray-200">Armario de looks</p>
+                <p className="text-[10px] text-gray-500 dark:text-gray-400">Tus looks guardados</p>
+              </div>
+            </div>
+            <span className="material-symbols-outlined text-gray-400 group-hover:translate-x-1 transition-transform text-sm">arrow_forward_ios</span>
+          </button>
         </section>
 
         {/* Collections */}

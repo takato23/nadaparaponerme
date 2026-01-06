@@ -100,6 +100,29 @@ export function Hero3DImproved({
     { icon: 'local_fire_department', value: daysActive, label: 'días', color: 'from-orange-400 to-red-500' },
   ];
 
+  const initial = (displayName?.trim()?.[0] || 'O').toUpperCase();
+
+  const Avatar = ({ sizeClassName }: { sizeClassName: string }) => {
+    if (avatarUrl) {
+      return (
+        <img
+          src={avatarUrl}
+          alt={`Avatar de ${displayName}`}
+          className={`${sizeClassName} rounded-full object-cover border-2 border-white`}
+        />
+      );
+    }
+
+    return (
+      <div
+        aria-hidden="true"
+        className={`${sizeClassName} rounded-full border-2 border-white/80 bg-gradient-to-br from-primary via-secondary to-accent flex items-center justify-center`}
+      >
+        <span className="text-white font-black text-2xl md:text-3xl leading-none">{initial}</span>
+      </div>
+    );
+  };
+
   // Versión sin animación 3D para accesibilidad
   if (prefersReducedMotion) {
     return (
@@ -110,17 +133,16 @@ export function Hero3DImproved({
       >
         <div className="p-6 md:p-8 flex flex-col items-center text-center">
           <div className="w-20 h-20 md:w-24 md:h-24 rounded-full bg-gradient-to-br from-primary to-secondary p-1 mb-4 md:mb-6 shadow-lg">
-            <img
-              src={avatarUrl || "https://images.pexels.com/photos/415829/pexels-photo-415829.jpeg?auto=compress&cs=tinysrgb&w=800"}
-              alt={`Avatar de ${displayName}`}
-              className="w-full h-full rounded-full object-cover border-2 border-white"
-            />
+            <Avatar sizeClassName="w-full h-full" />
           </div>
           <h2 className="text-3xl md:text-4xl font-bold text-white mb-2 tracking-tight">
             Hola, {displayName}
           </h2>
-          <p className="text-gray-400 text-base md:text-lg mb-6">
-            ¿Qué nos ponemos hoy?
+          <p className="text-gray-300 text-base md:text-lg mb-1">
+            Tu Studio está listo
+          </p>
+          <p className="text-xs md:text-sm text-white/70 mb-6">
+            2-3 prendas / modo foto / generar
           </p>
           <div className="flex flex-wrap gap-3 justify-center" role="list" aria-label="Estadísticas del usuario">
             {stats.map(stat => (
@@ -151,13 +173,17 @@ export function Hero3DImproved({
         rotateY,
         transformStyle: "preserve-3d",
       }}
-      className="relative w-full max-w-3xl mx-auto aspect-auto min-h-[380px] md:min-h-0 md:aspect-[16/9] rounded-2xl md:rounded-[2.5rem] bg-gradient-to-br from-slate-900/95 to-slate-800/95 backdrop-blur-sm border border-white/10 shadow-2xl cursor-pointer group overflow-hidden"
+      className="relative w-full max-w-3xl mx-auto aspect-auto min-h-[260px] md:min-h-0 md:aspect-[16/9] rounded-2xl md:rounded-[2.5rem] bg-gradient-to-br from-slate-900/95 to-slate-800/95 backdrop-blur-sm border border-white/10 shadow-2xl cursor-pointer group overflow-hidden"
       role="banner"
       aria-label={`Panel de bienvenida interactivo para ${displayName}. Mueve el cursor o desliza para ver el efecto 3D.`}
       tabIndex={0}
     >
       {/* Background con gradiente animado */}
       <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-secondary/5 opacity-50" />
+
+      {/* Decorative Magic Orbs */}
+      <div className="absolute top-1/4 -left-10 w-40 h-40 bg-primary/20 blur-[60px] rounded-full animate-float pointer-events-none" />
+      <div className="absolute bottom-1/4 -right-10 w-40 h-40 bg-secondary/20 blur-[60px] rounded-full animate-float pointer-events-none" style={{ animationDelay: '1s' }} />
 
       {/* Inner frame con profundidad */}
       <motion.div
@@ -178,19 +204,18 @@ export function Hero3DImproved({
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
         >
-          <img
-            src={avatarUrl || "https://images.pexels.com/photos/415829/pexels-photo-415829.jpeg?auto=compress&cs=tinysrgb&w=800"}
-            alt={`Avatar de ${displayName}`}
-            className="w-full h-full rounded-full object-cover border-2 border-white"
-          />
+          <Avatar sizeClassName="w-full h-full" />
         </motion.div>
 
         {/* Saludo */}
         <h2 className="text-2xl md:text-4xl font-bold text-white mb-1 md:mb-2 tracking-tight">
           Hola, {displayName}
         </h2>
-        <p className="text-gray-400 text-sm md:text-lg mb-4 md:mb-6">
-          ¿Qué nos ponemos hoy?
+        <p className="text-gray-300 text-sm md:text-lg mb-1 md:mb-2">
+          Tu Studio está listo
+        </p>
+        <p className="text-xs md:text-sm text-white/70 mb-4 md:mb-6">
+          2-3 prendas / modo foto / generar
         </p>
 
         {/* Stats con gradientes individuales */}
@@ -206,7 +231,7 @@ export function Hero3DImproved({
             >
               {/* Gradiente de fondo */}
               <div className={`absolute inset-0 bg-gradient-to-r ${stat.color} opacity-20`} />
-              <div className="absolute inset-0 bg-white/5 backdrop-blur-md border border-white/10" />
+              <div className="absolute inset-0 bg-white/5 backdrop-blur-md" />
 
               <div className="relative z-10 flex items-center gap-1.5 md:gap-2 text-white">
                 <span className="material-symbols-outlined text-base md:text-lg" aria-hidden="true">
@@ -224,35 +249,7 @@ export function Hero3DImproved({
         </div>
       </motion.div>
 
-      {/* Elementos flotantes con profundidad - más sutiles */}
-      <motion.div
-        style={{ transform: "translateZ(80px)" }}
-        className="absolute top-6 md:top-10 right-6 md:right-8 w-8 md:w-12 h-8 md:h-12 rounded-full bg-gradient-to-br from-yellow-400 to-orange-500 blur-xl opacity-30"
-        animate={{
-          scale: [1, 1.2, 1],
-          opacity: [0.3, 0.4, 0.3],
-        }}
-        transition={{
-          duration: 4,
-          repeat: Infinity,
-          ease: "easeInOut",
-        }}
-      />
-
-      <motion.div
-        style={{ transform: "translateZ(60px)" }}
-        className="absolute bottom-6 md:bottom-10 left-6 md:left-8 w-10 md:w-16 h-10 md:h-16 rounded-full bg-gradient-to-br from-primary to-secondary blur-2xl opacity-25"
-        animate={{
-          scale: [1, 1.1, 1],
-          opacity: [0.25, 0.35, 0.25],
-        }}
-        transition={{
-          duration: 5,
-          repeat: Infinity,
-          ease: "easeInOut",
-          delay: 1,
-        }}
-      />
+      {/* Nota: sin "orbs" decorativos para evitar distracciones en el dashboard */}
 
       {/* Reflejo de vidrio en hover */}
       <motion.div

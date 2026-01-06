@@ -443,6 +443,32 @@ supabase db push  # Re-aplicar migraciones
 - Verificar permisos del usuario
 - Verificar URL pública correcta
 
+## 2025 AI Edge Functions y Migraciones
+
+### Secretos requeridos
+- `GEMINI_API_KEY` (Google Cloud API Key que todas las funciones de IA necesitan).
+- `SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY` o el alias `SERVICE_ROLE_KEY` (el service role expone los RPC seguros).
+- `BETA_ALLOWLIST_EMAILS` (opcional, usada por todas las funciones con `allowlistRaw` para cerrar beta).
+- Usa `scripts/fix-backend-secrets.sh` o `supabase secrets set ...` para mantener estas claves sincronizadas.
+
+### Resumen rápido de funciones
+| Función | Ruta | Descripción | Cuota |
+| --- | --- | --- | --- |
+| `generate-image` | `POST /functions/v1/generate-image` | Genera la imagen final del producto (modelo `imagen-3.0`). Devuelve un `data:image/jpeg;base64`. | No consume el contador mensual. |
+| `generate-outfit` | `POST /functions/v1/generate-outfit` | Selecciona prendas del closet y responde con IDs + explicación. Valida `can_user_generate_outfit()` y llama a `increment_ai_generation_usage()` tras el éxito. | Comparte el contador mensual. |
+| `generate-packing-list` | `POST /functions/v1/generate-packing-list` | Empaca prendas y propone outfits para viajes; reusa exactamente los mismos RPC de cuota que `generate-outfit`. | Comparte el mismo contador. |
+| `virtual-try-on` | `POST /functions/v1/virtual-try-on` | Edición de un retrato con las prendas seleccionadas; elige `gemini-2.5-flash` o `gemini-3-pro` según el tier. Usa `can_user_generate_outfit()` antes de llamar `increment_ai_generation_usage()`. | Comparte el contador. |
+| `analyze-clothing` | `POST /functions/v1/analyze-clothing` | Devuelve metadata (categoría, colores, tags, estaciones) para una prenda subida. | Solo lectura, no consume cuota. |
+| `shopping-assistant` | `POST /functions/v1/shopping-assistant` | Modo `analyze-gaps`, `generate-recommendations` o `chat` (dependiendo de `action`). | No toca el contador. |
+| `process-payment` | `POST /functions/v1/process-payment` | Actualiza `subscriptions` + `usage_metrics` y reinicia counters tras confirmar el pago. Solo necesita `SERVICE_ROLE_KEY`. | Reinicia límites, no incrementa. |
+
+### Migraciones clave
+- `supabase/migrations/20251120000001_ai_image_generation.sql`: define las tablas `ai_generated_images` y `daily_generation_quota`, habilita RLS, índices y las funciones `get_user_quota_status`, `cleanup_old_quotas` y `update_quota_timestamp`.
+- `supabase/migrations/20251120000002_ai_images_storage.sql`: crea el bucket `ai-generated-images` privado con políticas rígidas (2MB max, solo service role y funciones con RLS).
+- `supabase/migrations/20251127000001_improve_subscription_reset.sql`: reemplaza `increment_ai_generation_usage`, `can_user_generate_outfit` y `get_remaining_generations` con lógica de reseteo mensual y límites por tier; las Edge Functions los consumen para validar y registrar la cuota compartida.
+
+Aplica `supabase db push` al desplegar las funciones y verifica los grants (`GRANT EXECUTE ON FUNCTION increment_ai_generation_usage(UUID) TO authenticated;`) para que las solicitudes autenticadas puedan invocarlas.
+
 ### Contacto
 Para issues o preguntas, revisar:
 - README.md - Documentación de uso

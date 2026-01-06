@@ -15,7 +15,9 @@
 
 import React, { useState, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import type { ClothingItem } from '../../types';
+import { ClothingItem } from '../../types';
+import { useNavigate } from 'react-router-dom';
+import { ROUTES } from '../../src/routes';
 import { PLACEHOLDERS, getImageUrl } from '../../src/utils/imagePlaceholder';
 
 interface ClosetItemCardProps {
@@ -30,6 +32,7 @@ interface ClosetItemCardProps {
   size?: 'compact' | 'normal' | 'large';
   showQuickActions?: boolean;
   onQuickAction?: (action: 'edit' | 'delete' | 'favorite' | 'share', itemId: string) => void;
+  onDelete?: (id: string) => void; // Added onDelete prop
   index?: number;
   isSelectionMode?: boolean;
 }
@@ -46,9 +49,11 @@ export default function ClosetItemCard({
   size = 'normal',
   showQuickActions = true,
   onQuickAction,
+  onDelete, // Added onDelete
   index = 0,
   isSelectionMode = false
 }: ClosetItemCardProps) {
+  const navigate = useNavigate();
   const [imageLoaded, setImageLoaded] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const [longPressTimer, setLongPressTimer] = useState<NodeJS.Timeout | null>(null);
@@ -58,6 +63,22 @@ export default function ClosetItemCard({
   const imageUrl = useMemo(() => {
     return getImageUrl(item as any, viewMode === 'grid');
   }, [item, viewMode]);
+
+  const statusBadge = useMemo(() => {
+    if (item.status === 'virtual') {
+      return {
+        label: 'Prestado',
+        className: 'bg-white/85 text-gray-700 border-white/70'
+      };
+    }
+    if (item.status === 'wishlist') {
+      return {
+        label: 'Wishlist',
+        className: 'bg-amber-100/90 text-amber-700 border-amber-200/70'
+      };
+    }
+    return null;
+  }, [item.status]);
 
   // Handle click
   const handleClick = (e: React.MouseEvent) => {
@@ -106,6 +127,8 @@ export default function ClosetItemCard({
     normal: 'h-48',
     large: 'h-64'
   };
+
+  const entryDelay = Math.min(index, 12) * 0.04;
 
   // List view layout
   if (viewMode === 'list') {
@@ -158,6 +181,13 @@ export default function ClosetItemCard({
           <p className="text-sm text-text-secondary dark:text-gray-400 capitalize truncate font-medium">
             {item.metadata?.color_primary || 'Sin color'}
           </p>
+          {statusBadge && (
+            <span
+              className={`mt-1 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border ${statusBadge.className}`}
+            >
+              {statusBadge.label}
+            </span>
+          )}
           {item.metadata?.vibe_tags && item.metadata.vibe_tags.length > 0 && (
             <div className="flex gap-1 mt-1.5">
               {item.metadata.vibe_tags.slice(0, 2).map((tag, i) => (
@@ -200,9 +230,14 @@ export default function ClosetItemCard({
     <motion.div
       layoutId={`item-${item.id}`}
       layout
+      initial={{ opacity: 0, y: 14, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
       whileHover={{ y: -8, scale: 1.02, transition: { duration: 0.3, ease: "easeOut" } }}
       whileTap={{ scale: 0.98 }}
-      transition={{ duration: 0.4, ease: "easeOut" }}
+      transition={{
+        default: { duration: 0.4, ease: "easeOut", delay: entryDelay },
+        layout: { duration: 0.3, ease: "easeOut" }
+      }}
       className={`
         relative rounded-2xl overflow-hidden cursor-pointer glass-card group
         ${sizeClasses[size]}
@@ -271,6 +306,14 @@ export default function ClosetItemCard({
           </motion.div>
         )}
 
+        {statusBadge && (
+          <div className={`absolute top-3 ${isSelectionMode ? 'left-12' : 'left-3'} z-20`}>
+            <span className={`px-2 py-1 rounded-full text-[10px] font-semibold border backdrop-blur-sm ${statusBadge.className}`}>
+              {statusBadge.label}
+            </span>
+          </div>
+        )}
+
         {/* Versatility badge (top-right) */}
         {showVersatilityScore && versatilityScore > 0 && (
           <motion.div
@@ -283,6 +326,48 @@ export default function ClosetItemCard({
               <span className="text-xs font-bold">{versatilityScore}</span>
             </div>
           </motion.div>
+        )}
+
+        {/* Top-Right Actions (Independent of versatility) */}
+        {!isSelectionMode && (
+          <div className="absolute top-3 right-3 z-20 flex flex-col gap-2">
+            {/* Only show versatility here if we want to stack them, otherwise keep separate positioning. 
+                     Actually, let's keep versatility separate if present. 
+                     If versatility is present, we might overlap. Let's position actions below it or to the side?
+                     Let's put actions at top-right, and versatility slightly left of it or below.
+                     Simplest: Actions at top-right. Versatility at top-left (next to checkbox) or ensure they don't collision.
+                     
+                     Let's put Actions at Top Right.
+                     If Versatility exists, let's move it to Bottom Right or Top Left?
+                     Looking at previous code, versatility was Top Right.
+                     Let's put Actions Top Right, and push Versatility to Top Left (if no checkbox) or just below Actions.
+                 */}
+
+            <div className="flex items-center gap-1">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate(ROUTES.STUDIO, { state: { preselectedItemIds: [item.id] } });
+                }}
+                className="bg-white/80 dark:bg-black/50 hover:bg-white dark:hover:bg-black/70 backdrop-blur-md w-8 h-8 rounded-full flex items-center justify-center shadow-sm transition-all group/btn"
+                title="Probar Ahora"
+              >
+                <span className="material-symbols-outlined text-[18px] text-gray-700 dark:text-gray-200 group-hover/btn:text-primary">auto_fix_high</span>
+              </button>
+              {onDelete && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDelete(item.id);
+                  }}
+                  className="bg-white/80 dark:bg-black/50 hover:bg-white dark:hover:bg-black/70 backdrop-blur-md w-8 h-8 rounded-full flex items-center justify-center shadow-sm transition-all text-red-500"
+                  title="Eliminar"
+                >
+                  <span className="material-symbols-outlined text-[18px]">delete</span>
+                </button>
+              )}
+            </div>
+          </div>
         )}
 
         {/* Glass Info Card on Hover - NEW */}
@@ -329,58 +414,50 @@ export default function ClosetItemCard({
                   )}
                 </div>
               </div>
+
+              {/* Quick Actions - Integrated into Card */}
+              {showQuickActions && !isSelectionMode && (
+                <div className="flex items-center justify-center gap-3 mt-3 pointer-events-auto">
+                  <motion.button
+                    type="button"
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.9 }}
+                    onClick={(e) => handleQuickAction('favorite', e)}
+                    className="w-8 h-8 rounded-full bg-white/80 text-primary shadow-sm flex items-center justify-center backdrop-blur-sm hover:bg-white transition-colors"
+                    title="Favorito"
+                  >
+                    <span className="material-symbols-outlined text-lg">favorite</span>
+                  </motion.button>
+
+                  <motion.button
+                    type="button"
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.9 }}
+                    onClick={(e) => handleQuickAction('edit', e)}
+                    className="w-8 h-8 rounded-full bg-white/80 text-gray-700 shadow-sm flex items-center justify-center backdrop-blur-sm hover:bg-white transition-colors"
+                    title="Editar"
+                  >
+                    <span className="material-symbols-outlined text-lg">edit</span>
+                  </motion.button>
+
+                  <motion.button
+                    type="button"
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.9 }}
+                    onClick={(e) => handleQuickAction('delete', e)}
+                    className="w-8 h-8 rounded-full bg-white/80 text-red-500 shadow-sm flex items-center justify-center backdrop-blur-sm hover:bg-white transition-colors"
+                    title="Eliminar"
+                  >
+                    <span className="material-symbols-outlined text-lg">delete</span>
+                  </motion.button>
+                </div>
+              )}
+
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* Desktop hover overlay */}
-        <AnimatePresence>
-          {isHovered && showQuickActions && !isSelectionMode && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 10 }}
-              transition={{ duration: 0.2 }}
-              className="absolute bottom-4 left-0 right-0 z-20 hidden md:flex items-center justify-center gap-3"
-            >
-              <motion.button
-                type="button"
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
-                onClick={(e) => handleQuickAction('favorite', e)}
-                className="w-10 h-10 rounded-full bg-white/90 text-primary shadow-lg flex items-center justify-center backdrop-blur-sm hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
-                aria-label={`Marcar como favorito ${item.metadata?.subcategory || 'prenda'}`}
-                title="Favorito"
-              >
-                <span className="material-symbols-outlined text-xl" aria-hidden="true">favorite</span>
-              </motion.button>
 
-              <motion.button
-                type="button"
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
-                onClick={(e) => handleQuickAction('edit', e)}
-                className="w-10 h-10 rounded-full bg-white/90 text-gray-700 shadow-lg flex items-center justify-center backdrop-blur-sm hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
-                aria-label={`Editar ${item.metadata?.subcategory || 'prenda'}`}
-                title="Editar"
-              >
-                <span className="material-symbols-outlined text-xl" aria-hidden="true">edit</span>
-              </motion.button>
-
-              <motion.button
-                type="button"
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
-                onClick={(e) => handleQuickAction('delete', e)}
-                className="w-10 h-10 rounded-full bg-white/90 text-red-500 shadow-lg flex items-center justify-center backdrop-blur-sm hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
-                aria-label={`Eliminar ${item.metadata?.subcategory || 'prenda'}`}
-                title="Eliminar"
-              >
-                <span className="material-symbols-outlined text-xl" aria-hidden="true">delete</span>
-              </motion.button>
-            </motion.div>
-          )}
-        </AnimatePresence>
       </div>
 
       {/* Info section */}
@@ -408,6 +485,6 @@ export default function ClosetItemCard({
           </div>
         )}
       </div>
-    </motion.div>
+    </motion.div >
   );
 }

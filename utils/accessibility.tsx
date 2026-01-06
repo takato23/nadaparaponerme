@@ -276,7 +276,7 @@ export const focusVisibleStyles = 'focus-visible:outline-none focus-visible:ring
 // ============================================
 
 export const getHeadingLevel = (level: 1 | 2 | 3 | 4 | 5 | 6) => {
-  const Component = `h${level}` as keyof JSX.IntrinsicElements;
+  const Component = `h${level}` as React.ElementType;
   return Component;
 };
 

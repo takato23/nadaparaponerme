@@ -8,6 +8,7 @@
 import React, { useState } from 'react';
 import { createPaymentPreference } from '../src/services/paymentService';
 import type { SubscriptionTier, SubscriptionPlan } from '../types-payment';
+import { PAYMENTS_ENABLED, V1_SAFE_MODE } from '../src/config/runtime';
 
 // ============================================================================
 // TYPES
@@ -123,6 +124,11 @@ export function PricingModal({
     if (tier === 'free' || tier === currentTier) return;
 
     try {
+      if (V1_SAFE_MODE && !PAYMENTS_ENABLED) {
+        setError('Pagos desactivados durante la V1 (beta). Próximamente vas a poder hacer upgrade.');
+        return;
+      }
+
       setIsLoading(tier);
       setError(null);
 
@@ -151,6 +157,7 @@ export function PricingModal({
   const isButtonDisabled = (plan: SubscriptionPlan) => {
     if (plan.id === currentTier) return true;
     if (plan.id === 'free') return true;
+    if (V1_SAFE_MODE && !PAYMENTS_ENABLED) return true;
     if (isLoading !== null) return true;
     return false;
   };
@@ -216,6 +223,13 @@ export function PricingModal({
         {error && (
           <div className="mx-6 mt-4 p-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
             <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+          </div>
+        )}
+        {V1_SAFE_MODE && !PAYMENTS_ENABLED && !error && (
+          <div className="mx-6 mt-4 p-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+            <p className="text-sm text-amber-700 dark:text-amber-300">
+              Beta: los pagos están desactivados por seguridad. Podés usar la app en modo Free mientras validamos el checkout.
+            </p>
           </div>
         )}
 

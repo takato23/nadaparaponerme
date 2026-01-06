@@ -3,6 +3,7 @@ import type { SubscriptionPlan, Subscription } from '../types-payment';
 import * as paymentService from '../src/services/paymentService';
 import Loader from './Loader';
 import { Card } from './ui/Card';
+import { PAYMENTS_ENABLED, V1_SAFE_MODE } from '../src/config/runtime';
 
 interface PaywallViewProps {
   onClose: () => void;
@@ -47,6 +48,11 @@ const PaywallView = ({ onClose, featureName, featureDescription }: PaywallViewPr
 
   const handleUpgrade = async (tier: 'pro' | 'premium') => {
     try {
+      if (V1_SAFE_MODE && !PAYMENTS_ENABLED) {
+        setError('Pagos desactivados durante la V1 (beta). Próximamente vas a poder hacer upgrade.');
+        return;
+      }
+
       setUpgrading(true);
       setError('');
 
@@ -73,6 +79,7 @@ const PaywallView = ({ onClose, featureName, featureDescription }: PaywallViewPr
   };
 
   const canUpgradeTo = (planId: string) => {
+    if (V1_SAFE_MODE && !PAYMENTS_ENABLED) return false;
     if (!currentSubscription) return planId !== 'free';
 
     const currentTier = currentSubscription.tier;
@@ -149,6 +156,13 @@ const PaywallView = ({ onClose, featureName, featureDescription }: PaywallViewPr
           {error && (
             <div className="mb-6 p-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
               <p className="text-red-600 dark:text-red-400 text-sm">{error}</p>
+            </div>
+          )}
+          {V1_SAFE_MODE && !PAYMENTS_ENABLED && !error && (
+            <div className="mb-6 p-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+              <p className="text-amber-700 dark:text-amber-300 text-sm">
+                Beta: pagos desactivados por seguridad. La app funciona en modo Free mientras validamos el checkout.
+              </p>
             </div>
           )}
 

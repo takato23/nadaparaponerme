@@ -172,7 +172,8 @@ export async function incrementAIGeneration(): Promise<boolean> {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return false;
 
-    const { data, error } = await supabase.rpc('increment_ai_generation', {
+    // Source of truth is increment_ai_generation_usage() in DB
+    const { data, error } = await supabase.rpc('increment_ai_generation_usage', {
         p_user_id: user.id,
     });
 

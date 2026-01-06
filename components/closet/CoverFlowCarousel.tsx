@@ -96,7 +96,7 @@ export const CoverFlowCarousel = ({ items, onItemClick, initialIndex = 0 }: Cove
             </div>
 
             {/* Navigation Dots */}
-            <div className="absolute bottom-4 sm:bottom-8 left-0 right-0 flex justify-center gap-2 z-50 pointer-events-auto">
+            <div className="absolute bottom-[calc(5.5rem+env(safe-area-inset-bottom))] sm:bottom-10 left-0 right-0 flex justify-center gap-2 z-50 pointer-events-auto">
                 {items.map((_, idx) => {
                     // Only show dots if we have few items, or show a sliding window of dots
                     if (items.length > 20 && Math.abs(idx - activeIndex) > 5) return null;

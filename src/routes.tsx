@@ -24,6 +24,11 @@ export const ROUTES = {
 
   // Nested/detail views
   OUTFIT_DETAIL: '/outfit/:id',
+  STUDIO: '/studio',
+  STUDIO_MIRROR: '/studio/espejo',
+  STUDIO_PHOTOSHOOT: '/studio/fotografia',
+  SAVED_LOOKS: '/armario-de-looks',
+  SHARED_LOOK: '/look/:token',
 
 } as const;
 

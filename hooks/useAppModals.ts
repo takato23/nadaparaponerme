@@ -1,5 +1,15 @@
-import { useState } from 'react';
+import { useState, startTransition, SetStateAction } from 'react';
 import type { ClothingItem, CommunityUser, FitResult, SavedOutfit, PackingListResult, BrandRecognitionResult, OutfitSuggestionForEvent } from '../types';
+
+// Wraps useState's setter in startTransition so opening lazy-loaded modals
+// doesn't trigger React error #426 (suspending during a synchronous input).
+const useTransitionState = <T,>(initial: T) => {
+  const [value, setValue] = useState(initial);
+  const setValueTransition = (next: SetStateAction<T>) => {
+    startTransition(() => setValue(next));
+  };
+  return [value, setValueTransition] as const;
+};
 
 /**
  * Central modal state management for the App
@@ -7,50 +17,52 @@ import type { ClothingItem, CommunityUser, FitResult, SavedOutfit, PackingListRe
  */
 export function useAppModals() {
   // Item management modals
-  const [showAddItem, setShowAddItem] = useState(false);
-  const [showBulkUpload, setShowBulkUpload] = useState(false);
-  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
-  const [selectedItemForBrandRecognition, setSelectedItemForBrandRecognition] = useState<ClothingItem | null>(null);
-  const [selectedItemForDupeFinder, setSelectedItemForDupeFinder] = useState<ClothingItem | null>(null);
-  const [itemToShare, setItemToShare] = useState<ClothingItem | null>(null);
+  const [showAddItem, setShowAddItem] = useTransitionState(false);
+  const [showBulkUpload, setShowBulkUpload] = useTransitionState(false);
+  const [selectedItemId, setSelectedItemId] = useTransitionState<string | null>(null);
+  const [selectedItemForBrandRecognition, setSelectedItemForBrandRecognition] = useTransitionState<ClothingItem | null>(null);
+  const [selectedItemForDupeFinder, setSelectedItemForDupeFinder] = useTransitionState<ClothingItem | null>(null);
+  const [itemToShare, setItemToShare] = useTransitionState<ClothingItem | null>(null);
 
   // Outfit modals
-  const [showStylist, setShowStylist] = useState(false);
-  const [selectedOutfitId, setSelectedOutfitId] = useState<string | null>(null);
-  const [outfitToShare, setOutfitToShare] = useState<FitResult | SavedOutfit | null>(null);
+  const [showStylist, setShowStylist] = useTransitionState(false);
+  const [selectedOutfitId, setSelectedOutfitId] = useTransitionState<string | null>(null);
+  const [outfitToShare, setOutfitToShare] = useTransitionState<FitResult | SavedOutfit | null>(null);
 
   // Feature modals
-  const [showVirtualTryOn, setShowVirtualTryOn] = useState(false);
-  const [showAnalytics, setShowAnalytics] = useState(false);
-  const [showColorPalette, setShowColorPalette] = useState(false);
-  const [showTopVersatile, setShowTopVersatile] = useState(false);
-  const [showChat, setShowChat] = useState(false);
-  const [showWeatherOutfit, setShowWeatherOutfit] = useState(false);
-  const [showWeeklyPlanner, setShowWeeklyPlanner] = useState(false);
-  const [showLookbookCreator, setShowLookbookCreator] = useState(false);
-  const [showStyleChallenges, setShowStyleChallenges] = useState(false);
-  const [showRatingView, setShowRatingView] = useState(false);
-  const [showFeedbackAnalysis, setShowFeedbackAnalysis] = useState(false);
-  const [showGapAnalysis, setShowGapAnalysis] = useState(false);
-  const [showBrandRecognition, setShowBrandRecognition] = useState(false);
-  const [showDupeFinder, setShowDupeFinder] = useState(false);
-  const [showCapsuleBuilder, setShowCapsuleBuilder] = useState(false);
-  const [showStyleDNA, setShowStyleDNA] = useState(false);
-  const [showAIDesigner, setShowAIDesigner] = useState(false);
-  const [showGenerationHistory, setShowGenerationHistory] = useState(false);
-  const [showStyleEvolution, setShowStyleEvolution] = useState(false);
-  const [showCalendarSync, setShowCalendarSync] = useState(false);
-  const [showActivityFeed, setShowActivityFeed] = useState(false);
-  const [showVirtualShopping, setShowVirtualShopping] = useState(false);
-  const [showMultiplayerChallenges, setShowMultiplayerChallenges] = useState(false);
-  const [showQuickCamera, setShowQuickCamera] = useState(false);
-  const [showProfessionalWizard, setShowProfessionalWizard] = useState(false);
-  const [showMigrationModal, setShowMigrationModal] = useState(false);
+  const [showVirtualTryOn, setShowVirtualTryOn] = useTransitionState(false);
+  const [showAnalytics, setShowAnalytics] = useTransitionState(false);
+  const [showColorPalette, setShowColorPalette] = useTransitionState(false);
+  const [showTopVersatile, setShowTopVersatile] = useTransitionState(false);
+  const [showChat, setShowChat] = useTransitionState(false);
+  const [showWeatherOutfit, setShowWeatherOutfit] = useTransitionState(false);
+  const [showWeeklyPlanner, setShowWeeklyPlanner] = useTransitionState(false);
+  const [showLookbookCreator, setShowLookbookCreator] = useTransitionState(false);
+  const [showStyleChallenges, setShowStyleChallenges] = useTransitionState(false);
+  const [showRatingView, setShowRatingView] = useTransitionState(false);
+  const [showFeedbackAnalysis, setShowFeedbackAnalysis] = useTransitionState(false);
+  const [showGapAnalysis, setShowGapAnalysis] = useTransitionState(false);
+  const [showBrandRecognition, setShowBrandRecognition] = useTransitionState(false);
+  const [showDupeFinder, setShowDupeFinder] = useTransitionState(false);
+  const [showCapsuleBuilder, setShowCapsuleBuilder] = useTransitionState(false);
+  const [showStyleDNA, setShowStyleDNA] = useTransitionState(false);
+  const [showAIDesigner, setShowAIDesigner] = useTransitionState(false);
+  const [showGenerationHistory, setShowGenerationHistory] = useTransitionState(false);
+  const [showStyleEvolution, setShowStyleEvolution] = useTransitionState(false);
+  const [showCalendarSync, setShowCalendarSync] = useTransitionState(false);
+  const [showActivityFeed, setShowActivityFeed] = useTransitionState(false);
+  const [showVirtualShopping, setShowVirtualShopping] = useTransitionState(false);
+  const [showMultiplayerChallenges, setShowMultiplayerChallenges] = useTransitionState(false);
+  const [showQuickCamera, setShowQuickCamera] = useTransitionState(false);
+  const [showProfessionalWizard, setShowProfessionalWizard] = useTransitionState(false);
+  const [showMigrationModal, setShowMigrationModal] = useTransitionState(false);
+  const [showDigitalTwinSetup, setShowDigitalTwinSetup] = useTransitionState(false);
+  const [showBorrowedItems, setShowBorrowedItems] = useTransitionState(false);
 
   // Paywall modals
-  const [showPaywall, setShowPaywall] = useState(false);
-  const [showFeatureLocked, setShowFeatureLocked] = useState(false);
-  const [lockedFeature, setLockedFeature] = useState<{
+  const [showPaywall, setShowPaywall] = useTransitionState(false);
+  const [showFeatureLocked, setShowFeatureLocked] = useTransitionState(false);
+  const [lockedFeature, setLockedFeature] = useTransitionState<{
     name: string;
     icon: string;
     description: string;
@@ -58,14 +70,14 @@ export function useAppModals() {
   } | null>(null);
 
   // Packer modals
-  const [showSmartPacker, setShowSmartPacker] = useState(false);
-  const [showSortOptions, setShowSortOptions] = useState(false);
+  const [showSmartPacker, setShowSmartPacker] = useTransitionState(false);
+  const [showSortOptions, setShowSortOptions] = useTransitionState(false);
 
   // Additional data states
-  const [brandRecognitionResultForDupe, setBrandRecognitionResultForDupe] = useState<BrandRecognitionResult | undefined>(undefined);
-  const [currentEventSuggestion, setCurrentEventSuggestion] = useState<OutfitSuggestionForEvent | null>(null);
-  const [viewingFriend, setViewingFriend] = useState<CommunityUser | null>(null);
-  const [borrowedItems, setBorrowedItems] = useState<ClothingItem[]>([]);
+  const [brandRecognitionResultForDupe, setBrandRecognitionResultForDupe] = useTransitionState<BrandRecognitionResult | undefined>(undefined);
+  const [currentEventSuggestion, setCurrentEventSuggestion] = useTransitionState<OutfitSuggestionForEvent | null>(null);
+  const [viewingFriend, setViewingFriend] = useTransitionState<CommunityUser | null>(null);
+  const [borrowedItems, setBorrowedItems] = useTransitionState<ClothingItem[]>([]);
 
   return {
     // Item management
@@ -166,6 +178,12 @@ export function useAppModals() {
     viewingFriend,
     setViewingFriend,
     borrowedItems,
-    setBorrowedItems
+    setBorrowedItems,
+    // Digital Twin
+    showDigitalTwinSetup,
+    setShowDigitalTwinSetup,
+    // Borrowed items
+    showBorrowedItems,
+    setShowBorrowedItems
   };
 }

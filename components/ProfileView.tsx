@@ -4,6 +4,8 @@ import { useThemeContext } from '../contexts/ThemeContext';
 import { Card } from './ui/Card';
 import { clearToneCache } from '../services/aiToneHelper';
 import { useAuth } from '../src/hooks/useAuth';
+import { FaceReferenceUploader } from './FaceReferenceUploader';
+import { getPendingRequestsCount, getActiveBorrowsCount } from '../src/services/borrowedItemsService';
 import type { ClothingItem } from '../types';
 
 export type AITone = 'concise' | 'balanced' | 'detailed';
@@ -24,6 +26,7 @@ interface ProfileViewProps {
     onOpenWeeklyPlanner?: () => void;
     onOpenTestingPlayground?: () => void;
     onOpenAestheticPlayground?: () => void;
+    onOpenBorrowedItems?: () => void;
 }
 
 const ProfileView = ({
@@ -36,9 +39,25 @@ const ProfileView = ({
     onOpenTopVersatile,
     onOpenWeeklyPlanner,
     onOpenTestingPlayground,
-    onOpenAestheticPlayground
+    onOpenAestheticPlayground,
+    onOpenBorrowedItems
 }: ProfileViewProps) => {
     const { theme, toggleTheme } = useThemeContext();
+    const [pendingRequests, setPendingRequests] = useState(0);
+    const [activeBorrows, setActiveBorrows] = useState(0);
+
+    useEffect(() => {
+        loadBorrowCounts();
+    }, []);
+
+    const loadBorrowCounts = async () => {
+        const [pending, active] = await Promise.all([
+            getPendingRequestsCount(),
+            getActiveBorrowsCount()
+        ]);
+        setPendingRequests(pending);
+        setActiveBorrows(active);
+    };
 
     // Calculate real color stats from closet
     const colorStats = useMemo(() => {
@@ -109,12 +128,20 @@ const ProfileView = ({
                     </div>
 
                     <div className="w-24 h-24 mb-4 rounded-full bg-gradient-to-br from-primary to-secondary p-1 shadow-lg">
-                        <div className="w-full h-full rounded-full bg-white dark:bg-gray-800 overflow-hidden">
-                            <img
-                                src={user?.user_metadata?.avatar_url || "https://images.pexels.com/photos/415829/pexels-photo-415829.jpeg?auto=compress&cs=tinysrgb&w=800"}
-                                alt="User avatar"
-                                className="w-full h-full object-cover"
-                            />
+                        <div className="w-full h-full rounded-full bg-white dark:bg-gray-800 overflow-hidden flex items-center justify-center">
+                            {user?.user_metadata?.avatar_url ? (
+                                <img
+                                    src={user.user_metadata.avatar_url}
+                                    alt="User avatar"
+                                    className="w-full h-full object-cover"
+                                />
+                            ) : (
+                                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary/20 to-secondary/20">
+                                    <span className="text-3xl font-bold text-primary">
+                                        {displayName.charAt(0).toUpperCase()}
+                                    </span>
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -223,6 +250,51 @@ const ProfileView = ({
                         <p className="text-xs text-gray-500 uppercase font-bold tracking-wider">Color Top</p>
                     </div>
                 </div>
+
+                {/* Face Reference for Virtual Try-On */}
+                <div className="space-y-3">
+                    <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider ml-2">Virtual Try-On</h3>
+                    <FaceReferenceUploader compact />
+                </div>
+
+                {/* Borrowed Items Section */}
+                {onOpenBorrowedItems && (
+                    <div className="space-y-3">
+                        <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider ml-2">Préstamos</h3>
+                        <Card
+                            variant="glass"
+                            padding="md"
+                            rounded="xl"
+                            onClick={onOpenBorrowedItems}
+                            className="w-full flex items-center gap-4 hover:bg-white/50 transition-colors cursor-pointer"
+                        >
+                            <div className="p-2 bg-teal-100 text-teal-600 rounded-lg relative">
+                                <span className="material-symbols-outlined">swap_horiz</span>
+                                {pendingRequests > 0 && (
+                                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                                        {pendingRequests}
+                                    </span>
+                                )}
+                            </div>
+                            <div className="text-left flex-1">
+                                <p className="font-bold text-gray-800 dark:text-white">Gestionar Préstamos</p>
+                                <p className="text-xs text-gray-500">
+                                    {activeBorrows > 0
+                                        ? `${activeBorrows} ${activeBorrows === 1 ? 'prenda prestada' : 'prendas prestadas'}`
+                                        : 'Solicitudes y devoluciones'}
+                                </p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                {pendingRequests > 0 && (
+                                    <span className="px-2 py-0.5 bg-red-100 text-red-600 text-xs font-bold rounded-full">
+                                        {pendingRequests} nueva{pendingRequests > 1 ? 's' : ''}
+                                    </span>
+                                )}
+                                <span className="material-symbols-outlined text-gray-400">chevron_right</span>
+                            </div>
+                        </Card>
+                    </div>
+                )}
 
                 {/* Menu Options */}
                 <div className="space-y-3">

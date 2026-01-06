@@ -3,7 +3,7 @@
  * Service layer for AI-powered fashion image generation using Gemini AI
  */
 
-import { supabase } from '@/lib/supabase';
+import { supabase } from '../lib/supabase';
 
 export interface GenerateImageRequest {
   prompt: string;
@@ -14,6 +14,8 @@ export interface GenerateImageRequest {
     mood?: string;
     [key: string]: string | undefined;
   };
+  input_images?: string[]; // Array of clothing item URLs
+  user_base_image?: string; // URL of the user's base photo for virtual try-on
 }
 
 export interface GenerateImageResponse {
@@ -102,13 +104,16 @@ export async function getQuotaStatus(
       throw new Error('No estás autenticado');
     }
 
-    const { data, error } = await supabase
-      .rpc('get_user_quota_status', {
-        p_user_id: user.id,
-        p_model_type: modelType,
-      });
+    const { data, error } = await (supabase.rpc as any)('get_user_quota_status', {
+      p_user_id: user.id,
+      p_model_type: modelType,
+    });
 
     if (error) throw error;
+
+    if (!data || !data[0]) {
+      throw new Error('No quota data found');
+    }
 
     return data[0] as QuotaStatus;
   } catch (error) {
@@ -135,13 +140,13 @@ export async function getGeneratedImages(limit = 20): Promise<Array<{
       throw new Error('No estás autenticado');
     }
 
-    const { data, error } = await supabase
-      .from('ai_generated_images')
+    const { data, error } = await (supabase
+      .from('ai_generated_images' as any)
       .select('id, prompt, image_url, model_type, generation_time_ms, created_at')
       .eq('user_id', user.id)
       .is('deleted_at', null)
       .order('created_at', { ascending: false })
-      .limit(limit);
+      .limit(limit) as any);
 
     if (error) throw error;
 
@@ -157,8 +162,7 @@ export async function getGeneratedImages(limit = 20): Promise<Array<{
  */
 export async function deleteGeneratedImage(imageId: string): Promise<void> {
   try {
-    const { error } = await supabase
-      .from('ai_generated_images')
+    const { error } = await (supabase.from('ai_generated_images') as any)
       .update({ deleted_at: new Date().toISOString() })
       .eq('id', imageId);
 
@@ -200,4 +204,27 @@ export function getRecommendedModel(tier: 'free' | 'pro' | 'premium'): 'flash' |
   if (tier === 'free') return 'flash';
   if (tier === 'pro') return 'flash';
   return 'pro';
+}
+/**
+ * Helper to build a "High Fidelity" prompt that prioritizes texture and detail preservation.
+ */
+export function buildHighFidelityPrompt(
+  itemDescription: string,
+  context: string,
+  baseBodyDescription: string = 'person'
+): string {
+  // Strategic repetition of key details to force attention ("Texture Lock")
+  const textureLock = `wearing exactly (${itemDescription}). The fabric texture, pattern, logos, and details of the (${itemDescription}) MUST BE PRESERVED precisely.`;
+
+  const negativePrompt = 'startified, distorted details, wrong fabric, blurry texture, altered logo, morphing, extra limbs, bad anatomy';
+
+  return `
+    Fashion photography, 8k, highly detailed.
+    Subject: A realistic ${baseBodyDescription} ${textureLock}
+    Environment: ${context}.
+    Lighting: Cinematic, professional fashion lighting.
+    Quality: Best quality, photorealistic, sharp focus.
+    Target: Fit the clothing item naturally onto the subject's body pose while keeping the item's visual identity 100% intact.
+    --no ${negativePrompt}
+  `.trim().replace(/\s+/g, ' ');
 }

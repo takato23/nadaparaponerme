@@ -20,7 +20,12 @@ import type {
 // CONSTANTS
 // ============================================================================
 
-const MERCADOPAGO_PUBLIC_KEY = import.meta.env.VITE_MERCADOPAGO_PUBLIC_KEY || '';
+const MERCADOPAGO_PUBLIC_KEY =
+  import.meta.env.VITE_MERCADOPAGO_PUBLIC_KEY ||
+  // Backwards-compat for older env naming (deprecated)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ((import.meta.env as any).VITE_MP_PUBLIC_KEY as string) ||
+  '';
 const APP_URL = import.meta.env.VITE_APP_URL || window.location.origin;
 
 // Import subscription plans

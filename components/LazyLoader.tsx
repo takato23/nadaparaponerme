@@ -32,14 +32,23 @@ const LazyLoader: React.FC<LazyLoaderProps> = ({ type = 'view' }) => {
     );
   }
 
-  // Default full-screen view loader with shimmer effect
+  // Default full-screen view loader with professional design
   return (
-    <div className="animate-fade-in w-full h-full flex flex-col items-center justify-center p-6">
+    <div className="animate-fade-in w-full h-full flex flex-col items-center justify-center p-6 bg-white/50 dark:bg-gray-900/50 backdrop-blur-sm">
       <div className="relative">
-        <div className="w-16 h-16 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+        {/* Animated rings */}
+        <div className="absolute inset-0 w-20 h-20 border-4 border-primary/10 rounded-full animate-ping" />
+        <div className="w-20 h-20 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+        {/* Logo or Icon */}
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className="material-symbols-outlined text-primary/60 text-2xl">checkroom</span>
+        </div>
       </div>
       <p className="mt-6 text-gray-600 dark:text-gray-400 text-sm font-medium">
-        Cargando...
+        Preparando tu experiencia...
+      </p>
+      <p className="mt-2 text-gray-400 dark:text-gray-500 text-xs">
+        Esto tomará solo un momento
       </p>
     </div>
   );

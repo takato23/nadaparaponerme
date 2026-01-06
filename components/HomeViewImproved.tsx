@@ -1,71 +1,42 @@
 /**
- * HomeViewImproved - Dashboard Mejorado
+ * HomeViewImproved - Dashboard Simplificado con Eye3D de fondo
  *
- * Mejoras implementadas:
- * 1. Configuración de features externalizada (featuresConfig.ts)
- * 2. Hero3D con soporte móvil y táctil
- * 3. WeatherCard con API real de clima
- * 4. Widget de estadísticas rápidas
- * 5. Accesibilidad mejorada (ARIA, keyboard nav)
- * 6. Mejor rendimiento y lazy loading
- * 7. Código más limpio y mantenible
+ * Diseño minimalista con el ojo como signature visual.
+ * Solo muestra las acciones principales de forma clara.
+ *
+ * @version 3.0
  */
 
-import React, { useState, useMemo, useEffect, useCallback, lazy, Suspense } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, lazy, Suspense } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import type { User } from '@supabase/supabase-js';
-import type { ClothingItem } from '../types';
-import { Hero3DImproved } from './home/Hero3DImproved';
-import { HomeQuickActionsImproved } from './home/HomeQuickActionsImproved';
-import { HomeFeatureCard } from './home/HomeFeatureCard';
-import { QuickStatsWidget } from './home/QuickStatsWidget';
-import { WeatherCardImproved } from './home/WeatherCardImproved';
-import { QuotaIndicator } from './QuotaIndicator';
+import type { ClothingItem, WeatherData, GeneratedLook } from '../types';
 import type { UseSubscriptionReturn } from '../hooks/useSubscription';
-import {
-  ALL_FEATURES,
-  QUICK_ACTIONS,
-  FEATURE_TABS,
-  FEATURED_FEATURES,
-  CATEGORY_COLORS,
-  searchFeatures,
-  filterByCategory,
-  type FeatureTabId,
-  type FeatureConfig,
-  type FeatureCategory,
-} from './home/featuresConfig';
-import { Feature } from './home/types';
+import { getCurrentWeather, getUserCity } from '../services/weatherService';
+import { getGeneratedLooks } from '../src/services/generatedLooksService';
+import { useThemeContext } from '../contexts/ThemeContext';
 
-// Tipos para los handlers
-type HandlerKey =
-  | 'onStartStylist'
-  | 'onStartVirtualTryOn'
-  | 'onNavigateToCloset'
-  | 'onNavigateToCommunity'
-  | 'onStartSmartPacker'
-  | 'onStartChat'
-  | 'onStartWeatherOutfit'
-  | 'onStartLookbookCreator'
-  | 'onStartStyleChallenges'
-  | 'onStartRatingView'
-  | 'onStartFeedbackAnalysis'
-  | 'onStartGapAnalysis'
-  | 'onStartBrandRecognition'
-  | 'onStartDupeFinder'
-  | 'onStartCapsuleBuilder'
-  | 'onStartStyleDNA'
-  | 'onStartAIDesigner'
-  | 'onShowGenerationHistory'
-  | 'onStartStyleEvolution'
-  | 'onStartCalendarSync'
-  | 'onStartActivityFeed'
-  | 'onStartVirtualShopping'
-  | 'onStartMultiplayerChallenges'
-  | 'onStartBulkUpload'
-  | 'onShowProfessionalWizard';
+// Lazy load Eye3D para performance
+const Eye3D = lazy(() => import('./Eye3D'));
+
+// Weather icon mapping to Material Symbols
+const WEATHER_ICONS: Record<string, string> = {
+  'Clear': 'sunny',
+  'Clouds': 'cloud',
+  'Rain': 'rainy',
+  'Drizzle': 'grain',
+  'Thunderstorm': 'thunderstorm',
+  'Snow': 'weather_snowy',
+  'Mist': 'foggy',
+  'Fog': 'foggy',
+  'Haze': 'foggy',
+};
 
 interface HomeViewImprovedProps {
   user: User | null;
   closet: ClothingItem[];
+  onStartStudio: () => void;
+  onAddItem: () => void;
   onStartStylist: () => void;
   onStartVirtualTryOn: () => void;
   onNavigateToCloset: () => void;
@@ -90,500 +61,561 @@ interface HomeViewImprovedProps {
   onStartVirtualShopping: () => void;
   onStartMultiplayerChallenges: () => void;
   onStartBulkUpload: () => void;
+  onNavigateToSavedLooks: () => void;
+  onStartOutfitTesting?: () => void;
   hasProfessionalProfile?: boolean;
   onShowProfessionalWizard?: () => void;
   onShowAnalytics?: () => void;
-  // Subscription props
   subscription?: UseSubscriptionReturn;
   onShowPricing?: () => void;
+  onShowCredits?: () => void;
 }
 
-// Constantes
-const RECENT_FEATURES_KEY = 'ojodeloca-recent-features';
-const MAX_RECENT_FEATURES = 5;
+// Layout modes
+type HomeLayoutMode = 'standard' | 'minimal';
+const LAYOUT_STORAGE_KEY = 'ojodeloca-home-layout';
+
+// Acciones para modo MINIMAL (solo 3 core)
+const MINIMAL_ACTIONS = [
+  { id: 'add', icon: 'add_photo_alternate', label: 'Agregar', description: 'Nueva prenda', handlerKey: 'onAddItem' },
+  { id: 'studio', icon: 'auto_fix_high', label: 'Studio', description: 'Crear look', handlerKey: 'onStartStudio' },
+  { id: 'closet', icon: 'checkroom', label: 'Armario', description: 'Ver prendas', handlerKey: 'onNavigateToCloset' },
+] as const;
+
+// Acciones para modo STANDARD (4 principales + extras)
+const STANDARD_ACTIONS = [
+  { id: 'studio', icon: 'auto_fix_high', label: 'Studio', description: 'Crear un look', handlerKey: 'onStartStudio' },
+  { id: 'stylist', icon: 'auto_awesome', label: 'Estilista', description: 'IA sugiere outfit', handlerKey: 'onStartStylist' },
+  { id: 'closet', icon: 'checkroom', label: 'Armario', description: 'Tus prendas', handlerKey: 'onNavigateToCloset' },
+  { id: 'saved-looks', icon: 'photo_library', label: 'Armario de looks', description: 'Tus looks guardados', handlerKey: 'onNavigateToSavedLooks' },
+  { id: 'chat', icon: 'forum', label: 'Chat', description: 'Hablar con IA', handlerKey: 'onStartChat' },
+] as const;
+
+// Herramientas secundarias (colapsables) - solo en modo standard
+const MORE_TOOLS = [
+  { id: 'add', icon: 'add_photo_alternate', label: 'Agregar prenda', handlerKey: 'onAddItem' },
+  { id: 'bulk', icon: 'cloud_upload', label: 'Carga múltiple', handlerKey: 'onStartBulkUpload' },
+  { id: 'weather', icon: 'partly_cloudy_day', label: 'Outfit del día', handlerKey: 'onStartWeatherOutfit' },
+  { id: 'packer', icon: 'luggage', label: 'Maleta viaje', handlerKey: 'onStartSmartPacker' },
+  { id: 'tryon', icon: 'view_in_ar', label: 'Probador virtual', handlerKey: 'onStartVirtualTryOn', isPro: true },
+  { id: 'community', icon: 'groups', label: 'Comunidad', handlerKey: 'onNavigateToCommunity' },
+  { id: 'dna', icon: 'fingerprint', label: 'Tu ADN de estilo', handlerKey: 'onStartStyleDNA' },
+  { id: 'shopping', icon: 'storefront', label: 'Asistente compras', handlerKey: 'onStartVirtualShopping' },
+] as const;
 
 const HomeViewImproved: React.FC<HomeViewImprovedProps> = (props) => {
-  const {
-    user,
-    closet,
-    hasProfessionalProfile,
-    onShowAnalytics,
-    ...handlers
-  } = props;
+  const { user, closet, subscription } = props;
+  const [showMoreTools, setShowMoreTools] = useState(false);
+  const [weather, setWeather] = useState<WeatherData | null>(null);
+  const [latestLook, setLatestLook] = useState<GeneratedLook | null>(null);
+  const { theme, toggleTheme } = useThemeContext();
+  const isDark = theme === 'dark';
 
-  // Estado
-  const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<FeatureTabId>('essential');
-  const [recentFeatures, setRecentFeatures] = useState<string[]>([]);
-  const [isScrolled, setIsScrolled] = useState(false);
+  // Layout mode preference (persisted in localStorage)
+  const [layoutMode, setLayoutMode] = useState<HomeLayoutMode>(() => {
+    const saved = localStorage.getItem(LAYOUT_STORAGE_KEY);
+    return (saved === 'minimal' || saved === 'standard') ? saved : 'standard';
+  });
 
-  // Nombre para mostrar
+  const toggleLayoutMode = useCallback(() => {
+    const newMode = layoutMode === 'standard' ? 'minimal' : 'standard';
+    setLayoutMode(newMode);
+    localStorage.setItem(LAYOUT_STORAGE_KEY, newMode);
+  }, [layoutMode]);
+
+  // Get the appropriate actions based on layout mode
+  const mainActions = layoutMode === 'minimal' ? MINIMAL_ACTIONS : STANDARD_ACTIONS;
+  const isMinimalMode = layoutMode === 'minimal';
+
   const displayName = user?.user_metadata?.display_name || user?.email?.split('@')[0] || 'Usuario';
 
-  // Cargar features recientes
+  // Fetch weather on mount
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(RECENT_FEATURES_KEY);
-      if (saved) setRecentFeatures(JSON.parse(saved));
-    } catch {
-      // Ignorar errores de parsing
-    }
-  }, []);
-
-  // Tracking de uso de features
-  const trackFeatureUse = useCallback((featureId: string) => {
-    setRecentFeatures(prev => {
-      const updated = [featureId, ...prev.filter(id => id !== featureId)].slice(0, MAX_RECENT_FEATURES);
-      localStorage.setItem(RECENT_FEATURES_KEY, JSON.stringify(updated));
-      return updated;
-    });
-  }, []);
-
-  // Mapa de handlers para lookup dinámico
-  const handlerMap = useMemo((): Record<HandlerKey, (() => void) | undefined> => ({
-    onStartStylist: handlers.onStartStylist,
-    onStartVirtualTryOn: handlers.onStartVirtualTryOn,
-    onNavigateToCloset: handlers.onNavigateToCloset,
-    onNavigateToCommunity: handlers.onNavigateToCommunity,
-    onStartSmartPacker: handlers.onStartSmartPacker,
-    onStartChat: handlers.onStartChat,
-    onStartWeatherOutfit: handlers.onStartWeatherOutfit,
-    onStartLookbookCreator: handlers.onStartLookbookCreator,
-    onStartStyleChallenges: handlers.onStartStyleChallenges,
-    onStartRatingView: handlers.onStartRatingView,
-    onStartFeedbackAnalysis: handlers.onStartFeedbackAnalysis,
-    onStartGapAnalysis: handlers.onStartGapAnalysis,
-    onStartBrandRecognition: handlers.onStartBrandRecognition,
-    onStartDupeFinder: handlers.onStartDupeFinder,
-    onStartCapsuleBuilder: handlers.onStartCapsuleBuilder,
-    onStartStyleDNA: handlers.onStartStyleDNA,
-    onStartAIDesigner: handlers.onStartAIDesigner,
-    onShowGenerationHistory: handlers.onShowGenerationHistory,
-    onStartStyleEvolution: handlers.onStartStyleEvolution,
-    onStartCalendarSync: handlers.onStartCalendarSync,
-    onStartActivityFeed: handlers.onStartActivityFeed,
-    onStartVirtualShopping: handlers.onStartVirtualShopping,
-    onStartMultiplayerChallenges: handlers.onStartMultiplayerChallenges,
-    onStartBulkUpload: handlers.onStartBulkUpload,
-    onShowProfessionalWizard: handlers.onShowProfessionalWizard,
-  }), [handlers]);
-
-  // Convertir FeatureConfig a Feature con handlers
-  const buildFeature = useCallback((config: FeatureConfig): Feature | null => {
-    const handler = handlerMap[config.handlerKey as HandlerKey];
-
-    // Si es condicional y no tiene handler, omitir
-    if (config.conditional && !handler) return null;
-
-    // Procesar descripción dinámica
-    let description = config.description;
-    if (description.includes('{closetCount}')) {
-      description = description.replace('{closetCount}', String(closet.length));
-    }
-
-    // Ajustar para perfil profesional
-    let title = config.title;
-    let icon = config.icon;
-    let badge = config.badge;
-
-    if (config.id === 'professional-profile' && hasProfessionalProfile) {
-      title = 'Perfil Profesional ✅';
-      icon = 'verified';
-      badge = undefined;
-      description = 'Outfits personalizados con morfología y colorimetría';
-    }
-
-    return {
-      id: config.id,
-      icon,
-      title,
-      description,
-      category: config.category,
-      keywords: config.keywords,
-      tooltip: config.tooltip,
-      badge,
-      featured: config.featured,
-      popularity: config.popularity,
-      onClick: () => {
-        trackFeatureUse(config.id);
-        handler?.();
-      },
+    const fetchWeather = async () => {
+      try {
+        const city = getUserCity();
+        const data = await getCurrentWeather(city);
+        setWeather(data);
+      } catch (err) {
+        // Silently fail - weather is optional
+        console.log('Weather unavailable');
+      }
     };
-  }, [handlerMap, closet.length, hasProfessionalProfile, trackFeatureUse]);
-
-  // Features procesadas
-  const features = useMemo(() => {
-    return ALL_FEATURES
-      .map(buildFeature)
-      .filter((f): f is Feature => f !== null);
-  }, [buildFeature]);
-
-  // Features filtradas
-  const filteredFeatures = useMemo(() => {
-    let result = features;
-
-    // Aplicar búsqueda
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      result = result.filter(f =>
-        f.title.toLowerCase().includes(query) ||
-        f.description.toLowerCase().includes(query) ||
-        f.keywords.some(kw => kw.includes(query))
-      );
-    }
-
-    // Aplicar filtro de categoría
-    if (activeTab !== 'all') {
-      result = result.filter(f => f.category === activeTab);
-    }
-
-    return result;
-  }, [features, searchQuery, activeTab]);
-
-  // Features destacadas (para mostrar en grid grande)
-  const featuredFeatures = useMemo(() => {
-    return features.filter(f => f.featured);
-  }, [features]);
-
-  // Features usadas recientemente
-  const recentUsedFeatures = useMemo(() => {
-    if (recentFeatures.length === 0) return [];
-    return recentFeatures
-      .map(id => features.find(f => f.id === id))
-      .filter((f): f is Feature => f !== undefined)
-      .slice(0, 4);
-  }, [features, recentFeatures]);
-
-  // Quick actions con handlers
-  const quickActionsWithHandlers = useMemo(() => {
-    return QUICK_ACTIONS.map(action => ({
-      ...action,
-      onClick: () => {
-        trackFeatureUse(action.id);
-        handlerMap[action.handlerKey as HandlerKey]?.();
-      },
-    }));
-  }, [handlerMap, trackFeatureUse]);
-
-  // User stats
-  const userStats = useMemo(() => {
-    const totalOutfits = parseInt(localStorage.getItem('ojodeloca-total-outfits') || '0', 10);
-    const firstUse = localStorage.getItem('ojodeloca-first-use');
-
-    if (!firstUse) {
-      localStorage.setItem('ojodeloca-first-use', new Date().toISOString());
-    }
-
-    const daysActive = firstUse
-      ? Math.ceil((Date.now() - new Date(firstUse).getTime()) / (1000 * 60 * 60 * 24))
-      : 1;
-
-    return { totalOutfits, daysActive };
+    fetchWeather();
   }, []);
 
-  // Scroll detection
+  // Fetch latest look on mount
   useEffect(() => {
-    const handleScroll = () => setIsScrolled(window.scrollY > 20);
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
+    const fetchLatestLook = async () => {
+      if (!user) return;
+      try {
+        const looks = await getGeneratedLooks({ limit: 1 });
+        if (looks.length > 0) {
+          setLatestLook(looks[0]);
+        }
+      } catch (err) {
+        // Silently fail - look is optional
+        console.log('Latest look unavailable');
+      }
+    };
+    fetchLatestLook();
+  }, [user]);
+
+  const closetStats = useMemo(() => ({
+    tops: closet.filter(i => i.metadata.category === 'top').length,
+    bottoms: closet.filter(i => i.metadata.category === 'bottom').length,
+    shoes: closet.filter(i => i.metadata.category === 'shoes').length,
+    total: closet.length,
+  }), [closet]);
+
+  // Handler map para lookup dinámico
+  const getHandler = useCallback((key: string) => {
+    return (props as any)[key] as (() => void) | undefined;
+  }, [props]);
+
 
   return (
-    <div className="w-full min-h-screen flex flex-col animate-fade-in bg-transparent font-sans selection:bg-primary/20 relative">
-      {/* Sticky Header */}
-      <header
-        className={`
-          fixed top-0 left-0 right-0 z-50 px-4 md:px-6 py-3 md:py-4 transition-all duration-300 ease-in-out
-          ${isScrolled
-            ? 'bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-gray-200/50 dark:border-slate-800/50 shadow-sm'
-            : 'bg-transparent'
-          }
-        `}
-        role="banner"
-      >
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <div className={`flex flex-col transition-all duration-300 ${isScrolled ? 'opacity-100' : 'opacity-0'}`}>
-            <h1 className="font-serif font-bold text-transparent bg-clip-text bg-gradient-to-r from-text-primary via-primary to-secondary tracking-tight text-lg md:text-xl">
-              Hola, {displayName}
-            </h1>
-          </div>
+    <div className="fixed inset-0 z-40 overflow-hidden">
+      {/* Background - Responde al tema */}
+      <div className={`absolute inset-0 transition-colors duration-500 ${isDark ? 'bg-[#05060a]' : 'bg-gradient-to-br from-slate-50 via-purple-50/30 to-pink-50/20'}`}>
+        {/* Gradients - Solo en modo oscuro */}
+        {isDark && (
+          <div
+            aria-hidden="true"
+            className="absolute inset-0"
+            style={{
+              backgroundImage: [
+                'radial-gradient(62% 48% at 50% 35%, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.00) 60%)',
+                'radial-gradient(55% 45% at 20% 20%, rgba(168,85,247,0.12) 0%, rgba(168,85,247,0.00) 70%)',
+                'radial-gradient(55% 45% at 80% 70%, rgba(59,130,246,0.10) 0%, rgba(59,130,246,0.00) 70%)',
+                'linear-gradient(180deg, rgba(3,7,18,0.00) 0%, rgba(3,7,18,0.85) 100%)',
+              ].join(','),
+            }}
+          />
+        )}
 
-          {/* Mini Stats cuando hay scroll */}
-          <div className={`flex items-center gap-2 md:gap-3 transition-all duration-300 ${isScrolled ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'}`}>
-            <div className="flex items-center gap-1 md:gap-1.5 px-2 md:px-3 py-1 md:py-1.5 rounded-full bg-primary/10 text-primary">
-              <span className="material-symbols-outlined text-base md:text-lg" aria-hidden="true">checkroom</span>
-              <span className="text-xs md:text-sm font-bold">{closet.length}</span>
-            </div>
-            <div className="flex items-center gap-1 md:gap-1.5 px-2 md:px-3 py-1 md:py-1.5 rounded-full bg-secondary/10 text-secondary">
-              <span className="material-symbols-outlined text-base md:text-lg" aria-hidden="true">local_fire_department</span>
-              <span className="text-xs md:text-sm font-bold">{userStats.daysActive}</span>
-            </div>
+        {/* Eye3D desenfocado - Visible en ambos modos con ajustes */}
+        <div className="absolute inset-0 flex items-center justify-center overflow-hidden">
+          <div className={`w-[120%] h-[120%] -translate-y-[5%] ${
+            isDark
+              ? 'blur-sm opacity-50'
+              : 'blur-md opacity-30'
+          }`}>
+            <Suspense fallback={null}>
+              <Eye3D
+                variant="landing"
+                colorScheme={isDark ? "ocean" : "violet"}
+                blinkInterval={6000}
+                reducedMotion={false}
+                quality="medium"
+                interactive={false}
+                className="w-full h-full"
+              />
+            </Suspense>
           </div>
         </div>
-      </header>
 
-      <main className="relative z-10 flex-grow w-full max-w-6xl mx-auto px-3 sm:px-4 md:px-6 pt-14 sm:pt-16 md:pt-20 pb-20 sm:pb-24">
-        {/* Grid principal: 2 columnas en desktop */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 mb-4">
-          {/* Columna izquierda: Hero + Weather + Quota */}
-          <div className="space-y-3">
-            <Hero3DImproved
-              displayName={displayName}
-              avatarUrl={user?.user_metadata?.avatar_url}
-              closetLength={closet.length}
-              totalOutfits={userStats.totalOutfits}
-              daysActive={userStats.daysActive}
-            />
-            <WeatherCardImproved />
+        {/* Vignette - Solo en modo oscuro */}
+        {isDark && (
+          <div
+            aria-hidden="true"
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              background: 'radial-gradient(50% 50% at 50% 50%, transparent 0%, rgba(0,0,0,0.7) 100%)',
+            }}
+          />
+        )}
 
-            {/* Quota Indicator en desktop (solo si hay suscripción) */}
-            {!searchQuery && props.subscription && (
-              <div className="hidden lg:block">
-                <QuotaIndicator
-                  used={props.subscription.aiGenerationsUsed}
-                  limit={props.subscription.aiGenerationsLimit}
-                  tier={props.subscription.tier}
-                  variant="full"
-                  onUpgradeClick={props.onShowPricing}
-                  className="animate-fade-in"
-                />
+        {/* Gradients suaves para modo claro */}
+        {!isDark && (
+          <div
+            aria-hidden="true"
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              backgroundImage: [
+                'radial-gradient(60% 50% at 50% 0%, rgba(168,85,247,0.08) 0%, transparent 70%)',
+                'radial-gradient(40% 40% at 100% 100%, rgba(236,72,153,0.06) 0%, transparent 70%)',
+              ].join(','),
+            }}
+          />
+        )}
+      </div>
+
+      {/* Content */}
+      <div className="absolute inset-0 z-10 flex flex-col px-4 pb-32 overflow-y-auto" style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))' }}>
+        {/* Header */}
+        <header className="pt-4 pb-6">
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-2"
+          >
+            {/* Top row: Weather + Theme toggle + Stats */}
+            <div className="flex items-center justify-between">
+              {/* Weather chip */}
+              <div className="flex items-center gap-2">
+                {weather ? (
+                  <button
+                    onClick={props.onStartWeatherOutfit}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full backdrop-blur-md transition-colors ${
+                      isDark
+                        ? 'bg-white/10 hover:bg-white/15'
+                        : 'bg-black/5 hover:bg-black/10'
+                    }`}
+                  >
+                    <span className={`material-symbols-rounded text-lg ${isDark ? 'text-amber-300' : 'text-amber-500'}`}>
+                      {WEATHER_ICONS[weather.condition] || 'partly_cloudy_day'}
+                    </span>
+                    <span className={`text-sm font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>{weather.temp}°</span>
+                    <span className={`text-xs ${isDark ? 'text-white/50' : 'text-gray-500'}`}>{weather.city}</span>
+                  </button>
+                ) : (
+                  <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full ${isDark ? 'bg-white/5' : 'bg-black/5'}`}>
+                    <span className={`material-symbols-rounded text-lg animate-pulse ${isDark ? 'text-white/30' : 'text-gray-400'}`}>partly_cloudy_day</span>
+                  </div>
+                )}
+
+                {/* Theme toggle */}
+                <button
+                  onClick={toggleTheme}
+                  className={`flex items-center justify-center w-9 h-9 rounded-full backdrop-blur-md transition-all ${
+                    isDark
+                      ? 'bg-white/10 hover:bg-white/15'
+                      : 'bg-black/5 hover:bg-black/10'
+                  }`}
+                  aria-label={isDark ? 'Cambiar a modo día' : 'Cambiar a modo noche'}
+                >
+                  <span className={`material-symbols-rounded text-lg transition-transform ${isDark ? 'text-amber-300' : 'text-purple-600'}`}>
+                    {isDark ? 'light_mode' : 'dark_mode'}
+                  </span>
+                </button>
+
+                {/* Layout mode toggle */}
+                <button
+                  onClick={toggleLayoutMode}
+                  className={`flex items-center justify-center w-9 h-9 rounded-full backdrop-blur-md transition-all ${
+                    isDark
+                      ? 'bg-white/10 hover:bg-white/15'
+                      : 'bg-black/5 hover:bg-black/10'
+                  }`}
+                  aria-label={isMinimalMode ? 'Ver más opciones' : 'Modo simplificado'}
+                  title={isMinimalMode ? 'Ver más opciones' : 'Modo simplificado'}
+                >
+                  <span className={`material-symbols-rounded text-lg ${isDark ? 'text-white/70' : 'text-gray-600'}`}>
+                    {isMinimalMode ? 'dashboard' : 'space_dashboard'}
+                  </span>
+                </button>
               </div>
-            )}
-          </div>
 
-          {/* Columna derecha: Search + Quick Actions + Stats */}
-          <div className="space-y-3">
-            {/* Barra de búsqueda */}
-            <div className="relative z-20">
-              <div className="relative group">
-                <div className="absolute inset-0 bg-gradient-to-r from-primary/20 to-secondary/20 rounded-2xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                <div className="relative bg-white dark:bg-slate-800 rounded-2xl shadow-lg shadow-gray-200/50 dark:shadow-slate-900/50 border border-gray-100 dark:border-slate-700 flex items-center p-1 transition-transform duration-300 group-hover:-translate-y-0.5">
-                  <label htmlFor="feature-search" className="pl-4 text-primary">
-                    <span className="material-symbols-outlined text-xl md:text-2xl" aria-hidden="true">search</span>
-                  </label>
-                  <input
-                    id="feature-search"
-                    type="text"
-                    placeholder="¿Qué buscas hoy?"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full px-3 md:px-4 py-2.5 md:py-3 bg-transparent border-none focus:ring-0 text-text-primary dark:text-gray-100 placeholder-text-secondary/60 dark:placeholder-gray-500 text-base md:text-lg"
-                    aria-label="Buscar funciones"
+              {/* Quick stats */}
+              <div className="flex items-center gap-2">
+                <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full backdrop-blur-md ${
+                  isDark ? 'bg-white/10' : 'bg-black/5'
+                }`}>
+                  <span className="material-symbols-rounded text-purple-500 text-lg">checkroom</span>
+                  <span className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>{closetStats.total}</span>
+                </div>
+                {subscription && (
+                  <button
+                    onClick={props.onShowCredits}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full backdrop-blur-md transition-colors ${
+                      isDark
+                        ? 'bg-white/10 hover:bg-white/15'
+                        : 'bg-black/5 hover:bg-black/10'
+                    }`}
+                  >
+                    <span className="material-symbols-rounded text-amber-500 text-lg">toll</span>
+                    <span className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                      {subscription.aiGenerationsLimit === -1 ? '∞' : subscription.aiGenerationsLimit - subscription.aiGenerationsUsed}
+                    </span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Greeting */}
+            <h1 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+              ¿Qué te ponés hoy, <span className="text-purple-500">{displayName}</span>?
+            </h1>
+          </motion.div>
+        </header>
+
+        {/* Main Actions - Cards grandes */}
+        <section className="mb-6">
+          <div className={`grid gap-3 ${isMinimalMode ? 'grid-cols-3' : 'grid-cols-2'}`}>
+            {mainActions.map((action, idx) => {
+              const handler = getHandler(action.handlerKey);
+              const isLastOdd = !isMinimalMode && mainActions.length % 2 === 1 && idx === mainActions.length - 1;
+              return (
+                <motion.button
+                  key={action.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: idx * 0.05 }}
+                  onClick={handler}
+                  className={`group relative p-5 rounded-2xl backdrop-blur-xl border transition-all text-left overflow-hidden ${
+                    isDark
+                      ? 'bg-white/10 border-white/10 hover:bg-white/15 hover:border-white/20'
+                      : 'bg-white/80 border-gray-200/50 hover:bg-white hover:border-purple-200 shadow-sm'
+                  } ${isLastOdd ? 'col-span-2' : ''}`}
+                >
+                  {/* Glow effect */}
+                  <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-pink-500/10 opacity-0 group-hover:opacity-100 transition-opacity" />
+
+                  <div className="relative">
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 ${
+                      isDark
+                        ? 'bg-gradient-to-br from-purple-500/30 to-pink-500/30'
+                        : 'bg-gradient-to-br from-purple-100 to-pink-100'
+                    }`}>
+                      <span className={`material-symbols-rounded text-2xl ${isDark ? 'text-white' : 'text-purple-600'}`}>{action.icon}</span>
+                    </div>
+                    <h3 className={`font-bold text-lg ${isDark ? 'text-white' : 'text-gray-900'}`}>{action.label}</h3>
+                    <p className={`text-sm mt-0.5 ${isDark ? 'text-white/50' : 'text-gray-500'}`}>{action.description}</p>
+                  </div>
+                </motion.button>
+              );
+            })}
+          </div>
+        </section>
+
+        {/* Latest Look Card */}
+        {latestLook && (
+          <motion.section
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15 }}
+            className="mb-6"
+          >
+            <button
+              onClick={props.onNavigateToSavedLooks}
+              className={`w-full relative p-4 rounded-2xl backdrop-blur-xl border transition-all overflow-hidden text-left ${
+                isDark
+                  ? 'bg-white/10 border-white/10 hover:bg-white/15 hover:border-white/20'
+                  : 'bg-white/80 border-gray-200/50 hover:bg-white hover:border-purple-200 shadow-sm'
+              }`}
+            >
+              <div className="flex items-center gap-4">
+                {/* Look thumbnail */}
+                <div className="w-16 h-20 rounded-xl overflow-hidden shrink-0 shadow-lg">
+                  <img
+                    src={latestLook.image_url}
+                    alt="Último look guardado"
+                    className="w-full h-full object-cover"
                   />
-                  {searchQuery && (
-                    <button
-                      onClick={() => setSearchQuery('')}
-                      className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-xl transition-colors mr-1"
-                      aria-label="Limpiar búsqueda"
-                    >
-                      <span className="material-symbols-outlined text-text-secondary text-lg md:text-xl" aria-hidden="true">close</span>
-                    </button>
-                  )}
+                </div>
+
+                {/* Info */}
+                <div className="flex-1 min-w-0">
+                  <p className={`text-xs mb-1 ${isDark ? 'text-white/50' : 'text-gray-500'}`}>Último look en tu armario</p>
+                  <h3 className={`font-semibold truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                    {latestLook.title || 'Look generado'}
+                  </h3>
+                  <p className={`text-xs mt-1 ${isDark ? 'text-white/40' : 'text-gray-400'}`}>
+                    {new Date(latestLook.created_at).toLocaleDateString('es-AR', {
+                      day: 'numeric',
+                      month: 'short'
+                    })}
+                  </p>
+                </div>
+
+                {/* Arrow */}
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                  isDark ? 'bg-white/10' : 'bg-gray-100'
+                }`}>
+                  <span className={`material-symbols-rounded ${isDark ? 'text-white/60' : 'text-gray-500'}`}>
+                    arrow_forward
+                  </span>
+                </div>
+              </div>
+
+              {/* Favorite badge */}
+              {latestLook.is_favorite && (
+                <div className="absolute top-3 right-3">
+                  <span className="text-sm">❤️</span>
+                </div>
+              )}
+            </button>
+          </motion.section>
+        )}
+
+        {/* Empty Closet CTA */}
+        {closetStats.total === 0 && (
+          <motion.section
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            className={`mb-6 p-5 rounded-2xl backdrop-blur-xl border ${
+              isDark
+                ? 'bg-gradient-to-br from-purple-500/20 to-pink-500/20 border-purple-500/20'
+                : 'bg-gradient-to-br from-purple-100 to-pink-100 border-purple-200/50'
+            }`}
+          >
+            <div className="flex items-start gap-4">
+              <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${
+                isDark ? 'bg-purple-500/30' : 'bg-purple-200'
+              }`}>
+                <span className={`material-symbols-rounded text-2xl ${isDark ? 'text-purple-300' : 'text-purple-600'}`}>rocket_launch</span>
+              </div>
+              <div className="flex-1">
+                <h3 className={`font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Empezá tu armario digital</h3>
+                <p className={`text-sm mt-1 ${isDark ? 'text-white/60' : 'text-gray-600'}`}>
+                  Agregá 8-12 prendas para que la IA pueda crear looks increíbles.
+                </p>
+                <div className="flex gap-2 mt-3">
+                  <button
+                    onClick={props.onAddItem}
+                    className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${
+                      isDark
+                        ? 'bg-white text-gray-900 hover:bg-white/90'
+                        : 'bg-purple-600 text-white hover:bg-purple-700'
+                    }`}
+                  >
+                    Agregar prenda
+                  </button>
+                  <button
+                    onClick={props.onStartBulkUpload}
+                    className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${
+                      isDark
+                        ? 'bg-white/10 text-white hover:bg-white/20'
+                        : 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+                    }`}
+                  >
+                    Carga múltiple
+                  </button>
                 </div>
               </div>
             </div>
-
-            {/* Quick Actions (ocultas durante búsqueda) */}
-            {!searchQuery && (
-              <HomeQuickActionsImproved actions={quickActionsWithHandlers} />
-            )}
-
-            {/* Stats Widget (oculto durante búsqueda) */}
-            {!searchQuery && closet.length > 0 && (
-              <QuickStatsWidget
-                closet={closet}
-                onViewAnalytics={onShowAnalytics}
-              />
-            )}
-
-            {/* Quota Indicator en móvil (solo si hay suscripción) */}
-            {!searchQuery && props.subscription && (
-              <div className="lg:hidden">
-                <QuotaIndicator
-                  used={props.subscription.aiGenerationsUsed}
-                  limit={props.subscription.aiGenerationsLimit}
-                  tier={props.subscription.tier}
-                  variant="full"
-                  onUpgradeClick={props.onShowPricing}
-                  className="animate-fade-in"
-                />
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Empty closet CTA */}
-        {closet.length === 0 && !searchQuery && (
-          <div className="bg-white dark:bg-slate-900 rounded-[2rem] md:rounded-[2.5rem] p-6 md:p-8 text-center relative overflow-hidden group animate-fade-in border border-primary/20 shadow-sm mb-6">
-            <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-secondary/5 to-accent/5 opacity-50" />
-            <div className="relative z-10">
-              <div className="w-16 h-16 md:w-20 md:h-20 mx-auto mb-4 md:mb-6 bg-white/80 dark:bg-slate-800/80 rounded-full flex items-center justify-center shadow-glow animate-bounce-slow">
-                <span className="material-symbols-outlined text-3xl md:text-4xl text-primary" aria-hidden="true">add_a_photo</span>
-              </div>
-              <h3 className="text-xl md:text-2xl font-bold text-text-primary dark:text-gray-100 mb-2">
-                ¡Empieza tu transformación!
-              </h3>
-              <p className="text-sm md:text-base text-text-secondary dark:text-gray-400 mb-4 md:mb-6 max-w-md mx-auto">
-                Sube tus prendas para que la IA haga su magia y empiece a crear outfits increíbles para ti.
-              </p>
-              <button
-                onClick={handlers.onStartBulkUpload}
-                className="px-6 md:px-8 py-3 md:py-4 bg-gradient-to-r from-primary to-secondary text-white rounded-xl md:rounded-2xl font-bold text-base md:text-lg shadow-lg shadow-primary/30 active:scale-95 transition-all hover:shadow-xl hover:-translate-y-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-              >
-                Subir Ropa Ahora
-              </button>
-            </div>
-          </div>
+          </motion.section>
         )}
 
-        {/* Sección de usados recientemente (si hay) */}
-        {recentUsedFeatures.length > 0 && !searchQuery && (
-          <section
-            className="mb-4 animate-slide-up"
-            style={{ animationDelay: '200ms' }}
-            aria-label="Funciones usadas recientemente"
+        {/* Quick Stats Row */}
+        {closetStats.total > 0 && (
+          <motion.section
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15 }}
+            className="mb-6"
           >
-            <div className="flex items-center gap-2 mb-3 px-1">
-              <span className="material-symbols-outlined text-lg text-primary" aria-hidden="true">history</span>
-              <h2 className="font-bold text-text-primary dark:text-gray-100 text-base">
-                Recientes
-              </h2>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              {recentUsedFeatures.map((feature, idx) => (
+            <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+              {[
+                { icon: 'stylus', label: 'Tops', value: closetStats.tops, color: isDark ? 'text-blue-400' : 'text-blue-600' },
+                { icon: 'straighten', label: 'Bottoms', value: closetStats.bottoms, color: isDark ? 'text-green-400' : 'text-green-600' },
+                { icon: 'steps', label: 'Zapatos', value: closetStats.shoes, color: isDark ? 'text-amber-400' : 'text-amber-600' },
+              ].map((stat) => (
                 <div
-                  key={feature.id}
-                  style={{ animationDelay: `${idx * 30}ms` }}
-                  className="animate-fade-in"
+                  key={stat.label}
+                  className={`flex-1 min-w-[100px] p-3 rounded-xl backdrop-blur-md border ${
+                    isDark ? 'bg-white/5 border-white/10' : 'bg-white/80 border-gray-200/50'
+                  }`}
                 >
-                  <HomeFeatureCard feature={feature} variant="compact" />
+                  <div className="flex items-center gap-2">
+                    <span className={`material-symbols-rounded ${stat.color} text-lg`}>{stat.icon}</span>
+                    <span className={`text-xs ${isDark ? 'text-white/50' : 'text-gray-500'}`}>{stat.label}</span>
+                  </div>
+                  <p className={`font-bold text-xl mt-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>{stat.value}</p>
                 </div>
               ))}
             </div>
-          </section>
+          </motion.section>
         )}
 
-        {/* Sección de exploración */}
-        <section
-          id="explore-section"
-          className="rounded-[2rem] md:rounded-[2.5rem] p-3 md:p-4 animate-slide-up space-y-3 md:space-y-4 relative overflow-hidden"
-          style={{ animationDelay: '300ms' }}
-          aria-label="Explorar todas las funciones"
+        {/* More Tools - Colapsable (hidden in minimal mode) */}
+        {!isMinimalMode && (
+        <motion.section
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
         >
-          {/* Header */}
-          <div className="flex items-center gap-2 md:gap-3 px-1 md:px-2">
-            <div className="p-1.5 md:p-2 rounded-lg md:rounded-xl bg-primary/10 text-primary">
-              <span className="material-symbols-outlined text-xl md:text-2xl" aria-hidden="true">explore</span>
-            </div>
-            <h2 className="font-serif font-bold text-text-primary dark:text-gray-100 text-xl md:text-2xl">
-              Explorar Todo
-            </h2>
-            <span className="text-xs text-text-secondary dark:text-gray-500 bg-gray-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">
-              {features.length} funciones
-            </span>
-            {searchQuery && (
-              <span className="text-sm text-text-secondary dark:text-gray-400 ml-auto">
-                {filteredFeatures.length} resultado{filteredFeatures.length !== 1 ? 's' : ''}
-              </span>
-            )}
-          </div>
-
-          {/* Tabs con colores */}
-          <div
-            className="flex items-center gap-2 overflow-x-auto pb-2 -mx-2 px-2 scrollbar-hide"
-            role="tablist"
-            aria-label="Categorías de funciones"
+          <button
+            onClick={() => setShowMoreTools(!showMoreTools)}
+            className={`w-full flex items-center justify-between p-4 rounded-2xl backdrop-blur-md border transition-colors mb-3 ${
+              isDark
+                ? 'bg-white/5 border-white/10 hover:bg-white/10'
+                : 'bg-white/80 border-gray-200/50 hover:bg-white'
+            }`}
           >
-            {FEATURE_TABS.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                role="tab"
-                aria-selected={activeTab === tab.id}
-                aria-controls={`${tab.id}-panel`}
-                className={`
-                  flex items-center gap-1.5 px-3 py-2 rounded-xl font-bold text-xs whitespace-nowrap transition-all duration-300
-                  focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2
-                  ${activeTab === tab.id
-                    ? `bg-gradient-to-r ${tab.id === 'all' ? 'from-gray-600 to-gray-700' : tab.id === 'essential' ? 'from-emerald-500 to-teal-500' : tab.id === 'create' ? 'from-violet-500 to-purple-500' : tab.id === 'social' ? 'from-pink-500 to-rose-500' : 'from-amber-500 to-orange-500'} text-white shadow-lg scale-105`
-                    : `bg-white dark:bg-slate-800 ${tab.color} hover:bg-gray-50 dark:hover:bg-slate-700 border border-gray-200 dark:border-slate-700`
-                  }
-                `}
+            <div className="flex items-center gap-3">
+              <span className={`material-symbols-rounded ${isDark ? 'text-white/60' : 'text-gray-500'}`}>apps</span>
+              <span className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>Más herramientas</span>
+            </div>
+            <motion.span
+              animate={{ rotate: showMoreTools ? 180 : 0 }}
+              className={`material-symbols-rounded ${isDark ? 'text-white/60' : 'text-gray-500'}`}
+            >
+              expand_more
+            </motion.span>
+          </button>
+
+          <AnimatePresence>
+            {showMoreTools && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="overflow-hidden"
               >
-                <span className="material-symbols-outlined text-base" aria-hidden="true">{tab.icon}</span>
-                <span>{tab.label}</span>
-              </button>
-            ))}
-          </div>
-
-          {/* Grid de Features destacadas (solo en tab "all" y sin búsqueda) */}
-          {activeTab === 'all' && !searchQuery && featuredFeatures.length > 0 && (
-            <div className="mb-2">
-              <div className="flex items-center gap-2 mb-2 px-1">
-                <span className="material-symbols-outlined text-base text-amber-500" aria-hidden="true">star</span>
-                <span className="text-sm font-bold text-text-secondary dark:text-gray-400">Destacadas</span>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                {featuredFeatures.map((feature, idx) => (
-                  <div
-                    key={feature.id}
-                    style={{ animationDelay: `${idx * 50}ms` }}
-                    className="animate-fade-in"
-                  >
-                    <HomeFeatureCard feature={feature} />
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Separador visual */}
-          {activeTab === 'all' && !searchQuery && featuredFeatures.length > 0 && (
-            <div className="flex items-center gap-3 py-2">
-              <div className="flex-1 h-px bg-gradient-to-r from-transparent via-gray-200 dark:via-slate-700 to-transparent" />
-              <span className="text-xs text-text-secondary dark:text-gray-500">Todas las funciones</span>
-              <div className="flex-1 h-px bg-gradient-to-r from-transparent via-gray-200 dark:via-slate-700 to-transparent" />
-            </div>
-          )}
-
-          {/* Features Grid */}
-          <div
-            id={`${activeTab}-panel`}
-            role="tabpanel"
-            aria-labelledby={activeTab}
-            className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3"
-          >
-            {filteredFeatures.length > 0 ? (
-              filteredFeatures
-                .filter(f => activeTab !== 'all' || !f.featured || searchQuery) // Ocultar featured en "all" si ya se muestran arriba
-                .map((feature, idx) => (
-                <div
-                  key={feature.id}
-                  style={{ animationDelay: `${idx * 30}ms` }}
-                  className="animate-fade-in"
-                >
-                  <HomeFeatureCard feature={feature} />
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pb-4">
+                  {MORE_TOOLS.map((tool, idx) => {
+                    const handler = getHandler(tool.handlerKey);
+                    return (
+                      <motion.button
+                        key={tool.id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: idx * 0.03 }}
+                        onClick={handler}
+                        className={`flex flex-col items-center gap-2 p-4 rounded-xl backdrop-blur-md border transition-colors relative ${
+                          isDark
+                            ? 'bg-white/5 border-white/10 hover:bg-white/10'
+                            : 'bg-white/80 border-gray-200/50 hover:bg-white'
+                        }`}
+                      >
+                        {tool.isPro && (
+                          <span className="absolute top-2 right-2 text-[9px] font-bold text-amber-500 bg-amber-500/20 px-1.5 py-0.5 rounded">
+                            PRO
+                          </span>
+                        )}
+                        <span className={`material-symbols-rounded text-2xl ${isDark ? 'text-white/70' : 'text-gray-600'}`}>{tool.icon}</span>
+                        <span className={`text-xs font-medium text-center ${isDark ? 'text-white/80' : 'text-gray-700'}`}>{tool.label}</span>
+                      </motion.button>
+                    );
+                  })}
                 </div>
-              ))
-            ) : (
-              <div className="col-span-full text-center py-8 md:py-12">
-                <span className="material-symbols-outlined text-4xl md:text-5xl text-text-secondary/50 mb-2 md:mb-3 block" aria-hidden="true">
-                  search_off
-                </span>
-                <p className="text-text-secondary dark:text-gray-400 text-sm md:text-base">
-                  No se encontraron funciones para "{searchQuery}"
-                </p>
-                <button
-                  onClick={() => setSearchQuery('')}
-                  className="mt-2 md:mt-3 text-primary hover:underline text-sm md:text-base"
-                >
-                  Limpiar búsqueda
-                </button>
-              </div>
+              </motion.div>
             )}
-          </div>
-        </section>
-      </main>
+          </AnimatePresence>
+        </motion.section>
+        )}
+
+        {/* Pro Upgrade Banner */}
+        {subscription && subscription.tier === 'free' && (
+          <motion.section
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.25 }}
+            className="mt-auto pt-6"
+          >
+            <button
+              onClick={props.onShowPricing}
+              className={`w-full p-4 rounded-2xl backdrop-blur-xl border flex items-center justify-between transition-all ${
+                isDark
+                  ? 'bg-gradient-to-r from-amber-500/20 to-orange-500/20 border-amber-500/30 hover:from-amber-500/30 hover:to-orange-500/30'
+                  : 'bg-gradient-to-r from-amber-100 to-orange-100 border-amber-200 hover:from-amber-200 hover:to-orange-200'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <span className={`material-symbols-rounded text-2xl ${isDark ? 'text-amber-400' : 'text-amber-600'}`}>diamond</span>
+                <div className="text-left">
+                  <p className={`font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>Upgrade a Pro</p>
+                  <p className={`text-sm ${isDark ? 'text-white/50' : 'text-gray-600'}`}>Probador virtual + más créditos</p>
+                </div>
+              </div>
+              <span className={`material-symbols-rounded ${isDark ? 'text-white/50' : 'text-gray-500'}`}>chevron_right</span>
+            </button>
+          </motion.section>
+        )}
+      </div>
     </div>
   );
 };

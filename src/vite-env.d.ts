@@ -9,3 +9,21 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
+
+declare global {
+  namespace JSX {
+    interface IntrinsicElements {
+      ambientLight: any;
+      pointLight: any;
+      spotLight: any;
+      group: any;
+      mesh: any;
+      sphereGeometry: any;
+      meshPhysicalMaterial: any;
+      meshStandardMaterial: any;
+      cylinderGeometry: any;
+      coneGeometry: any;
+      primitive: any;
+    }
+  }
+}

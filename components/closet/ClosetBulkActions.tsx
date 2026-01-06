@@ -39,6 +39,8 @@ interface ClosetBulkActionsProps {
 
   // Custom actions
   actions?: BulkAction[];
+  extraActions?: BulkAction[];
+  helperText?: string;
 
   // Position
   position?: 'top' | 'bottom' | 'floating';
@@ -89,6 +91,8 @@ export default function ClosetBulkActions({
   onAction,
   collections = [],
   actions = DEFAULT_ACTIONS,
+  extraActions = [],
+  helperText,
   position = 'bottom'
 }: ClosetBulkActionsProps) {
   const [showConfirmation, setShowConfirmation] = useState(false);
@@ -149,6 +153,8 @@ export default function ClosetBulkActions({
     floating: 'fixed bottom-24 md:bottom-10 right-6 z-40'
   };
 
+  const resolvedActions = extraActions.length ? [...extraActions, ...actions] : actions;
+
   return (
     <>
       {/* Main toolbar */}
@@ -174,14 +180,19 @@ export default function ClosetBulkActions({
                   </button>
 
                   <div>
-                    <div className="font-semibold text-text-primary dark:text-gray-200">
-                      {selectedCount} seleccionado{selectedCount !== 1 ? 's' : ''}
-                    </div>
-                    <div className="text-xs text-text-secondary dark:text-gray-400">
-                      {totalCount} disponibles
-                    </div>
+                  <div className="font-semibold text-text-primary dark:text-gray-200">
+                    {selectedCount} seleccionado{selectedCount !== 1 ? 's' : ''}
                   </div>
+                  <div className="text-xs text-text-secondary dark:text-gray-400">
+                    {totalCount} disponibles
+                  </div>
+                  {helperText && (
+                    <div className="text-[11px] text-text-secondary dark:text-gray-400 mt-1">
+                      {helperText}
+                    </div>
+                  )}
                 </div>
+              </div>
 
                 {/* Select all / Deselect all */}
                 <button
@@ -194,7 +205,7 @@ export default function ClosetBulkActions({
 
               {/* Actions */}
               <div className="flex items-center gap-2 p-3 overflow-x-auto">
-                {actions.map((action, index) => (
+                {resolvedActions.map((action, index) => (
                   <motion.button
                     key={action.id}
                     initial={{ scale: 0, opacity: 0 }}

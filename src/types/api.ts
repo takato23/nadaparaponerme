@@ -121,6 +121,15 @@ export interface Database {
           common_preferences: string[];
         }[];
       };
+      Views: {
+        [_ in never]: never;
+      };
+      Enums: {
+        [_ in never]: never;
+      };
+      CompositeTypes: {
+        [_ in never]: never;
+      };
     };
   };
 }

@@ -1,9 +1,10 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import type { ClothingItem, WeatherData, WeatherOutfitResult } from '../types';
 import { getCurrentWeather, getWeatherEmoji, getTempDescription, getUserCity, saveUserCity } from '../services/weatherService';
 import { generateWeatherOutfit } from '../src/services/aiService';
 import Loader from './Loader';
+import { getCreditStatus } from '../services/usageTrackingService';
 
 interface WeatherOutfitViewProps {
   closet: ClothingItem[];
@@ -20,6 +21,9 @@ const WeatherOutfitView = ({ closet, onClose, onViewOutfit }: WeatherOutfitViewP
   const [city, setCity] = useState(getUserCity());
   const [isEditingCity, setIsEditingCity] = useState(false);
   const [cityInput, setCityInput] = useState(city);
+
+  // Credits status
+  const creditsStatus = useMemo(() => getCreditStatus(), [outfitResult]);
 
   // Load weather on mount
   useEffect(() => {
@@ -91,12 +95,27 @@ const WeatherOutfitView = ({ closet, onClose, onViewOutfit }: WeatherOutfitViewP
             <h2 className="text-2xl font-bold text-text-primary dark:text-gray-200">Outfit del Día</h2>
             <p className="text-sm text-text-secondary dark:text-gray-400">Basado en el clima actual</p>
           </div>
-          <button
-            onClick={onClose}
-            className="w-10 h-10 rounded-full liquid-glass flex items-center justify-center transition-transform active:scale-95"
-          >
-            <span className="material-symbols-outlined text-text-primary dark:text-gray-200">close</span>
-          </button>
+          <div className="flex items-center gap-3">
+            {/* Credits Indicator */}
+            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg ${
+              creditsStatus.remaining <= 2
+                ? 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
+                : 'bg-gray-100 dark:bg-gray-800'
+            }`}>
+              <span className="material-symbols-rounded text-gray-500 text-sm">toll</span>
+              <span className={`text-xs font-medium ${
+                creditsStatus.remaining <= 2 ? 'text-red-600 dark:text-red-400' : 'text-gray-600 dark:text-gray-300'
+              }`}>
+                {creditsStatus.limit === -1 ? '∞' : `${creditsStatus.remaining}/${creditsStatus.limit}`}
+              </span>
+            </div>
+            <button
+              onClick={onClose}
+              className="w-10 h-10 rounded-full liquid-glass flex items-center justify-center transition-transform active:scale-95"
+            >
+              <span className="material-symbols-outlined text-text-primary dark:text-gray-200">close</span>
+            </button>
+          </div>
         </div>
 
         {/* Content */}

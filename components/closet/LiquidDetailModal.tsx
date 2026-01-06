@@ -1,6 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { ClothingItem, BrandRecognitionResult, DupeFinderResult } from '../../types';
+import { useNavigate } from 'react-router-dom';
+import { ROUTES } from '../../src/routes';
 import * as aiService from '../../src/services/aiService';
 import Loader from '../Loader';
 import { isRealImage } from '../../src/utils/imagePlaceholder';
@@ -12,6 +15,7 @@ interface LiquidDetailModalProps {
 }
 
 export default function LiquidDetailModal({ item, isOpen, onClose }: LiquidDetailModalProps) {
+    const navigate = useNavigate();
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [brandResult, setBrandResult] = useState<BrandRecognitionResult | null>(null);
     const [dupeResult, setDupeResult] = useState<DupeFinderResult | null>(null);
@@ -69,10 +73,13 @@ export default function LiquidDetailModal({ item, isOpen, onClose }: LiquidDetai
         }
     };
 
-    return (
+    // Use portal to ensure modal is always on top of other elements (like FloatingDock)
+    if (typeof document === 'undefined') return null;
+
+    return createPortal(
         <AnimatePresence>
             {isOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
                     {/* Backdrop with blur */}
                     <motion.div
                         initial={{ opacity: 0, backdropFilter: "blur(0px)" }}
@@ -85,10 +92,10 @@ export default function LiquidDetailModal({ item, isOpen, onClose }: LiquidDetai
                     {/* Modal Content - Peep-hole effect */}
                     <motion.div
                         layoutId={`item-${item.id}`}
-                        className="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-[3rem] overflow-hidden shadow-2xl z-10 max-h-[90vh] overflow-y-auto"
-                        initial={{ scale: 0.8, opacity: 0, borderRadius: "100%" }}
+                        className="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-[3rem] overflow-hidden shadow-2xl z-[110] max-h-[90vh] overflow-y-auto"
+                        initial={{ scale: 0.9, opacity: 0, borderRadius: "3rem" }}
                         animate={{ scale: 1, opacity: 1, borderRadius: "3rem" }}
-                        exit={{ scale: 0.8, opacity: 0, borderRadius: "100%" }}
+                        exit={{ scale: 0.9, opacity: 0, borderRadius: "3rem" }}
                         transition={{ type: "spring", damping: 25, stiffness: 300 }}
                     >
                         {/* Image Section */}
@@ -140,7 +147,7 @@ export default function LiquidDetailModal({ item, isOpen, onClose }: LiquidDetai
                         </div>
 
                         {/* Tab Content */}
-                        <div className="p-8">
+                        <div className="p-8 pb-[calc(8rem+env(safe-area-inset-bottom))]">
                             {/* Details Tab */}
                             {activeTab === 'details' && (
                                 <motion.div
@@ -170,6 +177,42 @@ export default function LiquidDetailModal({ item, isOpen, onClose }: LiquidDetai
                                             <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Subcategoría</p>
                                             <p className="font-medium text-slate-900 dark:text-white capitalize">{item.metadata?.subcategory || '-'}</p>
                                         </div>
+                                    </div>
+
+                                    {/* Extended Details */}
+                                    <div className="space-y-4">
+                                        {item.metadata?.styling_tips && (
+                                            <div className="p-4 rounded-2xl bg-indigo-50 dark:bg-indigo-900/20">
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <span className="material-symbols-outlined text-indigo-500 text-sm">style</span>
+                                                    <p className="text-xs text-indigo-600 dark:text-indigo-300 uppercase tracking-wider font-bold">Consejos de Estilo</p>
+                                                </div>
+                                                <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
+                                                    {item.metadata.styling_tips}
+                                                </p>
+                                            </div>
+                                        )}
+
+                                        {item.metadata?.care_instructions && (
+                                            <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-900/20">
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <span className="material-symbols-outlined text-emerald-500 text-sm">wash</span>
+                                                    <p className="text-xs text-emerald-600 dark:text-emerald-300 uppercase tracking-wider font-bold">Cuidados</p>
+                                                </div>
+                                                <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
+                                                    {item.metadata.care_instructions}
+                                                </p>
+                                            </div>
+                                        )}
+
+                                        {item.metadata?.fabric_composition && (
+                                            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50">
+                                                <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Composición</p>
+                                                <p className="text-sm font-medium text-slate-900 dark:text-white">
+                                                    {item.metadata.fabric_composition}
+                                                </p>
+                                            </div>
+                                        )}
                                     </div>
                                 </motion.div>
                             )}
@@ -286,44 +329,53 @@ export default function LiquidDetailModal({ item, isOpen, onClose }: LiquidDetai
                                     )}
                                 </motion.div>
                             )}
+                        </div>
 
-                            {/* Action Buttons */}
-                            <div className="flex gap-3 mt-6">
-                                {activeTab === 'details' && (
-                                    <>
-                                        <button
-                                            onClick={handleAnalyzeBrand}
-                                            disabled={!hasRealImage}
-                                            title={!hasRealImage ? 'Necesitás una foto real de la prenda para analizar la marca' : ''}
-                                            className={`flex-1 py-3 rounded-xl text-white font-bold shadow-lg transition-all flex items-center justify-center gap-2 ${
-                                                hasRealImage
-                                                    ? 'bg-gradient-to-r from-purple-500 to-pink-500 hover:scale-[1.02]'
-                                                    : 'bg-gray-400 cursor-not-allowed opacity-60'
+                        <div className="sticky bottom-0 left-0 right-0 z-20 px-8 pt-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))] bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-t border-gray-200/60 dark:border-gray-700/60">
+                            <div className="flex flex-col gap-3">
+                                <button
+                                    onClick={() => {
+                                        onClose();
+                                        navigate(ROUTES.STUDIO, { state: { preselectedItemIds: [item.id] } });
+                                    }}
+                                    className="w-full py-4 rounded-xl bg-black dark:bg-white text-white dark:text-black font-bold text-lg shadow-xl hover:shadow-2xl hover:scale-[1.02] transition-all flex items-center justify-center gap-2 group"
+                                >
+                                    <span className="material-symbols-outlined group-hover:rotate-12 transition-transform">auto_fix_high</span>
+                                    Probar look
+                                </button>
+
+                                <div className="flex gap-3">
+                                    <button
+                                        onClick={handleAnalyzeBrand}
+                                        disabled={!hasRealImage}
+                                        title={!hasRealImage ? 'Necesitás una foto real de la prenda para analizar la marca' : ''}
+                                        className={`flex-1 py-3 rounded-xl text-white font-bold shadow-sm transition-all flex items-center justify-center gap-2 ${hasRealImage
+                                            ? 'bg-gradient-to-r from-purple-500 to-pink-500 hover:scale-[1.02]'
+                                            : 'bg-gray-400 cursor-not-allowed opacity-60'
                                             }`}
-                                        >
-                                            <span className="material-symbols-outlined">label</span>
-                                            Analizar Marca
-                                        </button>
-                                        <button
-                                            onClick={handleFindDupes}
-                                            disabled={!hasRealImage}
-                                            title={!hasRealImage ? 'Necesitás una foto real de la prenda para buscar alternativas' : ''}
-                                            className={`flex-1 py-3 rounded-xl text-white font-bold transition-all flex items-center justify-center gap-2 ${
-                                                hasRealImage
-                                                    ? 'bg-gradient-to-r from-blue-500 to-cyan-500 hover:scale-[1.02]'
-                                                    : 'bg-gray-400 cursor-not-allowed opacity-60'
+                                    >
+                                        <span className="material-symbols-outlined">label</span>
+                                        Marca
+                                    </button>
+                                    <button
+                                        onClick={handleFindDupes}
+                                        disabled={!hasRealImage}
+                                        title={!hasRealImage ? 'Necesitás una foto real de la prenda para buscar alternativas' : ''}
+                                        className={`flex-1 py-3 rounded-xl text-white font-bold transition-all flex items-center justify-center gap-2 ${hasRealImage
+                                            ? 'bg-gradient-to-r from-blue-500 to-cyan-500 hover:scale-[1.02]'
+                                            : 'bg-gray-400 cursor-not-allowed opacity-60'
                                             }`}
-                                        >
-                                            <span className="material-symbols-outlined">shopping_bag</span>
-                                            Buscar Dupes
-                                        </button>
-                                    </>
-                                )}
+                                    >
+                                        <span className="material-symbols-outlined">shopping_bag</span>
+                                        Dupes
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </motion.div>
                 </div>
             )}
-        </AnimatePresence>
+        </AnimatePresence>,
+        document.body
     );
 }

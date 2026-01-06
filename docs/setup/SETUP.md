@@ -49,6 +49,16 @@ VITE_SUPABASE_URL=https://tu-proyecto.supabase.co
 VITE_SUPABASE_ANON_KEY=tu_anon_key
 ```
 
+Agrega (también en `.env.local.example`) las claves secretas que las Edge Functions consultan:
+```env
+# SUPABASE_SERVICE_ROLE_KEY=service_role_key
+# SERVICE_ROLE_KEY=alias que algunas utilidades (como supabase functions) detectan automáticamente
+# GEMINI_API_KEY=tu_gemini_api_key
+# BETA_ALLOWLIST_EMAILS=tu@email.com,otro@email.com (opcional)
+```
+- Usa `./scripts/fix-backend-secrets.sh` o `supabase secrets set ...` para sincronizar estas variables en Supabase.
+- Nunca subas estos secretos a Git; `.env.local` debe quedarse fuera del control de versiones.
+
 ## 🗄️ Paso 4: Ejecutar Migrations de Base de Datos
 
 ### Opción A: Usando Supabase Dashboard (Más fácil)
@@ -121,7 +131,19 @@ Esto instalará:
 - `@supabase/supabase-js` - Cliente de Supabase
 - Otras dependencias existentes
 
-## 🧪 Paso 8: Probar la Configuración
+Nota: `npm install` también agregó `vitest` y `jsdom` como dependencias de desarrollo para las pruebas; por eso `package-lock.json` se regeneró. Revisa el diff para ver solo estas incorporaciones y entiende que los tests predeterminados usan Vitest/jdom.
+
+## 🧪 Paso 8: Ejecutar pruebas
+
+Vitest está configurado (ver `vitest.config.ts`) para correr en ambiente `jsdom`. Lanza:
+
+```bash
+npm run test
+```
+
+La suite cubre el servicio `usageTrackingService` y valida las primeras reglas de crédito. Si aparece un error relacionado con `localStorage`, asegúrate de que el entorno está usando `jsdom` (Vitest lo hace por defecto).
+
+## 🧪 Paso 9: Probar la Configuración
 
 ```bash
 # Iniciar el servidor de desarrollo

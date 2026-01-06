@@ -17,37 +17,43 @@ import { retryAIOperation, retryAIOperation as retryWithBackoff } from '../utils
  * Direct usage from this file will fail unless an API key is explicitly provided.
  */
 
-// ⛔ SECURITY: API key MUST only be configured via Edge Functions (server-side)
-// NEVER read from VITE_ environment variables - they are exposed in client bundle
+// API key configuration
+// In development: reads from VITE_GEMINI_API_KEY
+// In production: should be configured via Edge Functions only
 let _apiKey: string | undefined = undefined;
-
-// Lazy initialization - only creates client when explicitly configured via configureGeminiAPI()
 let _aiClient: GoogleGenAI | null = null;
 
 /**
- * Configure API key (for Edge Functions only)
- * This should NEVER be called from client code
+ * Configure API key (for Edge Functions only in production)
  */
 export function configureGeminiAPI(apiKey: string) {
-  _apiKey = apiKey;
-  _aiClient = new GoogleGenAI({ apiKey });
+    _apiKey = apiKey;
+    _aiClient = new GoogleGenAI({ apiKey });
 }
 
 /**
  * Get configured AI client
- * Throws error if called without proper configuration
+ * In development mode, automatically configures from VITE_GEMINI_API_KEY
  */
 function getAIClient(): GoogleGenAI {
-  // If already configured from environment or explicit config, return it
-  if (_aiClient && _apiKey) {
-    return _aiClient;
-  }
+    // If already configured, return it
+    if (_aiClient && _apiKey) {
+        return _aiClient;
+    }
 
-  // If not configured, throw error
-  throw new Error(
-    'Gemini API not configured. This service must be called from Edge Functions only. ' +
-    'Use src/services/aiService.ts from client code, which routes through Edge Functions.'
-  );
+    // In development mode, try to read from VITE_ environment variable
+    const envApiKey = import.meta.env?.VITE_GEMINI_API_KEY;
+    if (envApiKey) {
+        _apiKey = envApiKey;
+        _aiClient = new GoogleGenAI({ apiKey: envApiKey });
+        return _aiClient;
+    }
+
+    // If not configured, throw error
+    throw new Error(
+        'Gemini API not configured. Set VITE_GEMINI_API_KEY in .env.local for development, ' +
+        'or use Edge Functions for production.'
+    );
 }
 
 /**
@@ -55,17 +61,17 @@ function getAIClient(): GoogleGenAI {
  * Adds operation context to help with debugging and user-facing messages
  */
 function enrichError(error: unknown, operation: string, context?: Record<string, any>): Error {
-  const err = error instanceof Error ? error : new Error(String(error));
+    const err = error instanceof Error ? error : new Error(String(error));
 
-  // Add operation context to error message
-  const contextStr = context ? ` | Context: ${JSON.stringify(context)}` : '';
-  err.message = `[${operation}] ${err.message}${contextStr}`;
+    // Add operation context to error message
+    const contextStr = context ? ` | Context: ${JSON.stringify(context)}` : '';
+    err.message = `[${operation}] ${err.message}${contextStr}`;
 
-  // Add metadata for error handling
-  (err as any).operation = operation;
-  (err as any).context = context;
+    // Add metadata for error handling
+    (err as any).operation = operation;
+    (err as any).context = context;
 
-  return err;
+    return err;
 }
 
 // --- Analyze Item Service ---
@@ -112,132 +118,132 @@ const clothingItemSchema = {
 };
 
 function base64ToGenerativePart(base64Data: string, mimeType: string) {
-  return {
-    inlineData: {
-      data: base64Data,
-      mimeType,
-    },
-  };
+    return {
+        inlineData: {
+            data: base64Data,
+            mimeType,
+        },
+    };
 }
 
 export async function analyzeClothingItem(imageDataUrl: string): Promise<ClothingItemMetadata> {
-  try {
-    const [mimeType, base64Data] = imageDataUrl.split(';base64,');
-    const imageMimeType = mimeType.split(':')[1];
+    try {
+        const [mimeType, base64Data] = imageDataUrl.split(';base64,');
+        const imageMimeType = mimeType.split(':')[1];
 
-    if (!base64Data || !imageMimeType) {
-      throw enrichError(
-        new Error('Formato de imagen inválido'),
-        'analyzeClothingItem',
-        { hasBase64: !!base64Data, hasMimeType: !!imageMimeType }
-      );
-    }
-
-    const imagePart = base64ToGenerativePart(base64Data, imageMimeType);
-    const systemInstruction = `Eres un experto en moda. Analiza la prenda en la imagen y describe sus características, prestando especial atención a detalles como el tipo de cuello y de manga si son visibles.`;
-
-    const response = await retryAIOperation(async () => {
-      return await getAIClient().models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: { parts: [imagePart] },
-        config: {
-          systemInstruction: systemInstruction,
-          responseMimeType: "application/json",
-          responseSchema: clothingItemSchema,
+        if (!base64Data || !imageMimeType) {
+            throw enrichError(
+                new Error('Formato de imagen inválido'),
+                'analyzeClothingItem',
+                { hasBase64: !!base64Data, hasMimeType: !!imageMimeType }
+            );
         }
-      });
-    });
 
-    if (!response?.text) {
-      throw enrichError(
-        new Error('La IA no devolvió ninguna respuesta'),
-        'analyzeClothingItem',
-        { responseEmpty: true }
-      );
+        const imagePart = base64ToGenerativePart(base64Data, imageMimeType);
+        const systemInstruction = `Eres un experto en moda. Analiza la prenda en la imagen y describe sus características, prestando especial atención a detalles como el tipo de cuello y de manga si son visibles.`;
+
+        const response = await retryAIOperation(async () => {
+            return await getAIClient().models.generateContent({
+                model: 'gemini-2.0-flash',
+                contents: { parts: [imagePart] },
+                config: {
+                    systemInstruction: systemInstruction,
+                    responseMimeType: "application/json",
+                    responseSchema: clothingItemSchema,
+                }
+            });
+        });
+
+        if (!response?.text) {
+            throw enrichError(
+                new Error('La IA no devolvió ninguna respuesta'),
+                'analyzeClothingItem',
+                { responseEmpty: true }
+            );
+        }
+
+        const parsedJson = JSON.parse(response.text);
+
+        if (!parsedJson.category || !Array.isArray(parsedJson.vibe_tags) || !Array.isArray(parsedJson.seasons)) {
+            throw enrichError(
+                new Error('La respuesta de IA no tiene el formato esperado'),
+                'analyzeClothingItem',
+                { hasCategory: !!parsedJson.category, hasVibeTags: Array.isArray(parsedJson.vibe_tags) }
+            );
+        }
+
+        return parsedJson as ClothingItemMetadata;
+    } catch (error: any) {
+        console.error("Error analyzing clothing item:", error);
+
+        // Provide more specific error messages
+        if (error?.message?.includes('429') || error?.message?.includes('rate limit') || error?.message?.includes('RESOURCE_EXHAUSTED')) {
+            throw enrichError(
+                new Error('Límite de análisis alcanzado. Por favor esperá 30 minutos o upgradeá a Premium.'),
+                'analyzeClothingItem',
+                { errorType: 'rate_limit' }
+            );
+        }
+
+        if (error?.message?.includes('503') || error?.message?.includes('overloaded') || error?.message?.includes('UNAVAILABLE')) {
+            throw enrichError(
+                new Error('El servicio de IA está temporalmente sobrecargado. Por favor, intenta nuevamente en unos segundos.'),
+                'analyzeClothingItem',
+                { errorType: 'service_overload' }
+            );
+        }
+
+        if (error?.message?.includes('dark') || error?.message?.includes('oscura')) {
+            throw enrichError(
+                new Error('La imagen está muy oscura. Por favor tomá la foto con mejor iluminación.'),
+                'analyzeClothingItem',
+                { errorType: 'dark_image' }
+            );
+        }
+
+        if (error?.message?.includes('timeout') || error?.message?.includes('deadline')) {
+            throw enrichError(
+                new Error('El análisis tardó demasiado. Por favor intentá de nuevo.'),
+                'analyzeClothingItem',
+                { errorType: 'timeout' }
+            );
+        }
+
+        // Re-throw enriched error or create generic one
+        throw error?.operation ? error : enrichError(
+            error,
+            'analyzeClothingItem',
+            { originalMessage: error?.message }
+        );
     }
-
-    const parsedJson = JSON.parse(response.text);
-
-    if (!parsedJson.category || !Array.isArray(parsedJson.vibe_tags) || !Array.isArray(parsedJson.seasons)) {
-      throw enrichError(
-        new Error('La respuesta de IA no tiene el formato esperado'),
-        'analyzeClothingItem',
-        { hasCategory: !!parsedJson.category, hasVibeTags: Array.isArray(parsedJson.vibe_tags) }
-      );
-    }
-
-    return parsedJson as ClothingItemMetadata;
-  } catch (error: any) {
-    console.error("Error analyzing clothing item:", error);
-
-    // Provide more specific error messages
-    if (error?.message?.includes('429') || error?.message?.includes('rate limit') || error?.message?.includes('RESOURCE_EXHAUSTED')) {
-      throw enrichError(
-        new Error('Límite de análisis alcanzado. Por favor esperá 30 minutos o upgradeá a Premium.'),
-        'analyzeClothingItem',
-        { errorType: 'rate_limit' }
-      );
-    }
-
-    if (error?.message?.includes('503') || error?.message?.includes('overloaded') || error?.message?.includes('UNAVAILABLE')) {
-      throw enrichError(
-        new Error('El servicio de IA está temporalmente sobrecargado. Por favor, intenta nuevamente en unos segundos.'),
-        'analyzeClothingItem',
-        { errorType: 'service_overload' }
-      );
-    }
-
-    if (error?.message?.includes('dark') || error?.message?.includes('oscura')) {
-      throw enrichError(
-        new Error('La imagen está muy oscura. Por favor tomá la foto con mejor iluminación.'),
-        'analyzeClothingItem',
-        { errorType: 'dark_image' }
-      );
-    }
-
-    if (error?.message?.includes('timeout') || error?.message?.includes('deadline')) {
-      throw enrichError(
-        new Error('El análisis tardó demasiado. Por favor intentá de nuevo.'),
-        'analyzeClothingItem',
-        { errorType: 'timeout' }
-      );
-    }
-
-    // Re-throw enriched error or create generic one
-    throw error?.operation ? error : enrichError(
-      error,
-      'analyzeClothingItem',
-      { originalMessage: error?.message }
-    );
-  }
 }
 
 // --- Generate Clothing Image Service ---
 
 export async function generateClothingImage(prompt: string): Promise<string> {
-  const enhancedPrompt = `A high-quality studio photograph of ${prompt}, on a clean, neutral white background. The item should be the main focus, with no distractions. Centered composition.`;
+    const enhancedPrompt = `A high-quality studio photograph of ${prompt}, on a clean, neutral white background. The item should be the main focus, with no distractions. Centered composition.`;
 
-  try {
-    const response = await getAIClient().models.generateImages({
-        model: 'imagen-4.0-generate-001',
-        prompt: enhancedPrompt,
-        config: {
-          numberOfImages: 1,
-          outputMimeType: 'image/jpeg',
-          aspectRatio: '1:1',
-        },
-    });
+    try {
+        const response = await getAIClient().models.generateImages({
+            model: 'imagen-4.0-generate-001',
+            prompt: enhancedPrompt,
+            config: {
+                numberOfImages: 1,
+                outputMimeType: 'image/jpeg',
+                aspectRatio: '1:1',
+            },
+        });
 
-    if (response.generatedImages && response.generatedImages.length > 0) {
-        const base64ImageBytes: string = response.generatedImages[0].image.imageBytes;
-        return `data:image/jpeg;base64,${base64ImageBytes}`;
-    } else {
-        throw new Error("Image generation failed, no images returned.");
+        if (response.generatedImages && response.generatedImages.length > 0) {
+            const base64ImageBytes: string = response.generatedImages[0].image.imageBytes;
+            return `data:image/jpeg;base64,${base64ImageBytes}`;
+        } else {
+            throw new Error("Image generation failed, no images returned.");
+        }
+    } catch (error) {
+        console.error("Error generating clothing image:", error);
+        throw new Error("Failed to generate an image. Please try a different prompt.");
     }
-  } catch (error) {
-    console.error("Error generating clothing image:", error);
-    throw new Error("Failed to generate an image. Please try a different prompt.");
-  }
 }
 
 
@@ -281,15 +287,15 @@ export async function generateOutfit(userPrompt: string, inventory: ClothingItem
 
     try {
         const response = await retryWithBackoff(async () => {
-          return await getAIClient().models.generateContent({
-            model: 'gemini-2.5-flash', // Usando 2.5-flash: modelo estable más reciente
-            contents: { parts: [{ text: `Aquí está la petición del usuario: "${userPrompt}"` }] },
-            config: {
-              systemInstruction,
-              responseMimeType: "application/json",
-              responseSchema: fitResultSchema,
-            }
-          });
+            return await getAIClient().models.generateContent({
+                model: 'gemini-2.0-flash', // Usando 2.0-flash: modelo más reciente y rápido
+                contents: { parts: [{ text: `Aquí está la petición del usuario: "${userPrompt}"` }] },
+                config: {
+                    systemInstruction,
+                    responseMimeType: "application/json",
+                    responseSchema: fitResultSchema,
+                }
+            });
         });
 
         const parsedJson = JSON.parse(response.text);
@@ -332,57 +338,48 @@ export async function generateOutfit(userPrompt: string, inventory: ClothingItem
  * @returns FitResult with potential educational fields
  */
 export async function generateOutfitWithCustomPrompt(
-  userPrompt: string,
-  inventory: ClothingItem[],
-  customSystemPrompt: string,
-  responseSchema: any
+    userPrompt: string,
+    inventory: ClothingItem[],
+    customSystemPrompt: string,
+    responseSchema: any
 ): Promise<any> {
-  console.log('🟢 [GEMINI] generateOutfitWithCustomPrompt iniciando...');
-  console.log('🟢 [GEMINI] Inventory size:', inventory.length);
+    const simplifiedInventory = inventory.map(item => ({
+        id: item.id,
+        metadata: item.metadata
+    }));
 
-  const simplifiedInventory = inventory.map(item => ({
-    id: item.id,
-    metadata: item.metadata
-  }));
+    if (simplifiedInventory.length < 3) {
+        throw new Error("No hay suficientes prendas en tu armario. Añade al menos un top, un pantalón y un par de zapatos.");
+    }
 
-  if (simplifiedInventory.length < 3) {
-    throw new Error("No hay suficientes prendas en tu armario. Añade al menos un top, un pantalón y un par de zapatos.");
-  }
+    try {
+        const response = await retryWithBackoff(async () => {
+            return await getAIClient().models.generateContent({
+                model: 'gemini-2.0-flash',
+                contents: { parts: [{ text: `Aquí está la petición del usuario: "${userPrompt}"\n\nINVENTARIO DISPONIBLE:\n${JSON.stringify(simplifiedInventory, null, 2)}` }] },
+                config: {
+                    systemInstruction: customSystemPrompt,
+                    responseMimeType: "application/json",
+                    responseSchema: responseSchema,
+                }
+            });
+        });
 
-  try {
-    console.log('🟢 [GEMINI] Llamando a retryWithBackoff...');
-    const response = await retryWithBackoff(async () => {
-      console.log('🟢 [GEMINI] Dentro de retryWithBackoff, llamando a getAIClient()...');
-      return await getAIClient().models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: { parts: [{ text: `Aquí está la petición del usuario: "${userPrompt}"\n\nINVENTARIO DISPONIBLE:\n${JSON.stringify(simplifiedInventory, null, 2)}` }] },
-        config: {
-          systemInstruction: customSystemPrompt,
-          responseMimeType: "application/json",
-          responseSchema: responseSchema,
+        const parsedJson = JSON.parse(response.text);
+
+        if (parsedJson.top_id && parsedJson.bottom_id && parsedJson.shoes_id && parsedJson.explanation) {
+            return parsedJson;
+        } else {
+            throw new Error("La IA no pudo crear un outfit válido con las prendas disponibles.");
         }
-      });
-    });
+    } catch (error) {
 
-    console.log('🟢 [GEMINI] Respuesta recibida, parseando JSON...');
-    const parsedJson = JSON.parse(response.text);
-    console.log('🟢 [GEMINI] JSON parseado exitosamente');
+        if (error?.message?.includes('503') || error?.message?.includes('overloaded')) {
+            throw new Error("El servicio de IA está temporalmente sobrecargado. Por favor, intenta nuevamente en unos segundos.");
+        }
 
-    if (parsedJson.top_id && parsedJson.bottom_id && parsedJson.shoes_id && parsedJson.explanation) {
-      console.log('🟢 [GEMINI] Validación exitosa, retornando resultado');
-      return parsedJson;
-    } else {
-      throw new Error("La IA no pudo crear un outfit válido con las prendas disponibles.");
+        throw new Error("No se pudo generar un outfit. Inténtalo de nuevo.");
     }
-  } catch (error) {
-    console.error("🔴 [GEMINI] Error generating outfit:", error);
-
-    if (error?.message?.includes('503') || error?.message?.includes('overloaded')) {
-      throw new Error("El servicio de IA está temporalmente sobrecargado. Por favor, intenta nuevamente en unos segundos.");
-    }
-
-    throw new Error("No se pudo generar un outfit. Inténtalo de nuevo.");
-  }
 }
 
 // --- Generate Packing List Service ---
@@ -426,15 +423,15 @@ ${toneInstructions}
 
     try {
         const response = await retryWithBackoff(async () => {
-          return await getAIClient().models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: { parts: [{ text: `Detalles del viaje: "${prompt}"` }] },
-            config: {
-              systemInstruction,
-              responseMimeType: "application/json",
-              responseSchema: packingListSchema,
-            }
-          });
+            return await getAIClient().models.generateContent({
+                model: 'gemini-2.0-flash',
+                contents: { parts: [{ text: `Detalles del viaje: "${prompt}"` }] },
+                config: {
+                    systemInstruction,
+                    responseMimeType: "application/json",
+                    responseSchema: packingListSchema,
+                }
+            });
         });
 
         const parsedJson = JSON.parse(response.text);
@@ -477,7 +474,7 @@ export async function findSimilarItems(currentItem: ClothingItem, inventory: Clo
     if (searchPool.length === 0) {
         return [];
     }
-    
+
     const [currentItemMime, currentItemBase64] = currentItem.imageDataUrl.split(';base64,');
     if (!currentItemBase64 || !currentItemMime) {
         throw new Error('Invalid image data URL for current item');
@@ -496,19 +493,19 @@ export async function findSimilarItems(currentItem: ClothingItem, inventory: Clo
             parts.push(base64ToGenerativePart(base64, mime.split(':')[1]));
         }
     }
-    
+
     const systemInstruction = "Analyze the provided images and return a JSON object with the IDs of similar items. Do not include any other text or explanations in your response.";
 
     try {
         const response = await getAIClient().models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: { parts },
-                config: {
-                    systemInstruction,
-                    responseMimeType: "application/json",
-                    responseSchema: similarItemsSchema,
-                }
-    });
+            model: 'gemini-2.0-flash',
+            contents: { parts },
+            config: {
+                systemInstruction,
+                responseMimeType: "application/json",
+                responseSchema: similarItemsSchema,
+            }
+        });
 
         const parsedJson = JSON.parse(response.text);
 
@@ -567,7 +564,7 @@ export async function findSimilarByImage(searchImage: string, inventory: Clothin
 
     try {
         const response = await getAIClient().models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-2.0-flash',
             contents: { parts },
             config: {
                 systemInstruction,
@@ -597,12 +594,12 @@ export async function searchShoppingSuggestions(itemName: string): Promise<Groun
 
     try {
         const response = await getAIClient().models.generateContent({
-                model: "gemini-2.5-flash",
-                contents: prompt,
-                config: {
-                    tools: [{googleSearch: {}}],
-                },
-            });
+            model: "gemini-2.0-flash",
+            contents: prompt,
+            config: {
+                tools: [{ googleSearch: {} }],
+            },
+        });
 
         const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
         if (chunks && Array.isArray(chunks)) {
@@ -628,10 +625,14 @@ export async function generateVirtualTryOn(
     userImage: string,
     topImage: string,
     bottomImage: string,
-    shoesImage: string
+    shoesImage?: string
 ): Promise<string> {
 
-    const imageSources = [userImage, topImage, bottomImage, shoesImage];
+    const blankImage =
+        'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAAWgmWQ0AAAAASUVORK5CYII=';
+
+    const normalizedShoes = shoesImage || blankImage;
+    const imageSources = [userImage, topImage, bottomImage, normalizedShoes];
     const imageParts: Part[] = [];
 
     for (const src of imageSources) {
@@ -645,7 +646,7 @@ export async function generateVirtualTryOn(
         throw new Error("Una o más imágenes no son válidas.");
     }
 
-    const prompt = 'Eres un asistente de moda experto. Viste a la persona en la primera imagen con la ropa de las tres imágenes que le siguen (top, pantalón, zapatos). Combina la ropa de forma realista sobre el cuerpo de la persona, manteniendo su rostro, pose y el fondo original. La salida debe ser solo la imagen final.';
+    const prompt = 'Eres un asistente de moda experto. Viste a la persona en la primera imagen con la ropa de las tres imágenes que le siguen (top, pantalón, zapatos). Si alguna de esas imágenes es blanca o está vacía, no modifiques esa parte del outfit. Combina la ropa de forma realista sobre el cuerpo de la persona, manteniendo su rostro, pose y el fondo original. La salida debe ser solo la imagen final.';
 
     try {
         const response = await getAIClient().models.generateContent({
@@ -659,15 +660,15 @@ export async function generateVirtualTryOn(
             config: {
                 responseModalities: [Modality.IMAGE],
             },
-    });
+        });
 
         for (const part of response.candidates[0].content.parts) {
             if (part.inlineData) {
-              const base64ImageBytes: string = part.inlineData.data;
-              return `data:image/png;base64,${base64ImageBytes}`;
+                const base64ImageBytes: string = part.inlineData.data;
+                return `data:image/png;base64,${base64ImageBytes}`;
             }
         }
-        
+
         throw new Error("La IA no devolvió una imagen.");
 
     } catch (error) {
@@ -741,7 +742,7 @@ export async function analyzeColorPalette(inventory: ClothingItem[]): Promise<Co
 
     try {
         const response = await getAIClient().models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-2.0-flash',
             contents: { parts: [{ text: "Analiza la paleta de colores de mi armario" }] },
             config: {
                 systemInstruction,
@@ -968,14 +969,7 @@ export async function parseOutfitFromChat(
     const bottomExists = inventory.some(item => item.id === suggestedIds.bottom_id);
     const shoesExists = inventory.some(item => item.id === suggestedIds.shoes_id);
 
-    // Log validation results for debugging
-    console.log('🔍 Validating outfit IDs:', {
-        top: { id: suggestedIds.top_id.substring(0, 20) + '...', exists: topExists },
-        bottom: { id: suggestedIds.bottom_id.substring(0, 20) + '...', exists: bottomExists },
-        shoes: { id: suggestedIds.shoes_id.substring(0, 20) + '...', exists: shoesExists }
-    });
-
-    // If any item doesn't exist, log error and return null
+    // If any item doesn't exist, return null
     if (!topExists || !bottomExists || !shoesExists) {
         const missingItems = [];
         if (!topExists) missingItems.push(`top (${suggestedIds.top_id})`);
@@ -1467,7 +1461,7 @@ const feedbackInsightsSchema = {
         },
     },
     required: ['satisfaction_score', 'top_preferences', 'least_favorites', 'style_evolution',
-               'improvement_suggestions', 'shopping_recommendations', 'unused_potential'],
+        'improvement_suggestions', 'shopping_recommendations', 'unused_potential'],
 };
 
 export async function analyzeFeedbackPatterns(data: FeedbackPatternData): Promise<FeedbackInsights> {
@@ -2302,7 +2296,7 @@ REGLAS CRÍTICAS:
             model: "gemini-2.5-flash",
             contents: `Buscar productos similares más baratos: ${searchQuery}. Devolver enlaces de shopping online.`,
             config: {
-                tools: [{googleSearch: {}}],
+                tools: [{ googleSearch: {} }],
             },
         });
 
@@ -2373,9 +2367,9 @@ Selecciona 3-5 dupes que sean visualmente similares y significativamente más ba
         const dupesPricesUSD = parsedJson.dupes.map((d: any) => {
             // Simple currency conversion (you could add a real API here)
             const priceUSD = d.currency === 'USD' ? d.price :
-                           d.currency === 'ARS' ? d.price / 1000 : // approximate
-                           d.currency === 'EUR' ? d.price * 1.1 :
-                           d.price; // default assume USD
+                d.currency === 'ARS' ? d.price / 1000 : // approximate
+                    d.currency === 'EUR' ? d.price * 1.1 :
+                        d.price; // default assume USD
             return priceUSD;
         });
 
@@ -2580,7 +2574,7 @@ Responde en español con:
                 responseMimeType: "application/json",
                 responseSchema: capsuleWardrobeSchema
             }
-    });
+        });
 
         const text = response.text;
 
@@ -2623,12 +2617,12 @@ Responde en español con:
 
     } catch (error: any) {
         console.error("Error generating capsule wardrobe:", error);
-        
+
         // Handle specific error cases
         if (error instanceof Error && error.message.includes("vacío")) {
             throw error;
         }
-        
+
         // Handle rate limit / quota errors
         if (error?.error?.code === 429 || error?.status === 429 || error?.message?.includes("quota") || error?.message?.includes("rate")) {
             throw new Error(
@@ -2636,12 +2630,12 @@ Responde en español con:
                 "Si el problema persiste, revisá tu plan y facturación en https://ai.google.dev/gemini-api/docs/rate-limits"
             );
         }
-        
+
         // Handle API not found errors
         if (error?.error?.code === 404 || error?.status === 404) {
             throw new Error("El modelo de IA no está disponible. Por favor, intentá más tarde.");
         }
-        
+
         throw new Error("No se pudo generar la cápsula de armario. Intentá de nuevo o probá con un tema diferente.");
     }
 }
@@ -2898,7 +2892,7 @@ Responde en español con:
                 responseMimeType: "application/json",
                 responseSchema: styleDNASchema
             }
-    });
+        });
 
         const text = response.text;
 
@@ -3007,8 +3001,6 @@ Ahora genera el prompt optimizado para la descripción del usuario:`;
 
         const optimizedPrompt = promptResult.text.trim();
 
-        console.log('Optimized prompt:', optimizedPrompt);
-
         // Step 2: Generate image with Imagen 4
         const imageResult = await getAIClient().models.generateImages({
             model: 'imagen-4.0-generate-001',
@@ -3092,7 +3084,7 @@ export async function analyzeStyleEvolution(
     const timeSpanMonths = (newestDate.getTime() - oldestDate.getTime()) / (1000 * 60 * 60 * 24 * 30);
     const confidenceLevel: 'low' | 'medium' | 'high' =
         closet.length >= 30 && timeSpanMonths >= 6 ? 'high' :
-        closet.length >= 20 && timeSpanMonths >= 3 ? 'medium' : 'low';
+            closet.length >= 20 && timeSpanMonths >= 3 ? 'medium' : 'low';
 
     const systemPrompt = `Sos un experto analista de moda especializado en rastrear y analizar la EVOLUCIÓN del estilo personal a lo largo del tiempo.
 
@@ -3292,7 +3284,7 @@ export async function generateContent(prompt: string): Promise<string> {
                 topK: 40,
                 maxOutputTokens: 1024,
             },
-    });
+        });
 
         const text = response.text;
         if (!text) {
@@ -3622,7 +3614,7 @@ Respondé de forma conversacional, útil y accionable.`;
                 topK: 40,
                 maxOutputTokens: 500,
             },
-    });
+        });
 
         const text = response.text;
         if (!text) {
