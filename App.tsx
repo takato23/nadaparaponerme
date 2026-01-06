@@ -33,6 +33,7 @@ import { ClosetGridSkeleton } from './components/ui/Skeleton';
 import Toast from './components/Toast';
 import { NetworkIndicator } from './components/ui/NetworkIndicator';
 import { CommandPalette } from './components/ui/CommandPalette';
+import { StudioGenerationIndicator } from './components/ui/StudioGenerationIndicator';
 import { KeyboardShortcutsHelp } from './components/ui/KeyboardShortcutsHelp';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { ROUTES } from './src/routes';
@@ -50,6 +51,7 @@ import LazyLoader from './components/LazyLoader';
 // Enhanced Closet System
 import { ClosetProvider } from './contexts/ClosetContext';
 import { ThemeProvider } from './context/ThemeContext';
+import { StudioGenerationProvider } from './contexts/StudioGenerationContext';
 import ClosetViewEnhanced from './components/closet/ClosetViewEnhanced';
 import { GlobalCanvas } from './components/3d/GlobalCanvas';
 const DISABLE_3D_BACKGROUND = false;
@@ -2074,6 +2076,9 @@ const AppContent = () => {
                 {/* Network Status Indicator */}
                 <NetworkIndicator />
 
+                {/* Studio Generation Indicator (shows when generating in background) */}
+                <StudioGenerationIndicator />
+
                 {/* Command Palette (Cmd+K) */}
                 <CommandPalette
                     isOpen={showCommandPalette}
@@ -2131,7 +2136,9 @@ const App = () => (
 
 const AppWithProviders = () => (
     <ThemeProvider>
-        <App />
+        <StudioGenerationProvider>
+            <App />
+        </StudioGenerationProvider>
     </ThemeProvider>
 );
 

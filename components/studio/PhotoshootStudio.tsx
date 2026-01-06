@@ -1,11 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ROUTES } from '../../src/routes';
 import type { ClothingItem, ClothingSlot, GenerationPreset, SlotSelection } from '../../types';
 import { SLOT_CONFIGS, GENERATION_PRESETS, MAX_SLOTS_PER_GENERATION, CATEGORY_TO_SLOT } from '../../types';
 import ClosetItemCard from '../closet/ClosetItemCard';
-import { generateVirtualTryOnWithSlots } from '../../src/services/aiService';
 import { saveGeneratedLook, canUserSaveLook } from '../../src/services/generatedLooksService';
 import toast from 'react-hot-toast';
 import Loader from '../Loader';
@@ -13,6 +12,7 @@ import { validateImageDataUri } from '../../utils/imageValidation';
 import { analyzeTryOnPhotoQuality } from '../../utils/photoQualityValidation';
 import ClothingCompatibilityWarning from './ClothingCompatibilityWarning';
 import { getFaceReferences, FaceReference } from '../../src/services/faceReferenceService';
+import { useStudioGeneration } from '../../contexts/StudioGenerationContext';
 
 // Extended type for generation history with full metadata
 interface GeneratedImageRecord {
@@ -92,8 +92,17 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
   const [slotSelections, setSlotSelections] = useState<Map<ClothingSlot, SlotSelection>>(new Map());
   const [presetId, setPresetId] = useState<GenerationPreset>('overlay');
-  const [isGenerating, setIsGenerating] = useState(false);
   const [generatedImages, setGeneratedImages] = useState<GeneratedImageRecord[]>([]);
+
+  // Use global generation context for persistence across navigation
+  const {
+    isGenerating,
+    activeGeneration,
+    pendingResults,
+    startGeneration,
+    clearPendingResult,
+    hasPendingResults,
+  } = useStudioGeneration();
   const [userBaseImage, setUserBaseImage] = useState<string | null>(null);
   const [isUploadingBase, setIsUploadingBase] = useState(false);
   const [autoSave, setAutoSave] = useState(false);
@@ -224,6 +233,50 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
       localStorage.removeItem('studio-generation-state');
     }
   }, [closet]);
+
+  // Load pending results from context when returning to studio
+  useEffect(() => {
+    if (!hasPendingResults || pendingResults.length === 0) return;
+
+    // Convert pending results to local format and add to images
+    const newImages: GeneratedImageRecord[] = pendingResults.map(result => ({
+      image: result.image,
+      slots: result.slotsUsed,
+      model: result.model,
+      preset: result.request.preset,
+      keepPose: result.request.keepPose,
+      faceRefsUsed: result.faceRefsUsed,
+      customScene: result.request.customScene,
+      selfieUsed: result.request.userImage,
+      timestamp: result.completedAt,
+    }));
+
+    setGeneratedImages(prev => {
+      // Avoid duplicates by checking timestamps
+      const existingTimestamps = new Set(prev.map(p => p.timestamp));
+      const uniqueNew = newImages.filter(n => !existingTimestamps.has(n.timestamp));
+      return [...uniqueNew, ...prev];
+    });
+
+    // Clear the pending results since we've loaded them
+    pendingResults.forEach(r => clearPendingResult(r.requestId));
+
+    // Notify user if there were pending results
+    if (newImages.length > 0) {
+      toast.success(
+        `${newImages.length} look${newImages.length > 1 ? 's' : ''} generado${newImages.length > 1 ? 's' : ''} mientras navegabas`,
+        { icon: '✨', duration: 4000 }
+      );
+    }
+  }, [hasPendingResults, pendingResults, clearPendingResult]);
+
+  // Show indicator when generation is in progress (even if user navigated away and returned)
+  useEffect(() => {
+    if (isGenerating && activeGeneration) {
+      // User returned while generation is in progress
+      toast('Generación en progreso...', { icon: '⏳', duration: 2000 });
+    }
+  }, []); // Only on mount
 
   const safeCloset = closet || [];
 
@@ -369,8 +422,6 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
       return;
     }
 
-    setIsGenerating(true);
-
     // Save state to localStorage for recovery
     const stateBackup = {
       slotSelections: Array.from(slotSelections.entries()).map(([slot, sel]) => ({
@@ -384,31 +435,37 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
     localStorage.setItem('studio-generation-state', JSON.stringify(stateBackup));
 
     try {
-      // Build slots object
+      // Build slots object for images
       const slots: Record<string, string> = {};
       for (const [slot, selection] of slotSelections) {
         slots[slot] = selection.item.imageDataUrl;
       }
 
-      const result = await generateVirtualTryOnWithSlots(
-        userBaseImage!,
+      // Build slot items array for context tracking
+      const slotItems = Array.from(slotSelections.entries()).map(([slot, sel]) => ({
+        slot,
+        item: sel.item,
+      }));
+
+      // Use the global context for generation (persists across navigation)
+      const result = await startGeneration({
+        userImage: userBaseImage!,
         slots,
-        {
-          preset: presetId,
-          quality: presetId === 'editorial' ? 'pro' : 'flash',
-          customScene: presetId === 'custom' ? customScene : undefined,
-          keepPose,
-          useFaceReferences: useFaceRefs && faceRefs.length > 0
-        }
-      );
+        slotItems,
+        preset: presetId,
+        customScene: presetId === 'custom' ? customScene : undefined,
+        keepPose,
+        useFaceRefs,
+        faceRefsCount: faceRefs.length,
+      });
 
       const newImage: GeneratedImageRecord = {
-        image: result.resultImage,
+        image: result.image,
         slots: result.slotsUsed,
         model: result.model,
         preset: presetId,
         keepPose,
-        faceRefsUsed: result.faceReferencesUsed || 0,
+        faceRefsUsed: result.faceRefsUsed || 0,
         customScene: presetId === 'custom' ? customScene : undefined,
         selfieUsed: userBaseImage!,
         timestamp: Date.now()
@@ -422,8 +479,8 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
 
       // Show model and face refs used in toast
       const modelLabel = result.model.includes('3-pro') ? 'Gemini 3 Pro' : 'Gemini 2.5 Flash';
-      const faceRefInfo = result.faceReferencesUsed && result.faceReferencesUsed > 0
-        ? ` + ${result.faceReferencesUsed} foto${result.faceReferencesUsed > 1 ? 's' : ''} de cara`
+      const faceRefInfo = result.faceRefsUsed && result.faceRefsUsed > 0
+        ? ` + ${result.faceRefsUsed} foto${result.faceRefsUsed > 1 ? 's' : ''} de cara`
         : '';
       toast.success(`Look generado con ${modelLabel}${faceRefInfo}`);
 
@@ -461,8 +518,6 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
       toast.error(userMessage, { duration: 5000 });
 
       // Don't clear backup on error - user can retry
-    } finally {
-      setIsGenerating(false);
     }
   };
 
