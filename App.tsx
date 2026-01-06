@@ -51,7 +51,7 @@ import LazyLoader from './components/LazyLoader';
 // Enhanced Closet System
 import { ClosetProvider } from './contexts/ClosetContext';
 import { ThemeProvider } from './context/ThemeContext';
-import { StudioGenerationProvider } from './contexts/StudioGenerationContext';
+import { AIGenerationProvider } from './contexts/AIGenerationContext';
 import ClosetViewEnhanced from './components/closet/ClosetViewEnhanced';
 import { GlobalCanvas } from './components/3d/GlobalCanvas';
 const DISABLE_3D_BACKGROUND = false;
@@ -2136,9 +2136,9 @@ const App = () => (
 
 const AppWithProviders = () => (
     <ThemeProvider>
-        <StudioGenerationProvider>
+        <AIGenerationProvider>
             <App />
-        </StudioGenerationProvider>
+        </AIGenerationProvider>
     </ThemeProvider>
 );
 

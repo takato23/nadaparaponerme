@@ -12,7 +12,7 @@ import { validateImageDataUri } from '../../utils/imageValidation';
 import { analyzeTryOnPhotoQuality } from '../../utils/photoQualityValidation';
 import ClothingCompatibilityWarning from './ClothingCompatibilityWarning';
 import { getFaceReferences, FaceReference } from '../../src/services/faceReferenceService';
-import { useStudioGeneration } from '../../contexts/StudioGenerationContext';
+import { useStudioGeneration } from '../../contexts/AIGenerationContext';
 
 // Extended type for generation history with full metadata
 interface GeneratedImageRecord {
@@ -96,13 +96,13 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
 
   // Use global generation context for persistence across navigation
   const {
-    isGenerating,
-    activeGeneration,
-    pendingResults,
-    startGeneration,
-    clearPendingResult,
-    hasPendingResults,
+    enqueue: enqueueGeneration,
+    results: pendingResults,
+    isProcessing: isGenerating,
+    activeRequest: activeGeneration,
+    clearResult: clearPendingResult,
   } = useStudioGeneration();
+  const hasPendingResults = pendingResults.length > 0;
   const [userBaseImage, setUserBaseImage] = useState<string | null>(null);
   const [isUploadingBase, setIsUploadingBase] = useState(false);
   const [autoSave, setAutoSave] = useState(false);
@@ -239,17 +239,19 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
     if (!hasPendingResults || pendingResults.length === 0) return;
 
     // Convert pending results to local format and add to images
-    const newImages: GeneratedImageRecord[] = pendingResults.map(result => ({
-      image: result.image,
-      slots: result.slotsUsed,
-      model: result.model,
-      preset: result.request.preset,
-      keepPose: result.request.keepPose,
-      faceRefsUsed: result.faceRefsUsed,
-      customScene: result.request.customScene,
-      selfieUsed: result.request.userImage,
-      timestamp: result.completedAt,
-    }));
+    const newImages: GeneratedImageRecord[] = pendingResults
+      .filter(result => result.result) // Only completed results with data
+      .map(result => ({
+        image: result.result!.image,
+        slots: result.result!.slotsUsed,
+        model: result.result!.model,
+        preset: result.payload.preset,
+        keepPose: result.payload.keepPose,
+        faceRefsUsed: result.result!.faceRefsUsed,
+        customScene: result.payload.customScene,
+        selfieUsed: result.payload.userImage,
+        timestamp: result.completedAt || Date.now(),
+      }));
 
     setGeneratedImages(prev => {
       // Avoid duplicates by checking timestamps
@@ -259,7 +261,7 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
     });
 
     // Clear the pending results since we've loaded them
-    pendingResults.forEach(r => clearPendingResult(r.requestId));
+    pendingResults.forEach(r => clearPendingResult(r.id));
 
     // Notify user if there were pending results
     if (newImages.length > 0) {
@@ -415,7 +417,7 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
     handleGenerateNow();
   };
 
-  const handleGenerateNow = async () => {
+  const handleGenerateNow = () => {
     setShowCompatibilityWarning(false);
     if (!canGenerate) {
       toast.error(helperText);
@@ -434,91 +436,35 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
     };
     localStorage.setItem('studio-generation-state', JSON.stringify(stateBackup));
 
-    try {
-      // Build slots object for images
-      const slots: Record<string, string> = {};
-      for (const [slot, selection] of slotSelections) {
-        slots[slot] = selection.item.imageDataUrl;
-      }
-
-      // Build slot items array for context tracking
-      const slotItems = Array.from(slotSelections.entries()).map(([slot, sel]) => ({
-        slot,
-        item: sel.item,
-      }));
-
-      // Use the global context for generation (persists across navigation)
-      const result = await startGeneration({
-        userImage: userBaseImage!,
-        slots,
-        slotItems,
-        preset: presetId,
-        customScene: presetId === 'custom' ? customScene : undefined,
-        keepPose,
-        useFaceRefs,
-        faceRefsCount: faceRefs.length,
-      });
-
-      const newImage: GeneratedImageRecord = {
-        image: result.image,
-        slots: result.slotsUsed,
-        model: result.model,
-        preset: presetId,
-        keepPose,
-        faceRefsUsed: result.faceRefsUsed || 0,
-        customScene: presetId === 'custom' ? customScene : undefined,
-        selfieUsed: userBaseImage!,
-        timestamp: Date.now()
-      };
-      setGeneratedImages(prev => [newImage, ...prev]);
-      if (isMobile) {
-        setSelectedImage(newImage);
-        setCompareMode(false);
-        setShowResultsHint(false);
-      }
-
-      // Show model and face refs used in toast
-      const modelLabel = result.model.includes('3-pro') ? 'Gemini 3 Pro' : 'Gemini 2.5 Flash';
-      const faceRefInfo = result.faceRefsUsed && result.faceRefsUsed > 0
-        ? ` + ${result.faceRefsUsed} foto${result.faceRefsUsed > 1 ? 's' : ''} de cara`
-        : '';
-      toast.success(`Look generado con ${modelLabel}${faceRefInfo}`);
-
-      // Scroll to top to see results
-      setTimeout(() => {
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      }, 300);
-
-      // Clear backup on success
-      localStorage.removeItem('studio-generation-state');
-
-      // Auto-save if enabled
-      if (autoSave) {
-        await handleSaveLook(newImage);
-      }
-    } catch (error: any) {
-      console.error('Generation error:', error);
-
-      // Parse error message for better UX
-      const errorMessage = error?.message || String(error);
-      let userMessage = 'Error al generar. Intentá de nuevo.';
-
-      if (errorMessage.includes('cuota') || errorMessage.includes('límite') || errorMessage.includes('Límite')) {
-        userMessage = 'Límite mensual alcanzado. Upgradeá tu plan para continuar.';
-      } else if (errorMessage.includes('Beta cerrada')) {
-        userMessage = 'Tu cuenta no está habilitada para esta beta.';
-      } else if (errorMessage.includes('network') || errorMessage.includes('fetch')) {
-        userMessage = 'Error de conexión. Verificá tu internet.';
-      } else if (errorMessage.includes('Unauthorized') || errorMessage.includes('authorization')) {
-        userMessage = 'Sesión expirada. Volvé a iniciar sesión.';
-      } else if (errorMessage.includes('imagen') || errorMessage.includes('image')) {
-        userMessage = 'Error con las imágenes. Probá con otras prendas.';
-      }
-
-      toast.error(userMessage, { duration: 5000 });
-
-      // Don't clear backup on error - user can retry
+    // Build slots object for images
+    const slots: Record<string, string> = {};
+    for (const [slot, selection] of slotSelections) {
+      slots[slot] = selection.item.imageDataUrl;
     }
+
+    // Build slot items array for context tracking
+    const slotItems = Array.from(slotSelections.entries()).map(([slot, sel]) => ({
+      slot,
+      item: sel.item,
+    }));
+
+    // Enqueue generation (runs in background, persists across navigation)
+    // The result will come through pendingResults when completed
+    enqueueGeneration({
+      userImage: userBaseImage!,
+      slots,
+      slotItems,
+      preset: presetId,
+      customScene: presetId === 'custom' ? customScene : undefined,
+      keepPose,
+      useFaceRefs,
+      faceRefsCount: faceRefs.length,
+    });
+
+    toast('Generando look...', { icon: '✨', duration: 2000 });
+
+    // Clear backup since generation is queued
+    localStorage.removeItem('studio-generation-state');
   };
 
   const handleSaveLook = async (record: GeneratedImageRecord) => {
