@@ -46,6 +46,7 @@ import { QuotaIndicator, LimitReachedModal } from './components/QuotaIndicator';
 import { CreditsDetailView } from './components/CreditsDetailView';
 import AuthEyeScreen from './components/AuthEyeScreen';
 import CookieConsentBanner from './components/legal/CookieConsentBanner';
+import { PWAInstallPrompt } from './components/PWAInstallPrompt';
 import { useConsentPreferences } from './src/hooks/useConsentPreferences';
 
 // Eager load critical components (above the fold)
@@ -1153,6 +1154,7 @@ const AppContent = () => {
                         </Suspense>
                     </div>
                     <CookieConsentBanner />
+                    <PWAInstallPrompt />
                 </>
             );
         }
@@ -1178,6 +1180,7 @@ const AppContent = () => {
                     </Suspense>
                 </div>
                 <CookieConsentBanner />
+                <PWAInstallPrompt />
             </>
         );
     }
@@ -1431,6 +1434,7 @@ const AppContent = () => {
                 />
 
                 <CookieConsentBanner />
+                <PWAInstallPrompt />
 
                 {
                     itemToShare && (
