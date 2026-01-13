@@ -15,6 +15,8 @@ import type { UseSubscriptionReturn } from '../hooks/useSubscription';
 import { getCurrentWeather, getUserCity } from '../services/weatherService';
 import { getGeneratedLooks } from '../src/services/generatedLooksService';
 import { useThemeContext } from '../contexts/ThemeContext';
+import { ADSENSE_ENABLED, ADSENSE_HOME_SLOT } from '../src/config/runtime';
+import AdSenseBanner from './ads/AdSenseBanner';
 
 // Lazy load Eye3D para performance
 const Eye3D = lazy(() => import('./Eye3D'));
@@ -59,6 +61,7 @@ interface HomeViewImprovedProps {
   onStartCalendarSync: () => void;
   onStartActivityFeed: () => void;
   onStartVirtualShopping: () => void;
+  onOpenShopLook: () => void;
   onStartMultiplayerChallenges: () => void;
   onStartBulkUpload: () => void;
   onNavigateToSavedLooks: () => void;
@@ -378,6 +381,18 @@ const HomeViewImproved: React.FC<HomeViewImprovedProps> = (props) => {
             })}
           </div>
         </section>
+
+        {/* Ads (Free plan) */}
+        {subscription?.tier === 'free' && ADSENSE_ENABLED && ADSENSE_HOME_SLOT && (
+          <section className="mb-6">
+            <div className={`rounded-2xl border ${isDark ? 'border-white/10 bg-white/5' : 'border-gray-200/60 bg-white/70'} p-3`}>
+              <p className={`text-[10px] uppercase tracking-[0.3em] ${isDark ? 'text-white/40' : 'text-gray-400'} mb-2`}>
+                Publicidad
+              </p>
+              <AdSenseBanner slot={ADSENSE_HOME_SLOT} className="rounded-xl overflow-hidden" />
+            </div>
+          </section>
+        )}
 
         {/* Latest Look Card */}
         {latestLook && (

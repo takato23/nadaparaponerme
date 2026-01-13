@@ -2,6 +2,8 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { GoogleGenAI, Type } from 'npm:@google/genai@1.27.0';
+import { enforceRateLimit, recordRequestResult } from '../_shared/antiAbuse.ts';
+import { withRetry } from '../_shared/retry.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -13,6 +15,9 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
+
+  let supabase: any = null;
+  let userId: string | null = null;
 
   try {
     // Get Gemini API key from environment
@@ -36,7 +41,7 @@ serve(async (req) => {
       );
     }
 
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+    supabase = createClient(supabaseUrl, supabaseServiceKey, {
       global: { headers: { Authorization: authHeader } },
     });
 
@@ -51,6 +56,7 @@ serve(async (req) => {
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+    userId = user.id;
 
     // Optional closed beta allowlist (protects Google credits)
     const allowlistRaw = Deno.env.get('BETA_ALLOWLIST_EMAILS');
@@ -66,6 +72,25 @@ serve(async (req) => {
           { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
+    }
+
+    const rateLimit = await enforceRateLimit(supabase, user.id, 'analyze-clothing');
+    if (!rateLimit.allowed) {
+      const retryAfter = rateLimit.retryAfterSeconds || 60;
+      const message = rateLimit.reason === 'blocked'
+        ? 'Detectamos muchos errores seguidos. Espera unos minutos antes de intentar de nuevo.'
+        : 'Demasiadas solicitudes en poco tiempo. Espera un momento y reintenta.';
+      return new Response(
+        JSON.stringify({ error: message }),
+        {
+          status: 429,
+          headers: {
+            ...corsHeaders,
+            'Content-Type': 'application/json',
+            'Retry-After': String(retryAfter),
+          },
+        }
+      );
     }
 
     // Parse request body (expecting JSON with imageDataUrl)
@@ -145,29 +170,33 @@ serve(async (req) => {
     };
 
     // Analyze image with Gemini
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: {
-        parts: [
-          {
-            inlineData: {
-              data: base64,
-              mimeType,
+    const response = await withRetry(() =>
+      ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: {
+          parts: [
+            {
+              inlineData: {
+                data: base64,
+                mimeType,
+              },
             },
-          },
-        ],
-      },
-      config: {
-        systemInstruction:
-          'Eres un experto en moda. Analiza la prenda en la imagen y describe sus características, prestando especial atención a detalles como el tipo de cuello y de manga si son visibles.',
-        responseMimeType: 'application/json',
-        responseSchema: clothingItemSchema,
-      },
-    });
+          ],
+        },
+        config: {
+          systemInstruction:
+            'Eres un experto en moda. Analiza la prenda en la imagen y describe sus características, prestando especial atención a detalles como el tipo de cuello y de manga si son visibles.',
+          responseMimeType: 'application/json',
+          responseSchema: clothingItemSchema,
+        },
+      })
+    );
 
     const analysis = JSON.parse(response.text);
 
     // Return the analysis directly (client expects ClothingItemMetadata format)
+    await recordRequestResult(supabase, user.id, 'analyze-clothing', true);
+
     return new Response(
       JSON.stringify(analysis),
       {
@@ -177,6 +206,9 @@ serve(async (req) => {
     );
   } catch (error) {
     console.error('Error analyzing clothing:', error);
+    if (supabase && userId) {
+      await recordRequestResult(supabase, userId, 'analyze-clothing', false);
+    }
     return new Response(
       JSON.stringify({
         error: error instanceof Error ? error.message : 'Failed to analyze clothing item',

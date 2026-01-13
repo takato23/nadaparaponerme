@@ -89,6 +89,23 @@ export interface GroundingChunk {
   web: WebSource;
 }
 
+// --- Shopping Search Types ---
+
+export interface ShoppingSearchResult {
+  title: string;
+  url: string;
+  price?: string;
+  store?: string;
+  imageUrl?: string;
+  description?: string;
+}
+
+export interface ItemShoppingState {
+  isLoading: boolean;
+  links: GroundingChunk[];
+  error?: string;
+}
+
 export interface ColorPaletteAnalysis {
   dominant_colors: ColorInfo[];
   color_scheme: 'monochromatic' | 'complementary' | 'analogous' | 'triadic' | 'diverse';
@@ -1204,6 +1221,9 @@ export type GenerationPreset =
   | 'minimalist'    // Clean white background
   | 'custom';       // User-defined scene
 
+export type GenerationFit = 'tight' | 'regular' | 'oversized';
+export type GenerationView = 'front' | 'back' | 'side';
+
 export interface GenerationPresetConfig {
   id: GenerationPreset;
   label: string;
@@ -1312,9 +1332,11 @@ export interface GeneratedLook {
   selfie_used: boolean;
   selfie_url?: string; // Original selfie for before/after comparison
   generation_preset: GenerationPreset;
-  generation_model: 'gemini-2.5-flash-image' | 'gemini-3-pro-image-preview';
+  generation_model: 'gemini-2.5-flash-image' | 'gemini-3-pro-image-preview' | 'dall-e-3' | 'gpt-image-1.5';
   keep_pose?: boolean;
   face_refs_used?: number;
+  generation_fit?: GenerationFit;
+  generation_view?: GenerationView;
 
   // User preferences
   is_favorite: boolean;
@@ -1327,6 +1349,10 @@ export interface GeneratedLook {
   // Optional metadata
   title?: string;
   notes?: string;
+
+  // Rating & Tags (for categorization)
+  rating?: number; // 1-5 stars
+  tags?: string[]; // User-defined tags like "casual", "trabajo", "noche"
 
   // Timestamps
   created_at: string;

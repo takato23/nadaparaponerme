@@ -61,14 +61,14 @@ export function SubscriptionBadge({ className = '', showDetails = false }: Subsc
             </div>
             {isAtLimit && (
               <span className="text-xs bg-red-500 text-white px-2 py-1 rounded-full">
-                LÌmite alcanzado
+                Limite alcanzado
               </span>
             )}
           </div>
 
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
-              <span>Generaciones de AI:</span>
+              <span>Creditos IA:</span>
               <span className="font-bold">
                 {formatUsage(usage.ai_generations_used, usage.ai_generations_limit)}
               </span>
@@ -92,13 +92,13 @@ export function SubscriptionBadge({ className = '', showDetails = false }: Subsc
 
             {isNearLimit && !isAtLimit && (
               <p className="text-xs opacity-80 mt-2">
-                † Te quedan pocas generaciones este mes
+                ‚ö†Ô∏è Te quedan pocos cr√©ditos este mes
               </p>
             )}
 
             {isAtLimit && (
               <p className="text-xs opacity-80 mt-2">
-                =Ä Upgrade· tu plan para seguir generando outfits
+                Upgradea tu plan para obtener mas creditos
               </p>
             )}
           </div>
@@ -110,7 +110,7 @@ export function SubscriptionBadge({ className = '', showDetails = false }: Subsc
           <span className="font-medium">
             {formatUsage(usage.ai_generations_used, usage.ai_generations_limit)}
           </span>
-          {isAtLimit && <span className="text-xs">†</span>}
+          {isAtLimit && <span className="text-xs">!</span>}
         </div>
       )}
     </div>

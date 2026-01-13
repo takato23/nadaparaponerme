@@ -103,7 +103,7 @@ export function QuotaIndicator({
       <div className={`w-full ${className}`}>
         <div className="flex items-center justify-between mb-1">
           <span className="text-xs text-gray-500 dark:text-gray-400">
-            Generaciones de IA
+            Créditos IA
           </span>
           <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
             {isUnlimited ? '∞' : `${used}/${limit}`}
@@ -128,7 +128,7 @@ export function QuotaIndicator({
             onClick={onUpgradeClick}
             className="mt-2 text-xs text-purple-600 dark:text-purple-400 hover:underline"
           >
-            Upgrade para más generaciones →
+            Upgrade para más créditos →
           </button>
         )}
       </div>
@@ -185,7 +185,7 @@ export function QuotaIndicator({
             </div>
             <div>
               <h3 className="font-semibold text-gray-900 dark:text-white text-sm">
-                Generaciones de IA
+                Créditos IA
               </h3>
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 {isUnlimited ? 'Sin límites' : 'Este mes'}
@@ -310,7 +310,7 @@ export function LimitReachedModal({
   if (!isOpen) return null;
 
   const nextTier = tier === 'free' ? 'Pro' : 'Premium';
-  const nextLimit = tier === 'free' ? '100' : 'ilimitadas';
+  const nextLimit = tier === 'free' ? '150' : '400';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -329,8 +329,8 @@ export function LimitReachedModal({
 
         {/* Description */}
         <p className="text-gray-500 dark:text-gray-400 mb-6">
-          Has usado todas tus generaciones de IA este mes.
-          Hacé upgrade a <strong>{nextTier}</strong> para obtener {nextLimit} generaciones.
+          Has usado todos tus créditos de IA este mes.
+          Hacé upgrade a <strong>{nextTier}</strong> para obtener {nextLimit} créditos.
         </p>
 
         {/* Buttons */}

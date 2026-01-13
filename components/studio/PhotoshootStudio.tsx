@@ -13,6 +13,10 @@ import { analyzeTryOnPhotoQuality } from '../../utils/photoQualityValidation';
 import ClothingCompatibilityWarning from './ClothingCompatibilityWarning';
 import { getFaceReferences, FaceReference } from '../../src/services/faceReferenceService';
 import { useStudioGeneration } from '../../contexts/AIGenerationContext';
+import { useSubscription } from '../../hooks/useSubscription';
+import { StudioHeader } from './StudioHeader';
+import { StudioToolbar } from './StudioToolbar';
+import { GenerationLoader } from './GenerationLoader';
 
 // Extended type for generation history with full metadata
 interface GeneratedImageRecord {
@@ -88,11 +92,8 @@ function getValidSlotsForItem(item: ClothingItem): ClothingSlot[] {
 
 // Check if the current slot selection has minimum required coverage
 function hasMinimumCoverage(slots: Map<ClothingSlot, SlotSelection>): boolean {
-  const hasOnePiece = slots.has('one_piece');
-  const hasTop = slots.has('top_base') || slots.has('top_mid');
-  const hasBottom = slots.has('bottom');
-
-  return hasOnePiece || (hasTop && hasBottom);
+  // Relaxed: At least one item is enough
+  return slots.size > 0;
 }
 
 export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
@@ -101,7 +102,15 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
   const [slotSelections, setSlotSelections] = useState<Map<ClothingSlot, SlotSelection>>(new Map());
   const [presetId, setPresetId] = useState<GenerationPreset>('overlay');
+  const [generationProvider] = useState<'google' | 'openai'>('google');
+  const [generationQuality, setGenerationQuality] = useState<'flash' | 'pro'>('flash');
+  const [generationFit, setGenerationFit] = useState<'tight' | 'regular' | 'oversized'>('regular');
+  const [generationView, setGenerationView] = useState<'front' | 'back' | 'side'>('front');
+  const [isSaving, setIsSaving] = useState(false);
+
   const [generatedImages, setGeneratedImages] = useState<GeneratedImageRecord[]>([]);
+
+  const subscription = useSubscription();
 
   // Use global generation context for persistence across navigation
   const {
@@ -110,44 +119,59 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
     isProcessing: isGenerating,
     activeRequest: activeGeneration,
     clearResult: clearPendingResult,
+    lastFailure,
+    cancel: cancelGeneration,
+    retry: retryGeneration,
   } = useStudioGeneration();
   const hasPendingResults = pendingResults.length > 0;
-  const [userBaseImage, setUserBaseImage] = useState<string | null>(null);
-  const [isUploadingBase, setIsUploadingBase] = useState(false);
-  const [autoSave, setAutoSave] = useState(false);
 
-  // Quick Try-On: temporary items from screenshots (not saved to closet)
+  // Failsafe: Reset generation state if it gets stuck for too long (> 60s)
+  useEffect(() => {
+    let timeout: NodeJS.Timeout;
+    if (isGenerating) {
+      timeout = setTimeout(() => {
+        // We can't force reset isGenerating from here since it lives in context
+        // But we can notify the user
+        toast.error('La generación está tardando más de lo esperado. Por favor recarga la página.');
+      }, 60000);
+    }
+    return () => clearTimeout(timeout);
+  }, [isGenerating]);
+
+  // Handle generation failures
+  useEffect(() => {
+    if (lastFailure) {
+      toast.error(`Error: ${lastFailure.error || 'Falló la generación'}`);
+      // Optional: Clear the failure from context if we had a method, 
+      // but for now we just show the toast. 
+      // Ideally we should auto-clear it so it doesn't show again on nav.
+    }
+  }, [lastFailure]);
+
+  const [userBaseImage, setUserBaseImage] = useState<string | null>(null);
+  const [autoSave, setAutoSave] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const [showResultsHint, setShowResultsHint] = useState(false);
+  const [customScene, setCustomScene] = useState('');
+  const [keepPose, setKeepPose] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<GeneratedImageRecord | null>(null);
+  const [compareMode, setCompareMode] = useState(false);
+  const [comparePosition, setComparePosition] = useState(50);
+  const [activeSlotPicker, setActiveSlotPicker] = useState<string | null>(null);
+
+  // Quick Try-On
   const [quickItems, setQuickItems] = useState<ClothingItem[]>([]);
   const [isUploadingQuickItem, setIsUploadingQuickItem] = useState(false);
   const [showQuickItemCategoryPicker, setShowQuickItemCategoryPicker] = useState<string | null>(null);
   const quickItemInputRef = useRef<HTMLInputElement>(null);
-  const [isSaving, setIsSaving] = useState(false);
-  const [activeSlotPicker, setActiveSlotPicker] = useState<string | null>(null);
-  const [selectedImage, setSelectedImage] = useState<GeneratedImageRecord | null>(null);
-  const [compareMode, setCompareMode] = useState(false);
-  const [comparePosition, setComparePosition] = useState(50); // 0-100 slider position
-  const [savedSelfies, setSavedSelfies] = useState<string[]>([]);
-  const [showSelfieManager, setShowSelfieManager] = useState(false);
-  const [showResultsHint, setShowResultsHint] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
-  const [showCompatibilityWarning, setShowCompatibilityWarning] = useState(false);
-  const [customScene, setCustomScene] = useState('');
-  const [keepPose, setKeepPose] = useState(false);
+
   const [useFaceRefs, setUseFaceRefs] = useState(true);
   const [faceRefs, setFaceRefs] = useState<FaceReference[]>([]);
-  const [showFaceRefPreview, setShowFaceRefPreview] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showCompatibilityWarning, setShowCompatibilityWarning] = useState(false);
   const resultsRef = useRef<HTMLDivElement>(null);
 
-  // Load saved selfies from localStorage
-  useEffect(() => {
-    const saved = localStorage.getItem('studio-saved-selfies');
-    if (saved) {
-      try {
-        setSavedSelfies(JSON.parse(saved));
-      } catch { /* ignore */ }
-    }
-  }, []);
+  // Load saved selfies logic moved to StudioToolbar
+  // Base image upload logic moved to StudioToolbar
 
   // Fetch face references
   useEffect(() => {
@@ -157,26 +181,17 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
   }, []);
 
   useEffect(() => {
+    if (!subscription.isPremium && generationQuality === 'pro') {
+      setGenerationQuality('flash');
+    }
+  }, [subscription.isPremium, generationQuality]);
+
+  useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 1024);
     checkMobile();
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
-
-  // Save selfie to quick access
-  const saveSelfieForQuickAccess = (selfie: string) => {
-    const updated = [selfie, ...savedSelfies.filter(s => s !== selfie)].slice(0, 5); // Max 5
-    setSavedSelfies(updated);
-    localStorage.setItem('studio-saved-selfies', JSON.stringify(updated));
-    toast.success('Selfie guardada para acceso rápido');
-  };
-
-  // Remove saved selfie
-  const removeSavedSelfie = (selfie: string) => {
-    const updated = savedSelfies.filter(s => s !== selfie);
-    setSavedSelfies(updated);
-    localStorage.setItem('studio-saved-selfies', JSON.stringify(updated));
-  };
 
   // Handle location state for preselection
   useEffect(() => {
@@ -278,6 +293,11 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
     // Clear the pending results since we've loaded them
     pendingResults.forEach(r => clearPendingResult(r.id));
 
+    // Failsafe: if the active request already has a completed result, clear it
+    if (activeGeneration && pendingResults.some(r => r.id === activeGeneration.id)) {
+      cancelGeneration(activeGeneration.id);
+    }
+
     // Notify user if there were pending results
     if (newImages.length > 0) {
       toast.success(
@@ -285,7 +305,7 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
         { icon: '✨', duration: 4000 }
       );
     }
-  }, [hasPendingResults, pendingResults, clearPendingResult]);
+  }, [hasPendingResults, pendingResults, clearPendingResult, activeGeneration, cancelGeneration]);
 
   // Show indicator when generation is in progress (even if user navigated away and returned)
   useEffect(() => {
@@ -294,6 +314,12 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
       toast('Generación en progreso...', { icon: '⏳', duration: 2000 });
     }
   }, []); // Only on mount
+
+  useEffect(() => {
+    if (lastFailure?.error) {
+      toast.error(`No se pudo generar el look. ${lastFailure.error}`);
+    }
+  }, [lastFailure]);
 
   const safeCloset = closet || [];
 
@@ -320,52 +346,18 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
   const slotCount = slotSelections.size;
   const hasCoverage = hasMinimumCoverage(slotSelections);
   const hasSelfie = Boolean(userBaseImage);
-  const canGenerate = hasCoverage && hasSelfie && slotCount <= MAX_SLOTS_PER_GENERATION;
+  const creditsNeeded = generationQuality === 'pro' ? 4 : 1;
+  const hasCredits = subscription.aiGenerationsLimit === -1
+    || (subscription.aiGenerationsUsed + creditsNeeded) <= subscription.aiGenerationsLimit;
+  const canGenerate = hasCoverage && hasSelfie && slotCount <= MAX_SLOTS_PER_GENERATION && hasCredits;
 
   const helperText = useMemo(() => {
-    if (slotCount === 0) return 'Selecciona prendas para tu look.';
-    if (!hasCoverage) return 'Necesitas top + bottom, o un vestido/enterito.';
+    if (slotCount === 0) return 'Seleccioná al menos 1 prenda para probar.';
     if (slotCount > MAX_SLOTS_PER_GENERATION) return `Máximo ${MAX_SLOTS_PER_GENERATION} prendas.`;
     if (!userBaseImage) return 'Subí tu selfie para generar.';
+    if (!hasCredits) return `Necesitás ${creditsNeeded} crédito${creditsNeeded > 1 ? 's' : ''} para generar.`;
     return 'Listo para generar tu look.';
-  }, [slotCount, hasCoverage, userBaseImage]);
-
-  const handleBaseImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setIsUploadingBase(true);
-    try {
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onerror = () => reject(new Error('No se pudo leer la imagen.'));
-        reader.onload = () => resolve(String(reader.result));
-        reader.readAsDataURL(file);
-      });
-
-      const validation = validateImageDataUri(dataUrl);
-      if (!validation.isValid) {
-        toast.error(validation.error || 'Imagen inválida');
-        return;
-      }
-
-      const quality = await analyzeTryOnPhotoQuality(dataUrl);
-      if (!quality.isAllowed) {
-        const primaryReason = quality.reasons[0] || 'Selfie no válida para probar el look.';
-        toast.error(primaryReason);
-        return;
-      }
-
-      setUserBaseImage(dataUrl);
-      toast.success('Selfie lista');
-    } catch (error) {
-      console.error('Error processing base image:', error);
-      toast.error('No pudimos procesar la selfie');
-    } finally {
-      setIsUploadingBase(false);
-      if (e.target) e.target.value = '';
-    }
-  };
+  }, [slotCount, userBaseImage, hasCredits, creditsNeeded]);
 
   // Add item to a specific slot
   const addItemToSlot = (item: ClothingItem, slot: ClothingSlot) => {
@@ -550,6 +542,10 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
       keepPose,
       useFaceRefs,
       faceRefsCount: faceRefs.length,
+      provider: generationProvider,
+      quality: generationQuality,
+      fit: generationFit,
+      view: generationView,
     });
 
     toast('Generando look...', { icon: '✨', duration: 2000 });
@@ -558,7 +554,7 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
     localStorage.removeItem('studio-generation-state');
   };
 
-  const handleSaveLook = async (record: GeneratedImageRecord) => {
+  const handleSaveLook = async (image: GeneratedImageRecord) => {
     setIsSaving(true);
     try {
       const canSave = await canUserSaveLook();
@@ -567,25 +563,27 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
         return;
       }
 
-      const sourceItems: Record<string, string> = {};
-      for (const [slot, selection] of slotSelections) {
-        sourceItems[slot] = selection.itemId;
+      if (!image.clothingItems || image.clothingItems.length === 0) {
+        toast.error('No hay prendas seleccionadas para guardar');
+        return;
       }
 
-      await saveGeneratedLook(record.image, sourceItems as any, {
-        selfieUsed: true,
-        selfieUrl: record.selfieUsed, // Save original selfie for comparison
-        preset: record.preset,
-        model: record.model,
-        autoSaved: autoSave,
-        keepPose: record.keepPose,
-        faceRefsUsed: record.faceRefsUsed,
+      await lookService.saveLook({
+        image_url: image.imageUrl,
+        user_id: user?.id,
+        items: image.clothingItems,
+        name: `Look ${new Date().toLocaleDateString()}`,
+        is_generated: true,
+        generation_metadata: {
+          prompt: image.prompt,
+          preset: image.presetId,
+          model: image.model
+        }
       });
-
-      toast.success('Guardado en tu armario de looks');
+      toast.success('Look guardado en tu armario');
     } catch (error) {
-      console.error(error);
-      toast.error('Error al guardar');
+      console.error('Error saving look:', error);
+      toast.error('Error al guardar el look');
     } finally {
       setIsSaving(false);
     }
@@ -638,47 +636,11 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
         {/* LEFT COLUMN: Options + Closet (scrollable) */}
         <div className="flex-1 flex flex-col lg:pr-80">
           {/* Header */}
-          <header className="px-4 pt-[calc(1rem+env(safe-area-inset-top))] pb-3 sticky top-0 z-30 bg-[#f8f3ee]/80 backdrop-blur-md">
-            <div className="flex items-center justify-between">
-              <button
-                onClick={() => navigate(-1)}
-                className="w-10 h-10 rounded-full bg-white/70 backdrop-blur-md border border-white/60 flex items-center justify-center shadow-sm hover:shadow-md transition"
-                aria-label="Volver"
-              >
-                <span className="material-symbols-outlined text-[color:var(--studio-ink)]">arrow_back</span>
-              </button>
-              <div className="text-center flex-1">
-                <h1 className="text-xl font-semibold" style={{ fontFamily: 'var(--studio-font-display)' }}>
-                  Studio
-                </h1>
-              </div>
-              {/* Mobile: Toggle inspector */}
-              <button
-                onClick={handleOpenLatestResult}
-                className="lg:hidden w-10 h-10 rounded-full bg-white/70 backdrop-blur-md border border-white/60 flex items-center justify-center shadow-sm relative"
-                aria-label="Ver resultados"
-              >
-                <span className="material-symbols-outlined text-[color:var(--studio-ink)]">photo_library</span>
-                {generatedImages.length > 0 && (
-                  <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-[color:var(--studio-rose)] text-white text-xs flex items-center justify-center">
-                    {generatedImages.length}
-                  </span>
-                )}
-                <AnimatePresence>
-                  {showResultsHint && generatedImages.length > 0 && (
-                    <motion.span
-                      initial={{ opacity: 0, y: 6, scale: 0.95 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: 6, scale: 0.95 }}
-                      className="absolute -bottom-9 right-1/2 translate-x-1/2 px-2 py-1 rounded-lg bg-[color:var(--studio-ink)] text-white text-[10px] font-semibold shadow-lg"
-                    >
-                      Tu look listo
-                    </motion.span>
-                  )}
-                </AnimatePresence>
-              </button>
-            </div>
-          </header>
+          <StudioHeader
+            generatedImagesCount={generatedImages.length}
+            onOpenLatestResult={handleOpenLatestResult}
+            showResultsHint={showResultsHint}
+          />
 
           <motion.main
             variants={containerVariants}
@@ -691,316 +653,32 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
             ═══════════════════════════════════════════════════════════════════ */}
 
             {/* ROW 1: Selfie + Presets + Slot Counter */}
-            <motion.section variants={itemVariants} className="mb-3">
-              <div className="flex items-center gap-3 p-2 rounded-xl bg-white/60 backdrop-blur-sm border border-white/70 overflow-x-auto no-scrollbar max-w-full">
-                {/* Selfie Section - Larger and more prominent */}
-                <div className="relative shrink-0 flex flex-col items-center gap-1">
-                  {userBaseImage ? (
-                    <div
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => fileInputRef.current?.click()}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          fileInputRef.current?.click();
-                        }
-                      }}
-                      className="relative w-20 h-28 rounded-xl overflow-hidden border-2 border-[color:var(--studio-ink)] shadow-md group cursor-pointer"
-                    >
-                      <img src={userBaseImage} alt="Tu selfie" className="w-full h-full object-cover" />
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
-                        <span className="material-symbols-outlined text-white text-lg">edit</span>
-                      </div>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setUserBaseImage(null); }}
-                        className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center text-xs shadow-md"
-                      >
-                        ×
-                      </button>
-                      {/* Save selfie button */}
-                      {!savedSelfies.includes(userBaseImage) && (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); saveSelfieForQuickAccess(userBaseImage); }}
-                          className="absolute -bottom-1.5 -right-1.5 w-5 h-5 rounded-full bg-[color:var(--studio-mint)] text-white flex items-center justify-center shadow-md"
-                          title="Guardar selfie"
-                        >
-                          <span className="material-symbols-outlined text-xs">bookmark_add</span>
-                        </button>
-                      )}
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => fileInputRef.current?.click()}
-                      className="w-20 h-28 rounded-xl border-2 border-dashed border-[color:var(--studio-rose)] bg-white/40 flex flex-col items-center justify-center gap-1 hover:bg-white/70 transition"
-                    >
-                      {isUploadingBase ? (
-                        <Loader size="small" />
-                      ) : (
-                        <>
-                          <span className="material-symbols-outlined text-2xl text-[color:var(--studio-rose)]">add_a_photo</span>
-                          <span className="text-[9px] font-medium text-[color:var(--studio-rose)]">Tu foto</span>
-                        </>
-                      )}
-                    </button>
-                  )}
-                  {/* Saved selfies quick access button - more visible */}
-                  {savedSelfies.length > 0 && (
-                    <button
-                      onClick={() => setShowSelfieManager(!showSelfieManager)}
-                      className="flex items-center gap-1 px-2 py-1 rounded-full bg-white/80 shadow-sm text-[10px] font-semibold text-[color:var(--studio-ink)] hover:bg-white transition"
-                    >
-                      <span className="material-symbols-outlined text-xs">photo_library</span>
-                      {savedSelfies.length} guardada{savedSelfies.length > 1 ? 's' : ''}
-                    </button>
-                  )}
-                </div>
-
-                {/* Preset Tabs - Compact 2-row grid */}
-                <div className="flex-1">
-                  <div className="grid grid-cols-5 gap-1">
-                    {GENERATION_PRESETS.map(preset => (
-                      <button
-                        key={preset.id}
-                        onClick={() => setPresetId(preset.id)}
-                        title={preset.description}
-                        className={`relative flex items-center justify-center gap-0.5 px-1 py-1 rounded-md text-[9px] font-medium transition ${presetId === preset.id
-                          ? 'bg-[color:var(--studio-ink)] text-white shadow-sm'
-                          : 'bg-white/50 text-[color:var(--studio-ink-muted)] hover:bg-white/80'
-                          }`}
-                      >
-                        <span className="material-symbols-outlined text-xs">{preset.icon}</span>
-                        <span className="truncate">{preset.label}</span>
-                        {preset.id === 'editorial' && (
-                          <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-purple-500" />
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                  {/* Custom scene input */}
-                  {presetId === 'custom' && (
-                    <input
-                      type="text"
-                      value={customScene}
-                      onChange={(e) => setCustomScene(e.target.value)}
-                      placeholder="Ej: en la playa, en un parque, en una fiesta..."
-                      className="mt-2 w-full px-3 py-2 rounded-lg bg-white/80 border border-[color:var(--studio-ink)]/20 text-xs placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[color:var(--studio-ink)]/30"
-                    />
-                  )}
-                  {/* Options row - Keep pose + Use face refs */}
-                  <div className="mt-2 flex items-center gap-4 flex-wrap">
-                    {/* Keep pose toggle */}
-                    <div className="relative group">
-                      <label className="flex items-center gap-1.5 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={keepPose}
-                          onChange={(e) => setKeepPose(e.target.checked)}
-                          className="w-3.5 h-3.5 rounded border-gray-300 text-[color:var(--studio-ink)] focus:ring-[color:var(--studio-ink)]"
-                        />
-                        <span className="text-[10px] font-medium text-[color:var(--studio-ink-muted)] group-hover:text-[color:var(--studio-ink)]">
-                          Mantener pose
-                        </span>
-                        <span className="material-symbols-rounded text-[12px] text-purple-400 group-hover:text-purple-600">
-                          info
-                        </span>
-                      </label>
-                      {/* Tooltip */}
-                      <div className="absolute bottom-full left-0 mb-2 w-48 p-2 bg-gray-900 text-white text-[10px] rounded-lg
-                                      opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 shadow-lg">
-                        <p className="font-semibold mb-1">Mejora la cara</p>
-                        <p className="text-gray-300">
-                          Al activar esta opción, la IA mantiene tu pose y expresión original,
-                          lo que hace que <span className="text-purple-300 font-medium">tu cara se vea más parecida</span>.
-                        </p>
-                        <div className="absolute bottom-0 left-4 transform translate-y-1/2 rotate-45 w-2 h-2 bg-gray-900" />
-                      </div>
-                    </div>
-
-                    {/* Face references toggle with count and preview */}
-                    <div className="flex items-center gap-1.5">
-                      <label
-                        className={`flex items-center gap-1.5 cursor-pointer group ${faceRefs.length === 0 ? 'opacity-50' : ''}`}
-                        title={faceRefs.length > 0
-                          ? `Usar ${faceRefs.length} foto${faceRefs.length > 1 ? 's' : ''} de referencia para mejorar la cara`
-                          : 'No tenés fotos de cara cargadas. Subí una en tu perfil.'
-                        }
-                      >
-                        <input
-                          type="checkbox"
-                          checked={useFaceRefs && faceRefs.length > 0}
-                          onChange={(e) => setUseFaceRefs(e.target.checked)}
-                          disabled={faceRefs.length === 0}
-                          className="w-3.5 h-3.5 rounded border-gray-300 text-[color:var(--studio-ink)] focus:ring-[color:var(--studio-ink)] disabled:opacity-50"
-                        />
-                        <span className="text-[10px] font-medium text-[color:var(--studio-ink-muted)] group-hover:text-[color:var(--studio-ink)]">
-                          Fotos de cara
-                        </span>
-                      </label>
-                      {faceRefs.length > 0 ? (
-                        <button
-                          onClick={() => setShowFaceRefPreview(!showFaceRefPreview)}
-                          className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold transition ${
-                            showFaceRefPreview
-                              ? 'bg-[color:var(--studio-mint)] text-white'
-                              : 'bg-[color:var(--studio-mint)]/20 text-[color:var(--studio-mint)] hover:bg-[color:var(--studio-mint)]/30'
-                          }`}
-                        >
-                          {faceRefs.length}
-                          <span className="material-symbols-outlined text-[10px]">
-                            {showFaceRefPreview ? 'expand_less' : 'expand_more'}
-                          </span>
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => navigate(ROUTES.PROFILE)}
-                          className="text-[9px] text-[color:var(--studio-rose)] underline"
-                        >
-                          Agregar
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Face references preview panel */}
-                  <AnimatePresence>
-                    {showFaceRefPreview && faceRefs.length > 0 && (
-                      <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        className="overflow-hidden"
-                      >
-                        <div className="mt-2 p-2 rounded-lg bg-[color:var(--studio-mint)]/10 border border-[color:var(--studio-mint)]/30">
-                          <div className="flex items-center gap-2">
-                            {faceRefs.map((ref) => (
-                              <div
-                                key={ref.id}
-                                className={`relative w-10 h-10 rounded-full overflow-hidden border-2 shrink-0 ${
-                                  ref.is_primary
-                                    ? 'border-[color:var(--studio-mint)] ring-2 ring-[color:var(--studio-mint)]/30'
-                                    : 'border-white/80'
-                                }`}
-                                title={ref.label + (ref.is_primary ? ' (Principal)' : '')}
-                              >
-                                <img
-                                  src={ref.image_url}
-                                  alt={ref.label}
-                                  className="w-full h-full object-cover"
-                                />
-                                {ref.is_primary && (
-                                  <div className="absolute bottom-0 right-0 w-3 h-3 bg-[color:var(--studio-mint)] rounded-full flex items-center justify-center">
-                                    <span className="material-symbols-outlined text-white text-[8px]">star</span>
-                                  </div>
-                                )}
-                              </div>
-                            ))}
-                            <button
-                              onClick={() => navigate(ROUTES.PROFILE)}
-                              className="w-8 h-8 rounded-full border border-dashed border-[color:var(--studio-mint)] flex items-center justify-center text-[color:var(--studio-mint)] hover:bg-[color:var(--studio-mint)]/10 transition"
-                              title="Administrar fotos de cara"
-                            >
-                              <span className="material-symbols-outlined text-sm">settings</span>
-                            </button>
-                          </div>
-                          <p className="text-[9px] text-[color:var(--studio-ink-muted)] mt-1.5">
-                            {useFaceRefs ? '✓ Se usarán para mejorar tu cara en la generación' : '○ Desactivadas'}
-                          </p>
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-
-                {/* Slot Counter */}
-                <div className="flex items-center gap-2 shrink-0">
-                  <div className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold ${hasCoverage ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
-                    }`}>
-                    <span className="material-symbols-outlined text-sm">{hasCoverage ? 'check_circle' : 'pending'}</span>
-                    {slotCount}/{MAX_SLOTS_PER_GENERATION}
-                  </div>
-                  {slotCount > 0 && (
-                    <button
-                      onClick={() => setSlotSelections(new Map())}
-                      className="w-6 h-6 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-xs"
-                      title="Limpiar selección"
-                    >
-                      ×
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Saved selfies gallery (expandable) */}
-              <AnimatePresence>
-                {showSelfieManager && savedSelfies.length > 0 && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    className="overflow-hidden"
-                  >
-                    <div className="mt-2 p-3 rounded-xl bg-white/70 border border-white/80 shadow-sm">
-                      <div className="flex items-center justify-between mb-2">
-                        <p className="text-xs font-semibold text-[color:var(--studio-ink)]">
-                          📷 Mis selfies guardadas
-                        </p>
-                        <button
-                          onClick={() => setShowSelfieManager(false)}
-                          className="text-[color:var(--studio-ink-muted)] hover:text-[color:var(--studio-ink)]"
-                        >
-                          <span className="material-symbols-outlined text-sm">close</span>
-                        </button>
-                      </div>
-                      <div className="flex gap-3 overflow-x-auto pb-1">
-                        {savedSelfies.map((selfie, idx) => (
-                          <div
-                            key={idx}
-                            role="button"
-                            tabIndex={0}
-                            onClick={() => { setUserBaseImage(selfie); setShowSelfieManager(false); toast.success('Selfie cargada'); }}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter' || e.key === ' ') {
-                                setUserBaseImage(selfie);
-                                setShowSelfieManager(false);
-                                toast.success('Selfie cargada');
-                              }
-                            }}
-                            className={`relative w-16 h-24 rounded-xl overflow-hidden border-2 shrink-0 transition shadow-sm cursor-pointer group ${userBaseImage === selfie
-                              ? 'border-[color:var(--studio-ink)] ring-2 ring-[color:var(--studio-ink)]/20'
-                              : 'border-white hover:border-[color:var(--studio-mint)] hover:shadow-md'
-                              }`}
-                          >
-                            <img src={selfie} alt={`Selfie ${idx + 1}`} className="w-full h-full object-cover" />
-                            {userBaseImage === selfie && (
-                              <div className="absolute inset-0 bg-[color:var(--studio-ink)]/20 flex items-center justify-center">
-                                <span className="material-symbols-outlined text-white text-lg">check_circle</span>
-                              </div>
-                            )}
-                            <button
-                              onClick={(e) => { e.stopPropagation(); removeSavedSelfie(selfie); }}
-                              className="absolute top-1 right-1 w-4 h-4 rounded-full bg-red-500/90 text-white flex items-center justify-center text-[8px] opacity-0 group-hover:opacity-100 hover:!opacity-100 shadow"
-                            >
-                              ×
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                      <p className="text-[9px] text-[color:var(--studio-ink-muted)] mt-2">
-                        Tocá una selfie para usarla • Máximo 5 guardadas
-                      </p>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              <input
-                type="file"
-                ref={fileInputRef}
-                className="hidden"
-                accept="image/*"
-                onChange={handleBaseImageUpload}
-              />
-            </motion.section>
+            {/* ═══════════════════════════════════════════════════════════════════
+            COMPACT TOOLBAR - Using Extracted Component
+            ═══════════════════════════════════════════════════════════════════ */}
+            <StudioToolbar
+              userBaseImage={userBaseImage}
+              setUserBaseImage={setUserBaseImage}
+              presetId={presetId}
+              setPresetId={setPresetId}
+              customScene={customScene}
+              setCustomScene={setCustomScene}
+              keepPose={keepPose}
+              setKeepPose={setKeepPose}
+              useFaceRefs={useFaceRefs}
+              setUseFaceRefs={setUseFaceRefs}
+              faceRefs={faceRefs}
+              slotCount={slotCount}
+              hasCoverage={hasCoverage}
+              onClearSelections={() => setSlotSelections(new Map())}
+              generationQuality={generationQuality}
+              setGenerationQuality={setGenerationQuality}
+              isPremium={subscription.isPremium}
+              generationFit={generationFit}
+              setGenerationFit={setGenerationFit}
+              generationView={generationView}
+              setGenerationView={setGenerationView}
+            />
 
             {/* ROW 2: Filters + Selected Slot Chips */}
             <motion.section variants={itemVariants} className="mb-3">
@@ -1215,8 +893,14 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
           </div>
 
           {/* Generated Image Preview */}
-          <div className="flex-1 p-4 overflow-y-auto">
-            {generatedImages.length > 0 ? (
+          <div className="flex-1 p-4 overflow-y-auto custom-scrollbar">
+            {isGenerating ? (
+              <div className="h-full flex items-center justify-center min-h-[400px]">
+                <div className="w-full max-w-[280px]">
+                  <GenerationLoader userImage={userBaseImage} />
+                </div>
+              </div>
+            ) : generatedImages.length > 0 ? (
               <div className="space-y-4">
                 {/* Latest result */}
                 <div className="relative rounded-xl overflow-hidden shadow-lg">
@@ -1232,7 +916,7 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
                       ? 'bg-purple-500/90 text-white'
                       : 'bg-white/90 text-gray-700'
                       }`}>
-                      {generatedImages[0].model?.includes('3-pro') ? 'Pro' : 'Flash'}
+                      {generatedImages[0].model?.includes('3-pro') ? 'Ultra' : 'Rápido'}
                     </span>
                     <span className="px-2 py-0.5 rounded-full bg-white/90 text-gray-700 text-[10px] font-semibold">
                       {GENERATION_PRESETS.find(p => p.id === generatedImages[0].preset)?.label || generatedImages[0].preset}
@@ -1344,33 +1028,63 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
               <p className="text-xs sm:text-sm font-medium truncate">{helperText}</p>
               <div className="flex flex-wrap gap-1 mt-1">
                 <span className={`text-[10px] px-2 py-0.5 rounded-full border ${hasCoverage ? 'border-green-500 text-green-700' : 'border-gray-300 text-gray-500'}`}>
-                  {hasCoverage ? '✓' : '○'} Outfit
+                  {hasCoverage ? '✓' : '○'} Prenda
                 </span>
                 <span className={`text-[10px] px-2 py-0.5 rounded-full border ${hasSelfie ? 'border-green-500 text-green-700' : 'border-gray-300 text-gray-500'}`}>
                   {hasSelfie ? '✓' : '○'} Selfie
                 </span>
               </div>
             </div>
-            <button
-              onClick={handleGenerateWithWarningCheck}
-              disabled={isGenerating || !canGenerate}
-              className={`px-5 py-3 rounded-xl font-semibold text-sm text-white flex items-center gap-2 transition shrink-0 ${isGenerating || !canGenerate
-                ? 'bg-gray-400 cursor-not-allowed'
-                : 'bg-[color:var(--studio-ink)] hover:scale-[1.02] active:scale-[0.98]'
-                }`}
-            >
-              {isGenerating ? (
-                <>
-                  <Loader size="small" /> Generando...
-                </>
-              ) : (
-                <>
-                  <span className="material-symbols-outlined text-base">auto_awesome</span>
-                  Generar
-                </>
+            <div className="flex items-center gap-2 shrink-0">
+              {isGenerating && activeGeneration && (
+                <button
+                  onClick={() => cancelGeneration(activeGeneration.id)}
+                  className="px-3 py-2 rounded-lg text-xs font-semibold text-[color:var(--studio-ink)] bg-white/80 border border-[color:var(--studio-ink)]/20 hover:bg-white transition"
+                >
+                  Cancelar
+                </button>
               )}
-            </button>
+              <button
+                onClick={handleGenerateWithWarningCheck}
+                disabled={isGenerating || !canGenerate}
+                className={`px-5 py-3 rounded-xl font-semibold text-sm text-white flex items-center gap-2 transition ${isGenerating || !canGenerate
+                  ? 'bg-gray-400 cursor-not-allowed'
+                  : 'bg-[color:var(--studio-ink)] hover:scale-[1.02] active:scale-[0.98]'
+                  }`}
+              >
+                {isGenerating ? (
+                  <>
+                    <Loader size="small" /> Generando...
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-base">auto_awesome</span>
+                    Generar
+                  </>
+                )}
+              </button>
+            </div>
           </div>
+
+          {lastFailure && (
+            <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 flex items-center justify-between gap-3">
+              <span className="truncate">Error: {lastFailure.error || 'No se pudo generar el look.'}</span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => retryGeneration(lastFailure.id)}
+                  className="px-2 py-1 rounded-lg bg-white text-red-700 font-semibold border border-red-200 hover:bg-red-100 transition"
+                >
+                  Reintentar
+                </button>
+                <button
+                  onClick={() => clearPendingResult(lastFailure.id)}
+                  className="px-2 py-1 rounded-lg text-red-500 hover:text-red-700 transition"
+                >
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1472,7 +1186,7 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
                   ? 'bg-purple-500 text-white'
                   : 'bg-white/20 text-white'
                   }`}>
-                  {selectedImage.model?.includes('3-pro') ? 'Gemini 3 Pro' : 'Flash'}
+                  {selectedImage.model?.includes('3-pro') ? 'Ultra' : 'Rápido'}
                 </span>
                 {/* Preset */}
                 <span className="px-2 py-1 rounded-full bg-white/20 text-white text-[10px] font-semibold">
@@ -1521,11 +1235,10 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
                 {selectedImage.selfieUsed && (
                   <button
                     onClick={() => setCompareMode(!compareMode)}
-                    className={`py-3 px-4 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition ${
-                      compareMode
-                        ? 'bg-yellow-500 text-black'
-                        : 'bg-white/20 text-white hover:bg-white/30'
-                    }`}
+                    className={`py-3 px-4 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition ${compareMode
+                      ? 'bg-yellow-500 text-black'
+                      : 'bg-white/20 text-white hover:bg-white/30'
+                      }`}
                   >
                     <span className="material-symbols-outlined text-lg">compare</span>
                   </button>

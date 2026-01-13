@@ -29,6 +29,12 @@ export const ROUTES = {
   STUDIO_PHOTOSHOOT: '/studio/fotografia',
   SAVED_LOOKS: '/armario-de-looks',
   SHARED_LOOK: '/look/:token',
+  TERMS: '/legal/terminos',
+  PRIVACY: '/legal/privacidad',
+
+  // Subscription pages
+  PRICING: '/pricing',
+  PLANES: '/planes',
 
 } as const;
 

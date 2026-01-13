@@ -187,7 +187,7 @@ const VirtualMirrorView: React.FC<VirtualMirrorViewProps> = ({ closet = [], onOp
                         </button>
 
                         <p className="text-[10px] uppercase tracking-widest text-white/30 mt-6">
-                            Powered by Nano Banana AI
+                            Potenciado por IA
                         </p>
 
                         {/* Back Button */}
@@ -338,7 +338,7 @@ const VirtualMirrorView: React.FC<VirtualMirrorViewProps> = ({ closet = [], onOp
 
                     {/* Helper text */}
                     <p className="text-[10px] text-center text-gray-400">
-                        Usando Nano Banana Model (v1.2) - High Fidelity Mode
+                        Calidad alta activada
                     </p>
                 </div>
 

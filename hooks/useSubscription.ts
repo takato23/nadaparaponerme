@@ -74,7 +74,7 @@ const PLANS: SubscriptionPlan[] = [
     price_monthly_usd: 0,
     features: [
       'Hasta 50 prendas en tu armario',
-      '10 generaciones de outfits por mes',
+      '10 créditos IA por mes (Rápido)',
       'Análisis básico de color',
       'Outfits guardados ilimitados',
       'Compartir en comunidad',
@@ -99,8 +99,9 @@ const PLANS: SubscriptionPlan[] = [
     features: [
       'Todo lo de Free +',
       'Prendas ilimitadas',
-      '100 generaciones de outfits por mes',
-      'Probador virtual con tu foto',
+      '150 créditos IA por mes',
+      'Probador virtual Rápido',
+      'Ultra habilitado',
       'AI Fashion Designer',
       'Lookbook Creator',
       'Exportar lookbooks en HD',
@@ -108,7 +109,7 @@ const PLANS: SubscriptionPlan[] = [
       'Sin anuncios',
     ],
     limits: {
-      ai_generations_per_month: 100,
+      ai_generations_per_month: 150,
       max_closet_items: -1,
       max_saved_outfits: -1,
       can_use_virtual_tryon: true,
@@ -122,12 +123,13 @@ const PLANS: SubscriptionPlan[] = [
   {
     id: 'premium',
     name: 'Premium',
-    description: 'Experiencia completa con IA ilimitada',
+    description: 'Experiencia completa con IA avanzada',
     price_monthly_ars: 4999,
     price_monthly_usd: 16.99,
     features: [
       'Todo lo de Pro +',
-      'Generaciones de IA ilimitadas',
+      '400 créditos IA por mes',
+      'Probador virtual Ultra',
       'Style DNA Profile completo',
       'Análisis de evolución de estilo',
       'Recomendaciones personalizadas diarias',
@@ -135,7 +137,7 @@ const PLANS: SubscriptionPlan[] = [
       'Soporte prioritario',
     ],
     limits: {
-      ai_generations_per_month: -1,
+      ai_generations_per_month: 400,
       max_closet_items: -1,
       max_saved_outfits: -1,
       can_use_virtual_tryon: true,
@@ -345,7 +347,7 @@ export function useSubscription(): UseSubscriptionReturn {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        await supabase.rpc('increment_ai_generation_usage', { p_user_id: user.id });
+        await supabase.rpc('increment_ai_generation_usage', { p_user_id: user.id, p_amount: 1 });
       }
     } catch (error) {
       // Supabase sync failed, but local tracking succeeded

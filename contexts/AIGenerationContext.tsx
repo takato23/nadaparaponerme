@@ -12,6 +12,7 @@
 import React, { createContext, useContext, useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { generateVirtualTryOnWithSlots } from '@/src/services/aiService';
 import * as aiService from '@/src/services/aiService';
+import * as analytics from '@/src/services/analyticsService';
 import type { ClothingItem, GenerationPreset, ClothingSlot, FitResult, PackingListResult } from '@/types';
 
 // ============================================================================
@@ -47,6 +48,10 @@ export interface StudioGenerationRequest extends BaseGenerationRequest {
     keepPose: boolean;
     useFaceRefs: boolean;
     faceRefsCount: number;
+    provider?: 'google' | 'openai';
+    quality?: 'flash' | 'pro';
+    fit?: 'tight' | 'regular' | 'oversized';
+    view?: 'front' | 'back' | 'side';
   };
   result?: {
     image: string;
@@ -126,6 +131,13 @@ const MAX_COMPLETED_RESULTS = 10;
 const MAX_RETRIES = 3;
 const BASE_RETRY_DELAY = 2000; // 2 seconds
 const MAX_RETRY_DELAY = 30000; // 30 seconds
+const GENERATION_TIMEOUT_MS: Record<GenerationType, number> = {
+  studio: 120000,
+  outfit: 60000,
+  packing: 60000,
+  'style-dna': 45000,
+  'color-palette': 45000,
+};
 
 // ============================================================================
 // Helpers
@@ -141,6 +153,23 @@ function calculateRetryDelay(retryCount: number): number {
   // Add jitter (±20%)
   const jitter = delay * 0.2 * (Math.random() - 0.5);
   return Math.round(delay + jitter);
+}
+
+async function runWithTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  let timeoutId: number | undefined;
+  const timeoutPromise = new Promise<T>((_, reject) => {
+    timeoutId = window.setTimeout(() => {
+      reject(new Error(`Request timed out after ${Math.round(timeoutMs / 1000)}s`));
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timeoutId !== undefined) {
+      window.clearTimeout(timeoutId);
+    }
+  }
 }
 
 function isNetworkError(error: any): boolean {
@@ -163,7 +192,10 @@ function isRetryableError(error: any): boolean {
     message.includes('cuota') ||
     message.includes('límite') ||
     message.includes('beta cerrada') ||
-    message.includes('invalid')
+    message.includes('invalid') ||
+    message.includes('must be verified') ||
+    message.includes('organization must be verified') ||
+    message.includes('verification required')
   ) {
     return false;
   }
@@ -186,6 +218,7 @@ export function AIGenerationProvider({ children }: { children: React.ReactNode }
 
   // Load state from localStorage on mount
   useEffect(() => {
+    isMountedRef.current = true;
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
@@ -251,19 +284,29 @@ export function AIGenerationProvider({ children }: { children: React.ReactNode }
     try {
       let result: any;
 
+      const timeoutMs = GENERATION_TIMEOUT_MS[request.type] ?? 60000;
+
       switch (request.type) {
         case 'studio': {
           const payload = (request as StudioGenerationRequest).payload;
-          const apiResult = await generateVirtualTryOnWithSlots(
-            payload.userImage,
-            payload.slots,
-            {
-              preset: payload.preset,
-              quality: payload.preset === 'editorial' ? 'pro' : 'flash',
-              customScene: payload.customScene,
-              keepPose: payload.keepPose,
-              useFaceReferences: payload.useFaceRefs && payload.faceRefsCount > 0,
-            }
+          const requestedQuality = payload.quality ?? (payload.preset === 'editorial' ? 'pro' : 'flash');
+          const apiResult = await runWithTimeout(
+            generateVirtualTryOnWithSlots(
+              payload.userImage,
+              payload.slots,
+              {
+                preset: payload.preset,
+                quality: requestedQuality,
+                customScene: payload.customScene,
+                keepPose: payload.keepPose,
+                useFaceReferences: payload.useFaceRefs && payload.faceRefsCount > 0,
+                provider: payload.provider,
+                slotItems: payload.slotItems,
+                fit: payload.fit,
+                view: payload.view,
+              }
+            ),
+            timeoutMs
           );
           result = {
             image: apiResult.resultImage,
@@ -276,24 +319,30 @@ export function AIGenerationProvider({ children }: { children: React.ReactNode }
 
         case 'outfit': {
           const payload = (request as OutfitGenerationRequest).payload;
-          result = await aiService.generateOutfit(
-            payload.closet,
-            payload.occasion,
-            payload.style,
-            payload.weather,
-            payload.excludeIds
+          result = await runWithTimeout(
+            aiService.generateOutfit(
+              payload.closet,
+              payload.occasion,
+              payload.style,
+              payload.weather,
+              payload.excludeIds
+            ),
+            timeoutMs
           );
           break;
         }
 
         case 'packing': {
           const payload = (request as PackingGenerationRequest).payload;
-          result = await aiService.generatePackingList(
-            payload.closet,
-            payload.destination,
-            payload.duration,
-            payload.activities,
-            payload.weather
+          result = await runWithTimeout(
+            aiService.generatePackingList(
+              payload.closet,
+              payload.destination,
+              payload.duration,
+              payload.activities,
+              payload.weather
+            ),
+            timeoutMs
           );
           break;
         }
@@ -301,6 +350,16 @@ export function AIGenerationProvider({ children }: { children: React.ReactNode }
 
       // Success!
       if (isMountedRef.current) {
+        if (request.type === 'studio') {
+          analytics.trackVirtualTryOn();
+        }
+        if (request.type === 'outfit') {
+          const payload = (request as OutfitGenerationRequest).payload;
+          const closetSize = Array.isArray(payload.closet) ? payload.closet.length : 0;
+          analytics.trackOutfitGenerated(closetSize);
+        }
+        analytics.trackAIFeatureUsed(request.type);
+
         const completedRequest: GenerationRequest = {
           ...request,
           status: 'completed',
@@ -312,7 +371,8 @@ export function AIGenerationProvider({ children }: { children: React.ReactNode }
         setCompletedRequests(prev => [completedRequest, ...prev].slice(0, MAX_COMPLETED_RESULTS));
       }
     } catch (error: any) {
-      console.error(`Generation failed (${request.type}):`, error);
+      console.error(`❌ [AIGenerationContext] Generation failed (${request.type}):`, error);
+      console.error('Error details:', { message: error.message, stack: error.stack, name: error.name });
 
       if (isMountedRef.current) {
         const shouldRetry = isRetryableError(error) && request.retryCount < MAX_RETRIES;
@@ -510,12 +570,19 @@ export function useAIGenerationStatus() {
 // Hook for specific generation type
 export function useStudioGeneration() {
   const context = useAIGeneration();
+  const failures = context.completedRequests
+    .filter((r) => r.type === 'studio' && r.status === 'failed')
+    .sort((a, b) => (b.failedAt || 0) - (a.failedAt || 0));
+
   return {
     enqueue: context.enqueueStudioGeneration,
     results: context.getStudioResults(),
     isProcessing: context.activeRequest?.type === 'studio',
     activeRequest: context.activeRequest?.type === 'studio' ? context.activeRequest : null,
     clearResult: context.clearCompletedRequest,
+    lastFailure: failures[0] ?? null,
+    cancel: context.cancelRequest,
+    retry: context.retryRequest,
   };
 }
 

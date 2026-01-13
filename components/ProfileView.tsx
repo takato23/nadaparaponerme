@@ -3,9 +3,11 @@ import { motion } from 'framer-motion';
 import { useThemeContext } from '../contexts/ThemeContext';
 import { Card } from './ui/Card';
 import { clearToneCache } from '../services/aiToneHelper';
-import { useAuth } from '../src/hooks/useAuth';
 import { FaceReferenceUploader } from './FaceReferenceUploader';
 import { getPendingRequestsCount, getActiveBorrowsCount } from '../src/services/borrowedItemsService';
+import ConfirmDeleteModal from './ui/ConfirmDeleteModal';
+import { useConsentPreferences } from '../src/hooks/useConsentPreferences';
+import { setConsentPreferences } from '../src/services/consentService';
 import type { ClothingItem } from '../types';
 
 export type AITone = 'concise' | 'balanced' | 'detailed';
@@ -27,6 +29,8 @@ interface ProfileViewProps {
     onOpenTestingPlayground?: () => void;
     onOpenAestheticPlayground?: () => void;
     onOpenBorrowedItems?: () => void;
+    onDeleteAccount?: () => Promise<void> | void;
+    onLoadSampleData?: () => void;
 }
 
 const ProfileView = ({
@@ -40,11 +44,17 @@ const ProfileView = ({
     onOpenWeeklyPlanner,
     onOpenTestingPlayground,
     onOpenAestheticPlayground,
-    onOpenBorrowedItems
+    onOpenBorrowedItems,
+    onDeleteAccount,
+    onLoadSampleData
 }: ProfileViewProps) => {
     const { theme, toggleTheme } = useThemeContext();
     const [pendingRequests, setPendingRequests] = useState(0);
     const [activeBorrows, setActiveBorrows] = useState(0);
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+    const consent = useConsentPreferences();
+    const [consentDraft, setConsentDraft] = useState({ analytics: false, ads: false });
 
     useEffect(() => {
         loadBorrowCounts();
@@ -107,6 +117,27 @@ const ProfileView = ({
         localStorage.setItem('ojodeloca-ai-tone', aiTone);
         clearToneCache();
     }, [aiTone]);
+
+    useEffect(() => {
+        if (consent) {
+            setConsentDraft({ analytics: consent.analytics, ads: consent.ads });
+        }
+    }, [consent]);
+
+    const handleConfirmDelete = async () => {
+        if (!onDeleteAccount) return;
+        setIsDeletingAccount(true);
+        let success = false;
+        try {
+            await onDeleteAccount();
+            success = true;
+        } finally {
+            setIsDeletingAccount(false);
+            if (success) {
+                setShowDeleteModal(false);
+            }
+        }
+    };
 
     const displayName = user?.user_metadata?.display_name || user?.email?.split('@')[0] || 'Usuario';
 
@@ -335,6 +366,19 @@ const ProfileView = ({
                         </Card>
                     )}
 
+                    {onLoadSampleData && closet.length === 0 && (
+                        <Card variant="glass" padding="md" rounded="xl" onClick={onLoadSampleData} className="w-full flex items-center gap-4 hover:bg-white/50 transition-colors cursor-pointer border border-blue-100 dark:border-blue-900/30">
+                            <div className="p-2 bg-blue-100 text-blue-600 rounded-lg">
+                                <span className="material-symbols-outlined">dataset</span>
+                            </div>
+                            <div className="text-left">
+                                <p className="font-bold text-gray-800 dark:text-white">Cargar Datos de Ejemplo</p>
+                                <p className="text-xs text-gray-500">Agrega prendas para probar la app</p>
+                            </div>
+                            <span className="material-symbols-outlined ml-auto text-gray-400">add_circle</span>
+                        </Card>
+                    )}
+
                     {/* AI Tone Settings */}
                     <div className="bg-white/40 dark:bg-gray-800/40 p-4 rounded-xl border border-white/10">
                         <p className="text-sm font-bold text-gray-800 dark:text-white mb-3 text-left">Tono de la IA</p>
@@ -354,7 +398,79 @@ const ProfileView = ({
                         </div>
                     </div>
                 </div>
+
+                {/* Privacy & Ads */}
+                <div className="space-y-3">
+                    <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider ml-2">Privacidad y anuncios</h3>
+                    <div className="bg-white/40 dark:bg-gray-800/40 p-4 rounded-xl border border-white/10 space-y-3">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-sm font-semibold text-gray-800 dark:text-white">Analytics</p>
+                                <p className="text-xs text-gray-500">Medición básica de uso</p>
+                            </div>
+                            <button
+                                onClick={() => setConsentDraft(prev => ({ ...prev, analytics: !prev.analytics }))}
+                                className={`px-3 py-1 rounded-full text-xs font-semibold transition ${consentDraft.analytics ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-200 text-gray-600'
+                                    }`}
+                            >
+                                {consentDraft.analytics ? 'Activado' : 'Desactivado'}
+                            </button>
+                        </div>
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-sm font-semibold text-gray-800 dark:text-white">Anuncios</p>
+                                <p className="text-xs text-gray-500">AdSense para planes Free</p>
+                            </div>
+                            <button
+                                onClick={() => setConsentDraft(prev => ({ ...prev, ads: !prev.ads }))}
+                                className={`px-3 py-1 rounded-full text-xs font-semibold transition ${consentDraft.ads ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-200 text-gray-600'
+                                    }`}
+                            >
+                                {consentDraft.ads ? 'Activado' : 'Desactivado'}
+                            </button>
+                        </div>
+                        <button
+                            onClick={() => setConsentPreferences(consentDraft)}
+                            className="w-full py-2 rounded-xl text-sm font-semibold text-white bg-gray-900 hover:bg-gray-800 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100 transition"
+                        >
+                            Guardar preferencias
+                        </button>
+                    </div>
+                </div>
+
+                {/* Account Actions */}
+                {onDeleteAccount && (
+                    <div className="space-y-3">
+                        <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider ml-2">Cuenta</h3>
+                        <Card
+                            variant="glass"
+                            padding="md"
+                            rounded="xl"
+                            onClick={() => setShowDeleteModal(true)}
+                            className="w-full flex items-center gap-4 hover:bg-red-50/60 dark:hover:bg-red-900/20 transition-colors cursor-pointer border border-red-100/70 dark:border-red-900/40"
+                        >
+                            <div className="p-2 bg-red-100 text-red-600 rounded-lg">
+                                <span className="material-symbols-outlined">delete_forever</span>
+                            </div>
+                            <div className="text-left">
+                                <p className="font-bold text-red-600 dark:text-red-400">Eliminar cuenta</p>
+                                <p className="text-xs text-gray-500">Borra tus datos y cierra sesión</p>
+                            </div>
+                            <span className="material-symbols-outlined ml-auto text-gray-400">chevron_right</span>
+                        </Card>
+                    </div>
+                )}
             </div>
+
+            <ConfirmDeleteModal
+                isOpen={showDeleteModal}
+                onClose={() => setShowDeleteModal(false)}
+                onConfirm={handleConfirmDelete}
+                itemName="tu cuenta"
+                itemType="cuenta"
+                isLoading={isDeletingAccount}
+                warningMessage="Se eliminarán tus datos en la app, se revocará tu sesión y no podrás recuperar tu historial."
+            />
         </div>
     );
 };

@@ -8,7 +8,8 @@
 import React, { useState } from 'react';
 import { createPaymentPreference } from '../src/services/paymentService';
 import type { SubscriptionTier, SubscriptionPlan } from '../types-payment';
-import { PAYMENTS_ENABLED, V1_SAFE_MODE } from '../src/config/runtime';
+import { PAYMENTS_ENABLED, USD_ENABLED, V1_SAFE_MODE } from '../src/config/runtime';
+import * as analytics from '../src/services/analyticsService';
 
 // ============================================================================
 // TYPES
@@ -36,7 +37,7 @@ const PLANS: SubscriptionPlan[] = [
     price_monthly_usd: 0,
     features: [
       'Hasta 50 prendas',
-      '10 generaciones de IA/mes',
+      '10 créditos IA/mes (Rápido)',
       'Análisis básico de color',
       'Outfits guardados ilimitados',
     ],
@@ -59,14 +60,15 @@ const PLANS: SubscriptionPlan[] = [
     price_monthly_usd: 9.99,
     features: [
       'Prendas ilimitadas',
-      '100 generaciones de IA/mes',
-      'Probador virtual',
+      '150 créditos IA/mes',
+      'Probador virtual Rápido',
+      'Ultra habilitado',
       'AI Fashion Designer',
       'Lookbook Creator',
       'Sin anuncios',
     ],
     limits: {
-      ai_generations_per_month: 100,
+      ai_generations_per_month: 150,
       max_closet_items: -1,
       max_saved_outfits: -1,
       can_use_virtual_tryon: true,
@@ -85,14 +87,15 @@ const PLANS: SubscriptionPlan[] = [
     price_monthly_usd: 16.99,
     features: [
       'Todo lo de Pro +',
-      'IA ilimitada',
+      '400 créditos IA/mes',
+      'Probador virtual Ultra',
       'Style DNA Profile',
       'Evolución de estilo',
       'Acceso anticipado',
       'Soporte prioritario',
     ],
     limits: {
-      ai_generations_per_month: -1,
+      ai_generations_per_month: 400,
       max_closet_items: -1,
       max_saved_outfits: -1,
       can_use_virtual_tryon: true,
@@ -124,6 +127,7 @@ export function PricingModal({
     if (tier === 'free' || tier === currentTier) return;
 
     try {
+      analytics.trackCheckoutStart(tier, 'ARS');
       if (V1_SAFE_MODE && !PAYMENTS_ENABLED) {
         setError('Pagos desactivados durante la V1 (beta). Próximamente vas a poder hacer upgrade.');
         return;
@@ -188,15 +192,27 @@ export function PricingModal({
           </button>
         </div>
 
+        {/* Currency Toggle */}
+        <div className="px-6 pt-4">
+          {USD_ENABLED ? (
+            <div className="inline-flex items-center gap-2 rounded-full border border-gray-200 dark:border-gray-700 p-1 text-xs">
+              <span className="px-3 py-1 rounded-full bg-gray-900 text-white">ARS</span>
+              <span className="px-3 py-1 rounded-full text-gray-400">USD</span>
+            </div>
+          ) : (
+            <span className="text-xs text-gray-400">Precios en ARS</span>
+          )}
+        </div>
+
         {/* Current Usage */}
-        {currentTier !== 'premium' && (
+        {aiGenerationsLimit !== -1 && (
           <div className="mx-6 mt-6 p-4 rounded-xl bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 border border-purple-200 dark:border-purple-800">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
                 Uso este mes
               </span>
               <span className="text-sm font-bold text-purple-600 dark:text-purple-400">
-                {aiGenerationsUsed} / {aiGenerationsLimit === -1 ? '∞' : aiGenerationsLimit} generaciones
+                {aiGenerationsUsed} / {aiGenerationsLimit === -1 ? '∞' : aiGenerationsLimit} créditos
               </span>
             </div>
             <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
@@ -213,7 +229,7 @@ export function PricingModal({
             </div>
             {usagePercentage >= 80 && (
               <p className="text-xs text-orange-600 dark:text-orange-400 mt-2">
-                ⚠️ Te quedan pocas generaciones. Considerá hacer upgrade.
+                ⚠️ Te quedan pocos créditos. Considerá hacer upgrade.
               </p>
             )}
           </div>

@@ -1,6 +1,8 @@
 import { supabase } from '../lib/supabase';
 import type { User } from '@supabase/supabase-js';
 
+const APP_URL = import.meta.env.VITE_APP_URL || window.location.origin;
+
 export interface AuthUser {
   id: string;
   email: string;
@@ -28,6 +30,18 @@ export async function signIn(email: string, password: string) {
   const { data, error } = await supabase.auth.signInWithPassword({
     email,
     password,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function signInWithGoogle() {
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo: APP_URL,
+    },
   });
 
   if (error) throw error;

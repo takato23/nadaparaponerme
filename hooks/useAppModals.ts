@@ -58,6 +58,7 @@ export function useAppModals() {
   const [showMigrationModal, setShowMigrationModal] = useTransitionState(false);
   const [showDigitalTwinSetup, setShowDigitalTwinSetup] = useTransitionState(false);
   const [showBorrowedItems, setShowBorrowedItems] = useTransitionState(false);
+  const [showShopLook, setShowShopLook] = useTransitionState(false);
 
   // Paywall modals
   const [showPaywall, setShowPaywall] = useTransitionState(false);
@@ -184,6 +185,9 @@ export function useAppModals() {
     setShowDigitalTwinSetup,
     // Borrowed items
     showBorrowedItems,
-    setShowBorrowedItems
+    setShowBorrowedItems,
+    // Shop Look
+    showShopLook,
+    setShowShopLook
   };
 }

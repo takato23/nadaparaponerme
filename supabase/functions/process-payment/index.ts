@@ -107,8 +107,8 @@ serve(async (req) => {
         // Reset usage metrics for the new period
         // Get plan limits (simplified for this function, ideally fetch from DB or config)
         const limits = { ai_generations_per_month: 10 }; // Default Free
-        if (subscription_tier === 'pro') limits.ai_generations_per_month = 100;
-        if (subscription_tier === 'premium') limits.ai_generations_per_month = -1;
+        if (subscription_tier === 'pro') limits.ai_generations_per_month = 150;
+        if (subscription_tier === 'premium') limits.ai_generations_per_month = 400;
 
         const { error: metricsError } = await supabase
             .from('usage_metrics')

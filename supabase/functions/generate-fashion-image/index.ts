@@ -2,6 +2,8 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { GoogleGenerativeAI } from 'npm:@google/generative-ai@0.21.0';
+import { enforceRateLimit, recordRequestResult } from '../_shared/antiAbuse.ts';
+import { withRetry } from '../_shared/retry.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -10,6 +12,26 @@ const corsHeaders = {
 
 // Enhanced prompt with style requirements
 function enhancePrompt(userPrompt: string, stylePreferences?: Record<string, unknown>): string {
+  // Extract view and fit from stylePreferences
+  const view = stylePreferences?.view as string | undefined;
+  const fit = stylePreferences?.fit as string | undefined;
+
+  // Build view instruction
+  let viewInstruction = 'front view';
+  if (view === 'back') {
+    viewInstruction = 'back view (showing the back of the garment/person)';
+  } else if (view === 'side') {
+    viewInstruction = 'side profile view';
+  }
+
+  // Build fit instruction
+  let fitInstruction = '';
+  if (fit === 'tight') {
+    fitInstruction = '- Clothing fits tightly/form-fitting on the body\n';
+  } else if (fit === 'oversized') {
+    fitInstruction = '- Clothing has an oversized/loose fit\n';
+  }
+
   return `Generate a high-quality, photorealistic fashion product image: ${userPrompt}
 
 Style requirements:
@@ -19,7 +41,8 @@ Style requirements:
 - High detail and texture
 - Fashion photography aesthetic
 - 1024x1024px resolution
-
+- Camera angle: ${viewInstruction}
+${fitInstruction}
 ${stylePreferences ? `Additional style: ${JSON.stringify(stylePreferences)}` : ''}`;
 }
 
@@ -30,6 +53,8 @@ serve(async (req) => {
   }
 
   const startTime = Date.now();
+  let supabase: any = null;
+  let userId: string | null = null;
 
   try {
     // Get environment variables
@@ -65,7 +90,7 @@ serve(async (req) => {
     }
 
     // Verify user token (but don't use database)
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+    supabase = createClient(supabaseUrl, supabaseServiceKey, {
       global: {
         headers: { Authorization: authHeader },
       },
@@ -85,8 +110,28 @@ serve(async (req) => {
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+    userId = user.id;
 
     console.log('User authenticated:', user.id);
+
+    const rateLimit = await enforceRateLimit(supabase, user.id, 'generate-fashion-image');
+    if (!rateLimit.allowed) {
+      const retryAfter = rateLimit.retryAfterSeconds || 60;
+      const message = rateLimit.reason === 'blocked'
+        ? 'Detectamos muchos errores seguidos. Espera unos minutos antes de intentar de nuevo.'
+        : 'Demasiadas solicitudes en poco tiempo. Espera un momento y reintenta.';
+      return new Response(
+        JSON.stringify({ success: false, error: message, error_code: 'RATE_LIMIT' }),
+        {
+          status: 429,
+          headers: {
+            ...corsHeaders,
+            'Content-Type': 'application/json',
+            'Retry-After': String(retryAfter),
+          },
+        }
+      );
+    }
 
     // Parse request body
     const { prompt, model_type = 'flash', style_preferences } = await req.json();
@@ -115,13 +160,17 @@ serve(async (req) => {
     console.log('Calling Gemini Imagen API with model:', modelName);
 
     // Llamada simplificada para modelos Imagen
-    const result = await model.generateContent(enhancedPromptText);
+    const result = await withRetry(() => model.generateContent(enhancedPromptText));
 
     const response = await result.response;
     console.log('Imagen response received');
 
     // Extract image data from response
-    const imageData = response.candidates?.[0]?.content?.parts?.[0]?.inlineData;
+    // The API might return text parts before the image, so we must find the part with inlineData
+    const candidate = response.candidates?.[0];
+    const parts = candidate?.content?.parts || [];
+    const imagePart = parts.find((p: any) => p.inlineData);
+    const imageData = imagePart?.inlineData;
 
     if (!imageData || !imageData.data) {
       console.error('No image data in response:', JSON.stringify(response, null, 2));
@@ -133,12 +182,23 @@ serve(async (req) => {
     // Convert base64 to data URL
     const mimeType = imageData.mimeType || 'image/png';
     const imageUrl = `data:${mimeType};base64,${imageData.data}`;
-
     const generationTimeMs = Date.now() - startTime;
 
-    console.log('Image generation successful in', generationTimeMs, 'ms');
+    console.log('Image extracted successfully. Size:', imageData.data.length, 'Mime:', mimeType);
+    console.log('Generation time:', generationTimeMs, 'ms');
 
     // Return success response with base64 image
+    console.log('Recording request result in Supabase...');
+    try {
+      await recordRequestResult(supabase, user.id, 'generate-fashion-image', true);
+      console.log('Request result recorded successfully.');
+    } catch (dbError) {
+      console.error('Error recording request result to Supabase (non-fatal):', dbError);
+      // Continue, as we have the image
+    }
+
+    console.log('Returning success response to client...');
+
     return new Response(
       JSON.stringify({
         success: true,
@@ -156,6 +216,9 @@ serve(async (req) => {
     );
   } catch (error) {
     console.error('Error generating image:', error);
+    if (supabase && userId) {
+      await recordRequestResult(supabase, userId, 'generate-fashion-image', false);
+    }
 
     return new Response(
       JSON.stringify({

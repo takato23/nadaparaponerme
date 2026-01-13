@@ -7,36 +7,39 @@
 -- =====================================================
 -- 1. LIST ALL TABLES
 -- =====================================================
-SELECT
-  '=== ALL TABLES ===' AS section,
-  NULL::TEXT AS table_name,
-  NULL::INTEGER AS row_count,
-  NULL::TEXT AS status
-UNION ALL
-SELECT
-  'table' AS section,
-  table_name,
-  NULL::INTEGER AS row_count,
-  CASE
-    WHEN table_name IN ('profiles', 'clothing_items', 'outfits', 'friendships', 'outfit_likes', 'outfit_comments', 'borrowed_items', 'packing_lists', 'activity_feed')
-      THEN '✅ Base Schema'
-    WHEN table_name IN ('outfit_schedules', 'style_challenges', 'challenge_participations', 'outfit_ratings', 'closet_gap_analysis')
-      THEN '⏳ Core Features'
-    WHEN table_name IN ('subscriptions', 'payment_transactions', 'payment_methods', 'usage_metrics', 'payment_history')
-      THEN '💳 Payments'
-    WHEN table_name IN ('multiplayer_challenges', 'challenge_teams', 'team_members', 'challenge_submissions', 'challenge_votes')
-      THEN '🎮 Multiplayer'
-    WHEN table_name IN ('close_friends', 'suggested_users', 'communities', 'community_members')
-      THEN '👥 Social'
-    WHEN table_name IN ('ai_generated_images', 'daily_generation_quota')
-      THEN '🎨 AI Images'
-    ELSE '❓ Unknown'
-  END AS status
-FROM information_schema.tables
-WHERE table_schema = 'public'
-  AND table_type = 'BASE TABLE'
+SELECT *
+FROM (
+  SELECT
+    '=== ALL TABLES ===' AS section,
+    NULL::TEXT AS table_name,
+    NULL::INTEGER AS row_count,
+    NULL::TEXT AS status
+  UNION ALL
+  SELECT
+    'table' AS section,
+    table_name,
+    NULL::INTEGER AS row_count,
+    CASE
+      WHEN table_name IN ('profiles', 'clothing_items', 'outfits', 'friendships', 'outfit_likes', 'outfit_comments', 'borrowed_items', 'packing_lists', 'activity_feed')
+        THEN '✅ Base Schema'
+      WHEN table_name IN ('outfit_schedules', 'style_challenges', 'challenge_participations', 'outfit_ratings', 'closet_gap_analysis')
+        THEN '⏳ Core Features'
+      WHEN table_name IN ('subscriptions', 'payment_transactions', 'payment_methods', 'usage_metrics', 'payment_history')
+        THEN '💳 Payments'
+      WHEN table_name IN ('multiplayer_challenges', 'challenge_teams', 'team_members', 'challenge_submissions', 'challenge_votes')
+        THEN '🎮 Multiplayer'
+      WHEN table_name IN ('close_friends', 'suggested_users', 'communities', 'community_members')
+        THEN '👥 Social'
+      WHEN table_name IN ('ai_generated_images', 'daily_generation_quota')
+        THEN '🎨 AI Images'
+      ELSE '❓ Unknown'
+    END AS status
+  FROM information_schema.tables
+  WHERE table_schema = 'public'
+    AND table_type = 'BASE TABLE'
+) AS tables_overview
 ORDER BY
-  CASE section WHEN '=== ALL TABLES ===' THEN 0 ELSE 1 END,
+  CASE WHEN section = '=== ALL TABLES ===' THEN 0 ELSE 1 END,
   status,
   table_name;
 

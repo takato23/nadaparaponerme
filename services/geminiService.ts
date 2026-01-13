@@ -619,6 +619,113 @@ export async function searchShoppingSuggestions(itemName: string): Promise<Groun
     }
 }
 
+// --- Search Products for Specific Item ---
+
+/**
+ * Search for online shopping links for a specific clothing item
+ * Uses Google Search grounding to find real products
+ *
+ * @param itemDescription - Description of the item (e.g. "remera blanca algodón")
+ * @param category - Category hint (e.g. "top", "bottom", "shoes")
+ * @returns Array of grounding chunks with web links
+ */
+export async function searchProductsForItem(
+    itemDescription: string,
+    category?: string
+): Promise<GroundingChunk[]> {
+    const categoryHint = category ? ` (${category})` : '';
+    const prompt = `Buscar tiendas online para comprar: ${itemDescription}${categoryHint}.
+    Priorizar tiendas de Argentina y Latinoamérica como Mercado Libre, Dafiti, Zara, H&M.
+    También incluir tiendas internacionales como Amazon, ASOS.
+    Mostrar opciones de diferentes rangos de precio.`;
+
+    try {
+        const response = await getAIClient().models.generateContent({
+            model: "gemini-2.0-flash",
+            contents: prompt,
+            config: {
+                tools: [{ googleSearch: {} }],
+            },
+        });
+
+        const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
+        if (chunks && Array.isArray(chunks)) {
+            return chunks.filter(chunk => 'web' in chunk) as GroundingChunk[];
+        }
+        return [];
+
+    } catch (error) {
+        console.error("Error searching products for item:", error);
+
+        if (error?.message?.includes('503') || error?.message?.includes('overloaded')) {
+            throw new Error("El servicio de búsqueda está temporalmente sobrecargado. Intenta en unos segundos.");
+        }
+
+        throw new Error("No se pudieron buscar productos. Intenta de nuevo.");
+    }
+}
+
+/**
+ * Analyze an image and search for similar products online
+ *
+ * @param imageDataUrl - Base64 image of the clothing item
+ * @returns Object with item description and shopping links
+ */
+export async function searchProductsFromImage(
+    imageDataUrl: string
+): Promise<{ description: string; category: string; links: GroundingChunk[] }> {
+    // Step 1: Analyze the image to get description
+    const [mime, base64] = imageDataUrl.split(';base64,');
+    if (!base64 || !mime) {
+        throw new Error("Imagen inválida");
+    }
+
+    const analyzePrompt = `Analiza esta imagen de una prenda de ropa y describe:
+    1. Tipo de prenda (remera, pantalón, vestido, etc.)
+    2. Color principal
+    3. Estilo/vibe (casual, formal, deportivo, etc.)
+    4. Material aparente si es visible
+
+    Responde en formato JSON:
+    {
+        "description": "descripción completa para buscar en tiendas",
+        "category": "top|bottom|shoes|accessory|outerwear"
+    }`;
+
+    try {
+        const analyzeResponse = await getAIClient().models.generateContent({
+            model: "gemini-2.0-flash",
+            contents: [
+                { text: analyzePrompt },
+                { inlineData: { mimeType: mime.split(':')[1], data: base64 } }
+            ],
+        });
+
+        const responseText = analyzeResponse.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+        // Parse JSON from response
+        const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) {
+            throw new Error("No se pudo analizar la imagen");
+        }
+
+        const analysis = JSON.parse(jsonMatch[0]);
+
+        // Step 2: Search for products with the description
+        const links = await searchProductsForItem(analysis.description, analysis.category);
+
+        return {
+            description: analysis.description,
+            category: analysis.category,
+            links
+        };
+
+    } catch (error) {
+        console.error("Error analyzing image for shopping:", error);
+        throw new Error("No se pudo analizar la imagen. Intenta con otra foto.");
+    }
+}
+
 
 // --- Virtual Try-On Service ---
 export async function generateVirtualTryOn(

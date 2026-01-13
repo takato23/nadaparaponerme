@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import OjoDeLocaLogo from './OjoDeLocaLogo';
-import { signIn, signUp } from '../src/services/authService';
+import { signIn, signUp, signInWithGoogle } from '../src/services/authService';
 import { motion, useMotionValue, useSpring, animate } from 'framer-motion';
 
 interface AuthViewProps {
@@ -22,6 +22,7 @@ const AuthView = ({ onLogin, initialMode = 'login', variant = 'default' }: AuthV
     const [error, setError] = useState<string | null>(null);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
     const [reducedMotion, setReducedMotion] = useState(false);
+    const [oauthLoading, setOauthLoading] = useState(false);
 
     // Form states
     const [email, setEmail] = useState('');
@@ -120,7 +121,23 @@ const AuthView = ({ onLogin, initialMode = 'login', variant = 'default' }: AuthV
         }
     };
 
+    const handleGoogleSignIn = async () => {
+        setError(null);
+        setSuccessMessage(null);
+        setOauthLoading(true);
+
+        try {
+            await signInWithGoogle();
+        } catch (err) {
+            console.error('Google auth error:', err);
+            const message = err instanceof Error ? err.message : 'Error al conectar con Google.';
+            setError(message);
+            setOauthLoading(false);
+        }
+    };
+
     const isEyeVariant = variant === 'eye';
+    const isBusy = loading || oauthLoading;
 
     const portalOverlayClassName = isEyeVariant
         ? 'w-full h-full bg-black/45 backdrop-blur-xl border border-white/10 shadow-2xl'
@@ -138,7 +155,13 @@ const AuthView = ({ onLogin, initialMode = 'login', variant = 'default' }: AuthV
         ? 'w-full bg-white text-black font-bold py-4 px-4 rounded-2xl transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_18px_40px_rgba(0,0,0,0.45)] mt-4'
         : 'w-full bg-black text-white font-bold py-4 px-4 rounded-2xl transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed shadow-lg mt-4';
 
+    const googleButtonClassName = isEyeVariant
+        ? 'w-full flex items-center justify-center gap-3 bg-white/10 text-white font-semibold py-3 px-4 rounded-2xl border border-white/20 hover:bg-white/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed'
+        : 'w-full flex items-center justify-center gap-3 bg-white text-gray-800 font-semibold py-3 px-4 rounded-2xl border border-gray-200 hover:bg-gray-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed';
+
     const toggleClassName = isEyeVariant ? 'text-sm text-white/70 hover:text-white transition-colors' : 'text-sm text-gray-500 hover:text-black transition-colors';
+    const dividerTextClassName = isEyeVariant ? 'text-white/50' : 'text-gray-400';
+    const dividerLineClassName = isEyeVariant ? 'bg-white/15' : 'bg-gray-200/80';
 
     return (
         <div
@@ -238,6 +261,30 @@ const AuthView = ({ onLogin, initialMode = 'login', variant = 'default' }: AuthV
                         <p className={`${isEyeVariant ? 'text-white/70' : 'text-gray-500'} mt-2`}>Tu laboratorio de estilo te espera.</p>
                     </div>
 
+                    <div className="w-full space-y-4">
+                        <button
+                            type="button"
+                            onClick={handleGoogleSignIn}
+                            disabled={isBusy}
+                            className={googleButtonClassName}
+                            aria-label="Continuar con Google"
+                        >
+                            <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
+                                <path fill="#EA4335" d="M24 9.5c3.2 0 5.9 1.2 8.1 3.3l6-6C34.5 3.2 29.7 1 24 1 14.6 1 6.5 6.4 2.8 14.1l7 5.4C12 13.4 17.6 9.5 24 9.5z"/>
+                                <path fill="#4285F4" d="M46.5 24.5c0-1.7-.1-2.9-.4-4.3H24v8.1h12.7c-.5 3-2.1 5.6-4.6 7.3l7.1 5.5c4.1-3.8 6.3-9.4 6.3-16.6z"/>
+                                <path fill="#FBBC05" d="M9.8 28.5c-.6-1.7-1-3.4-1-5.1s.4-3.4 1-5.1l-7-5.4C1 16.5 0 20.1 0 23.4s1 6.9 2.8 9.9l7-4.8z"/>
+                                <path fill="#34A853" d="M24 46c5.7 0 10.5-1.9 14-5.2l-7.1-5.5c-2 1.3-4.5 2.1-6.9 2.1-6.4 0-12-3.9-14.3-9.5l-7 4.8C6.5 41.6 14.6 46 24 46z"/>
+                            </svg>
+                            {oauthLoading ? 'Conectando...' : 'Continuar con Google'}
+                        </button>
+
+                        <div className={`flex items-center gap-3 text-xs ${dividerTextClassName}`}>
+                            <span className={`h-px flex-1 ${dividerLineClassName}`}></span>
+                            o
+                            <span className={`h-px flex-1 ${dividerLineClassName}`}></span>
+                        </div>
+                    </div>
+
                     <form onSubmit={handleSubmit} className="w-full space-y-4">
                         {!isLoginView && (
                             <>
@@ -289,7 +336,7 @@ const AuthView = ({ onLogin, initialMode = 'login', variant = 'default' }: AuthV
 
                         <button
                             type="submit"
-                            disabled={loading}
+                            disabled={isBusy}
                             className={submitClassName}
                         >
                             {loading ? 'Procesando...' : (isLoginView ? 'Entrar' : 'Unirse')}

@@ -173,11 +173,10 @@ export default function LandingHeroEye({ onGetStarted, onLogin }: LandingHeroEye
                         scale: isLoaded && !isTransitioning ? 1 : 0.95
                     }}
                     transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1], delay: 0.3 }}
-                    className={`pointer-events-none w-full max-w-md rounded-[28px] p-5 backdrop-blur-xl sm:p-6 ${
-                        isDark
-                            ? 'border border-white/12 bg-white/6 shadow-[0_24px_80px_rgba(0,0,0,0.55)]'
-                            : 'border border-slate-200/50 bg-white/70 shadow-[0_24px_80px_rgba(0,0,0,0.15)]'
-                    }`}
+                    className={`pointer-events-none w-full max-w-md rounded-[28px] p-5 backdrop-blur-xl sm:p-6 ${isDark
+                        ? 'border border-white/12 bg-white/6 shadow-[0_24px_80px_rgba(0,0,0,0.55)]'
+                        : 'border border-slate-200/50 bg-white/70 shadow-[0_24px_80px_rgba(0,0,0,0.15)]'
+                        }`}
                 >
                     <header className="pointer-events-none text-center">
                         {/* Animated badge */}
@@ -185,9 +184,8 @@ export default function LandingHeroEye({ onGetStarted, onLogin }: LandingHeroEye
                             initial={{ opacity: 0, y: -10 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: 0.5, duration: 0.5 }}
-                            className={`inline-flex items-center gap-2 px-3 py-1 rounded-full mb-3 ${
-                                isDark ? 'bg-primary/20 border border-primary/30' : 'bg-primary/10 border border-primary/20'
-                            }`}
+                            className={`inline-flex items-center gap-2 px-3 py-1 rounded-full mb-3 ${isDark ? 'bg-primary/20 border border-primary/30' : 'bg-primary/10 border border-primary/20'
+                                }`}
                         >
                             <span className="relative flex h-2 w-2">
                                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75" />
@@ -229,11 +227,10 @@ export default function LandingHeroEye({ onGetStarted, onLogin }: LandingHeroEye
                             aria-disabled={isTransitioning}
                             whileHover={{ scale: 1.03, y: -2 }}
                             whileTap={{ scale: 0.97 }}
-                            className={`pointer-events-auto inline-flex w-full items-center justify-center rounded-2xl px-6 py-3.5 text-sm font-semibold transition-all disabled:opacity-70 disabled:cursor-not-allowed sm:w-auto ${
-                                isDark
-                                    ? 'bg-white text-black shadow-[0_14px_28px_rgba(0,0,0,0.35)] hover:shadow-[0_20px_40px_rgba(0,0,0,0.4)]'
-                                    : 'bg-gradient-to-r from-primary to-secondary text-white shadow-lg shadow-primary/30 hover:shadow-xl hover:shadow-primary/40'
-                            }`}
+                            className={`pointer-events-auto inline-flex w-full items-center justify-center rounded-2xl px-6 py-3.5 text-sm font-semibold transition-all disabled:opacity-70 disabled:cursor-not-allowed sm:w-auto ${isDark
+                                ? 'bg-white text-black shadow-[0_14px_28px_rgba(0,0,0,0.35)] hover:shadow-[0_20px_40px_rgba(0,0,0,0.4)]'
+                                : 'bg-gradient-to-r from-primary to-secondary text-white shadow-lg shadow-primary/30 hover:shadow-xl hover:shadow-primary/40'
+                                }`}
                         >
                             <span className="material-symbols-outlined text-lg mr-2">login</span>
                             Ingresar
@@ -245,11 +242,10 @@ export default function LandingHeroEye({ onGetStarted, onLogin }: LandingHeroEye
                             aria-disabled={isTransitioning}
                             whileHover={{ scale: 1.03, y: -2 }}
                             whileTap={{ scale: 0.97 }}
-                            className={`pointer-events-auto inline-flex w-full items-center justify-center rounded-2xl px-6 py-3.5 text-sm font-semibold backdrop-blur-xl transition-all disabled:opacity-70 disabled:cursor-not-allowed sm:w-auto ${
-                                isDark
-                                    ? 'border border-white/18 bg-white/8 text-white shadow-[0_10px_26px_rgba(0,0,0,0.25)] hover:bg-white/15'
-                                    : 'border border-slate-200 bg-white text-slate-700 shadow-md hover:bg-slate-50'
-                            }`}
+                            className={`pointer-events-auto inline-flex w-full items-center justify-center rounded-2xl px-6 py-3.5 text-sm font-semibold backdrop-blur-xl transition-all disabled:opacity-70 disabled:cursor-not-allowed sm:w-auto ${isDark
+                                ? 'border border-white/18 bg-white/8 text-white shadow-[0_10px_26px_rgba(0,0,0,0.25)] hover:bg-white/15'
+                                : 'border border-slate-200 bg-white text-slate-700 shadow-md hover:bg-slate-50'
+                                }`}
                         >
                             <span className="material-symbols-outlined text-lg mr-2">person_add</span>
                             Crear cuenta

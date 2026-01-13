@@ -33,7 +33,7 @@ export const aiImageService = {
     // const quotaCheck = await this.checkDailyQuota();
     // if (quotaCheck.remaining <= 0) {
     //   throw new Error(
-    //     `Has alcanzado tu límite diario de ${quotaCheck.limit} generaciones. Vuelve mañana o actualiza a Premium.`
+    //     `Has alcanzado tu límite diario de ${quotaCheck.limit} créditos. Volvé mañana o actualiza a Premium.`
     //   );
     // }
 
@@ -71,7 +71,7 @@ export const aiImageService = {
         // Handle specific error codes
         switch (data.error_code) {
           case 'QUOTA_EXCEEDED':
-            throw new Error('Has alcanzado tu límite diario de generaciones');
+            throw new Error('Has alcanzado tu límite diario de créditos');
           case 'INVALID_PROMPT':
             throw new Error('El prompt contiene contenido no permitido');
           case 'API_ERROR':

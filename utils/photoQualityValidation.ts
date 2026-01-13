@@ -289,9 +289,13 @@ export async function analyzeTryOnPhotoQuality(dataUrl: string): Promise<TryOnQu
     ...(reasons.some(r => r.includes('vertical')) ? ['Usa la cámara trasera y alejate para capturar cuerpo completo'] : []),
   ];
 
+  // RELAXED GATE: We allow the image but keep the reasons as warnings
+  // This prevents blocking the user while still informing them about quality issues
+  const isAllowed = true;
+
   return {
     ...base,
-    isAllowed: reasons.length === 0,
+    isAllowed,
     reasons,
     tips
   };

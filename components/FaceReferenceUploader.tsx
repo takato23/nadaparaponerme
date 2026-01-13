@@ -225,7 +225,7 @@ export const FaceReferenceUploader: React.FC<FaceReferenceUploaderProps> = ({
                         <span className="material-symbols-outlined text-primary">tips_and_updates</span>
                         <div className="text-sm">
                             <p className="font-medium text-gray-800 dark:text-white">
-                                Nano Banana Pro usa estas fotos para preservar tu identidad
+                                El modo Ultra usa estas fotos para preservar tu identidad
                             </p>
                             <p className="text-gray-500 mt-1">
                                 Recomendamos: 1 frontal, 1 perfil, 1 sonriendo

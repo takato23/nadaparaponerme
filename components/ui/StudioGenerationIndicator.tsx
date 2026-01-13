@@ -92,7 +92,7 @@ export function StudioGenerationIndicator() {
                 : 'bg-gradient-to-r from-purple-600 to-pink-600 shadow-purple-500/30 hover:shadow-purple-500/50'
             }
                      hover:scale-105 active:scale-95`}
-          aria-label="Estado de generaciones AI"
+          aria-label="Estado de creaciones IA"
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
         >
@@ -177,7 +177,7 @@ export function StudioGenerationIndicator() {
               <div className="max-h-64 overflow-y-auto">
                 {completedRequests.length === 0 ? (
                   <div className="px-4 py-6 text-center text-gray-500 dark:text-gray-400 text-sm">
-                    No hay generaciones recientes
+                    No hay creaciones recientes
                   </div>
                 ) : (
                   completedRequests.map((request) => {

@@ -235,8 +235,8 @@ export const PAYWALL_FEATURES: PaywallFeature[] = [
   },
   {
     id: 'unlimited_ai',
-    name: 'IA Ilimitada',
-    description: 'Generaciones ilimitadas de outfits',
+    name: 'Créditos IA',
+    description: '400 créditos IA por mes',
     icon: 'all_inclusive',
     required_tier: 'premium',
     is_premium: true,
@@ -278,7 +278,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     price_monthly_usd: 0,
     features: [
       'Hasta 50 prendas en tu armario',
-      '10 generaciones de outfits por mes',
+      '10 créditos IA por mes (Rápido)',
       'Análisis básico de color',
       'Outfits guardados ilimitados',
       'Compartir en comunidad',
@@ -303,8 +303,9 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     features: [
       'Todo lo de Free +',
       'Prendas ilimitadas',
-      '100 generaciones de outfits por mes',
-      'Probador virtual con tu foto',
+      '150 créditos IA por mes',
+      'Probador virtual Rápido',
+      'Ultra habilitado',
       'AI Fashion Designer',
       'Lookbook Creator',
       'Exportar lookbooks en HD',
@@ -312,7 +313,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
       'Sin anuncios',
     ],
     limits: {
-      ai_generations_per_month: 100,
+      ai_generations_per_month: 150,
       max_closet_items: -1,  // Unlimited
       max_saved_outfits: -1,  // Unlimited
       can_use_virtual_tryon: true,
@@ -326,12 +327,12 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
   {
     id: 'premium',
     name: 'Premium',
-    description: 'Experiencia completa con IA ilimitada',
+    description: 'Experiencia completa con IA avanzada',
     price_monthly_ars: 4999,
     price_monthly_usd: 16.99,
     features: [
       'Todo lo de Pro +',
-      'Generaciones de IA ilimitadas',
+      '400 créditos IA por mes',
       'Style DNA Profile completo',
       'Análisis de evolución de estilo',
       'Recomendaciones personalizadas diarias',
@@ -339,7 +340,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
       'Soporte prioritario',
     ],
     limits: {
-      ai_generations_per_month: -1,  // Unlimited
+      ai_generations_per_month: 400,
       max_closet_items: -1,  // Unlimited
       max_saved_outfits: -1,  // Unlimited
       can_use_virtual_tryon: true,

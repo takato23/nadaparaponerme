@@ -13,6 +13,8 @@ import { V1_SAFE_MODE } from '../config/runtime';
 import * as edgeClient from './edgeFunctionClient';
 import * as geminiService from '../../services/geminiService-rest';
 import * as geminiServiceFull from '../../services/geminiService';
+
+import { GENERATION_PRESETS } from '../../types';
 import { canGenerateOutfit } from './subscriptionService';
 import { retryAIOperation } from '../../utils/retryWithBackoff';
 
@@ -95,7 +97,7 @@ export async function generateOutfit(
   const canGenerate = await canGenerateOutfit();
 
   if (!canGenerate.allowed) {
-    throw new Error(canGenerate.reason || 'Has alcanzado tu límite de generaciones. Upgradeá tu plan para continuar.');
+    throw new Error(canGenerate.reason || 'Has alcanzado tu límite de créditos. Upgradeá tu plan para continuar.');
   }
 
   // 🛡️ Safe Mode
@@ -145,7 +147,7 @@ export async function generatePackingList(
   const canGenerate = await canGenerateOutfit();
 
   if (!canGenerate.allowed) {
-    throw new Error(canGenerate.reason || 'Has alcanzado tu límite de generaciones. Upgradeá tu plan para continuar.');
+    throw new Error(canGenerate.reason || 'Has alcanzado tu límite de créditos. Upgradeá tu plan para continuar.');
   }
 
   // 🛡️ Safe Mode
@@ -319,14 +321,72 @@ export async function generateVirtualTryOnWithSlots(
     preset?: GenerationPreset;
     quality?: 'flash' | 'pro';
     customScene?: string;
+    // New option for provider
+    provider?: 'google' | 'openai';
+    slotItems?: Array<{ slot: string; item: ClothingItem }>;
+    fit?: 'tight' | 'regular' | 'oversized';
+    view?: 'front' | 'back' | 'side';
   } = {}
 ): Promise<{
   resultImage: string;
   model: string;
   slotsUsed: string[];
-  faceReferencesUsed?: number;
 }> {
-  // Always use Edge Function for slot-based try-on
+  // OpenAI Client-Side Test Path
+  if (options.provider === 'openai') {
+    console.log('Using OpenAI Provider (GPT Image 1.5)');
+    const geminiOptions = { ...options } as any;
+    delete geminiOptions.provider;
+    delete geminiOptions.slotItems;
+
+    // Construct prompt locally
+    const presetConfig = GENERATION_PRESETS.find(p => p.id === (options.preset || 'overlay'));
+    const presetPrompt = presetConfig?.promptModifier || '';
+    const scenePrompt = options.preset === 'custom' ? (options.customScene || '') : presetPrompt;
+
+    // Simple prompting strategy for the test
+    // Construct detailed clothing description
+    let clothingDescription = 'a stylish outfit';
+    if (options.slotItems && options.slotItems.length > 0) {
+      const items = options.slotItems.map(s => {
+        const item = s.item;
+        const color = item.color_primary || '';
+        const subcat = item.subcategory || item.category || 'garment';
+        return `${color} ${subcat}`.trim();
+      });
+      clothingDescription = items.join(', ');
+    }
+
+    const fitMsg = options.fit && options.fit !== 'regular' ? `${options.fit} fit, ` : '';
+    const viewMsg = options.view ? `${options.view} view, ` : 'front view, ';
+
+    const prompt = `A highly realistic, professional fashion photo. ${viewMsg}${fitMsg}Model is wearing ${clothingDescription}. Scene: ${scenePrompt}. 8k resolution, highly detailed, fashion photography.`;
+
+    // Call Edge Function for OpenAI generation
+    try {
+      const resultImage = await edgeClient.generateOpenAIImageViaEdge(prompt, {
+        model: 'gpt-image-1.5',
+        // Map quality if needed, but 'gpt-image-1.5' might imply high quality by default
+        quality: options.quality === 'pro' ? 'hd' : 'standard'
+      });
+
+      return {
+        resultImage,
+        model: 'gpt-image-1.5',
+        slotsUsed: Object.keys(slots),
+        faceReferencesUsed: 0
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message.toLowerCase() : '';
+      if (message.includes('must be verified') || message.includes('verification')) {
+        console.warn('OpenAI image generation requires org verification. Falling back to Gemini.');
+        return await edgeClient.generateVirtualTryOnWithSlots(userImage, slots, geminiOptions);
+      }
+      throw error;
+    }
+  }
+
+  // Always use Edge Function for slot-based try-on (Gemini / Nano Banana Pro)
   return await edgeClient.generateVirtualTryOnWithSlots(userImage, slots, options as any);
 }
 
@@ -343,6 +403,20 @@ export async function searchShoppingSuggestions(...args: Parameters<typeof gemin
   return await geminiServiceFull.searchShoppingSuggestions(...args);
 }
 
+// Search Products for Specific Item
+export async function searchProductsForItem(...args: Parameters<typeof geminiServiceFull.searchProductsForItem>) {
+  if (V1_SAFE_MODE) return [];
+  if (getFeatureFlag('useSupabaseAI')) return assertFeatureAvailable('Búsqueda de productos');
+  return await geminiServiceFull.searchProductsForItem(...args);
+}
+
+// Search Products from Image
+export async function searchProductsFromImage(...args: Parameters<typeof geminiServiceFull.searchProductsFromImage>) {
+  if (V1_SAFE_MODE) return { description: '', category: '', links: [] };
+  if (getFeatureFlag('useSupabaseAI')) return assertFeatureAvailable('Búsqueda de productos por imagen');
+  return await geminiServiceFull.searchProductsFromImage(...args);
+}
+
 // Color Palette Analysis
 export async function analyzeColorPalette(...args: Parameters<typeof geminiServiceFull.analyzeColorPalette>) {
   if (V1_SAFE_MODE) return { palette: [], harmony: 'Mono', advice: 'Safe Mode' };
@@ -353,13 +427,13 @@ export async function analyzeColorPalette(...args: Parameters<typeof geminiServi
 // Chat Services
 export async function chatWithFashionAssistant(...args: Parameters<typeof geminiServiceFull.chatWithFashionAssistant>) {
   if (V1_SAFE_MODE) return { role: 'assistant', content: 'Safe Mode enabled.' };
-  if (getFeatureFlag('useSupabaseAI')) return assertFeatureAvailable('Chat IA');
+  // if (getFeatureFlag('useSupabaseAI')) return assertFeatureAvailable('Chat IA');
   return await geminiServiceFull.chatWithFashionAssistant(...args);
 }
 
 export async function parseOutfitFromChat(...args: Parameters<typeof geminiServiceFull.parseOutfitFromChat>) {
   if (V1_SAFE_MODE) return null;
-  if (getFeatureFlag('useSupabaseAI')) return assertFeatureAvailable('Chat IA');
+  // if (getFeatureFlag('useSupabaseAI')) return assertFeatureAvailable('Chat IA');
   return await geminiServiceFull.parseOutfitFromChat(...args);
 }
 
@@ -461,7 +535,18 @@ export async function generateCapsuleWardrobe(
 // Style DNA
 export async function analyzeStyleDNA(...args: Parameters<typeof geminiServiceFull.analyzeStyleDNA>) {
   if (V1_SAFE_MODE) return { archetypes: [], traits: [], colorProfile: { primary: [], secondary: [], avoid: [] } };
-  if (getFeatureFlag('useSupabaseAI')) return assertFeatureAvailable('Style DNA');
+
+  const useSupabaseAI = getFeatureFlag('useSupabaseAI');
+  if (useSupabaseAI) {
+    // Simplify closet object for transport
+    const closet = args[0]; // first arg is closet
+    const simplifiedCloset = closet.map(item => ({
+      id: item.id,
+      metadata: item.metadata
+    }));
+    return await edgeClient.analyzeStyleDNAViaEdge(simplifiedCloset);
+  }
+
   return await geminiServiceFull.analyzeStyleDNA(...args);
 }
 

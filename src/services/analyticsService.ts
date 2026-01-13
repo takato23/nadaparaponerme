@@ -180,6 +180,20 @@ export function trackAIFeatureUsed(feature: string): void {
   trackEvent('ai_feature_used', { feature });
 }
 
+/**
+ * User clicked rewarded ad CTA
+ */
+export function trackRewardedAdClick(provider: string): void {
+  trackEvent('rewarded_ad_click', { provider });
+}
+
+/**
+ * User earned reward from ad (placeholder)
+ */
+export function trackRewardedAdReward(provider: string, credits: number): void {
+  trackEvent('rewarded_ad_reward', { provider, credits });
+}
+
 // ============================================================================
 // TYPE DECLARATIONS
 // ============================================================================

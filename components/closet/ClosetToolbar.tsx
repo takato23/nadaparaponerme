@@ -379,7 +379,7 @@ export default function ClosetToolbar({
         )}
 
         {/* Wardrobe Generator (Dev/Test) */}
-        <div className="hidden md:block">
+        <div className="block">
           <WardrobeGeneratorButton onGenerationComplete={onRefresh} />
         </div>
 

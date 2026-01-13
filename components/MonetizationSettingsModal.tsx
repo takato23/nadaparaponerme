@@ -11,6 +11,7 @@ const MonetizationSettingsModal: React.FC<MonetizationSettingsModalProps> = ({ o
         shareReward: false,
         watermark: false,
         affiliates: false,
+        sponsored: false,
     });
 
     useEffect(() => {
@@ -18,6 +19,7 @@ const MonetizationSettingsModal: React.FC<MonetizationSettingsModalProps> = ({ o
             shareReward: getFeatureFlag(MONETIZATION_FLAGS.ENABLE_SHARE_REWARD),
             watermark: getFeatureFlag(MONETIZATION_FLAGS.ENABLE_WATERMARK),
             affiliates: getFeatureFlag(MONETIZATION_FLAGS.ENABLE_AFFILIATES),
+            sponsored: getFeatureFlag(MONETIZATION_FLAGS.ENABLE_SPONSORED_PLACEMENTS),
         });
     }, []);
 
@@ -114,6 +116,28 @@ const MonetizationSettingsModal: React.FC<MonetizationSettingsModalProps> = ({ o
                                 onChange={() => handleToggle(MONETIZATION_FLAGS.ENABLE_AFFILIATES, 'affiliates')}
                             />
                             <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-green-300 dark:peer-focus:ring-green-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-green-600"></div>
+                        </label>
+                    </div>
+
+                    {/* Sponsored Placements */}
+                    <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg text-emerald-600 dark:text-emerald-400">
+                                <span className="material-symbols-outlined">campaign</span>
+                            </div>
+                            <div>
+                                <h3 className="font-bold text-gray-900 dark:text-white">Placements Patrocinados</h3>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">Anunciantes en Shop the Look</p>
+                            </div>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                                type="checkbox"
+                                className="sr-only peer"
+                                checked={flags.sponsored}
+                                onChange={() => handleToggle(MONETIZATION_FLAGS.ENABLE_SPONSORED_PLACEMENTS, 'sponsored')}
+                            />
+                            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-emerald-300 dark:peer-focus:ring-emerald-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-emerald-600"></div>
                         </label>
                     </div>
 

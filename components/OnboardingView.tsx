@@ -10,6 +10,8 @@
 
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Link } from 'react-router-dom';
+import { ROUTES } from '../src/routes';
 import OjoDeLocaLogo from './OjoDeLocaLogo';
 import { useThemeContext } from '../contexts/ThemeContext';
 
@@ -150,7 +152,14 @@ const OnboardingView: React.FC<OnboardingViewProps> = ({ onComplete }) => {
 
         {/* Texto de privacidad */}
         <p className={`text-xs text-center mt-4 ${isDark ? 'text-white/40' : 'text-slate-400'}`}>
-          Al continuar aceptás los términos y condiciones
+          Al continuar aceptás los{' '}
+          <Link to={ROUTES.TERMS} className={`underline ${isDark ? 'hover:text-white' : 'hover:text-slate-700'}`}>
+            términos y condiciones
+          </Link>{' '}
+          y la{' '}
+          <Link to={ROUTES.PRIVACY} className={`underline ${isDark ? 'hover:text-white' : 'hover:text-slate-700'}`}>
+            política de privacidad
+          </Link>
         </p>
       </div>
     </motion.div>

@@ -78,7 +78,7 @@ const AIFashionDesignerView = ({ onClose, onAddToCloset, onShowHistory }: AIFash
     }
 
     if (remainingQuota <= 0) {
-      setError('Has alcanzado tu límite diario de generaciones');
+      setError('Has alcanzado tu límite diario de créditos');
       return;
     }
 

@@ -3,7 +3,8 @@ import type { SubscriptionPlan, Subscription } from '../types-payment';
 import * as paymentService from '../src/services/paymentService';
 import Loader from './Loader';
 import { Card } from './ui/Card';
-import { PAYMENTS_ENABLED, V1_SAFE_MODE } from '../src/config/runtime';
+import { PAYMENTS_ENABLED, USD_ENABLED, V1_SAFE_MODE } from '../src/config/runtime';
+import * as analytics from '../src/services/analyticsService';
 
 interface PaywallViewProps {
   onClose: () => void;
@@ -18,7 +19,7 @@ const PaywallView = ({ onClose, featureName, featureDescription }: PaywallViewPr
   const [loading, setLoading] = useState(true);
   const [upgrading, setUpgrading] = useState(false);
   const [error, setError] = useState<string>('');
-  const [currency, setCurrency] = useState<'ARS' | 'USD'>('ARS');
+  const [currency] = useState<'ARS' | 'USD'>('ARS');
 
   useEffect(() => {
     loadData();
@@ -48,6 +49,7 @@ const PaywallView = ({ onClose, featureName, featureDescription }: PaywallViewPr
 
   const handleUpgrade = async (tier: 'pro' | 'premium') => {
     try {
+      analytics.trackCheckoutStart(tier, currency);
       if (V1_SAFE_MODE && !PAYMENTS_ENABLED) {
         setError('Pagos desactivados durante la V1 (beta). Próximamente vas a poder hacer upgrade.');
         return;
@@ -125,28 +127,13 @@ const PaywallView = ({ onClose, featureName, featureDescription }: PaywallViewPr
             </button>
           </div>
 
-          {/* Currency Toggle */}
+          {/* Currency Label */}
           <div className="flex items-center justify-center gap-2 mt-4">
-            <button
-              onClick={() => setCurrency('ARS')}
-              className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
-                currency === 'ARS'
-                  ? 'bg-primary text-white'
-                  : 'bg-gray-100 dark:bg-gray-800 text-text-primary dark:text-gray-300'
-              }`}
-            >
-              ARS ($)
-            </button>
-            <button
-              onClick={() => setCurrency('USD')}
-              className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
-                currency === 'USD'
-                  ? 'bg-primary text-white'
-                  : 'bg-gray-100 dark:bg-gray-800 text-text-primary dark:text-gray-300'
-              }`}
-            >
-              USD (US$)
-            </button>
+            {USD_ENABLED ? (
+              <span className="text-xs text-text-secondary dark:text-gray-400">ARS · USD</span>
+            ) : (
+              <span className="text-xs text-text-secondary dark:text-gray-400">Precios en ARS</span>
+            )}
           </div>
         </div>
 

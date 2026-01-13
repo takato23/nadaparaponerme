@@ -33,7 +33,7 @@ export function UpgradeModal({
   // Determine the title and message
   const getTitle = () => {
     if (reason === 'limit_reached' || (featureStatus && !featureStatus.isPremiumLocked)) {
-      return '¡Límite alcanzado!';
+      return '¡Créditos agotados!';
     }
     if (reason === 'premium_feature' || featureStatus?.isPremiumLocked) {
       return 'Función Premium';
@@ -46,9 +46,9 @@ export function UpgradeModal({
       return `"${featureName}" es una función exclusiva para usuarios Pro y Premium.`;
     }
     if (featureStatus && !featureStatus.canUse) {
-      return `Alcanzaste tu límite mensual de "${featureName}" (${featureStatus.used}/${featureStatus.limit}).`;
+      return `Alcanzaste tu límite mensual de créditos (${featureStatus.used}/${featureStatus.limit}).`;
     }
-    return 'Desbloquea más funciones y límites más altos para tu armario inteligente.';
+    return 'Desbloquea más créditos y funciones para tu armario inteligente.';
   };
 
   // Plans configuration
@@ -60,9 +60,9 @@ export function UpgradeModal({
       priceLabel: 'Gratis',
       description: 'Para empezar',
       features: [
-        '10 outfits/mes',
-        '5 análisis de prenda/mes',
-        '20 mensajes de chat/mes',
+        '10 créditos IA/mes (Rápido)',
+        'Escaneo limitado de prendas',
+        'Chat limitado',
         'Items ilimitados en closet',
       ],
       limitations: [
@@ -81,11 +81,11 @@ export function UpgradeModal({
       priceLabel: 'AR$ 2.999/mes',
       description: 'Para fashionistas',
       features: [
-        '100 outfits/mes',
-        '50 análisis de prenda/mes',
-        '200 mensajes de chat/mes',
-        '20 probador virtual/mes',
-        '10 imágenes generadas/mes',
+        '150 créditos IA/mes',
+        'Escaneo ampliado de prendas',
+        'Chat ampliado',
+        'Probador virtual Rápido',
+        'Ultra habilitado',
         'Lookbook Creator',
         'Sin publicidad',
       ],
@@ -103,9 +103,9 @@ export function UpgradeModal({
       priceLabel: 'AR$ 4.999/mes',
       description: 'Experiencia completa',
       features: [
-        'Todo ilimitado',
-        'Probador virtual ilimitado',
-        '50 imágenes/mes',
+        '400 créditos IA/mes',
+        'Probador virtual Ultra',
+        'Más créditos para imagen',
         'Style DNA completo',
         'Acceso anticipado',
         'Soporte prioritario',

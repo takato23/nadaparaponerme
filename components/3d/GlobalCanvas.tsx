@@ -39,7 +39,7 @@ export const GlobalCanvas: React.FC<GlobalCanvasProps> = ({ isAuth }) => {
     const { theme } = useThemeContext();
     const isDark = theme === 'dark';
 
-    const disable3DForDashboard = !isAuth && location.pathname === '/';
+    const disable3DForDashboard = (!isAuth && location.pathname === '/') || location.pathname.startsWith('/studio');
     const eyeBackgroundDebug =
         import.meta.env.DEV && new URLSearchParams(location.search).has('eyeBgDebug');
 

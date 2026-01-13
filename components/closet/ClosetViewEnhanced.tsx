@@ -26,6 +26,7 @@ import ClosetPresentationMode from './ClosetPresentationMode';
 import VisualSearchModal from './VisualSearchModal';
 import LiquidDetailModal from './LiquidDetailModal';
 import { CoverFlowCarousel } from './CoverFlowCarousel';
+import LoadDemoDataButton from './LoadDemoDataButton';
 import { useCloset } from '../../contexts/ClosetContext';
 import { getUniqueColors, getUniqueTags, getUniqueSeasons } from '../../utils/closetUtils';
 import { findSimilarByImage } from '../../services/geminiService';
@@ -37,12 +38,14 @@ interface ClosetViewEnhancedProps {
   onItemClick: (id: string) => void;
   onAddItem?: () => void;
   onRefresh?: () => void;
+  onLoadDemoData?: (items: ClothingItem[]) => void;
 }
 
 export default function ClosetViewEnhanced({
   onItemClick,
   onAddItem,
-  onRefresh
+  onRefresh,
+  onLoadDemoData
 }: ClosetViewEnhancedProps) {
   const {
     items,
@@ -332,6 +335,27 @@ export default function ClosetViewEnhanced({
 
           {/* Grid/List Content */}
           <div className="flex-1 overflow-hidden">
+            {/* Demo Data Button - Show when closet is empty and no filters */}
+            {items.length === 0 && !filters.hasFilters && onLoadDemoData && (
+              <div className="p-6">
+                <LoadDemoDataButton
+                  closet={items}
+                  onLoadDemo={onLoadDemoData}
+                  variant="prominent"
+                />
+              </div>
+            )}
+
+            {/* Demo Data Indicator - Show when demo data is loaded */}
+            {items.length > 0 && items.some(item => item.id.startsWith('demo-')) && onLoadDemoData && (
+              <div className="px-4 pb-2">
+                <LoadDemoDataButton
+                  closet={items}
+                  onLoadDemo={onLoadDemoData}
+                  variant="subtle"
+                />
+              </div>
+            )}
             {/* Render masonry layout for desktop, virtualized grid for mobile/list */}
             {viewPreferences.currentViewMode === 'masonry' && viewPreferences.isDesktop ? (
               <ClosetGridMasonry

@@ -361,6 +361,18 @@ const INTELLIGENCE_FEATURES: FeatureConfig[] = [
     badge: 'ai',
   },
   {
+    id: 'shop-look',
+    icon: 'shopping_bag',
+    title: 'Encontrar Prenda',
+    description: 'Buscá dónde comprar cualquier prenda',
+    category: 'intelligence',
+    keywords: ['buscar', 'prenda', 'comprar', 'shopping', 'encontrar', 'tiendas'],
+    tooltip: 'Subí una foto o describí lo que buscás y encontrá dónde comprarlo',
+    handlerKey: 'onOpenShopLook',
+    popularity: 77,
+    badge: 'new',
+  },
+  {
     id: 'gap-analysis',
     icon: 'search_insights',
     title: 'Análisis de Gaps',
@@ -615,7 +627,7 @@ export const FEATURE_GROUPS: FeatureGroup[] = [
     id: 'insights',
     title: 'Insights & compras',
     description: 'Insights, compras y evolución',
-    featureIds: ['style-dna', 'virtual-shopping', 'gap-analysis', 'feedback', 'brand-recognition', 'dupe-finder', 'evolution'],
+    featureIds: ['style-dna', 'virtual-shopping', 'shop-look', 'gap-analysis', 'feedback', 'brand-recognition', 'dupe-finder', 'evolution'],
   },
 ];
 

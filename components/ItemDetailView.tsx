@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import type { ClothingItem, ClothingItemMetadata } from '../types';
-import { findSimilarItems } from '../src/services/aiService';
+import type { ClothingItem, ClothingItemMetadata, GroundingChunk } from '../types';
+import { findSimilarItems, searchProductsForItem } from '../src/services/aiService';
+import { buildSearchTermFromItem, getShoppingLinks } from '../src/services/monetizationService';
 // FIX: The Loader component is now correctly created and exported, resolving the 'not a module' error.
 import Loader from './Loader';
 import { Card } from './ui/Card';
@@ -29,6 +30,11 @@ export const ItemDetailView = ({ item, inventory, onUpdate, onDelete, onBack, on
     const [isLoadingSimilar, setIsLoadingSimilar] = useState(true);
     const toast = useToast();
 
+    // Shopping state
+    const [showShopping, setShowShopping] = useState(false);
+    const [shoppingLinks, setShoppingLinks] = useState<GroundingChunk[]>([]);
+    const [isLoadingShopping, setIsLoadingShopping] = useState(false);
+
     useEffect(() => {
         setEditableMetadata(item.metadata);
         setIsEditing(false);
@@ -55,6 +61,32 @@ export const ItemDetailView = ({ item, inventory, onUpdate, onDelete, onBack, on
 
     const updateMetadataField = <K extends keyof ClothingItemMetadata>(field: K, value: ClothingItemMetadata[K]) => {
         setEditableMetadata({ ...editableMetadata, [field]: value });
+    };
+
+    const handleSearchShopping = async () => {
+        if (showShopping && shoppingLinks.length > 0) {
+            // Toggle off if already showing
+            setShowShopping(false);
+            return;
+        }
+
+        setShowShopping(true);
+
+        // Skip if already loaded
+        if (shoppingLinks.length > 0) return;
+
+        setIsLoadingShopping(true);
+        try {
+            const searchTerm = buildSearchTermFromItem(item);
+            const links = await searchProductsForItem(searchTerm, item.metadata.category);
+            setShoppingLinks(links);
+        } catch (error) {
+            console.error('Error searching shopping:', error);
+            toast.error('No se pudieron cargar sugerencias de compra');
+            setShoppingLinks([]);
+        } finally {
+            setIsLoadingShopping(false);
+        }
     };
 
     return (
@@ -104,6 +136,77 @@ export const ItemDetailView = ({ item, inventory, onUpdate, onDelete, onBack, on
                                 <span className="material-symbols-outlined">shopping_bag</span>
                                 Buscar Dupes
                             </button>
+                        )}
+
+                        {/* Shopping Button */}
+                        <button
+                            onClick={handleSearchShopping}
+                            className={`w-full font-bold py-4 rounded-2xl transition-all flex items-center justify-center gap-2 ${
+                                showShopping
+                                    ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-2 border-emerald-500/30'
+                                    : 'bg-white dark:bg-gray-800 border-2 border-emerald-500 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-gray-700'
+                            }`}
+                        >
+                            <span className="material-symbols-outlined">storefront</span>
+                            {showShopping ? 'Ocultar' : 'Dónde lo compro'}
+                        </button>
+
+                        {/* Shopping Results */}
+                        {showShopping && (
+                            <div className="bg-white/50 dark:bg-black/20 rounded-2xl p-4 space-y-4 animate-fade-in border border-emerald-500/20">
+                                {/* Quick Links */}
+                                <div className="space-y-2">
+                                    <p className="text-sm font-semibold text-text-secondary dark:text-gray-400">Buscar en:</p>
+                                    <div className="grid grid-cols-3 gap-2">
+                                        {getShoppingLinks(buildSearchTermFromItem(item)).map((link) => (
+                                            <a
+                                                key={link.platform}
+                                                href={link.url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="py-3 px-2 rounded-xl bg-white/80 dark:bg-white/10 hover:bg-emerald-500/10 transition-all text-center border border-white/20 dark:border-white/10"
+                                            >
+                                                <span className="material-symbols-outlined text-xl block mb-1">{link.icon}</span>
+                                                <span className="text-xs font-medium block truncate">{link.name}</span>
+                                            </a>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* AI Results */}
+                                <div className="border-t border-white/20 dark:border-white/10 pt-3">
+                                    <p className="text-sm font-semibold text-text-secondary dark:text-gray-400 mb-2">Resultados AI:</p>
+
+                                    {isLoadingShopping && (
+                                        <div className="flex items-center justify-center py-6">
+                                            <Loader />
+                                        </div>
+                                    )}
+
+                                    {!isLoadingShopping && shoppingLinks.length > 0 && (
+                                        <div className="space-y-2 max-h-64 overflow-y-auto">
+                                            {shoppingLinks.slice(0, 6).map((link, index) => (
+                                                <a
+                                                    href={link.web.uri}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    key={index}
+                                                    className="block bg-white/50 dark:bg-black/20 p-3 rounded-xl text-sm hover:bg-white/80 dark:hover:bg-black/40 transition-all border border-white/20 dark:border-white/10"
+                                                >
+                                                    <p className="font-semibold text-text-primary dark:text-gray-200 truncate">{link.web.title}</p>
+                                                    <p className="text-text-secondary dark:text-gray-400 truncate text-xs mt-1">{new URL(link.web.uri).hostname}</p>
+                                                </a>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {!isLoadingShopping && shoppingLinks.length === 0 && (
+                                        <p className="text-sm text-text-secondary dark:text-gray-500 text-center py-4">
+                                            Usa los links de arriba para buscar
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
                         )}
                     </div>
                 )

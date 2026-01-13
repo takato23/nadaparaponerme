@@ -7,8 +7,12 @@
 
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { getCreditStatus, CREDIT_LIMITS } from '../services/usageTrackingService';
+import { getCreditStatus, CREDIT_LIMITS, getMonthlyUsage, getFeatureUsageSummary, type FeatureType } from '../services/usageTrackingService';
 import { useSubscription } from '../hooks/useSubscription';
+import { ADSENSE_CREDITS_SLOT, ADSENSE_ENABLED, REWARDED_ADS_ENABLED, REWARDED_ADS_PROVIDER } from '../src/config/runtime';
+import toast from 'react-hot-toast';
+import * as analytics from '../src/services/analyticsService';
+import AdSenseBanner from './ads/AdSenseBanner';
 
 interface CreditsDetailViewProps {
   isOpen: boolean;
@@ -19,6 +23,34 @@ interface CreditsDetailViewProps {
 export function CreditsDetailView({ isOpen, onClose, onUpgrade }: CreditsDetailViewProps) {
   const subscription = useSubscription();
   const status = getCreditStatus();
+  const monthlyUsage = getMonthlyUsage();
+  const featureUsage = getFeatureUsageSummary().filter((entry) => entry.used > 0);
+
+  const featureLabels: Record<FeatureType, string> = {
+    outfit_generation: 'Outfits',
+    clothing_analysis: 'Análisis de prendas',
+    fashion_chat: 'Chat de moda',
+    virtual_tryon: 'Try-on',
+    packing_list: 'Maleta inteligente',
+    image_generation: 'Diseños IA',
+    color_palette: 'Paleta de colores',
+    style_dna: 'Style DNA',
+    gap_analysis: 'Gaps de armario',
+    lookbook: 'Lookbook',
+    weather_outfit: 'Outfits por clima',
+    similar_items: 'Ítems similares',
+    shopping_suggestions: 'Compras sugeridas',
+    brand_recognition: 'Reconocimiento de marca',
+  };
+
+  const monthLabel = (() => {
+    try {
+      const [year, month] = monthlyUsage.month.split('-').map(Number);
+      return new Date(year, month - 1, 1).toLocaleDateString('es-AR', { month: 'long', year: 'numeric' });
+    } catch {
+      return monthlyUsage.month;
+    }
+  })();
 
   if (!isOpen) return null;
 
@@ -134,6 +166,30 @@ export function CreditsDetailView({ isOpen, onClose, onUpgrade }: CreditsDetailV
 
           {/* Info Section */}
           <div className="p-5 space-y-3">
+            {/* Low credits alert */}
+            {status.limit !== -1 && status.remaining <= 5 && (
+              <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-900/30 border border-amber-200/70 dark:border-amber-800/50">
+                <p className="text-xs text-amber-700 dark:text-amber-200 font-semibold">
+                  Te quedan pocos créditos. Considerá usar Rápido o sumar más créditos.
+                </p>
+              </div>
+            )}
+
+            {/* Monthly usage */}
+            <div className="p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs text-gray-500 dark:text-gray-400">Uso del mes</p>
+                <span className="text-[10px] uppercase tracking-wide text-gray-400">{monthLabel}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">
+                  {status.limit === -1 ? '∞' : `${status.used} / ${status.limit}`} créditos
+                </span>
+                <span className="text-xs text-gray-500 dark:text-gray-400">
+                  {status.limit === -1 ? 'Ilimitados' : `${status.remaining} restantes`}
+                </span>
+              </div>
+            </div>
             {/* Current Plan */}
             <div className="flex items-center justify-between p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50">
               <div className="flex items-center gap-2">
@@ -164,7 +220,7 @@ export function CreditsDetailView({ isOpen, onClose, onUpgrade }: CreditsDetailV
                   <p className="text-[10px] text-gray-500">Pro</p>
                 </div>
                 <div className={`p-2 rounded-lg ${subscription.tier === 'premium' ? 'bg-purple-50 dark:bg-purple-900/20 ring-1 ring-purple-500' : ''}`}>
-                  <p className="text-lg font-bold text-gray-900 dark:text-white">∞</p>
+                  <p className="text-lg font-bold text-gray-900 dark:text-white">{CREDIT_LIMITS.premium}</p>
                   <p className="text-[10px] text-gray-500">Premium</p>
                 </div>
               </div>
@@ -172,9 +228,9 @@ export function CreditsDetailView({ isOpen, onClose, onUpgrade }: CreditsDetailV
 
             {/* What uses credits */}
             <div className="p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50">
-              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Cada acción IA usa 1 crédito:</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Consumo por acción:</p>
               <div className="flex flex-wrap gap-1.5">
-                {['Generar outfit', 'Analizar prenda', 'Chat moda', 'Smart packer'].map((item) => (
+                {['Outfit (1 crédito)', 'Analizar prenda (1)', 'Chat moda (1)', 'Try-on Rápido (1)', 'Try-on Ultra (4)'].map((item) => (
                   <span
                     key={item}
                     className="text-[10px] px-2 py-1 rounded-full bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300"
@@ -184,6 +240,63 @@ export function CreditsDetailView({ isOpen, onClose, onUpgrade }: CreditsDetailV
                 ))}
               </div>
             </div>
+
+            {/* Feature usage breakdown */}
+            {featureUsage.length > 0 && (
+              <div className="p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50">
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Créditos por feature</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {featureUsage.map((entry) => (
+                    <div key={entry.feature} className="flex items-center justify-between rounded-lg bg-white/80 dark:bg-gray-700/60 px-2 py-1 text-[10px] text-gray-600 dark:text-gray-300">
+                      <span className="truncate">{featureLabels[entry.feature] || entry.feature}</span>
+                      <span className="font-semibold">{entry.used}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Estimated cost */}
+            <div className="p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50">
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Costo estimado</p>
+              <div className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-300">
+                <span>Rápido: {status.used} créditos</span>
+                <span>Ultra: {Math.floor(status.used / 4)} usos</span>
+              </div>
+              <p className="mt-1 text-[10px] text-gray-400">Equivalencia: 1 crédito = Rápido, 4 créditos = Ultra.</p>
+            </div>
+
+            {/* Rewarded ads */}
+            {ADSENSE_ENABLED && ADSENSE_CREDITS_SLOT && subscription.tier === 'free' && (
+              <div className="p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50">
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Publicidad</p>
+                <AdSenseBanner slot={ADSENSE_CREDITS_SLOT} className="rounded-lg overflow-hidden" />
+              </div>
+            )}
+
+            {REWARDED_ADS_ENABLED && subscription.tier !== 'premium' && (
+              <div className="p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-700 dark:text-gray-200">
+                      Ganá créditos viendo anuncios
+                    </p>
+                    <p className="text-[10px] text-gray-500 dark:text-gray-400">
+                      Disponible pronto con {REWARDED_ADS_PROVIDER}. Te suma créditos extras sin pagar.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      analytics.trackRewardedAdClick(REWARDED_ADS_PROVIDER);
+                      toast('Próximamente');
+                    }}
+                    className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-200 border border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition"
+                  >
+                    Ver anuncio
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Footer */}

@@ -9,6 +9,33 @@ import { supabase } from '../lib/supabase';
 import { logger } from '../utils/logger';
 import type { ClothingItemMetadata, FitResult, PackingListResult } from '../../types';
 
+// Helper to add timeout to Supabase invocations
+const invokeWithTimeout = async (functionName: string, options: any, timeoutMs = 90000) => {
+  const start = Date.now();
+  console.log(`[Edge Function] Invoking ${functionName}... (Timeout: ${timeoutMs}ms)`);
+
+  const timeoutPromise = new Promise<any>((_, reject) => {
+    const id = setTimeout(() => {
+      clearTimeout(id);
+      reject(new Error(`Request timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+  });
+
+  try {
+    const result = await Promise.race([
+      supabase.functions.invoke(functionName, options),
+      timeoutPromise
+    ]);
+    const duration = Date.now() - start;
+    console.log(`[Edge Function] ${functionName} completed in ${duration}ms`);
+    return result;
+  } catch (error) {
+    const duration = Date.now() - start;
+    console.error(`[Edge Function] ${functionName} failed after ${duration}ms:`, error);
+    throw error;
+  }
+};
+
 /**
  * Analyze clothing item using Edge Function
  */
@@ -16,7 +43,7 @@ export async function analyzeClothingViaEdge(
   imageDataUrl: string
 ): Promise<ClothingItemMetadata> {
   try {
-    const { data, error } = await supabase.functions.invoke('analyze-clothing', {
+    const { data, error } = await invokeWithTimeout('analyze-clothing', {
       body: { imageDataUrl },
     });
 
@@ -47,7 +74,7 @@ export async function generateOutfitViaEdge(
   closetItemIds: string[]
 ): Promise<FitResult> {
   try {
-    const { data, error } = await supabase.functions.invoke('generate-outfit', {
+    const { data, error } = await invokeWithTimeout('generate-outfit', {
       body: {
         prompt,
         closetItemIds,
@@ -66,7 +93,8 @@ export async function generateOutfitViaEdge(
     };
   } catch (error) {
     logger.error('Edge function generate-outfit failed:', error);
-    throw new Error('Failed to generate outfit via Edge Function');
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    throw new Error(`Failed to generate outfit via Edge Function: ${message}`);
   }
 }
 
@@ -78,15 +106,12 @@ export async function generatePackingListViaEdge(
   closetItemIds: string[]
 ): Promise<PackingListResult> {
   try {
-    const { data, error } = await supabase.functions.invoke(
-      'generate-packing-list',
-      {
-        body: {
-          prompt,
-          closetItemIds,
-        },
-      }
-    );
+    const { data, error } = await invokeWithTimeout('generate-packing-list', {
+      body: {
+        prompt,
+        closetItemIds,
+      },
+    });
 
     if (error) throw error;
 
@@ -96,7 +121,8 @@ export async function generatePackingListViaEdge(
     };
   } catch (error) {
     logger.error('Edge function generate-packing-list failed:', error);
-    throw new Error('Failed to generate packing list via Edge Function');
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    throw new Error(`Failed to generate packing list via Edge Function: ${message}`);
   }
 }
 
@@ -123,7 +149,12 @@ export async function generateVirtualTryOnViaEdge(
 
     if (error) throw error;
 
-    return data.resultImage;
+    const resultImage = data?.resultImage || data?.image;
+    if (!resultImage) {
+      throw new Error('Edge Function did not return image data');
+    }
+
+    return resultImage;
   } catch (error) {
     logger.error('Edge function virtual-try-on failed:', error);
     throw new Error('Failed to generate virtual try-on via Edge Function');
@@ -153,16 +184,16 @@ export const VIRTUAL_TRYON_PRESETS: Array<{
   icon: string;
   description: string;
 }> = [
-  { id: 'overlay', name: 'Original', icon: 'filter_none', description: 'Mantiene tu fondo' },
-  { id: 'mirror_selfie', name: 'Selfie Espejo', icon: 'door_sliding', description: 'Frente al espejo de tu cuarto' },
-  { id: 'studio', name: 'Estudio', icon: 'photo_camera', description: 'Fondo profesional' },
-  { id: 'street', name: 'Calle', icon: 'location_city', description: 'Look urbano' },
-  { id: 'golden_hour', name: 'Atardecer', icon: 'wb_twilight', description: 'Luz dorada' },
-  { id: 'coffee_shop', name: 'Café', icon: 'local_cafe', description: 'Ambiente acogedor' },
-  { id: 'home', name: 'Living', icon: 'weekend', description: 'Tu casa' },
-  { id: 'editorial', name: 'Editorial', icon: 'auto_awesome', description: 'Estilo revista' },
-  { id: 'minimalist', name: 'Minimalista', icon: 'crop_square', description: 'Fondo blanco' },
-];
+    { id: 'overlay', name: 'Original', icon: 'filter_none', description: 'Mantiene tu fondo' },
+    { id: 'mirror_selfie', name: 'Selfie Espejo', icon: 'door_sliding', description: 'Frente al espejo de tu cuarto' },
+    { id: 'studio', name: 'Estudio', icon: 'photo_camera', description: 'Fondo profesional' },
+    { id: 'street', name: 'Calle', icon: 'location_city', description: 'Look urbano' },
+    { id: 'golden_hour', name: 'Atardecer', icon: 'wb_twilight', description: 'Luz dorada' },
+    { id: 'coffee_shop', name: 'Café', icon: 'local_cafe', description: 'Ambiente acogedor' },
+    { id: 'home', name: 'Living', icon: 'weekend', description: 'Tu casa' },
+    { id: 'editorial', name: 'Editorial', icon: 'auto_awesome', description: 'Estilo revista' },
+    { id: 'minimalist', name: 'Minimalista', icon: 'crop_square', description: 'Fondo blanco' },
+  ];
 
 /**
  * Generate Virtual Try-On with slot system
@@ -184,7 +215,7 @@ export async function generateVirtualTryOnWithSlots(
   faceReferencesUsed?: number;
 }> {
   try {
-    const { data, error } = await supabase.functions.invoke('virtual-try-on', {
+    const { data, error } = await invokeWithTimeout('virtual-try-on', {
       body: {
         userImage,
         slots,
@@ -198,14 +229,37 @@ export async function generateVirtualTryOnWithSlots(
 
     if (error) throw error;
 
+    const resultImage = data?.resultImage || data?.image;
+    if (!resultImage) {
+      throw new Error('Edge Function did not return image data');
+    }
+
     return {
-      resultImage: data.resultImage,
-      model: data.model,
-      slotsUsed: data.slotsUsed || [],
-      faceReferencesUsed: data.faceReferencesUsed || 0,
+      resultImage,
+      model: data?.model,
+      slotsUsed: data?.slotsUsed || [],
+      faceReferencesUsed: data?.faceReferencesUsed || 0,
     };
-  } catch (error) {
-    logger.error('Edge function virtual-try-on (slots) failed:', error);
+  } catch (error: any) {
+    // Log full error object for debugging
+    console.error('Edge Function (Gemini) Error Details:', error);
+
+    // Try to extract more details if it's a FunctionsHttpError
+    if (error?.context?.json) {
+      try {
+        const errorBody = await error.context.json();
+        console.error('Edge Function (Gemini) Response JSON:', errorBody);
+        if (errorBody.error) {
+          const detail = errorBody.code ? `${errorBody.error} (${errorBody.code})` : errorBody.error;
+          throw new Error(`Edge Function: ${detail}`);
+        }
+      } catch (e) {
+        // ignore json parse error
+      }
+    }
+
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    logger.error('Edge function virtual-try-on (slots) failed:', message);
     throw new Error('Failed to generate virtual try-on via Edge Function');
   }
 }
@@ -227,6 +281,60 @@ export async function generateClothingImageViaEdge(
   } catch (error) {
     logger.error('Edge function generate-image failed:', error);
     throw new Error('Failed to generate clothing image via Edge Function');
+  }
+}
+
+
+/**
+ * Generate Image using OpenAI Via Edge Function
+ */
+export async function generateOpenAIImageViaEdge(
+  prompt: string,
+  options: {
+    model?: string;
+    quality?: 'standard' | 'hd' | 'low';
+    size?: string;
+    style?: 'vivid' | 'natural';
+    n?: number;
+  } = {}
+): Promise<string> {
+  try {
+    const { data, error } = await invokeWithTimeout('openai-image-generation', {
+      body: {
+        prompt,
+        ...options
+      },
+    });
+
+    if (error) throw error;
+
+    return data.resultImage;
+
+  } catch (error: any) {
+    // Log full error object for debugging
+    console.error('Edge Function Error Details:', error);
+
+    // Check for "message channel closed" error specifically
+    if (error?.message?.includes('message channel closed')) {
+      console.error('Browser Extension Conflict: A browser extension (like React DevTools or an AdBlocker) might be interfering with the request.');
+    }
+
+    // Try to extract more details if it's a FunctionsHttpError
+    if (error?.context?.json) {
+      try {
+        const errorBody = await error.context.json();
+        console.error('Edge Function Response JSON:', errorBody);
+        if (errorBody.error) {
+          throw new Error(`Edge Function: ${errorBody.error}`);
+        }
+      } catch (e) {
+        // ignore json parse error
+      }
+    }
+
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    logger.error('Edge function openai-image-generation failed:', message);
+    throw new Error(`Failed to generate OpenAI image via Edge Function: ${message}`);
   }
 }
 
@@ -308,16 +416,30 @@ export async function conversationalShoppingAssistantViaEdge(
 }
 
 /**
+ * Analyze Style DNA using Edge Function
+ */
+export async function analyzeStyleDNAViaEdge(
+  closet: Array<{ id: string; metadata: any }>
+): Promise<any> {
+  try {
+    const { data, error } = await invokeWithTimeout('analyze-style-dna', {
+      body: { closet },
+    });
+
+    if (error) throw error;
+
+    return data;
+  } catch (error) {
+    logger.error('Edge function analyze-style-dna failed:', error);
+    throw new Error('Failed to analyze style DNA via Edge Function');
+  }
+}
+
+/**
  * Check if Edge Functions are available
  */
 export async function checkEdgeFunctionsAvailable(): Promise<boolean> {
   try {
-    // Try a simple health check by invoking with minimal payload
-    const { error } = await supabase.functions.invoke('analyze-clothing', {
-      body: { healthCheck: true },
-    });
-
-    // If no error, functions are available
     return !error;
   } catch (error) {
     logger.warn('Edge Functions not available:', error);

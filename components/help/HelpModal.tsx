@@ -418,6 +418,16 @@ const HelpModal: React.FC<HelpModalProps> = ({
                   </div>
                 </div>
               </div>
+
+              <div className="flex items-center justify-center gap-4 text-xs text-text-secondary dark:text-gray-400">
+                <a href="/legal/terminos" className="underline hover:text-text-primary dark:hover:text-gray-200">
+                  Términos
+                </a>
+                <span className="text-gray-300">•</span>
+                <a href="/legal/privacidad" className="underline hover:text-text-primary dark:hover:text-gray-200">
+                  Privacidad
+                </a>
+              </div>
             </div>
           )}
         </div>

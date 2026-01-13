@@ -2,6 +2,8 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { GoogleGenAI, Type } from 'npm:@google/genai@1.27.0';
+import { enforceRateLimit, recordRequestResult } from '../_shared/antiAbuse.ts';
+import { withRetry } from '../_shared/retry.ts';
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -12,6 +14,9 @@ serve(async (req) => {
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders });
     }
+
+    let supabase: any = null;
+    let userId: string | null = null;
 
     try {
         const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
@@ -34,7 +39,7 @@ serve(async (req) => {
             );
         }
 
-        const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+        supabase = createClient(supabaseUrl, supabaseServiceKey, {
             global: { headers: { Authorization: authHeader } },
         });
 
@@ -45,6 +50,7 @@ serve(async (req) => {
                 { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             );
         }
+        userId = user.id;
 
         // Optional closed beta allowlist (protects Google credits)
         const allowlistRaw = Deno.env.get('BETA_ALLOWLIST_EMAILS');
@@ -60,6 +66,25 @@ serve(async (req) => {
                     { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
                 );
             }
+        }
+
+        const rateLimit = await enforceRateLimit(supabase, user.id, 'shopping-assistant');
+        if (!rateLimit.allowed) {
+            const retryAfter = rateLimit.retryAfterSeconds || 60;
+            const message = rateLimit.reason === 'blocked'
+                ? 'Detectamos muchos errores seguidos. Espera unos minutos antes de intentar de nuevo.'
+                : 'Demasiadas solicitudes en poco tiempo. Espera un momento y reintenta.';
+            return new Response(
+                JSON.stringify({ error: message }),
+                {
+                    status: 429,
+                    headers: {
+                        ...corsHeaders,
+                        'Content-Type': 'application/json',
+                        'Retry-After': String(retryAfter),
+                    },
+                }
+            );
         }
 
         const { action, ...params } = await req.json();
@@ -88,16 +113,19 @@ serve(async (req) => {
                 }
             };
 
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: { parts: [{ text: `Analiza este armario: ${JSON.stringify(closet.map((i: any) => ({ id: i.id, name: i.metadata.subcategory, category: i.metadata.category, color: i.metadata.color_primary })))}` }] },
-                config: {
-                    systemInstruction,
-                    responseMimeType: 'application/json',
-                    responseSchema: schema
-                }
-            });
+            const response = await withRetry(() =>
+                ai.models.generateContent({
+                    model: 'gemini-2.5-flash',
+                    contents: { parts: [{ text: `Analiza este armario: ${JSON.stringify(closet.map((i: any) => ({ id: i.id, name: i.metadata.subcategory, category: i.metadata.category, color: i.metadata.color_primary })))}` }] },
+                    config: {
+                        systemInstruction,
+                        responseMimeType: 'application/json',
+                        responseSchema: schema
+                    }
+                })
+            );
 
+            await recordRequestResult(supabase, user.id, 'shopping-assistant', true);
             return new Response(response.text, { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
         } else if (action === 'generate-recommendations') {
@@ -131,16 +159,19 @@ serve(async (req) => {
                 }
             };
 
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: { parts: [{ text: `Genera recomendaciones para estos gaps: ${JSON.stringify(gaps)}` }] },
-                config: {
-                    systemInstruction,
-                    responseMimeType: 'application/json',
-                    responseSchema: schema
-                }
-            });
+            const response = await withRetry(() =>
+                ai.models.generateContent({
+                    model: 'gemini-2.5-flash',
+                    contents: { parts: [{ text: `Genera recomendaciones para estos gaps: ${JSON.stringify(gaps)}` }] },
+                    config: {
+                        systemInstruction,
+                        responseMimeType: 'application/json',
+                        responseSchema: schema
+                    }
+                })
+            );
 
+            await recordRequestResult(supabase, user.id, 'shopping-assistant', true);
             return new Response(response.text, { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
         } else if (action === 'chat') {
@@ -154,11 +185,13 @@ serve(async (req) => {
                 parts: [{ text: msg.content }]
             }));
 
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: [...chatHistory, { role: 'user', parts: [{ text: message }] }],
-                config: { systemInstruction }
-            });
+            const response = await withRetry(() =>
+                ai.models.generateContent({
+                    model: 'gemini-2.5-flash',
+                    contents: [...chatHistory, { role: 'user', parts: [{ text: message }] }],
+                    config: { systemInstruction }
+                })
+            );
 
             const responseText = response.text;
             const responseMessage = {
@@ -168,6 +201,7 @@ serve(async (req) => {
                 timestamp: new Date().toISOString()
             };
 
+            await recordRequestResult(supabase, user.id, 'shopping-assistant', true);
             return new Response(JSON.stringify(responseMessage), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 
@@ -175,6 +209,9 @@ serve(async (req) => {
 
     } catch (error) {
         console.error('Error in shopping-assistant:', error);
+        if (supabase && userId) {
+            await recordRequestResult(supabase, userId, 'shopping-assistant', false);
+        }
         return new Response(
             JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
             { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

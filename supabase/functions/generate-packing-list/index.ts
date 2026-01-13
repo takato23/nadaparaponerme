@@ -2,6 +2,8 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { GoogleGenAI, Type } from 'npm:@google/genai@1.27.0';
+import { enforceRateLimit, recordRequestResult } from '../_shared/antiAbuse.ts';
+import { withRetry } from '../_shared/retry.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -13,6 +15,9 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
+
+  let supabase: any = null;
+  let userId: string | null = null;
 
   try {
     // Get API keys from environment
@@ -34,7 +39,7 @@ serve(async (req) => {
     }
 
     // Create Supabase client with user's token
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+    supabase = createClient(supabaseUrl, supabaseServiceKey, {
       global: {
         headers: { Authorization: authHeader },
       },
@@ -52,6 +57,7 @@ serve(async (req) => {
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+    userId = user.id;
 
     // Optional closed beta allowlist (protects Google credits)
     const allowlistRaw = Deno.env.get('BETA_ALLOWLIST_EMAILS');
@@ -69,12 +75,32 @@ serve(async (req) => {
       }
     }
 
+    const rateLimit = await enforceRateLimit(supabase, user.id, 'generate-packing-list');
+    if (!rateLimit.allowed) {
+      const retryAfter = rateLimit.retryAfterSeconds || 60;
+      const message = rateLimit.reason === 'blocked'
+        ? 'Detectamos muchos errores seguidos. Espera unos minutos antes de intentar de nuevo.'
+        : 'Demasiadas solicitudes en poco tiempo. Espera un momento y reintenta.';
+      return new Response(
+        JSON.stringify({ error: message }),
+        {
+          status: 429,
+          headers: {
+            ...corsHeaders,
+            'Content-Type': 'application/json',
+            'Retry-After': String(retryAfter),
+          },
+        }
+      );
+    }
+
     // Parse request body
     const { prompt } = await req.json();
 
     // Enforce quota server-side (prevents bypassing client checks)
     const { data: canGenerate, error: canGenerateError } = await supabase.rpc('can_user_generate_outfit', {
       p_user_id: user.id,
+      p_amount: 1,
     });
 
     if (canGenerateError) {
@@ -87,7 +113,7 @@ serve(async (req) => {
 
     if (!canGenerate) {
       return new Response(
-        JSON.stringify({ error: 'Has alcanzado tu límite de generaciones. Upgradeá tu plan para continuar.' }),
+        JSON.stringify({ error: 'Has alcanzado tu límite de créditos. Upgradeá tu plan para continuar.' }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -140,21 +166,24 @@ serve(async (req) => {
     Devuelve un JSON con los IDs de las prendas a empacar y las sugerencias de outfits en formato markdown.`;
 
     // Generate packing list with Gemini
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: { parts: [{ text: `Detalles del viaje: "${prompt}"` }] },
-      config: {
-        systemInstruction,
-        responseMimeType: 'application/json',
-        responseSchema: packingListSchema,
-      },
-    });
+    const response = await withRetry(() =>
+      ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: { parts: [{ text: `Detalles del viaje: "${prompt}"` }] },
+        config: {
+          systemInstruction,
+          responseMimeType: 'application/json',
+          responseSchema: packingListSchema,
+        },
+      })
+    );
 
     const packingList = JSON.parse(response.text);
 
     // Increment usage only after a successful generation
     const { data: incremented, error: incrementError } = await supabase.rpc('increment_ai_generation_usage', {
       p_user_id: user.id,
+      p_amount: 1,
     });
     if (incrementError) {
       console.error('Failed to increment usage:', incrementError);
@@ -162,12 +191,17 @@ serve(async (req) => {
       console.warn('Usage increment returned false (limit reached race?)');
     }
 
+    await recordRequestResult(supabase, user.id, 'generate-packing-list', true);
+
     return new Response(JSON.stringify(packingList), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
     console.error('Error generating packing list:', error);
+    if (supabase && userId) {
+      await recordRequestResult(supabase, userId, 'generate-packing-list', false);
+    }
     return new Response(
       JSON.stringify({
         error: error instanceof Error ? error.message : 'Failed to generate packing list',

@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import ConfettiEffect from './ConfettiEffect';
 import * as paymentService from '../services/paymentService';
 import { MONETIZATION_FLAGS, getFeatureFlag, getAffiliateLink, shouldShowWatermark } from '../services/monetizationService';
+import ShopTheLookPanel from '../../components/ShopTheLookPanel';
 
 import type { ClothingItem, FitResult, SavedOutfit } from '../../types';
 
@@ -15,6 +16,7 @@ interface FitResultViewImprovedProps {
   onShareOutfit: (outfit: FitResult) => void;
   onRegenerateWithAdjustment: (adjustment: 'more-formal' | 'change-colors' | 'more-casual') => void;
   onRateOutfit: (rating: number) => void;
+  onOpenShopLook?: () => void;
   onBack: () => void;
   borrowedItemIds: Set<string>;
   alternatives?: FitResult[];
@@ -37,6 +39,7 @@ const FitResultViewImproved: React.FC<FitResultViewImprovedProps> = ({
   onShareOutfit,
   onRegenerateWithAdjustment,
   onRateOutfit,
+  onOpenShopLook,
   onBack,
   borrowedItemIds,
   alternatives = [],
@@ -69,6 +72,15 @@ const FitResultViewImproved: React.FC<FitResultViewImprovedProps> = ({
   const topItem = inventory.find((item) => item.id === currentOutfit.top_id);
   const bottomItem = inventory.find((item) => item.id === currentOutfit.bottom_id);
   const shoesItem = inventory.find((item) => item.id === currentOutfit.shoes_id);
+  const shopItems = useMemo(
+    () =>
+      [
+        topItem ? { slot: 'top', item: topItem } : null,
+        bottomItem ? { slot: 'bottom', item: bottomItem } : null,
+        shoesItem ? { slot: 'shoes', item: shoesItem } : null,
+      ].filter(Boolean) as { slot: string; item: ClothingItem }[],
+    [topItem, bottomItem, shoesItem]
+  );
 
   // Verificar si el outfit está guardado
   const isOutfitSaved = savedOutfits.some(
@@ -547,6 +559,14 @@ const FitResultViewImproved: React.FC<FitResultViewImprovedProps> = ({
                     </div>
                   </div>
                 </div>
+              )}
+
+              {shopItems.length > 0 && (
+                <ShopTheLookPanel
+                  items={shopItems}
+                  borrowedItemIds={borrowedItemIds}
+                  onOpenFinder={onOpenShopLook}
+                />
               )}
 
               {/* Regenerate with Adjustments */}

@@ -2,7 +2,7 @@
  * Usage Tracking Service - SIMPLIFIED
  *
  * Single pool of AI credits per month.
- * Free: 30 credits/month | Pro: 150 credits/month | Premium: Unlimited
+ * Free: 10 credits/month | Pro: 150 credits/month | Premium: 400 credits/month
  */
 
 // ============================================================================
@@ -15,6 +15,12 @@ export interface CreditUsage {
   month: string;           // YYYY-MM format
   used: number;            // Total credits used this month
   lastUpdated: string;     // ISO timestamp
+}
+
+export interface FeatureUsageStore {
+  month: string; // YYYY-MM format
+  usage: Partial<Record<FeatureType, number>>;
+  lastUpdated: string;
 }
 
 export interface CreditStatus {
@@ -49,9 +55,9 @@ export type FeatureType =
 // ============================================================================
 
 export const CREDIT_LIMITS: Record<UserTier, number> = {
-  free: 15,      // 🔒 BETA: Reducido de 30 para proteger créditos GCloud
-  pro: 150,      // 150 créditos/mes para Pro
-  premium: -1,   // Ilimitado para Premium
+  free: 10,
+  pro: 150,
+  premium: 400,
 };
 
 // ============================================================================
@@ -60,6 +66,7 @@ export const CREDIT_LIMITS: Record<UserTier, number> = {
 
 const STORAGE_KEY = 'ojodeloca-credits';
 const TIER_KEY = 'ojodeloca-user-tier';
+const FEATURE_STORAGE_KEY = 'ojodeloca-credits-by-feature';
 
 type StorageProvider = {
   getItem: (key: string) => string | null;
@@ -171,6 +178,45 @@ export function getCreditUsage(): CreditUsage {
   };
 }
 
+function getFeatureUsageStore(): FeatureUsageStore {
+  const currentMonth = getCurrentMonth();
+
+  try {
+    const stored = readStorage(FEATURE_STORAGE_KEY);
+    if (stored) {
+      const data = JSON.parse(stored) as FeatureUsageStore;
+      if (data.month === currentMonth && data.usage) {
+        return data;
+      }
+    }
+  } catch (e) {
+    console.warn('Error reading feature usage:', e);
+  }
+
+  return {
+    month: currentMonth,
+    usage: {},
+    lastUpdated: new Date().toISOString(),
+  };
+}
+
+function saveFeatureUsage(store: FeatureUsageStore): void {
+  try {
+    store.lastUpdated = new Date().toISOString();
+    writeStorage(FEATURE_STORAGE_KEY, JSON.stringify(store));
+  } catch (e) {
+    console.warn('Error saving feature usage:', e);
+  }
+}
+
+export function getFeatureUsageSummary(): Array<{ feature: FeatureType; used: number }> {
+  const store = getFeatureUsageStore();
+  return Object.entries(store.usage || {}).map(([feature, used]) => ({
+    feature: feature as FeatureType,
+    used: used || 0,
+  }));
+}
+
 /**
  * Save credit usage
  */
@@ -262,6 +308,7 @@ export function resetCredits(): void {
     lastUpdated: new Date().toISOString(),
   };
   saveCreditUsage(freshUsage);
+  removeStorage(FEATURE_STORAGE_KEY);
 }
 
 // ============================================================================
@@ -305,7 +352,13 @@ export function canUseFeature(_feature: FeatureType): UsageStatus {
  * @deprecated Use useCredit() instead
  */
 export function recordUsage(_feature: FeatureType): boolean {
-  return useCredit();
+  const ok = useCredit();
+  if (!ok) return false;
+
+  const store = getFeatureUsageStore();
+  store.usage[_feature] = (store.usage[_feature] || 0) + 1;
+  saveFeatureUsage(store);
+  return true;
 }
 
 /**
@@ -378,5 +431,6 @@ export function getMonthlyUsage() {
     records: [],
     totalCreditsUsed: usage.used,
     lastUpdated: usage.lastUpdated,
+    featureUsage: getFeatureUsageSummary(),
   };
 }

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
@@ -15,6 +15,7 @@ import {
 } from '../src/services/generatedLooksService';
 import Loader from './Loader';
 import EditLookModal from './EditLookModal';
+import ShopTheLookPanel from './ShopTheLookPanel';
 
 interface SavedLooksViewProps {
   closet: ClothingItem[];
@@ -97,6 +98,18 @@ export default function SavedLooksView({ closet }: SavedLooksViewProps) {
     if (!itemId) return undefined;
     return closet.find(item => item.id === itemId);
   }, [closet]);
+
+  const shopLookItems = useMemo(() => {
+    if (!selectedLook) return [];
+
+    return SLOT_CONFIGS.map((config) => {
+      const itemId = selectedLook.source_items[config.id];
+      if (!itemId) return null;
+      const item = getItemById(itemId);
+      if (!item) return null;
+      return { slot: config.id, item, label: config.labelShort };
+    }).filter(Boolean) as { slot: string; item: ClothingItem; label?: string }[];
+  }, [selectedLook, getItemById]);
 
   // Handle favorite toggle
   const handleToggleFavorite = async (look: GeneratedLook) => {
@@ -529,7 +542,7 @@ export default function SavedLooksView({ closet }: SavedLooksViewProps) {
                           ? 'bg-purple-100 text-purple-700'
                           : 'bg-gray-100 text-gray-700'
                       }`}>
-                        {selectedLook.generation_model?.includes('3-pro') ? 'Gemini 3 Pro' : 'Flash'}
+                        {selectedLook.generation_model?.includes('3-pro') ? 'Ultra' : 'Rápido'}
                       </span>
                       {/* Preset */}
                       <span className="px-2 py-1 rounded-full bg-gray-100 text-gray-700 text-xs font-semibold">
@@ -571,6 +584,17 @@ export default function SavedLooksView({ closet }: SavedLooksViewProps) {
                         ))}
                       </div>
                     </div>
+
+                    {shopLookItems.length > 0 && (
+                      <div className="mb-4">
+                        <ShopTheLookPanel
+                          items={shopLookItems}
+                          title="Comprar este look"
+                          variant="default"
+                          className="bg-white/70 border border-white/60 shadow-none"
+                        />
+                      </div>
+                    )}
 
                     {/* Share link */}
                     {selectedLook.is_public && selectedLook.share_token && (

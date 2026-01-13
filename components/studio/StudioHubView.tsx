@@ -78,7 +78,7 @@ export default function StudioHubView({ closet = [] }: StudioHubViewProps) {
     {
       id: 'probador',
       kicker: 'Probador IA',
-      title: 'Portal Nano Banana',
+      title: 'Portal Ultra',
       description:
         'Prueba looks sobre tu gemelo digital sin tocar tu cuerpo. La tela cambia, vos no.',
       glow: 'rgba(166, 139, 255, 0.35)',
@@ -100,7 +100,7 @@ export default function StudioHubView({ closet = [] }: StudioHubViewProps) {
       ],
       stats: [
         { label: 'Modo', value: 'Realista' },
-        { label: 'FX', value: 'Nano Banana' },
+        { label: 'FX', value: 'Ultra' },
         { label: 'Control', value: 'Total' }
       ]
     },

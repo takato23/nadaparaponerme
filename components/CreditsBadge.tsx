@@ -180,7 +180,7 @@ export function CreditsProgressBar({ className = '' }: CreditsProgressBarProps) 
     return 'bg-green-500';
   };
 
-  if (tier === 'premium') {
+  if (summary.totalLimit === -1) {
     return (
       <div className={`text-center text-purple-600 dark:text-purple-400 ${className}`}>
         <span className="material-symbols-rounded mr-1" style={{ fontSize: '16px' }}>

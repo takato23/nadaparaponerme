@@ -4,6 +4,8 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { GoogleGenAI } from 'npm:@google/genai@1.27.0';
+import { enforceRateLimit, recordRequestResult } from '../_shared/antiAbuse.ts';
+import { withRetry } from '../_shared/retry.ts';
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -162,6 +164,9 @@ serve(async (req) => {
         return new Response('ok', { headers: corsHeaders });
     }
 
+    let supabase: any = null;
+    let userId: string | null = null;
+
     try {
         const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
         if (!geminiApiKey) {
@@ -182,7 +187,7 @@ serve(async (req) => {
             );
         }
 
-        const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+        supabase = createClient(supabaseUrl, supabaseServiceKey, {
             global: { headers: { Authorization: authHeader } },
         });
 
@@ -193,6 +198,7 @@ serve(async (req) => {
                 { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             );
         }
+        userId = user.id;
 
         // Beta allowlist check
         const allowlistRaw = Deno.env.get('BETA_ALLOWLIST_EMAILS');
@@ -205,6 +211,25 @@ serve(async (req) => {
                     { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
                 );
             }
+        }
+
+        const rateLimit = await enforceRateLimit(supabase, user.id, 'virtual-try-on');
+        if (!rateLimit.allowed) {
+            const retryAfter = rateLimit.retryAfterSeconds || 60;
+            const message = rateLimit.reason === 'blocked'
+                ? 'Detectamos muchos errores seguidos. Espera unos minutos antes de intentar de nuevo.'
+                : 'Demasiadas solicitudes en poco tiempo. Espera un momento y reintenta.';
+            return new Response(
+                JSON.stringify({ error: message }),
+                {
+                    status: 429,
+                    headers: {
+                        ...corsHeaders,
+                        'Content-Type': 'application/json',
+                        'Retry-After': String(retryAfter),
+                    },
+                }
+            );
         }
 
         // Payload size guard
@@ -226,24 +251,6 @@ serve(async (req) => {
         const tier = (subscriptionRow?.tier ?? 'free') as string;
         const status = (subscriptionRow?.status ?? 'active') as string;
         const isSubscriptionActive = status === 'active' || status === 'trialing' || status === 'past_due';
-
-        // Quota check
-        const { data: canUse, error: canUseError } = await supabase.rpc('can_user_generate_outfit', {
-            p_user_id: user.id,
-        });
-        if (canUseError) {
-            console.error('Quota check failed:', canUseError);
-            return new Response(
-                JSON.stringify({ error: 'No se pudo validar la cuota. Intentá de nuevo.' }),
-                { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-            );
-        }
-        if (!canUse) {
-            return new Response(
-                JSON.stringify({ error: 'Límite mensual alcanzado. Upgradeá tu plan para continuar.' }),
-                { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-            );
-        }
 
         // Parse request body
         // Supports both legacy format (topImage, bottomImage, shoesImage) and new slot format
@@ -321,17 +328,38 @@ serve(async (req) => {
 
         const ai = new GoogleGenAI({ apiKey: geminiApiKey });
 
-        // Model selection - Nano Banana Pro for all users (best identity preservation)
-        // gemini-3-pro-image-preview: Up to 14 images, 5 people consistency, 4K output
+        // Model selection
+        // Pro: gemini-3-pro-image-preview (Nano Banana Pro)
+        // Flash: gemini-2.5-flash-image (cheaper/faster)
         const wantsProQuality = typeof quality === 'string' && quality.toLowerCase() === 'pro';
         const canUseProModel = isSubscriptionActive && tier === 'premium';
+        const useProModel = wantsProQuality && canUseProModel;
+        const modelId = useProModel ? 'gemini-3-pro-image-preview' : 'gemini-2.5-flash-image';
 
-        // Use Nano Banana Pro (gemini-3-pro-image-preview) for superior quality
-        // Fallback to gemini-2.5-flash-image for free tier if needed
-        const modelId = 'gemini-3-pro-image-preview';
+        // Credit cost based on actual model used
+        const creditCost = useProModel ? 4 : 1;
 
-        // Resolution based on subscription tier
-        const imageSize = canUseProModel && wantsProQuality ? '2K' : '1K';
+        // Quota check (credits)
+        const { data: canUse, error: canUseError } = await supabase.rpc('can_user_generate_outfit', {
+            p_user_id: user.id,
+            p_amount: creditCost,
+        });
+        if (canUseError) {
+            console.error('Quota check failed:', canUseError);
+            return new Response(
+                JSON.stringify({ error: 'No se pudo validar la cuota. Intentá de nuevo.' }),
+                { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+        }
+        if (!canUse) {
+            return new Response(
+                JSON.stringify({ error: 'No tenés créditos suficientes. Upgradeá tu plan para continuar.' }),
+                { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+        }
+
+        // Resolution based on subscription tier (Pro model only)
+        const imageSize = useProModel ? '2K' : undefined;
 
         // Build image parts - Order: Face refs (identity) -> User photo (pose) -> Clothing
         const imageParts: Array<{ inlineData: { data: string; mimeType: string } }> = [];
@@ -380,21 +408,23 @@ serve(async (req) => {
         const shouldKeepPose = keepPose === true;
         const prompt = buildTryOnPrompt(validSlots, presetName, modelId, hasFaceRefs, customSceneText, shouldKeepPose);
 
-        const response = await ai.models.generateContent({
-            model: modelId,
-            contents: {
-                parts: [
-                    { text: prompt },
-                    ...imageParts
-                ],
-            },
-            config: {
-                // @ts-ignore - Nano Banana Pro specific config
-                responseModalities: ["IMAGE"],
-                // @ts-ignore - Resolution: 1K, 2K, or 4K (Nano Banana Pro only)
-                imageSize: imageSize,
-            },
-        });
+        const response = await withRetry(() =>
+            ai.models.generateContent({
+                model: modelId,
+                contents: {
+                    parts: [
+                        { text: prompt },
+                        ...imageParts
+                    ],
+                },
+                config: {
+                    // @ts-ignore - image response
+                    responseModalities: ["IMAGE"],
+                    // @ts-ignore - Resolution only supported on Nano Banana Pro
+                    ...(imageSize ? { imageSize } : {}),
+                },
+            })
+        );
 
         const candidate = response.candidates?.[0];
         const parts = candidate?.content?.parts ?? [];
@@ -407,12 +437,15 @@ serve(async (req) => {
         // Increment usage
         const { error: incError } = await supabase.rpc('increment_ai_generation_usage', {
             p_user_id: user.id,
+            p_amount: creditCost,
         });
         if (incError) {
             console.error('Usage increment failed:', incError);
         }
 
         const resultImage = `data:image/png;base64,${imagePart.inlineData.data}`;
+
+        await recordRequestResult(supabase, user.id, 'virtual-try-on', true);
 
         return new Response(JSON.stringify({
             resultImage,
@@ -426,6 +459,9 @@ serve(async (req) => {
 
     } catch (error) {
         console.error('Error in virtual-try-on:', error);
+        if (supabase && userId) {
+            await recordRequestResult(supabase, userId, 'virtual-try-on', false);
+        }
         return new Response(
             JSON.stringify({ error: error instanceof Error ? error.message : 'Error desconocido' }),
             { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

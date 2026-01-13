@@ -3,6 +3,7 @@ import React from 'react';
 import type { SavedOutfit, ClothingItem } from '../types';
 import { Card } from './ui/Card';
 import { OutfitVisualizer } from './OutfitVisualizer';
+import ShopTheLookPanel from './ShopTheLookPanel';
 
 interface OutfitDetailViewProps {
     outfit: SavedOutfit;
@@ -11,12 +12,18 @@ interface OutfitDetailViewProps {
     onDelete: (id: string) => void;
     // FIX: Add onShareOutfit prop to handle sharing functionality.
     onShareOutfit: (outfit: SavedOutfit) => void;
+    onOpenShopLook?: () => void;
 }
 
-const OutfitDetailView = ({ outfit, inventory, onBack, onDelete, onShareOutfit }: OutfitDetailViewProps) => {
+const OutfitDetailView = ({ outfit, inventory, onBack, onDelete, onShareOutfit, onOpenShopLook }: OutfitDetailViewProps) => {
     const top = inventory.find(i => i.id === outfit.top_id);
     const bottom = inventory.find(i => i.id === outfit.bottom_id);
     const shoes = inventory.find(i => i.id === outfit.shoes_id);
+    const shopItems = [
+        top ? { slot: 'top', item: top } : null,
+        bottom ? { slot: 'bottom', item: bottom } : null,
+        shoes ? { slot: 'shoes', item: shoes } : null,
+    ].filter(Boolean) as { slot: string; item: ClothingItem }[];
 
     if (!top || !bottom || !shoes) {
         return (
@@ -52,6 +59,15 @@ const OutfitDetailView = ({ outfit, inventory, onBack, onDelete, onShareOutfit }
                         <h3 className="font-bold text-text-primary dark:text-gray-200 mb-2">Explicación del Estilista:</h3>
                         <p className="text-text-secondary dark:text-gray-400 text-sm">{outfit.explanation}</p>
                     </Card>
+
+                    {shopItems.length > 0 && (
+                        <div className="mt-4">
+                            <ShopTheLookPanel
+                                items={shopItems}
+                                onOpenFinder={onOpenShopLook}
+                            />
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

@@ -44,7 +44,7 @@ export interface PlanLimits {
 
 const PLAN_LIMITS: Record<SubscriptionTier, PlanLimits> = {
     free: {
-        aiGenerations: 5,
+        aiGenerations: 10,
         closetItems: 5,
         virtualTryOn: false,
         analytics: false,
@@ -53,7 +53,7 @@ const PLAN_LIMITS: Record<SubscriptionTier, PlanLimits> = {
         prioritySupport: false,
     },
     pro: {
-        aiGenerations: 50,
+        aiGenerations: 150,
         closetItems: -1, // unlimited
         virtualTryOn: true,
         analytics: true,
@@ -62,7 +62,7 @@ const PLAN_LIMITS: Record<SubscriptionTier, PlanLimits> = {
         prioritySupport: false,
     },
     premium: {
-        aiGenerations: -1, // unlimited
+        aiGenerations: 400,
         closetItems: -1, // unlimited
         virtualTryOn: true,
         analytics: true,
@@ -141,6 +141,7 @@ export async function canGenerateOutfit(): Promise<{ allowed: boolean; reason?: 
 
     const { data, error } = await supabase.rpc('can_user_generate_outfit', {
         p_user_id: user.id,
+        p_amount: 1,
     });
 
     if (error) {
@@ -155,7 +156,7 @@ export async function canGenerateOutfit(): Promise<{ allowed: boolean; reason?: 
         if (usage && subscription) {
             return {
                 allowed: false,
-                reason: `Has alcanzado tu límite de ${usage.ai_generations_limit} generaciones este mes. Upgradeá a ${subscription.tier === 'free' ? 'Pro' : 'Premium'} para más.`,
+                reason: `Has alcanzado tu límite de ${usage.ai_generations_limit} créditos este mes. Upgradeá a ${subscription.tier === 'free' ? 'Pro' : 'Premium'} para más.`,
             };
         }
 
@@ -175,6 +176,7 @@ export async function incrementAIGeneration(): Promise<boolean> {
     // Source of truth is increment_ai_generation_usage() in DB
     const { data, error } = await supabase.rpc('increment_ai_generation_usage', {
         p_user_id: user.id,
+        p_amount: 1,
     });
 
     if (error) {

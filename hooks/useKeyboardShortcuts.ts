@@ -53,8 +53,10 @@ export function useKeyboardShortcuts(
             if (shortcut.scope && shortcut.scope !== scope) continue;
 
             // Check if the key matches
+            if (!event.key || !shortcut.key) continue;
+
             const keyMatches = event.key.toLowerCase() === shortcut.key.toLowerCase() ||
-                event.code.toLowerCase() === `key${shortcut.key.toLowerCase()}`;
+                (event.code && event.code.toLowerCase() === `key${shortcut.key.toLowerCase()}`);
 
             if (!keyMatches) continue;
 

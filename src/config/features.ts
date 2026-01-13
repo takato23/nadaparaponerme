@@ -25,15 +25,25 @@ export interface FeatureFlags {
   autoMigration: boolean;
 }
 
-// Default feature flags - Supabase enabled for production use
+// Default feature flags - tuned for local/dev. Production enforcement happens below.
 // ⚠️ SECURITY: useSupabaseAI should be TRUE in production to route AI calls through Edge Functions
 const defaultFlags: FeatureFlags = {
   useSupabaseAuth: true, // ✅ Enabled - AuthView uses Supabase authentication
-  useSupabaseCloset: false, // ✅ Keep local closet until migration is ready
+  useSupabaseCloset: false, // ✅ Keep local closet in dev until migration is ready
   useSupabaseOutfits: false, // TODO: Enable after migration
   useSupabaseAI: true, // ✅ SECURITY: Must be true - routes AI through Edge Functions (no exposed API key)
   useSupabasePreferences: false,
   autoMigration: false,
+};
+
+const enforceProductionFlags = (flags: FeatureFlags): FeatureFlags => {
+  if (!import.meta.env.PROD) return flags;
+  return {
+    ...flags,
+    useSupabaseAuth: true,
+    useSupabaseAI: true,
+    useSupabaseCloset: true,
+  };
 };
 
 // Load flags from localStorage, falling back to defaults
@@ -42,12 +52,12 @@ const loadFlags = (): FeatureFlags => {
     const stored = localStorage.getItem('ojodeloca-feature-flags');
     if (stored) {
       const parsed = JSON.parse(stored);
-      return { ...defaultFlags, ...parsed, useSupabaseCloset: false };
+      return enforceProductionFlags({ ...defaultFlags, ...parsed });
     }
   } catch (error) {
     console.error('Failed to load feature flags:', error);
   }
-  return defaultFlags;
+  return enforceProductionFlags(defaultFlags);
 };
 
 // Save flags to localStorage
@@ -80,7 +90,7 @@ export const getFeatureFlag = (flag: keyof FeatureFlags): boolean => {
  * Update feature flags
  */
 export const setFeatureFlags = (flags: Partial<FeatureFlags>): void => {
-  currentFlags = { ...currentFlags, ...flags };
+  currentFlags = enforceProductionFlags({ ...currentFlags, ...flags });
   saveFlags(currentFlags);
 };
 
@@ -102,7 +112,7 @@ export const disableFeature = (flag: keyof FeatureFlags): void => {
  * Reset all flags to defaults (useful for rollback)
  */
 export const resetFeatureFlags = (): void => {
-  currentFlags = { ...defaultFlags };
+  currentFlags = enforceProductionFlags({ ...defaultFlags });
   saveFlags(currentFlags);
 };
 

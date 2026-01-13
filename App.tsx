@@ -1,6 +1,6 @@
 
 
-import React, { useState, useMemo, useEffect, lazy, Suspense, startTransition, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, lazy, Suspense, startTransition, useCallback, useRef } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import useLocalStorage from './hooks/useLocalStorage';
@@ -10,9 +10,10 @@ import { useToast } from './hooks/useToast';
 import { useOptimistic } from './hooks/useOptimistic';
 import { useSubscription } from './hooks/useSubscription';
 import { useNavigateTransition } from './hooks/useNavigateTransition';
+import { useChatConversations } from './hooks/useChatConversations';
 import type { ClothingItem, FitResult, ClothingItemMetadata, SavedOutfit, CommunityUser, PackingListResult, SortOption, BrandRecognitionResult, OutfitSuggestionForEvent, ChatConversation, ChatMessage, CategoryFilter, ProfessionalProfile, ProfessionalFitResult } from './types';
 import * as aiService from './src/services/aiService';
-import { generateProfessionalOutfit } from './services/professionalStylistService';
+import { generateProfessionalOutfit } from './src/services/professionalStylistService';
 import { dataUrlToFile } from './src/lib/supabase';
 import * as preferencesService from './src/services/preferencesService';
 import { communityData } from './data/communityData';
@@ -23,6 +24,7 @@ import * as closetService from './src/services/closetService';
 import * as outfitService from './src/services/outfitService';
 import * as paymentService from './src/services/paymentService';
 import * as analytics from './src/services/analyticsService';
+import { deleteAccount } from './src/services/accountService';
 import { usePullToRefresh } from './hooks/usePullToRefresh';
 import PullToRefreshIndicator from './components/ui/PullToRefreshIndicator';
 import { FloatingDock } from './components/ui/FloatingDock';
@@ -43,6 +45,8 @@ import { PricingModal } from './components/PricingModal';
 import { QuotaIndicator, LimitReachedModal } from './components/QuotaIndicator';
 import { CreditsDetailView } from './components/CreditsDetailView';
 import AuthEyeScreen from './components/AuthEyeScreen';
+import CookieConsentBanner from './components/legal/CookieConsentBanner';
+import { useConsentPreferences } from './src/hooks/useConsentPreferences';
 
 // Eager load critical components (above the fold)
 import ClosetGrid from './components/ClosetGrid';
@@ -50,11 +54,12 @@ import LazyLoader from './components/LazyLoader';
 
 // Enhanced Closet System
 import { ClosetProvider } from './contexts/ClosetContext';
-import { ThemeProvider } from './context/ThemeContext';
+import { ThemeProvider as GlassThemeProvider } from './context/ThemeContext';
+import { ThemeProvider as UIThemeProvider } from './contexts/ThemeContext';
 import { AIGenerationProvider } from './contexts/AIGenerationContext';
 import ClosetViewEnhanced from './components/closet/ClosetViewEnhanced';
 import { GlobalCanvas } from './components/3d/GlobalCanvas';
-const DISABLE_3D_BACKGROUND = false;
+const DISABLE_3D_BACKGROUND = true;
 import { DISALLOW_CLIENT_GEMINI_KEY_IN_PROD, PAYMENTS_ENABLED, V1_SAFE_MODE } from './src/config/runtime';
 
 // Lazy load all view components
@@ -78,6 +83,8 @@ const SmartPackerView = lazy(() => import('./components/SmartPackerView'));
 const PackingListView = lazy(() => import('./components/PackingListView'));
 const ShareItemView = lazy(() => import('./components/ShareItemView'));
 const SortOptionsView = lazy(() => import('./components/SortOptionsView'));
+const TermsView = lazy(() => import('./components/legal/TermsView'));
+const PrivacyView = lazy(() => import('./components/legal/PrivacyView'));
 const MigrationModal = lazy(() => import('./src/components/MigrationModal'));
 const ClosetAnalyticsView = lazy(() => import('./components/ClosetAnalyticsView'));
 const ColorPaletteView = lazy(() => import('./components/ColorPaletteView'));
@@ -116,6 +123,8 @@ const SharedLookView = lazy(() => import('./components/SharedLookView'));
 const VirtualMirrorView = lazy(() => import('./components/studio/VirtualMirrorView'));
 const DigitalTwinSetup = lazy(() => import('./components/digital-twin/DigitalTwinSetup'));
 const BorrowedItemsView = lazy(() => import('./components/BorrowedItemsView'));
+const ShopLookView = lazy(() => import('./components/ShopLookView'));
+const PricingPage = lazy(() => import('./components/PricingPage'));
 
 /**
  * AppContent - Main app component with routing logic
@@ -124,6 +133,8 @@ const BorrowedItemsView = lazy(() => import('./components/BorrowedItemsView'));
 const AppContent = () => {
     const location = useLocation();
     const navigate = useNavigateTransition();
+    const consentPreferences = useConsentPreferences();
+    const analyticsInitializedRef = useRef(false);
     // Authentication
     const { user, signOut: authSignOut } = useAuth();
     const isAuthenticated = !!user;
@@ -148,16 +159,40 @@ const AppContent = () => {
     const useSupabaseCloset = useFeatureFlag('useSupabaseCloset');
     const useSupabaseOutfits = useFeatureFlag('useSupabaseOutfits');
     const useSupabasePreferences = useFeatureFlag('useSupabasePreferences');
+    const useSupabaseAuth = useFeatureFlag('useSupabaseAuth');
 
     // UX improvements: Toast notifications and optimistic UI
     const toast = useToast();
+    const showToast = useCallback((message: string, type: 'success' | 'error') => {
+        toast.showToast(message, type);
+    }, [toast]);
     const optimistic = useOptimistic();
 
     // Hard safety: prevent client-side Gemini key in production builds
-    // Initialize Google Analytics
+    // Initialize Google Analytics (only after consent)
     useEffect(() => {
+        if (!consentPreferences?.analytics) return;
+        if (analyticsInitializedRef.current) return;
         analytics.initAnalytics();
-    }, []);
+        analyticsInitializedRef.current = true;
+    }, [consentPreferences?.analytics]);
+
+    useEffect(() => {
+        if (!consentPreferences?.analytics) return;
+        analytics.trackPageView(location.pathname);
+    }, [location.pathname, consentPreferences?.analytics]);
+
+    useEffect(() => {
+        if (showPricingModal) {
+            analytics.trackUpgradeModalView('pricing_modal');
+        }
+    }, [showPricingModal]);
+
+    useEffect(() => {
+        if (!showLimitReachedModal) return;
+        const tier = subscription.tier === 'premium' ? 'pro' : subscription.tier;
+        analytics.trackLimitReached(tier);
+    }, [showLimitReachedModal, subscription.tier]);
 
     useEffect(() => {
         if (!import.meta.env.PROD) return;
@@ -238,7 +273,7 @@ const AppContent = () => {
     useEffect(() => {
         // Show migration modal after onboarding is complete
         // ONLY if user has data that needs migration
-        if (isAuthenticated && hasOnboarded && !useSupabaseCloset && needsMigration()) {
+        if (isAuthenticated && hasOnboarded && useSupabaseCloset && needsMigration()) {
             modals.setShowMigrationModal(true);
         }
     }, [isAuthenticated, hasOnboarded, useSupabaseCloset]);
@@ -265,10 +300,17 @@ const AppContent = () => {
             const items = await closetService.getClothingItems();
             setCloset(items);
         } catch (error) {
-            console.error('Failed to load closet from Supabase:', error);
-            toast.error('No se pudo cargar tu armario. Revisa tu conexión.');
+            console.error('Error loading closet:', error);
+            showToast('Error al cargar tu armario', 'error');
         }
     };
+
+    const handleLoadSampleData = useCallback(() => {
+        setCloset(sampleData);
+        showToast('Datos de ejemplo cargados correctamente', 'success');
+        analytics.trackEvent('load_sample_data', { items_count: sampleData.length });
+    }, [showToast, setCloset]);
+
 
     const loadOutfitsFromSupabase = async () => {
         try {
@@ -365,82 +407,44 @@ const AppContent = () => {
     const [outfitToShare, setOutfitToShare] = useState<FitResult | SavedOutfit | null>(null);
     const [itemToShare, setItemToShare] = useState<ClothingItem | null>(null);
 
-    // Chat conversations management with persistence
-    const [chatConversations, setChatConversations] = useLocalStorage<ChatConversation[]>('ojodeloca-chat-conversations', []);
-    const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
+    // Chat conversations management - using extracted hook
+    const chatHook = useChatConversations();
+    const {
+        conversations: chatConversations,
+        currentConversationId,
+        createConversation,
+        selectConversation: selectConversationBase,
+        updateMessages: updateConversationMessages,
+        updateTitle: updateConversationTitle,
+        deleteConversation: deleteConversationBase,
+        currentConversation,
+        setCurrentConversationId
+    } = chatHook;
 
-    // Chat helper functions
+    // Wrap hook functions to integrate with modals
     const createNewConversation = () => {
-        const welcomeMessage: ChatMessage = {
-            id: 'welcome',
-            role: 'assistant',
-            content: '¡Hola! Soy tu asistente de moda personal. ¿En qué puedo ayudarte hoy? Puedo sugerirte outfits para cualquier ocasión basándome en tu armario.',
-            timestamp: Date.now()
-        };
-
-        const newConversation: ChatConversation = {
-            id: `chat_${crypto.randomUUID()}`,
-            title: 'Nueva Conversación',
-            messages: [welcomeMessage],
-            createdAt: Date.now(),
-            updatedAt: Date.now()
-        };
-
-        setChatConversations(prev => [newConversation, ...prev]);
-        setCurrentConversationId(newConversation.id);
+        createConversation();
         startTransition(() => {
             modals.setShowChat(true);
         });
     };
 
     const selectConversation = (conversationId: string) => {
-        setCurrentConversationId(conversationId);
+        selectConversationBase(conversationId);
         startTransition(() => {
             modals.setShowChat(true);
         });
     };
 
-    const updateConversationMessages = (messages: ChatMessage[]) => {
-        if (!currentConversationId) return;
-
-        setChatConversations(prev => prev.map(conv => {
-            if (conv.id === currentConversationId) {
-                // Generate preview from first user message
-                const firstUserMessage = messages.find(m => m.role === 'user');
-                const preview = firstUserMessage?.content.slice(0, 100);
-
-                return {
-                    ...conv,
-                    messages,
-                    updatedAt: Date.now(),
-                    preview: preview || conv.preview
-                };
-            }
-            return conv;
-        }));
-    };
-
-    const updateConversationTitle = (title: string) => {
-        if (!currentConversationId) return;
-
-        setChatConversations(prev => prev.map(conv =>
-            conv.id === currentConversationId
-                ? { ...conv, title, updatedAt: Date.now() }
-                : conv
-        ));
-    };
-
     const deleteConversation = (conversationId: string) => {
-        setChatConversations(prev => prev.filter(conv => conv.id !== conversationId));
-        if (currentConversationId === conversationId) {
-            setCurrentConversationId(null);
+        const wasCurrent = deleteConversationBase(conversationId);
+        if (wasCurrent) {
             modals.setShowChat(false);
         }
     };
 
     const getCurrentConversation = (): ChatConversation | null => {
-        if (!currentConversationId) return null;
-        return chatConversations.find(conv => conv.id === currentConversationId) || null;
+        return currentConversation;
     };
 
     // const [showSmartPacker, setShowSmartPacker] = useState(false); // Moved to useAppModals
@@ -1094,6 +1098,36 @@ const AppContent = () => {
         }
     };
 
+    const clearLocalAppStorage = () => {
+        if (typeof window === 'undefined') return;
+        Object.keys(localStorage).forEach((key) => {
+            if (key.startsWith('ojodeloca-')) {
+                localStorage.removeItem(key);
+            }
+        });
+    };
+
+    const handleDeleteAccount = async () => {
+        try {
+            toast.info('Eliminando tu cuenta...');
+            if (useSupabaseAuth) {
+                await deleteAccount();
+            }
+            await authSignOut();
+            clearLocalAppStorage();
+            setCloset([]);
+            setSavedOutfits([]);
+            setProfessionalProfile(null);
+            setHasOnboarded(false);
+            setHasMigratedCloset(false);
+            toast.success('Cuenta eliminada correctamente.');
+        } catch (error) {
+            console.error('Delete account failed:', error);
+            toast.error('No pudimos eliminar tu cuenta. Probá de nuevo.');
+            throw error;
+        }
+    };
+
     const selectedItem = closet.find(item => item.id === modals.selectedItemId);
     const selectedOutfit = savedOutfits.find(outfit => outfit.id === modals.selectedOutfitId);
 
@@ -1118,6 +1152,7 @@ const AppContent = () => {
                             <AuthEyeScreen initialMode={authInitialMode} onLoggedIn={handleLogin} />
                         </Suspense>
                     </div>
+                    <CookieConsentBanner />
                 </>
             );
         }
@@ -1142,6 +1177,7 @@ const AppContent = () => {
                         />
                     </Suspense>
                 </div>
+                <CookieConsentBanner />
             </>
         );
     }
@@ -1187,6 +1223,7 @@ const AppContent = () => {
                                                 onStartSmartPacker={() => navigate(ROUTES.SMART_PACKER)}
                                                 onStartActivityFeed={() => navigate(ROUTES.ACTIVITY)}
                                                 onStartVirtualShopping={() => navigate(ROUTES.VIRTUAL_SHOPPING)}
+                                                onOpenShopLook={() => modals.setShowShopLook(true)}
                                                 onStartBulkUpload={() => navigate(ROUTES.BULK_UPLOAD)}
                                                 onStartMultiplayerChallenges={() => navigate(ROUTES.MULTIPLAYER_CHALLENGES)}
                                                 onStartCapsuleBuilder={() => navigate(ROUTES.CAPSULE_BUILDER)}
@@ -1224,6 +1261,11 @@ const AppContent = () => {
                                                 <ClosetViewEnhanced
                                                     onItemClick={modals.setSelectedItemId}
                                                     onAddItem={() => modals.setShowAddItem(true)}
+                                                    onLoadDemoData={(items) => {
+                                                        setCloset(items);
+                                                        localStorage.setItem('ojodeloca-closet', JSON.stringify(items));
+                                                        toast.success('Armario demo cargado correctamente');
+                                                    }}
                                                 />
                                             </ClosetProvider>
                                         } />
@@ -1254,8 +1296,10 @@ const AppContent = () => {
                                                 onOpenTopVersatile={() => modals.setShowTopVersatile(true)}
                                                 onOpenWeeklyPlanner={() => modals.setShowWeeklyPlanner(true)}
                                                 onOpenTestingPlayground={() => startTransition(() => setShowTestingPlayground(true))}
-                                                onOpenAestheticPlayground={() => startTransition(() => setShowAestheticPlayground(true))}
+                                                onOpenAestheticPlayground={!import.meta.env.PROD ? () => startTransition(() => setShowAestheticPlayground(true)) : undefined}
                                                 onOpenBorrowedItems={() => modals.setShowBorrowedItems(true)}
+                                                onDeleteAccount={handleDeleteAccount}
+                                                onLoadSampleData={handleLoadSampleData}
                                             />
                                         } />
                                         {/* /prueba-virtual redirects to /studio */}
@@ -1314,6 +1358,14 @@ const AppContent = () => {
                                         <Route path={ROUTES.SHARED_LOOK} element={
                                             <SharedLookView />
                                         } />
+                                        <Route path={ROUTES.TERMS} element={<TermsView />} />
+                                        <Route path={ROUTES.PRIVACY} element={<PrivacyView />} />
+                                        <Route path={ROUTES.PRICING} element={
+                                            <Suspense fallback={<LazyLoader type="view" />}>
+                                                <PricingPage />
+                                            </Suspense>
+                                        } />
+                                        <Route path={ROUTES.PLANES} element={<Navigate to={ROUTES.PRICING} replace />} />
 
                                         {/* Redirect unknown routes to home */}
                                         <Route path="*" element={<Navigate to={ROUTES.HOME} replace />} />
@@ -1377,6 +1429,8 @@ const AppContent = () => {
                         setShowPricingModal(true);
                     }}
                 />
+
+                <CookieConsentBanner />
 
                 {
                     itemToShare && (
@@ -1500,6 +1554,7 @@ const AppContent = () => {
                                 onBack={() => modals.setSelectedOutfitId(null)}
                                 onDelete={handleDeleteOutfitClick}
                                 onShareOutfit={setOutfitToShare}
+                                onOpenShopLook={() => modals.setShowShopLook(true)}
                             />
                         </Suspense>
                     )
@@ -1535,6 +1590,7 @@ const AppContent = () => {
                                 onShareOutfit={setOutfitToShare}
                                 onRegenerateWithAdjustment={handleRegenerateWithAdjustment}
                                 onRateOutfit={(rating) => handleRateOutfit('current-fit', rating)}
+                                onOpenShopLook={() => modals.setShowShopLook(true)}
                                 borrowedItemIds={borrowedItemIds}
                                 alternatives={fitAlternatives}
                                 onBack={() => {
@@ -1921,6 +1977,14 @@ const AppContent = () => {
                 }
 
                 {
+                    modals.showShopLook && (
+                        <ShopLookView
+                            onClose={() => modals.setShowShopLook(false)}
+                        />
+                    )
+                }
+
+                {
                     modals.showMultiplayerChallenges && (
                         <Suspense fallback={<LazyLoader type="analytics" />}>
                             <MultiplayerChallengesView
@@ -1958,6 +2022,7 @@ const AppContent = () => {
                             savedOutfits={savedOutfits}
                             onShareOutfit={setOutfitToShare}
                             borrowedItemIds={new Set()}
+                            onOpenShopLook={() => modals.setShowShopLook(true)}
                         />
                     )
                 }
@@ -2135,11 +2200,13 @@ const App = () => (
 );
 
 const AppWithProviders = () => (
-    <ThemeProvider>
-        <AIGenerationProvider>
-            <App />
-        </AIGenerationProvider>
-    </ThemeProvider>
+    <GlassThemeProvider>
+        <UIThemeProvider>
+            <AIGenerationProvider>
+                <App />
+            </AIGenerationProvider>
+        </UIThemeProvider>
+    </GlassThemeProvider>
 );
 
 export default AppWithProviders;

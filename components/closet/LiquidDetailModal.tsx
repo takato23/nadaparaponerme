@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import type { ClothingItem, BrandRecognitionResult, DupeFinderResult } from '../../types';
+import type { ClothingItem, BrandRecognitionResult, DupeFinderResult, GroundingChunk } from '../../types';
 import { useNavigate } from 'react-router-dom';
 import { ROUTES } from '../../src/routes';
 import * as aiService from '../../src/services/aiService';
+import { buildSearchTermFromItem, getShoppingLinks } from '../../src/services/monetizationService';
 import Loader from '../Loader';
 import { isRealImage } from '../../src/utils/imagePlaceholder';
 

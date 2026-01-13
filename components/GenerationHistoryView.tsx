@@ -300,7 +300,7 @@ const GenerationHistoryView = ({ onClose, onAddToCloset }: GenerationHistoryView
 
               {!hasMore && generations.length > 0 && (
                 <p className="text-center text-text-secondary dark:text-gray-500 text-sm mt-6">
-                  Has visto todas tus generaciones
+                  Has visto todas tus creaciones
                 </p>
               )}
             </>

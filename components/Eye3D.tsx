@@ -580,18 +580,18 @@ function Eyeball({ colors, mousePos }: { colors: EyeColorScheme; mousePos: Point
             <group position={[0, 0, 1.02]}>
                 <mesh renderOrder={RENDER_ORDER.eyeball}>
                     <circleGeometry args={[0.46, 64]} />
-                <meshStandardMaterial
-                    map={irisTex ?? undefined}
-                    transparent
-                    roughness={0.42}
-                    metalness={0}
-                    emissive={new THREE.Color(colors.glow)}
-                    emissiveIntensity={0.1}
-                    depthWrite={false}
-                    polygonOffset
-                    polygonOffsetFactor={-4}
-                    {...stencilTest}
-                />
+                    <meshStandardMaterial
+                        map={irisTex ?? undefined}
+                        transparent
+                        roughness={0.42}
+                        metalness={0}
+                        emissive={new THREE.Color(colors.glow)}
+                        emissiveIntensity={0.1}
+                        depthWrite={false}
+                        polygonOffset
+                        polygonOffsetFactor={-4}
+                        {...stencilTest}
+                    />
                 </mesh>
 
                 <mesh ref={pupilRef} position={[0, 0, 0.01]} renderOrder={RENDER_ORDER.eyeball}>
@@ -909,10 +909,10 @@ function EyeAperture({
 
             {/* Socket + outer eyelid volume (subtle, behind the eye) */}
             <group position={[0, 0, z]}>
-            {/* Soft eyelid shadow behind */}
-            <mesh geometry={shadowGeo} position={[0, -0.02, -0.025]} renderOrder={0}>
-                <meshStandardMaterial color="#000000" transparent opacity={0.10} roughness={1} metalness={0} depthWrite={false} />
-            </mesh>
+                {/* Soft eyelid shadow behind */}
+                <mesh geometry={shadowGeo} position={[0, -0.02, -0.025]} renderOrder={0}>
+                    <meshStandardMaterial color="#000000" transparent opacity={0.10} roughness={1} metalness={0} depthWrite={false} />
+                </mesh>
 
             </group>
 
@@ -1207,10 +1207,12 @@ function EyeScene({
     colorScheme,
     blinkInterval = 3000,
     variant = 'playground',
+    showBackdrop = true,
 }: {
     colorScheme: EyeColorKey;
     blinkInterval?: number;
     variant?: Eye3DVariant;
+    showBackdrop?: boolean;
 }) {
     const rigRef = useRef<THREE.Group>(null);
     const mousePos = useRef({ x: 0, y: 0 }); // smoothed pointer
@@ -1288,7 +1290,7 @@ function EyeScene({
 
     return (
         <group ref={rigRef} scale={[1.15, 1.15, 1.15]} position={[0, 0, 0]}>
-            <FaceSocket enabled={variant !== 'landing'} />
+            <FaceSocket enabled={showBackdrop} />
             <EyeAperture blink={blink} />
             <Eyeball colors={EYE_COLORS[colorScheme]} mousePos={mousePos} />
             <Eyelids blink={blink} mousePos={mousePos} />
@@ -1306,6 +1308,7 @@ export default function Eye3D({
     interactive = true,
     watermarkFps = 24,
     className = '',
+    enableBackdrop,
 }: {
     colorScheme?: EyeColorKey;
     blinkInterval?: number;
@@ -1316,6 +1319,7 @@ export default function Eye3D({
     interactive?: boolean;
     watermarkFps?: number;
     className?: string;
+    enableBackdrop?: boolean;
 }) {
     const isWatermark = quality === 'watermark';
     const computedDpr = dpr ?? (isWatermark ? [0.8, 1.15] : [1, 1.75]);
@@ -1326,6 +1330,10 @@ export default function Eye3D({
     const enableShadows = !isWatermark;
     const frameloop: 'always' | 'demand' = isWatermark ? 'demand' : 'always';
     const containerMinH = variant === 'playground' ? 'min-h-[520px]' : 'min-h-0';
+
+    // Logic: if enableBackdrop is explicitly set, use it. Otherwise, default to hiding it on landing variant (legacy behavior)
+    // but we are about to override this in LandingHeroEye.
+    const showBackdrop = enableBackdrop ?? (variant !== 'landing');
 
     return (
         <div className={`w-full h-full ${containerMinH} ${className}`}>
@@ -1368,7 +1376,7 @@ export default function Eye3D({
                 )}
 
                 <Float speed={floatSpeed} rotationIntensity={0} floatIntensity={floatIntensity}>
-                    <EyeScene colorScheme={colorScheme} blinkInterval={blinkInterval} variant={variant} />
+                    <EyeScene colorScheme={colorScheme} blinkInterval={blinkInterval} variant={variant} showBackdrop={showBackdrop} />
                 </Float>
 
                 {/* Custom lightformers to avoid the HDRI "cross" reflection and keep a premium, controlled highlight */}
