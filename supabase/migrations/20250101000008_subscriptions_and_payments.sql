@@ -333,8 +333,8 @@ BEGIN
   SELECT
     COALESCE(ai_generations_used, 0),
     CASE v_tier
-      WHEN 'free' THEN 10
-      WHEN 'pro' THEN 100
+      WHEN 'free' THEN 100
+      WHEN 'pro' THEN 150
       WHEN 'premium' THEN -1  -- Unlimited
     END
   INTO v_current_usage, v_limit
@@ -381,8 +381,8 @@ SELECT
   p.id,
   COALESCE(s.tier, 'free'),
   CASE COALESCE(s.tier, 'free')
-    WHEN 'free' THEN 10
-    WHEN 'pro' THEN 100
+    WHEN 'free' THEN 100
+    WHEN 'pro' THEN 150
     WHEN 'premium' THEN -1
   END,
   DATE_TRUNC('month', NOW()),

@@ -44,10 +44,10 @@ export interface PlanLimits {
 
 const PLAN_LIMITS: Record<SubscriptionTier, PlanLimits> = {
     free: {
-        aiGenerations: 10,
-        closetItems: 5,
-        virtualTryOn: false,
-        analytics: false,
+        aiGenerations: 100,
+        closetItems: 200,
+        virtualTryOn: true,
+        analytics: true,
         exportToSocial: false,
         outfitCalendar: false,
         prioritySupport: false,
