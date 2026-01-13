@@ -58,13 +58,10 @@ export default defineConfig(({ mode }) => {
               if (id.includes('three') || id.includes('@react-three') || id.includes('drei') || id.includes('fiber')) {
                 return 'vendor-three';
               }
-              // Charts - recharts only (d3 will be in default vendor chunk)
-              if (id.includes('recharts') || id.includes('victory')) {
+              // Charts - let Vite handle recharts naturally to avoid initialization issues
+              // Recharts has complex internal dependencies that break with manual chunking
+              if (id.includes('victory')) {
                 return 'vendor-charts';
-              }
-              // D3 libraries - separate chunk to avoid initialization issues
-              if (id.includes('d3-')) {
-                return 'vendor-d3';
               }
               // Date utilities
               if (id.includes('date-fns') || id.includes('dayjs') || id.includes('moment')) {
