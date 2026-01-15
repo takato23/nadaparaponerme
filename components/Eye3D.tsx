@@ -211,7 +211,7 @@ function createAlmondClosedCurve(w: number, h: number, upperK: number, lowerK: n
 }
 
 function useIrisTexture(colorHex: string) {
-    return useMemo(() => {
+    const tex = useMemo(() => {
         const canvas = document.createElement('canvas');
         canvas.width = 512;
         canvas.height = 512;
@@ -288,10 +288,18 @@ function useIrisTexture(colorHex: string) {
         tex.anisotropy = 8;
         return tex;
     }, [colorHex]);
+
+    useEffect(() => {
+        return () => {
+            tex?.dispose();
+        };
+    }, [tex]);
+
+    return tex;
 }
 
 function useScleraTexture() {
-    return useMemo(() => {
+    const tex = useMemo(() => {
         const canvas = document.createElement('canvas');
         canvas.width = 512;
         canvas.height = 512;
@@ -335,10 +343,18 @@ function useScleraTexture() {
         tex.anisotropy = 8;
         return tex;
     }, []);
+
+    useEffect(() => {
+        return () => {
+            tex?.dispose();
+        };
+    }, [tex]);
+
+    return tex;
 }
 
 function useSocketVignetteAlpha() {
-    return useMemo(() => {
+    const tex = useMemo(() => {
         const canvas = document.createElement('canvas');
         canvas.width = 512;
         canvas.height = 512;
@@ -376,10 +392,18 @@ function useSocketVignetteAlpha() {
         tex.anisotropy = 4;
         return tex;
     }, []);
+
+    useEffect(() => {
+        return () => {
+            tex?.dispose();
+        };
+    }, [tex]);
+
+    return tex;
 }
 
 function useSocketVignetteMap() {
-    return useMemo(() => {
+    const tex = useMemo(() => {
         const canvas = document.createElement('canvas');
         canvas.width = 512;
         canvas.height = 512;
@@ -418,10 +442,18 @@ function useSocketVignetteMap() {
         tex.wrapT = THREE.ClampToEdgeWrapping;
         return tex;
     }, []);
+
+    useEffect(() => {
+        return () => {
+            tex?.dispose();
+        };
+    }, [tex]);
+
+    return tex;
 }
 
 function useApertureOcclusionAlpha() {
-    return useMemo(() => {
+    const tex = useMemo(() => {
         const canvas = document.createElement('canvas');
         canvas.width = 512;
         canvas.height = 512;
@@ -473,10 +505,18 @@ function useApertureOcclusionAlpha() {
         tex.anisotropy = 4;
         return tex;
     }, []);
+
+    useEffect(() => {
+        return () => {
+            tex?.dispose();
+        };
+    }, [tex]);
+
+    return tex;
 }
 
 function useSkinMicroRoughnessMap() {
-    return useMemo(() => {
+    const tex = useMemo(() => {
         const canvas = document.createElement('canvas');
         canvas.width = 256;
         canvas.height = 256;
@@ -516,6 +556,14 @@ function useSkinMicroRoughnessMap() {
         tex.anisotropy = 8;
         return tex;
     }, []);
+
+    useEffect(() => {
+        return () => {
+            tex?.dispose();
+        };
+    }, [tex]);
+
+    return tex;
 }
 
 function Eyeball({ colors, mousePos }: { colors: EyeColorScheme; mousePos: PointerRef }) {
@@ -646,8 +694,8 @@ function FaceSocket({ enabled }: { enabled: boolean }) {
     const colorMap = useSocketVignetteMap();
     const geo = useMemo(() => {
         const s = createAlmondShape(
-            V27_TUNING.aperture.outerW * V27_TUNING.socket.wMul,
-            V27_TUNING.aperture.outerH * V27_TUNING.socket.hMul,
+            V27_TUNING.aperture.outerW * 1.15,
+            V27_TUNING.aperture.outerH * 1.15,
             V27_TUNING.aperture.outerUpperK,
             V27_TUNING.aperture.outerLowerK
         );
@@ -655,6 +703,12 @@ function FaceSocket({ enabled }: { enabled: boolean }) {
         g.computeVertexNormals();
         return g;
     }, []);
+
+    useEffect(() => {
+        return () => {
+            geo.dispose();
+        };
+    }, [geo]);
 
     return (
         <group>
@@ -739,7 +793,7 @@ function EyeAperture({
     const apertureOcclusionAlpha = useApertureOcclusionAlpha();
     const skinMicroRoughness = useSkinMicroRoughnessMap();
 
-    const [outerMaskGeo, apertureMaskGeo, shadowGeo, rimTubeGeo, waterlineTubeGeo, contactShadowTubeGeo] = useMemo(() => {
+    const geos = useMemo(() => {
         // Dual stencil:
         // - outerMask writes 2 (overall eye region / silhouette)
         // - apertureMask writes 1 (actual opening for the eyeball)
@@ -804,6 +858,14 @@ function EyeAperture({
 
         return [outerMask, apertureMask, shadow, rimTube, waterlineTube, contactShadowTube] as const;
     }, [innerH, innerW, outerH, outerW]);
+
+    const [outerMaskGeo, apertureMaskGeo, shadowGeo, rimTubeGeo, waterlineTubeGeo, contactShadowTubeGeo] = geos;
+
+    useEffect(() => {
+        return () => {
+            geos.forEach(g => g.dispose());
+        };
+    }, [geos]);
 
     return (
         <group>
@@ -990,13 +1052,20 @@ function Eyelashes({
         return temp;
     }, [count, edgeCurve, side]);
 
+    const coneGeo = useMemo(() => new THREE.ConeGeometry(V27_TUNING.lashes.thickness, 1, 7), []);
+
+    useEffect(() => {
+        return () => {
+            coneGeo.dispose();
+        };
+    }, [coneGeo]);
+
     return (
         <group>
             {lashes.map((l, i) => (
                 <group key={`${side}-${i}`} position={l.position} quaternion={l.quaternion as any}>
                     {/* Cone points along +Y: add curl by rotating around local X (after quaternion) */}
-                    <mesh rotation={[l.curl, 0, 0]} position={[0, l.length / 2, 0]} renderOrder={RENDER_ORDER.lashes}>
-                        <coneGeometry args={[V27_TUNING.lashes.thickness, l.length, 7]} />
+                    <mesh rotation={[l.curl, 0, 0]} position={[0, l.length / 2, 0]} scale={[1, l.length, 1]} geometry={coneGeo} renderOrder={RENDER_ORDER.lashes}>
                         <meshPhysicalMaterial
                             color="#050505"
                             roughness={V27_TUNING.lashes.roughness}

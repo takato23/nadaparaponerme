@@ -9,11 +9,12 @@ interface MetadataEditModalProps {
 }
 
 const CATEGORIES = [
-  { value: 'top', label: 'Top' },
-  { value: 'bottom', label: 'Bottom' },
-  { value: 'shoes', label: 'Zapatos' },
-  { value: 'accessory', label: 'Accesorio' },
+  { value: 'top', label: 'Parte de Arriba' },
+  { value: 'bottom', label: 'Parte de Abajo' },
+  { value: 'shoes', label: 'Calzado' },
   { value: 'outerwear', label: 'Abrigo' },
+  { value: 'dress', label: 'Vestido / Enterito' },
+  { value: 'accessory', label: 'Accesorio' },
 ];
 
 const SEASONS = [
@@ -129,33 +130,54 @@ export default function MetadataEditModal({ imageDataUrl, metadata, onSave, onCa
                 <label className="block text-sm font-semibold mb-2">
                   Categoría <span className="text-red-500">*</span>
                 </label>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="flex gap-2 mb-2 overflow-x-auto pb-2">
                   {CATEGORIES.map(cat => (
                     <button
                       key={cat.value}
-                      onClick={() => handleCategoryChange(cat.value)}
-                      className={`px-3 py-2 rounded-xl text-sm font-semibold transition-colors ${
-                        editedMetadata.category === cat.value
-                          ? 'bg-primary text-white'
-                          : 'bg-gray-200/60 dark:bg-gray-700/60'
-                      }`}
+                      onClick={() => handleCategoryChange(cat.label)} // Use label as value for consistency/simplicity if backend allows, or keep specific mapping. User wants freedom. Let's use free text.
+                      className={`px-3 py-2 rounded-xl text-sm font-semibold whitespace-nowrap transition-colors ${editedMetadata.category.toLowerCase() === cat.label.toLowerCase()
+                        ? 'bg-primary text-white'
+                        : 'bg-gray-200/60 dark:bg-gray-700/60'
+                        }`}
                     >
                       {cat.label}
                     </button>
                   ))}
                 </div>
+                <input
+                  type="text"
+                  value={editedMetadata.category}
+                  onChange={(e) => setEditedMetadata(prev => ({ ...prev, category: e.target.value }))}
+                  placeholder="O escribí tu propia categoría..."
+                  className="w-full p-3 bg-white/50 dark:bg-black/20 rounded-xl border-none focus:ring-2 focus:ring-primary"
+                />
               </div>
 
               {/* Subcategory */}
               <div>
                 <label className="block text-sm font-semibold mb-2">
-                  Tipo de Prenda <span className="text-red-500">*</span>
+                  Tipo de Prenda (Subcategoría) <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
                   value={editedMetadata.subcategory}
                   onChange={(e) => setEditedMetadata(prev => ({ ...prev, subcategory: e.target.value }))}
-                  placeholder="Ej: camiseta, jean, zapatillas..."
+                  placeholder="Ej: remera, jean, zapatillas..."
+                  className="w-full p-3 bg-white/50 dark:bg-black/20 rounded-xl border-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+
+              {/* Brand (New Field) */}
+              <div>
+                <label className="block text-sm font-semibold mb-2">
+                  Marca
+                </label>
+                <input
+                  type="text"
+                  // @ts-ignore - Brand might not be in strict type but usually ok if index signature or expanded type
+                  value={(editedMetadata as any).brand || ''}
+                  onChange={(e) => setEditedMetadata(prev => ({ ...prev, brand: e.target.value } as any))}
+                  placeholder="Ej: Zara, Nike, artesanal..."
                   className="w-full p-3 bg-white/50 dark:bg-black/20 rounded-xl border-none focus:ring-2 focus:ring-primary"
                 />
               </div>
@@ -170,11 +192,10 @@ export default function MetadataEditModal({ imageDataUrl, metadata, onSave, onCa
                     <button
                       key={color}
                       onClick={() => handleColorSelect(color)}
-                      className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
-                        editedMetadata.color_primary === color
-                          ? 'bg-primary text-white'
-                          : 'bg-gray-200/60 dark:bg-gray-700/60'
-                      }`}
+                      className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${editedMetadata.color_primary === color
+                        ? 'bg-primary text-white'
+                        : 'bg-gray-200/60 dark:bg-gray-700/60'
+                        }`}
                     >
                       {color}
                     </button>
@@ -206,11 +227,10 @@ export default function MetadataEditModal({ imageDataUrl, metadata, onSave, onCa
                     <button
                       key={season.value}
                       onClick={() => toggleSeason(season.value)}
-                      className={`px-3 py-2 rounded-xl text-sm font-semibold transition-colors ${
-                        (editedMetadata.seasons || []).includes(season.value)
-                          ? 'bg-primary text-white'
-                          : 'bg-gray-200/60 dark:bg-gray-700/60'
-                      }`}
+                      className={`px-3 py-2 rounded-xl text-sm font-semibold transition-colors ${(editedMetadata.seasons || []).includes(season.value)
+                        ? 'bg-primary text-white'
+                        : 'bg-gray-200/60 dark:bg-gray-700/60'
+                        }`}
                     >
                       {season.label}
                     </button>
@@ -226,11 +246,10 @@ export default function MetadataEditModal({ imageDataUrl, metadata, onSave, onCa
                     <button
                       key={tag}
                       onClick={() => toggleVibeTag(tag)}
-                      className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
-                        (editedMetadata.vibe_tags || []).includes(tag)
-                          ? 'bg-primary text-white'
-                          : 'bg-gray-200/60 dark:bg-gray-700/60'
-                      }`}
+                      className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${(editedMetadata.vibe_tags || []).includes(tag)
+                        ? 'bg-primary text-white'
+                        : 'bg-gray-200/60 dark:bg-gray-700/60'
+                        }`}
                     >
                       {tag}
                     </button>

@@ -49,7 +49,7 @@ const PLANS: SubscriptionPlan[] = [
       max_closet_items: 200,
       max_saved_outfits: -1,
       can_use_virtual_tryon: true,
-      can_use_ai_designer: false,
+      can_use_ai_designer: true,  // Enabled for all tiers, limited by credits
       can_use_lookbook: false,
       can_use_style_dna: false,
       can_export_lookbooks: false,
@@ -124,7 +124,7 @@ const PLANS: SubscriptionPlan[] = [
 export async function getCurrentSubscription(): Promise<Subscription | null> {
   try {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('No authenticated user');
+    if (!user) throw new Error('Usuario no autenticado');
 
     const { data, error } = await supabase
       .from('subscriptions')
@@ -206,10 +206,10 @@ export async function createPaymentPreference(
 ): Promise<MercadoPagoPreference> {
   try {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('No authenticated user');
+    if (!user) throw new Error('Usuario no autenticado');
 
     const plan = getSubscriptionPlan(tier);
-    if (!plan) throw new Error('Invalid subscription tier');
+    if (!plan) throw new Error('Plan de suscripción inválido');
 
     // Call Supabase Edge Function to create preference
     const { data, error } = await supabase.functions.invoke('create-payment-preference', {
@@ -258,7 +258,7 @@ export async function handlePaymentSuccess(
 ): Promise<void> {
   try {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('No authenticated user');
+    if (!user) throw new Error('Usuario no autenticado');
 
     // Call Edge Function to process payment
     const { error } = await supabase.functions.invoke('process-payment', {
@@ -371,7 +371,7 @@ export async function canGenerateOutfit(): Promise<boolean> {
 export async function incrementAIGenerationUsage(): Promise<void> {
   try {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('No authenticated user');
+    if (!user) throw new Error('Usuario no autenticado');
 
     // Call database function to increment usage
     const { error } = await supabase.rpc('increment_ai_generation_usage', {
@@ -395,7 +395,7 @@ export async function incrementAIGenerationUsage(): Promise<void> {
 export async function getUsageMetrics(): Promise<UsageMetrics | null> {
   try {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('No authenticated user');
+    if (!user) throw new Error('Usuario no autenticado');
 
     const now = new Date();
     const periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -437,7 +437,7 @@ async function initializeUsageMetrics(tier?: SubscriptionTier): Promise<UsageMet
   }
 
   const plan = getSubscriptionPlan(subscriptionTier);
-  if (!plan) throw new Error('Invalid subscription tier');
+  if (!plan) throw new Error('Plan de suscripción inválido');
 
   const now = new Date();
   const periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -495,7 +495,7 @@ export async function getRemainingGenerations(): Promise<number> {
 export async function upgradeSubscription(newTier: SubscriptionTier): Promise<void> {
   try {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('No authenticated user');
+    if (!user) throw new Error('Usuario no autenticado');
 
     // Create payment preference and redirect to MercadoPago
     const preference = await createPaymentPreference(newTier);
@@ -514,7 +514,7 @@ export async function upgradeSubscription(newTier: SubscriptionTier): Promise<vo
 export async function cancelSubscription(): Promise<void> {
   try {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('No authenticated user');
+    if (!user) throw new Error('Usuario no autenticado');
 
     const now = new Date();
 
@@ -539,7 +539,7 @@ export async function cancelSubscription(): Promise<void> {
 export async function reactivateSubscription(): Promise<void> {
   try {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('No authenticated user');
+    if (!user) throw new Error('Usuario no autenticado');
 
     const { error } = await supabase
       .from('subscriptions')

@@ -214,7 +214,7 @@ serve(async (req) => {
       const periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
       const periodEndMetrics = new Date(now.getFullYear(), now.getMonth() + 1, 0);
 
-      const aiGenerationsLimit = subscriptionTier === 'premium' ? 400 : (subscriptionTier === 'pro' ? 150 : 10);
+      const aiGenerationsLimit = subscriptionTier === 'premium' ? 400 : (subscriptionTier === 'pro' ? 150 : 50);
 
       const { error: metricsError } = await supabase
         .from('usage_metrics')

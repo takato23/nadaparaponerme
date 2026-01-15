@@ -163,13 +163,13 @@ export function FloatingDock({ onCameraClick }: { onCameraClick?: () => void }) 
             style={{ bottom: 'calc(1rem + env(safe-area-inset-bottom))' }}
         >
             <div className="
-        flex items-end gap-2 sm:gap-3 px-4 sm:px-6 py-3 sm:py-4
-        liquid-glass
-        shadow-[0_20px_40px_-10px_rgba(0,0,0,0.15)] dark:shadow-[0_20px_40px_-10px_rgba(0,0,0,0.4)]
-        pointer-events-auto
-        max-w-full
-        transition-all duration-300
-      " style={{ ['--glass-opacity' as any]: 0.35, ['--glass-blur' as any]: '26px' }}>
+    flex items-end gap-2 sm:gap-3 px-4 sm:px-6 py-3 sm:py-4
+    liquid-glass !overflow-visible
+    shadow-[0_20px_40px_-10px_rgba(0,0,0,0.15)] dark:shadow-[0_20px_40px_-10px_rgba(0,0,0,0.4)]
+    pointer-events-auto
+    max-w-full
+    transition-all duration-300
+" style={{ ['--glass-opacity' as any]: 0.35, ['--glass-blur' as any]: '26px' }}>
                 {items.map((item) => (
                     <DockItem
                         key={item.id}

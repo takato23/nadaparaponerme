@@ -48,8 +48,11 @@ const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }
   const navigate = useNavigate();
   const [viewState, setViewState] = useState<ViewState>('capture');
   const [imageDataUrl, setImageDataUrl] = useState<string | null>(null);
+  const [backImageDataUrl, setBackImageDataUrl] = useState<string | null>(null);
   const [itemStatus, setItemStatus] = useState<'owned' | 'wishlist' | 'virtual'>('owned');
   const [imageFile, setImageFile] = useState<File | null>(null);
+  const [backImageFile, setBackImageFile] = useState<File | null>(null);
+  const [capturingBack, setCapturingBack] = useState(false);
   const [metadata, setMetadata] = useState<ClothingItemMetadata | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [prompt, setPrompt] = useState('');
@@ -97,8 +100,16 @@ const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }
       setPhotoQualityWarnings([]);
     }
 
-    setImageDataUrl(url);
-    setViewState('preview'); // Show preview before analysis
+    if (capturingBack) {
+      setBackImageDataUrl(url);
+      setBackImageFile(file || null);
+      setViewState('editing');
+      setCapturingBack(false);
+    } else {
+      setImageDataUrl(url);
+      setImageFile(file || null);
+      setViewState('preview'); // Show preview before analysis
+    }
     setError(null);
   };
 
@@ -135,8 +146,13 @@ const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }
   };
 
   const handleRetakePhoto = () => {
-    setImageDataUrl(null);
-    setImageFile(null);
+    if (capturingBack) {
+      setBackImageDataUrl(null);
+      setBackImageFile(null);
+    } else {
+      setImageDataUrl(null);
+      setImageFile(null);
+    }
     setPhotoQualityWarnings([]);
     setViewState('capture');
   };
@@ -201,7 +217,7 @@ const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }
         // For now, we assume closetService might need an update or we handle it post-save.
         // NOTE: addClothingItem might not support status argument yet.
         // We will need to update addClothingItem signature or ensure metadata carries it.
-        await addClothingItem(file, { ...metadata });
+        await addClothingItem(file, { ...metadata, status: itemStatus } as any, backImageFile || undefined);
 
         // Ideally we would update the status immediately if addClothingItem doesn't support it
         // But for this implementation, let's assume valid handling or future update.
@@ -279,7 +295,10 @@ const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }
         return (
           <CameraCaptureButton
             onCapture={handleCameraCapture}
-            onClose={() => setViewState('capture')}
+            onClose={() => {
+              setViewState(capturingBack ? 'editing' : 'capture');
+              setCapturingBack(false);
+            }}
           />
         );
 
@@ -448,10 +467,27 @@ const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }
             className="flex flex-col h-full"
           >
             {/* Image Preview Header */}
-            <div className="relative h-64 shrink-0">
-              <img src={imageDataUrl} alt="clothing item" className="w-full h-full object-cover" />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-6">
-                <div>
+            <div className="relative h-64 shrink-0 overflow-hidden">
+              <div className="flex w-full h-full">
+                <div className="relative w-full h-full">
+                  <img src={imageDataUrl} alt="front view" className="w-full h-full object-cover" />
+                  <div className="absolute top-2 left-2 px-2 py-0.5 rounded bg-black/50 text-white text-[10px] uppercase font-bold">Frente</div>
+                </div>
+                {backImageDataUrl && (
+                  <div className="relative w-full h-full border-l border-white/20">
+                    <img src={backImageDataUrl} alt="back view" className="w-full h-full object-cover" />
+                    <div className="absolute top-2 left-2 px-2 py-0.5 rounded bg-black/50 text-white text-[10px] uppercase font-bold">Espalda</div>
+                    <button
+                      onClick={() => setBackImageDataUrl(null)}
+                      className="absolute top-2 right-2 w-6 h-6 rounded-full bg-black/50 text-white flex items-center justify-center"
+                    >
+                      <span className="material-symbols-outlined text-sm">close</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent flex items-end p-6">
+                <div className="flex-grow">
                   <h2 className="text-white text-2xl font-serif font-bold capitalize">
                     {metadata.subcategory}
                   </h2>
@@ -459,11 +495,42 @@ const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }
                     {metadata.color_primary} • {metadata.category}
                   </p>
                 </div>
+                {!backImageDataUrl && (
+                  <button
+                    onClick={() => {
+                      setCapturingBack(true);
+                      setViewState('camera');
+                    }}
+                    className="p-3 rounded-full bg-white/20 backdrop-blur-md text-white hover:bg-white/30 transition-colors flex flex-col items-center gap-1 group"
+                  >
+                    <span className="material-symbols-outlined group-hover:scale-110 transition-transform">add_a_photo</span>
+                    <span className="text-[10px] font-bold">VISTA ATRÁS</span>
+                  </button>
+                )}
               </div>
             </div>
 
             {/* Form Content */}
-            <div className="flex-grow overflow-y-auto p-6 space-y-6 bg-white dark:bg-gray-900 rounded-t-3xl -mt-6 relative z-10">
+            <div className="flex-grow overflow-y-auto p-6 space-y-6 bg-white dark:bg-gray-900 rounded-t-3xl -mt-6 relative z-10 shadow-[0_-8px_30px_rgb(0,0,0,0.12)]">
+
+              {!backImageDataUrl && (
+                <div className="bg-primary/5 border border-primary/10 rounded-2xl p-4 flex items-start gap-3">
+                  <span className="material-symbols-outlined text-primary mt-0.5">info</span>
+                  <div className="space-y-1">
+                    <p className="text-sm font-bold text-gray-800 dark:text-white">¿Tenés la espalda de esta prenda?</p>
+                    <p className="text-xs text-text-secondary dark:text-gray-400">Sumar la vista trasera ayuda a la IA a que los looks de espalda sean perfectos y realistas.</p>
+                    <button
+                      onClick={() => {
+                        setCapturingBack(true);
+                        setViewState('camera');
+                      }}
+                      className="mt-2 text-xs font-bold text-primary hover:underline flex items-center gap-1"
+                    >
+                      Tomar foto de espalda <span className="material-symbols-outlined text-sm">arrow_forward</span>
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Basic Info */}
               <div className="space-y-4">

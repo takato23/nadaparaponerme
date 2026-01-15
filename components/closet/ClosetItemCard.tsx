@@ -84,8 +84,10 @@ export default function ClosetItemCard({
   const handleClick = (e: React.MouseEvent) => {
     if (isSelectionMode && onToggleSelection) {
       e.stopPropagation();
+      if (navigator.vibrate) navigator.vibrate(5);
       onToggleSelection(item.id);
     } else if (onClick) {
+      if (navigator.vibrate) navigator.vibrate(5);
       onClick(item.id);
     }
   };
@@ -94,6 +96,7 @@ export default function ClosetItemCard({
   const handleTouchStart = () => {
     const timer = setTimeout(() => {
       if (onLongPress) {
+        if (navigator.vibrate) navigator.vibrate(10); // Slightly longer for long press
         onLongPress(item.id);
       }
     }, 500); // 500ms long press
@@ -110,6 +113,7 @@ export default function ClosetItemCard({
   // Quick action handlers
   const handleQuickAction = (action: 'edit' | 'delete' | 'favorite' | 'share', e: React.MouseEvent) => {
     e.stopPropagation();
+    if (navigator.vibrate) navigator.vibrate(5);
     if (onQuickAction) {
       onQuickAction(action, item.id);
     }
@@ -299,7 +303,7 @@ export default function ClosetItemCard({
             <input
               type="checkbox"
               checked={isSelected}
-              onChange={() => onToggleSelection?.(item.id)}
+              onChange={() => { if (navigator.vibrate) navigator.vibrate(5); onToggleSelection?.(item.id); }}
               className="w-6 h-6 rounded-full border-2 border-white text-primary focus:ring-primary bg-white/50 backdrop-blur-sm shadow-lg cursor-pointer"
               onClick={(e) => e.stopPropagation()}
             />
@@ -347,6 +351,7 @@ export default function ClosetItemCard({
               <button
                 onClick={(e) => {
                   e.stopPropagation();
+                  if (navigator.vibrate) navigator.vibrate(5);
                   navigate(ROUTES.STUDIO, { state: { preselectedItemIds: [item.id] } });
                 }}
                 className="bg-white/80 dark:bg-black/50 hover:bg-white dark:hover:bg-black/70 backdrop-blur-md w-8 h-8 rounded-full flex items-center justify-center shadow-sm transition-all group/btn"
@@ -358,6 +363,7 @@ export default function ClosetItemCard({
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
+                    if (navigator.vibrate) navigator.vibrate(5);
                     onDelete(item.id);
                   }}
                   className="bg-white/80 dark:bg-black/50 hover:bg-white dark:hover:bg-black/70 backdrop-blur-md w-8 h-8 rounded-full flex items-center justify-center shadow-sm transition-all text-red-500"

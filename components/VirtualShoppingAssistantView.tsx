@@ -100,31 +100,28 @@ export default function VirtualShoppingAssistantView({
         <div className="flex gap-2 px-6 pt-4 border-b border-white/10">
           <button
             onClick={() => setSelectedView('chat')}
-            className={`px-4 py-2 rounded-t-xl font-medium transition-all ${
-              selectedView === 'chat'
+            className={`px-4 py-2 rounded-t-xl font-medium transition-all ${selectedView === 'chat'
                 ? 'bg-white/10 text-white'
                 : 'text-white/60 hover:text-white hover:bg-white/5'
-            }`}
+              }`}
           >
             💬 Chat
           </button>
           <button
             onClick={() => setSelectedView('gaps')}
-            className={`px-4 py-2 rounded-t-xl font-medium transition-all ${
-              selectedView === 'gaps'
+            className={`px-4 py-2 rounded-t-xl font-medium transition-all ${selectedView === 'gaps'
                 ? 'bg-white/10 text-white'
                 : 'text-white/60 hover:text-white hover:bg-white/5'
-            }`}
+              }`}
           >
             🔍 Gaps ({currentGaps?.length || 0})
           </button>
           <button
             onClick={() => setSelectedView('recommendations')}
-            className={`px-4 py-2 rounded-t-xl font-medium transition-all ${
-              selectedView === 'recommendations'
+            className={`px-4 py-2 rounded-t-xl font-medium transition-all ${selectedView === 'recommendations'
                 ? 'bg-white/10 text-white'
                 : 'text-white/60 hover:text-white hover:bg-white/5'
-            }`}
+              }`}
           >
             ⭐ Recomendaciones ({allProducts.length})
           </button>
@@ -172,11 +169,10 @@ export default function VirtualShoppingAssistantView({
                       className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                     >
                       <div
-                        className={`max-w-[80%] md:max-w-[70%] p-4 rounded-2xl ${
-                          msg.role === 'user'
+                        className={`max-w-[80%] md:max-w-[70%] p-4 rounded-2xl ${msg.role === 'user'
                             ? 'bg-purple-500/20 border border-purple-400/30'
                             : 'bg-white/5 border border-white/10'
-                        }`}
+                          }`}
                       >
                         {msg.role === 'assistant' && (
                           <div className="text-xs text-white/50 mb-2 flex items-center gap-2">
@@ -403,15 +399,20 @@ export default function VirtualShoppingAssistantView({
                                   <Badge
                                     variant={
                                       product.estimated_quality === 'premium' ? 'warning' :
-                                      product.estimated_quality === 'mid-range' ? 'info' : 'success'
+                                        product.estimated_quality === 'mid-range' ? 'info' : 'success'
                                     }
                                     size="sm"
                                   >
                                     {product.estimated_quality}
                                   </Badge>
                                 </div>
-                                <div className="text-purple-400 font-bold">
-                                  ${product.price.toLocaleString('es-AR')}
+                                <div className="mt-2 flex items-center justify-between">
+                                  <span className="text-purple-400 font-bold">
+                                    ${product.price ? product.price.toLocaleString('es-AR') : '???'}
+                                  </span>
+                                  <span className="text-xs bg-purple-500/20 px-2 py-1 rounded text-purple-300">
+                                    Comprar ↗
+                                  </span>
                                 </div>
                                 <p className="text-xs text-white/50 mt-2 line-clamp-2">
                                   {product.match_reasoning}

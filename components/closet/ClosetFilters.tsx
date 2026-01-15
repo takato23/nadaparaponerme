@@ -27,13 +27,14 @@ interface ClosetFiltersProps {
   filteredCount: number;
 }
 
-const CATEGORIES: { value: CategoryFilter; label: string; icon: string }[] = [
-  { value: 'top', label: 'Tops', icon: 'checkroom' },
-  { value: 'bottom', label: 'Bottoms', icon: 'accessibility' },
-  { value: 'shoes', label: 'Zapatos', icon: 'footprint' },
-  { value: 'outerwear', label: 'Abrigos', icon: 'severe_cold' },
+export const CATEGORY_FILTERS = [
+  { value: 'all', label: 'Todo', icon: 'grid_view' },
+  { value: 'top', label: 'Partes de Arriba', icon: 'checkroom' },
+  { value: 'bottom', label: 'Partes de Abajo', icon: 'styler' },
+  { value: 'shoes', label: 'Calzado', icon: 'steps' },
+  { value: 'outerwear', label: 'Abrigos', icon: 'dry_cleaning' },
+  { value: 'dress', label: 'Vestidos', icon: 'woman' },
   { value: 'accessory', label: 'Accesorios', icon: 'watch' },
-  { value: 'one-piece', label: 'Vestidos', icon: 'styler' }
 ];
 
 export default function ClosetFilters({

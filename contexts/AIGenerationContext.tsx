@@ -42,7 +42,8 @@ export interface StudioGenerationRequest extends BaseGenerationRequest {
   payload: {
     userImage: string;
     slots: Record<string, string>;
-    slotItems: Array<{ slot: ClothingSlot; item: ClothingItem }>;
+    slotItems: Array<{ slot: ClothingSlot; item: ClothingItem; fit?: 'tight' | 'regular' | 'oversized' }>;
+    slotFits?: Record<string, 'tight' | 'regular' | 'oversized'>; // Per-garment fit preferences
     preset: GenerationPreset;
     customScene?: string;
     keepPose: boolean;
@@ -50,7 +51,6 @@ export interface StudioGenerationRequest extends BaseGenerationRequest {
     faceRefsCount: number;
     provider?: 'google' | 'openai';
     quality?: 'flash' | 'pro';
-    fit?: 'tight' | 'regular' | 'oversized';
     view?: 'front' | 'back' | 'side';
   };
   result?: {
@@ -262,12 +262,50 @@ export function AIGenerationProvider({ children }: { children: React.ReactNode }
 
   // Save state to localStorage when it changes
   useEffect(() => {
+    // 1. Cleanup old results (older than 24h) naturally before saving
+    const twentyFourHoursAgo = Date.now() - 24 * 60 * 60 * 1000;
+
+    // We only save metadata, but let's be even more aggressive if needed
+    const safeCompleted = completedRequests
+      .filter(r => (r.completedAt || r.createdAt) > twentyFourHoursAgo)
+      .slice(0, MAX_COMPLETED_RESULTS)
+      .map(r => ({
+        ...r,
+        // Keep result metadata but remove heavy base64 strings
+        // In this app, result.image is a base64 string usually
+        result: r.result ? { ...r.result, image: undefined } : undefined,
+        payload: {
+          ...r.payload,
+          userImage: undefined, // Remove base64 user image
+          slots: undefined,      // Remove base64 clothing slots
+          slotItems: undefined,
+        }
+      }));
+
     const data = {
       queue,
       active: activeRequest,
-      completed: completedRequests.slice(0, MAX_COMPLETED_RESULTS),
+      completed: safeCompleted,
     };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+
+    try {
+      const serialized = JSON.stringify(data);
+      // Rough check if we're exceeding 4MB (most browsers allow 5MB-10MB)
+      if (serialized.length > 4 * 1024 * 1024) {
+        console.warn('⚠️ AI Queue state too large, clearing older results');
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...data, completed: [] }));
+      } else {
+        localStorage.setItem(STORAGE_KEY, serialized);
+      }
+    } catch (e) {
+      console.warn('Failed to save AI generation state (quota exceeded?):', e);
+      // fallback: save only essential queue
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ queue: queue.map(q => ({ ...q, payload: { ...q.payload, userImage: undefined, slots: undefined } })), active: null, completed: [] }));
+      } catch (e2) {
+        localStorage.removeItem(STORAGE_KEY);
+      }
+    }
   }, [queue, activeRequest, completedRequests]);
 
   // Process queue
@@ -302,7 +340,7 @@ export function AIGenerationProvider({ children }: { children: React.ReactNode }
                 useFaceReferences: payload.useFaceRefs && payload.faceRefsCount > 0,
                 provider: payload.provider,
                 slotItems: payload.slotItems,
-                fit: payload.fit,
+                slotFits: payload.slotFits, // Per-garment fits
                 view: payload.view,
               }
             ),
@@ -319,13 +357,11 @@ export function AIGenerationProvider({ children }: { children: React.ReactNode }
 
         case 'outfit': {
           const payload = (request as OutfitGenerationRequest).payload;
+          const prompt = `Ocasión: ${payload.occasion || 'diaria'}, Estilo: ${payload.style || 'casual'}, Clima: ${payload.weather || 'templado'}${payload.excludeIds?.length ? `, Excluir IDs: ${payload.excludeIds.join(', ')}` : ''}`;
           result = await runWithTimeout(
             aiService.generateOutfit(
+              prompt,
               payload.closet,
-              payload.occasion,
-              payload.style,
-              payload.weather,
-              payload.excludeIds
             ),
             timeoutMs
           );
@@ -334,13 +370,11 @@ export function AIGenerationProvider({ children }: { children: React.ReactNode }
 
         case 'packing': {
           const payload = (request as PackingGenerationRequest).payload;
+          const prompt = `Destino: ${payload.destination}, Duración: ${payload.duration} días, Actividades: ${payload.activities.join(', ')}${payload.weather ? `, Clima: ${payload.weather}` : ''}`;
           result = await runWithTimeout(
             aiService.generatePackingList(
+              prompt,
               payload.closet,
-              payload.destination,
-              payload.duration,
-              payload.activities,
-              payload.weather
             ),
             timeoutMs
           );

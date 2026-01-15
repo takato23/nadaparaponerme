@@ -27,17 +27,17 @@ export function CreditsDetailView({ isOpen, onClose, onUpgrade }: CreditsDetailV
   const featureUsage = getFeatureUsageSummary().filter((entry) => entry.used > 0);
 
   const featureLabels: Record<FeatureType, string> = {
-    outfit_generation: 'Outfits',
+    outfit_generation: 'Looks',
     clothing_analysis: 'Análisis de prendas',
     fashion_chat: 'Chat de moda',
-    virtual_tryon: 'Try-on',
+    virtual_tryon: 'Probador',
     packing_list: 'Maleta inteligente',
     image_generation: 'Diseños IA',
     color_palette: 'Paleta de colores',
     style_dna: 'Style DNA',
     gap_analysis: 'Gaps de armario',
     lookbook: 'Lookbook',
-    weather_outfit: 'Outfits por clima',
+    weather_outfit: 'Look del Clima',
     similar_items: 'Ítems similares',
     shopping_suggestions: 'Compras sugeridas',
     brand_recognition: 'Reconocimiento de marca',
@@ -198,12 +198,11 @@ export function CreditsDetailView({ isOpen, onClose, onUpgrade }: CreditsDetailV
                 </span>
                 <span className="text-sm text-gray-600 dark:text-gray-300">Plan actual</span>
               </div>
-              <span className={`text-sm font-semibold ${
-                subscription.tier === 'premium' ? 'text-purple-500' :
+              <span className={`text-sm font-semibold ${subscription.tier === 'premium' ? 'text-purple-500' :
                 subscription.tier === 'pro' ? 'text-blue-500' : 'text-gray-700 dark:text-gray-300'
-              }`}>
+                }`}>
                 {subscription.tier === 'premium' ? 'Premium' :
-                 subscription.tier === 'pro' ? 'Pro' : 'Free'}
+                  subscription.tier === 'pro' ? 'Pro' : 'Gratis'}
               </span>
             </div>
 
@@ -230,7 +229,7 @@ export function CreditsDetailView({ isOpen, onClose, onUpgrade }: CreditsDetailV
             <div className="p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50">
               <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Consumo por acción:</p>
               <div className="flex flex-wrap gap-1.5">
-                {['Outfit (1 crédito)', 'Analizar prenda (1)', 'Chat moda (1)', 'Try-on Rápido (1)', 'Try-on Ultra (4)'].map((item) => (
+                {['Look (1 crédito)', 'Analizar prenda (1)', 'Chat moda (1)', 'Probador Rápido (1)', 'Probador Ultra (4)'].map((item) => (
                   <span
                     key={item}
                     className="text-[10px] px-2 py-1 rounded-full bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300"

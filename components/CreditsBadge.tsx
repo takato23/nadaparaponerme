@@ -73,7 +73,7 @@ export function CreditsBadge({
   };
 
   const tierLabels = {
-    free: 'Free',
+    free: 'Gratis',
     pro: 'Pro',
     premium: 'Premium',
   };

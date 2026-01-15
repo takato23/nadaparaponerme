@@ -29,6 +29,7 @@ export interface ClothingItemMetadata {
 export interface ClothingItem {
   id: string;
   imageDataUrl: string;
+  backImageDataUrl?: string; // Optional back view image
   metadata: ClothingItemMetadata;
   // Status tracking: 'owned' (default), 'wishlist' (store/external), 'virtual' (try-on draft)
   status?: 'owned' | 'wishlist' | 'virtual';
@@ -1312,6 +1313,8 @@ export interface SlotSelection {
   slot: ClothingSlot;
   itemId: string;
   item: ClothingItem;
+  /** Per-garment fit preference. Defaults to 'regular' if not specified. */
+  fit?: GenerationFit;
 }
 
 /**

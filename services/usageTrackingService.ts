@@ -55,10 +55,125 @@ export type FeatureType =
 // ============================================================================
 
 export const CREDIT_LIMITS: Record<UserTier, number> = {
-  free: 10,
+  free: 50,   // Increased from 10 - generous for testing phase
   pro: 150,
   premium: 400,
 };
+
+// ============================================================================
+// ANTI-ABUSE: Device Fingerprinting
+// ============================================================================
+
+const DEVICE_ID_KEY = 'ojodeloca-device-id';
+const DEVICE_REWARDS_KEY = 'ojodeloca-device-rewards';
+
+/**
+ * Generate or retrieve a persistent device ID
+ * This persists across accounts on the same browser/device
+ */
+function getDeviceId(): string {
+  const stored = readStorage(DEVICE_ID_KEY);
+  if (stored) return stored;
+
+  // Generate a unique device ID based on browser fingerprint
+  const fingerprint = [
+    navigator.userAgent,
+    navigator.language,
+    screen.width,
+    screen.height,
+    screen.colorDepth,
+    new Date().getTimezoneOffset(),
+    navigator.hardwareConcurrency || 0,
+  ].join('|');
+
+  // Simple hash function
+  let hash = 0;
+  for (let i = 0; i < fingerprint.length; i++) {
+    const char = fingerprint.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+
+  const deviceId = `device_${Math.abs(hash).toString(36)}_${Date.now().toString(36)}`;
+  writeStorage(DEVICE_ID_KEY, deviceId);
+  return deviceId;
+}
+
+interface DeviceRewards {
+  deviceId: string;
+  shareRewardsThisMonth: number;
+  lastShareMonth: string;
+  totalAccountsUsed: number;
+  accountIds: string[];
+}
+
+function getDeviceRewards(): DeviceRewards {
+  const deviceId = getDeviceId();
+  const currentMonth = new Date().toISOString().slice(0, 7);
+
+  try {
+    const stored = readStorage(DEVICE_REWARDS_KEY);
+    if (stored) {
+      const data = JSON.parse(stored) as DeviceRewards;
+      // Reset monthly counter if new month
+      if (data.lastShareMonth !== currentMonth) {
+        data.shareRewardsThisMonth = 0;
+        data.lastShareMonth = currentMonth;
+      }
+      return data;
+    }
+  } catch (e) {
+    console.warn('Error reading device rewards:', e);
+  }
+
+  return {
+    deviceId,
+    shareRewardsThisMonth: 0,
+    lastShareMonth: currentMonth,
+    totalAccountsUsed: 0,
+    accountIds: [],
+  };
+}
+
+function saveDeviceRewards(rewards: DeviceRewards): void {
+  try {
+    writeStorage(DEVICE_REWARDS_KEY, JSON.stringify(rewards));
+  } catch (e) {
+    console.warn('Error saving device rewards:', e);
+  }
+}
+
+/**
+ * Check if device can claim share reward (max 2 per month per device)
+ */
+export function canClaimShareReward(): { allowed: boolean; reason?: string } {
+  const rewards = getDeviceRewards();
+  const MAX_SHARE_REWARDS_PER_DEVICE = 2;
+
+  if (rewards.shareRewardsThisMonth >= MAX_SHARE_REWARDS_PER_DEVICE) {
+    return {
+      allowed: false,
+      reason: `Límite alcanzado: máximo ${MAX_SHARE_REWARDS_PER_DEVICE} recompensas por compartir este mes.`
+    };
+  }
+
+  return { allowed: true };
+}
+
+/**
+ * Record that a share reward was claimed on this device
+ */
+export function recordShareReward(userId?: string): void {
+  const rewards = getDeviceRewards();
+  rewards.shareRewardsThisMonth += 1;
+
+  if (userId && !rewards.accountIds.includes(userId)) {
+    rewards.accountIds.push(userId);
+    rewards.totalAccountsUsed += 1;
+  }
+
+  saveDeviceRewards(rewards);
+}
 
 // ============================================================================
 // STORAGE KEYS
@@ -309,6 +424,27 @@ export function resetCredits(): void {
   };
   saveCreditUsage(freshUsage);
   removeStorage(FEATURE_STORAGE_KEY);
+}
+
+/**
+ * Grant bonus credits (e.g., for sharing, watching ads, referrals)
+ * Returns the new remaining credits count
+ */
+export function grantBonusCredit(amount: number = 1): { success: boolean; newRemaining: number } {
+  const usage = getCreditUsage();
+  const tier = getUserTier();
+  const limit = CREDIT_LIMITS[tier];
+
+  // Reduce "used" credits (effectively giving more)
+  // But don't go below 0
+  usage.used = Math.max(0, usage.used - amount);
+  saveCreditUsage(usage);
+
+  const newRemaining = limit === -1 ? -1 : Math.max(0, limit - usage.used);
+
+  console.log(`✅ Bonus credit granted: +${amount}. New remaining: ${newRemaining}`);
+
+  return { success: true, newRemaining };
 }
 
 // ============================================================================

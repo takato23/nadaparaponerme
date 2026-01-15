@@ -165,7 +165,14 @@ serve(async (req) => {
                 const imageRes = await fetch(data.data[0].url);
                 if (!imageRes.ok) throw new Error('Failed to download generated image from OpenAI URL');
                 const imageBuffer = await imageRes.arrayBuffer();
-                imageBase64 = btoa(String.fromCharCode(...new Uint8Array(imageBuffer)));
+                const uint8Array = new Uint8Array(imageBuffer);
+                let binary = '';
+                const chunkSize = 0x8000; // 32KB chunks
+                for (let i = 0; i < uint8Array.length; i += chunkSize) {
+                    const chunk = uint8Array.subarray(i, i + chunkSize);
+                    binary += String.fromCharCode.apply(null, chunk as any);
+                }
+                imageBase64 = btoa(binary);
             }
         }
 

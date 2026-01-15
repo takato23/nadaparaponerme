@@ -38,7 +38,7 @@ const CapsuleWardrobeBuilderView = ({ closet, onClose, onSaveCapsule, onCreateOu
 
     const handleStartGeneration = async () => {
         if (isGenerating) return; // Prevent multiple calls
-        
+
         if (closet.length < selectedSize) {
             setError(`Necesitás al menos ${selectedSize} prendas en tu armario para crear una cápsula de este tamaño.`);
             return;
@@ -88,7 +88,7 @@ const CapsuleWardrobeBuilderView = ({ closet, onClose, onSaveCapsule, onCreateOu
 
                 <div className="absolute inset-0 bg-white/90 dark:bg-background-dark/90 backdrop-blur-xl flex flex-col md:inset-y-4 md:inset-x-4 md:rounded-3xl md:border md:border-white/20">
                     <header className="p-6 flex items-center justify-between border-b border-gray-200 dark:border-gray-700">
-                        <h2 className="text-2xl font-bold dark:text-gray-200">Capsule Wardrobe Builder</h2>
+                        <h2 className="text-2xl font-bold dark:text-gray-200">Armador de Cápsula</h2>
                         <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl dark:text-gray-200">
                             <span className="material-symbols-outlined">close</span>
                         </button>
@@ -217,18 +217,15 @@ const CapsuleWardrobeBuilderView = ({ closet, onClose, onSaveCapsule, onCreateOu
                                         <button
                                             key={option.value}
                                             onClick={() => setSelectedTheme(option.value)}
-                                            className={`p-4 rounded-2xl border-2 transition-all ${
-                                                selectedTheme === option.value
+                                            className={`p-4 rounded-2xl border-2 transition-all ${selectedTheme === option.value
                                                     ? 'border-primary bg-primary/10'
                                                     : 'border-gray-200 dark:border-gray-700 hover:border-primary/50'
-                                            }`}
+                                                }`}
                                         >
-                                            <span className={`material-symbols-outlined text-3xl mb-2 ${
-                                                selectedTheme === option.value ? 'text-primary' : 'text-gray-400'
-                                            }`}>{option.icon}</span>
-                                            <p className={`font-bold text-sm mb-1 ${
-                                                selectedTheme === option.value ? 'text-primary' : 'dark:text-gray-200'
-                                            }`}>{option.label}</p>
+                                            <span className={`material-symbols-outlined text-3xl mb-2 ${selectedTheme === option.value ? 'text-primary' : 'text-gray-400'
+                                                }`}>{option.icon}</span>
+                                            <p className={`font-bold text-sm mb-1 ${selectedTheme === option.value ? 'text-primary' : 'dark:text-gray-200'
+                                                }`}>{option.label}</p>
                                             <p className="text-xs text-text-secondary dark:text-gray-400">{option.description}</p>
                                         </button>
                                     ))}
@@ -242,15 +239,13 @@ const CapsuleWardrobeBuilderView = ({ closet, onClose, onSaveCapsule, onCreateOu
                                         <button
                                             key={size}
                                             onClick={() => setSelectedSize(size)}
-                                            className={`p-4 rounded-2xl border-2 transition-all ${
-                                                selectedSize === size
+                                            className={`p-4 rounded-2xl border-2 transition-all ${selectedSize === size
                                                     ? 'border-primary bg-primary/10'
                                                     : 'border-gray-200 dark:border-gray-700 hover:border-primary/50'
-                                            }`}
+                                                }`}
                                         >
-                                            <p className={`text-3xl font-bold mb-1 ${
-                                                selectedSize === size ? 'text-primary' : 'dark:text-gray-200'
-                                            }`}>{size}</p>
+                                            <p className={`text-3xl font-bold mb-1 ${selectedSize === size ? 'text-primary' : 'dark:text-gray-200'
+                                                }`}>{size}</p>
                                             <p className="text-xs text-text-secondary dark:text-gray-400">prendas</p>
                                         </button>
                                     ))}
@@ -268,15 +263,13 @@ const CapsuleWardrobeBuilderView = ({ closet, onClose, onSaveCapsule, onCreateOu
                                             <button
                                                 key={season}
                                                 onClick={() => setSelectedSeason(season)}
-                                                className={`p-3 rounded-2xl border-2 transition-all ${
-                                                    selectedSeason === season
+                                                className={`p-3 rounded-2xl border-2 transition-all ${selectedSeason === season
                                                         ? 'border-primary bg-primary/10'
                                                         : 'border-gray-200 dark:border-gray-700 hover:border-primary/50'
-                                                }`}
+                                                    }`}
                                             >
-                                                <p className={`font-bold text-sm ${
-                                                    selectedSeason === season ? 'text-primary' : 'dark:text-gray-200'
-                                                }`}>{season || 'Cualquiera'}</p>
+                                                <p className={`font-bold text-sm ${selectedSeason === season ? 'text-primary' : 'dark:text-gray-200'
+                                                    }`}>{season || 'Cualquiera'}</p>
                                             </button>
                                         ))}
                                     </div>

@@ -6,12 +6,14 @@ interface StudioHeaderProps {
     generatedImagesCount: number;
     onOpenLatestResult: () => void;
     showResultsHint: boolean;
+    onShowHelp?: () => void;
 }
 
 export const StudioHeader: React.FC<StudioHeaderProps> = ({
     generatedImagesCount,
     onOpenLatestResult,
-    showResultsHint
+    showResultsHint,
+    onShowHelp
 }) => {
     const navigate = useNavigate();
 
@@ -25,10 +27,19 @@ export const StudioHeader: React.FC<StudioHeaderProps> = ({
                 >
                     <span className="material-symbols-outlined text-[color:var(--studio-ink)]">arrow_back</span>
                 </button>
-                <div className="text-center flex-1">
+                <div className="text-center flex-1 relative">
                     <h1 className="text-xl font-semibold" style={{ fontFamily: 'var(--studio-font-display)' }}>
                         Studio
                     </h1>
+                    {onShowHelp && (
+                        <button
+                            onClick={onShowHelp}
+                            className="absolute right-0 top-1/2 -translate-y-1/2 text-[color:var(--studio-ink-muted)] hover:text-[color:var(--studio-ink)] transition"
+                            title="¿Cómo se usa?"
+                        >
+                            <span className="material-symbols-outlined text-lg">help_outline</span>
+                        </button>
+                    )}
                 </div>
                 {/* Mobile: Toggle inspector */}
                 <button

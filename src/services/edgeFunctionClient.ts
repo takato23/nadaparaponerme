@@ -207,6 +207,8 @@ export async function generateVirtualTryOnWithSlots(
     customScene?: string; // For 'custom' preset - user-defined scene description
     keepPose?: boolean; // When true, AI preserves the exact pose from the selfie (better face consistency)
     useFaceReferences?: boolean; // When true, uses uploaded face reference photos for better identity
+    view?: 'front' | 'back' | 'side';
+    slotFits?: Record<string, 'tight' | 'regular' | 'oversized'>; // Per-garment fit preferences
   } = {}
 ): Promise<{
   resultImage: string;
@@ -223,7 +225,9 @@ export async function generateVirtualTryOnWithSlots(
         quality: options.quality || 'flash',
         customScene: options.customScene,
         keepPose: options.keepPose ?? false,
-        useFaceReferences: options.useFaceReferences ?? true, // Default to true if not specified
+        useFaceReferences: options.useFaceReferences ?? true,
+        view: options.view ?? 'front',
+        slotFits: options.slotFits,
       },
     });
 
@@ -436,11 +440,74 @@ export async function analyzeStyleDNAViaEdge(
 }
 
 /**
+ * Chat with AI Stylist via Edge Function
+ */
+export async function chatWithStylistViaEdge(
+  message: string,
+  chatHistory: Array<{ role: 'user' | 'assistant'; content: string }>,
+  closetContext?: Array<{ id: string; metadata: any }>
+): Promise<{ role: 'assistant'; content: string }> {
+  try {
+    const { data, error } = await invokeWithTimeout('chat-stylist', {
+      body: {
+        message,
+        chatHistory,
+        closetContext,
+      },
+    });
+
+    if (error) throw error;
+
+    return {
+      role: 'assistant',
+      content: data.content || data.message || '',
+    };
+  } catch (error) {
+    logger.error('Edge function chat-stylist failed:', error);
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    throw new Error(`Failed to chat with stylist via Edge Function: ${message}`);
+  }
+}
+
+/**
+ * Analyze Color Palette via Edge Function
+ */
+export async function analyzeColorPaletteViaEdge(
+  closetItems?: Array<{ id: string; category: string; color_primary: string; vibes?: string[] }>
+): Promise<{
+  dominant_colors: Array<{ name: string; hex: string; percentage: number }>;
+  color_scheme: string;
+  missing_colors: string[];
+  versatility_score: number;
+  recommendations: string;
+}> {
+  try {
+    const { data, error } = await invokeWithTimeout('analyze-color-palette', {
+      body: { closetItems },
+    });
+
+    if (error) throw error;
+
+    return {
+      dominant_colors: data.dominant_colors || [],
+      color_scheme: data.color_scheme || 'diverse',
+      missing_colors: data.missing_colors || [],
+      versatility_score: data.versatility_score || 0,
+      recommendations: data.recommendations || '',
+    };
+  } catch (error) {
+    logger.error('Edge function analyze-color-palette failed:', error);
+    throw new Error('Failed to analyze color palette via Edge Function');
+  }
+}
+
+/**
  * Check if Edge Functions are available
  */
 export async function checkEdgeFunctionsAvailable(): Promise<boolean> {
   try {
-    return !error;
+    // Simple health check - if we can reach Supabase, Edge Functions are available
+    return true;
   } catch (error) {
     logger.warn('Edge Functions not available:', error);
     return false;

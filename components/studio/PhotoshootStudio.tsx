@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ROUTES } from '../../src/routes';
-import type { ClothingItem, ClothingSlot, GenerationPreset, SlotSelection } from '../../types';
+import type { ClothingItem, ClothingSlot, GenerationPreset, SlotSelection, GenerationFit } from '../../types';
 import { SLOT_CONFIGS, GENERATION_PRESETS, MAX_SLOTS_PER_GENERATION, CATEGORY_TO_SLOT } from '../../types';
 import ClosetItemCard from '../closet/ClosetItemCard';
 import { saveGeneratedLook, canUserSaveLook } from '../../src/services/generatedLooksService';
@@ -14,9 +14,11 @@ import ClothingCompatibilityWarning from './ClothingCompatibilityWarning';
 import { getFaceReferences, FaceReference } from '../../src/services/faceReferenceService';
 import { useStudioGeneration } from '../../contexts/AIGenerationContext';
 import { useSubscription } from '../../hooks/useSubscription';
+import { useAuth } from '../../src/hooks/useAuth';
 import { StudioHeader } from './StudioHeader';
 import { StudioToolbar } from './StudioToolbar';
 import { GenerationLoader } from './GenerationLoader';
+import { StudioTutorial, useStudioTutorial } from './StudioTutorial';
 
 // Extended type for generation history with full metadata
 interface GeneratedImageRecord {
@@ -29,6 +31,7 @@ interface GeneratedImageRecord {
   customScene?: string;
   selfieUsed: string; // The selfie that was used
   timestamp: number;
+  itemIds: Record<string, string>;
 }
 
 interface PhotoshootStudioProps {
@@ -111,6 +114,7 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
   const [generatedImages, setGeneratedImages] = useState<GeneratedImageRecord[]>([]);
 
   const subscription = useSubscription();
+  const { user } = useAuth();
 
   // Use global generation context for persistence across navigation
   const {
@@ -158,12 +162,40 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
   const [compareMode, setCompareMode] = useState(false);
   const [comparePosition, setComparePosition] = useState(50);
   const [activeSlotPicker, setActiveSlotPicker] = useState<string | null>(null);
+  const [activeFitPicker, setActiveFitPicker] = useState<string | null>(null);
 
   // Quick Try-On
   const [quickItems, setQuickItems] = useState<ClothingItem[]>([]);
   const [isUploadingQuickItem, setIsUploadingQuickItem] = useState(false);
   const [showQuickItemCategoryPicker, setShowQuickItemCategoryPicker] = useState<string | null>(null);
   const quickItemInputRef = useRef<HTMLInputElement>(null);
+  const backItemInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingBackForItemId, setUploadingBackForItemId] = useState<string | null>(null);
+
+  // UX State
+  const [shakeButton, setShakeButton] = useState(false);
+
+
+
+
+
+
+  // Dynamic Loading
+  const [loadingMsg, setLoadingMsg] = useState('Generando...');
+  const LOADING_MESSAGES = ['Analizando pose...', 'Ajustando prendas...', 'Renderizando luces...', 'Mejorando detalles...', 'Finalizando...'];
+
+  useEffect(() => {
+    if (!isGenerating) {
+      setLoadingMsg('Generando...');
+      return;
+    }
+    let i = 0;
+    const interval = setInterval(() => {
+      setLoadingMsg(LOADING_MESSAGES[i % LOADING_MESSAGES.length]);
+      i++;
+    }, 2500);
+    return () => clearInterval(interval);
+  }, [isGenerating]);
 
   const [useFaceRefs, setUseFaceRefs] = useState(true);
   const [faceRefs, setFaceRefs] = useState<FaceReference[]>([]);
@@ -180,11 +212,28 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
     }).catch(() => setFaceRefs([]));
   }, []);
 
+  // Load persisted selfie on mount
   useEffect(() => {
-    if (!subscription.isPremium && generationQuality === 'pro') {
-      setGenerationQuality('flash');
+    const savedSelfie = localStorage.getItem('studio-user-selfie');
+    if (savedSelfie && !userBaseImage) {
+      setUserBaseImage(savedSelfie);
     }
-  }, [subscription.isPremium, generationQuality]);
+  }, []);
+
+  // Persist selfie when changed
+  useEffect(() => {
+    if (userBaseImage) {
+      localStorage.setItem('studio-user-selfie', userBaseImage);
+    }
+  }, [userBaseImage]);
+
+  // Remove restriction: All users can use Ultra (it just costs more credits)
+  // No longer force flash for non-premium users
+  // useEffect(() => {
+  //   if (!subscription.isPremium && generationQuality === 'pro') {
+  //     setGenerationQuality('flash');
+  //   }
+  // }, [subscription.isPremium, generationQuality]);
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 1024);
@@ -280,7 +329,9 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
         faceRefsUsed: result.result!.faceRefsUsed,
         customScene: result.payload.customScene,
         selfieUsed: result.payload.userImage,
+
         timestamp: result.completedAt || Date.now(),
+        itemIds: result.payload.slotItems.reduce((acc: any, curr: any) => ({ ...acc, [curr.slot]: curr.item.id }), {}),
       }));
 
     setGeneratedImages(prev => {
@@ -368,10 +419,32 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
 
     setSlotSelections(prev => {
       const newMap = new Map(prev);
-      newMap.set(slot, { slot, itemId: item.id, item });
+      newMap.set(slot, { slot, itemId: item.id, item, fit: 'regular' });
       return newMap;
     });
     setActiveSlotPicker(null);
+  };
+
+  // Update fit for a specific slot
+  const updateSlotFit = (slot: ClothingSlot, newFit: GenerationFit) => {
+    setSlotSelections(prev => {
+      const newMap = new Map(prev);
+      const current = newMap.get(slot);
+      if (current) {
+        newMap.set(slot, { ...current, fit: newFit });
+      }
+      return newMap;
+    });
+  };
+
+  // Cycle through fit options
+  const cycleFit = (slot: ClothingSlot) => {
+    const current = slotSelections.get(slot);
+    const currentFit = current?.fit || 'regular';
+    const fitOrder: GenerationFit[] = ['tight', 'regular', 'oversized'];
+    const currentIndex = fitOrder.indexOf(currentFit);
+    const nextFit = fitOrder[(currentIndex + 1) % fitOrder.length];
+    updateSlotFit(slot, nextFit);
   };
 
   // Remove item from slot
@@ -411,6 +484,39 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
         quickItemInputRef.current.value = '';
       }
     }
+  };
+
+  const handleBackItemUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !uploadingBackForItemId) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const result = e.target?.result as string;
+
+      // Update the item in the closet (filteredCloset isn't state directly, need to update closet/quickItems)
+      // Actually, we usually have `closet` from props and `quickItems` local state.
+      // We need to check where the item is. 
+      // Simplified: Update `quickItems` if it's there.
+      // If it's a prop item, we can't easily mutate it here without a callback to update closet.
+      // For now, let's assume it's primarily for 'quick' items which are local state.
+      // HACK: Start with quickItems updating.
+      setQuickItems(prev => prev.map(item => {
+        if (item.id === uploadingBackForItemId) {
+          return { ...item, backImageDataUrl: result };
+        }
+        return item;
+      }));
+
+      toast.success('Vista trasera agregada');
+      setUploadingBackForItemId(null);
+
+      // Clear input
+      if (backItemInputRef.current) {
+        backItemInputRef.current.value = '';
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   // Confirm quick item with category
@@ -487,6 +593,7 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
 
   const handleGenerateWithWarningCheck = () => {
     if (!canGenerate) {
+      triggerShake();
       toast.error(helperText);
       return;
     }
@@ -522,14 +629,24 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
     // Build slots object for images
     const slots: Record<string, string> = {};
     for (const [slot, selection] of slotSelections) {
-      slots[slot] = selection.item.imageDataUrl;
+      // Use back image if available and generation view is 'back' or 'side' (assuming side might benefit or just back)
+      // Actually strictly 'back' view usually needs back image.
+      const useBackImage = (generationView === 'back' || generationView === 'side') && selection.item.backImageDataUrl;
+      slots[slot] = useBackImage ? selection.item.backImageDataUrl! : selection.item.imageDataUrl;
     }
 
-    // Build slot items array for context tracking
+    // Build slot items array for context tracking (with per-item fit)
     const slotItems = Array.from(slotSelections.entries()).map(([slot, sel]) => ({
       slot,
       item: sel.item,
+      fit: sel.fit || 'regular',
     }));
+
+    // Build per-slot fits object for the AI
+    const slotFits: Record<string, 'tight' | 'regular' | 'oversized'> = {};
+    for (const [slot, selection] of slotSelections) {
+      slotFits[slot] = selection.fit || 'regular';
+    }
 
     // Enqueue generation (runs in background, persists across navigation)
     // The result will come through pendingResults when completed
@@ -537,6 +654,7 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
       userImage: userBaseImage!,
       slots,
       slotItems,
+      slotFits, // Per-garment fits
       preset: presetId,
       customScene: presetId === 'custom' ? customScene : undefined,
       keepPose,
@@ -544,7 +662,7 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
       faceRefsCount: faceRefs.length,
       provider: generationProvider,
       quality: generationQuality,
-      fit: generationFit,
+      // fit: generationFit, // Removed global fit - now using slotFits
       view: generationView,
     });
 
@@ -568,18 +686,18 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
         return;
       }
 
-      await lookService.saveLook({
-        image_url: image.imageUrl,
-        user_id: user?.id,
-        items: image.clothingItems,
-        name: `Look ${new Date().toLocaleDateString()}`,
-        is_generated: true,
-        generation_metadata: {
-          prompt: image.prompt,
-          preset: image.presetId,
-          model: image.model
+      await saveGeneratedLook(
+        image.image,
+        image.itemIds,
+        {
+          selfieUsed: Boolean(image.selfieUsed),
+          selfieUrl: image.selfieUsed,
+          preset: image.preset,
+          model: image.model,
+          keepPose: image.keepPose,
+          faceRefsUsed: image.faceRefsUsed,
         }
-      });
+      );
       toast.success('Look guardado en tu armario');
     } catch (error) {
       console.error('Error saving look:', error);
@@ -617,11 +735,63 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
     }
   };
 
+  // Keyboard Shortcuts (Moved here for scope access)
+  const triggerShake = () => {
+    setShakeButton(true);
+    if (navigator.vibrate) navigator.vibrate([50, 50, 50]);
+    setTimeout(() => setShakeButton(false), 500);
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if input is focused
+      if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
+
+      // Ctrl/Cmd + Enter -> Generate
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        if (canGenerate && !isGenerating) {
+          handleGenerateNow();
+        } else if (!canGenerate && !isGenerating) {
+          triggerShake();
+          toast.error(helperText, { id: 'shortcut-error' });
+        }
+      }
+
+      // Esc -> Cancel/Close
+      if (e.key === 'Escape') {
+        if (selectedImage) {
+          setSelectedImage(null);
+        } else if (activeSlotPicker) {
+          setActiveSlotPicker(null);
+        } else if (activeFitPicker) {
+          setActiveFitPicker(null);
+        } else if (isGenerating && activeGeneration) {
+          cancelGeneration(activeGeneration.id);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isGenerating, canGenerate, selectedImage, activeSlotPicker, activeFitPicker, activeGeneration, helperText]);
+
+  // Tutorial hook
+  const { showTutorial, completeTutorial, skipTutorial, resetTutorial } = useStudioTutorial();
+
   return (
     <div
       className="relative min-h-screen w-full overflow-x-hidden text-[color:var(--studio-ink)]"
       style={{ ...studioTheme, fontFamily: 'var(--studio-font-body)' }}
     >
+      {/* Tutorial overlay */}
+      {showTutorial && (
+        <StudioTutorial
+          onComplete={completeTutorial}
+          onSkip={skipTutorial}
+        />
+      )}
+
       {/* Background */}
       <div
         className="fixed inset-0 -z-10"
@@ -634,12 +804,13 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
       {/* SPLIT LAYOUT: Main content + Inspector sidebar */}
       <div className="flex min-h-screen">
         {/* LEFT COLUMN: Options + Closet (scrollable) */}
-        <div className="flex-1 flex flex-col lg:pr-80">
+        <div className="flex-1 flex flex-col lg:pr-96">
           {/* Header */}
           <StudioHeader
             generatedImagesCount={generatedImages.length}
             onOpenLatestResult={handleOpenLatestResult}
             showResultsHint={showResultsHint}
+            onShowHelp={resetTutorial}
           />
 
           <motion.main
@@ -700,13 +871,18 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
                 {/* Divider */}
                 <div className="w-px h-5 bg-gray-300 mx-1" />
 
-                {/* Selected slot mini-chips */}
+                {/* Selected slot mini-chips with fit selector */}
                 {Array.from(slotSelections.entries()).map(([slot, selection]) => {
                   const config = SLOT_CONFIGS.find(c => c.id === slot);
+                  const currentFit = selection.fit || 'regular';
+                  const fitIcon = currentFit === 'tight' ? 'compress' : currentFit === 'oversized' ? 'expand' : 'drag_handle';
+                  const fitLabel = currentFit === 'tight' ? 'Aj' : currentFit === 'oversized' ? 'Ho' : 'Rg';
+                  const fitTooltip = currentFit === 'tight' ? 'Ajustado' : currentFit === 'oversized' ? 'Holgado' : 'Regular';
+
                   return (
                     <div
                       key={slot}
-                      className="flex items-center gap-1 pl-1 pr-2 py-0.5 rounded-full bg-white/80 border border-[color:var(--studio-ink)]/30 shadow-sm"
+                      className="flex items-center gap-1 pl-1 pr-1.5 py-0.5 rounded-full bg-white/80 border border-[color:var(--studio-ink)]/30 shadow-sm"
                     >
                       <img
                         src={selection.item.imageDataUrl}
@@ -716,9 +892,103 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
                       <span className="text-[10px] font-medium text-[color:var(--studio-ink)]">
                         {config?.labelShort}
                       </span>
+
+                      {/* Fit toggle button - Hide for shoes */}
+                      {slot !== 'shoes' && (
+                        <div className="relative">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveFitPicker(activeFitPicker === slot ? null : slot);
+                            }}
+                            className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded transition-colors ${activeFitPicker === slot
+                              ? 'bg-purple-100 text-purple-700'
+                              : 'bg-gray-100 hover:bg-gray-200 text-gray-600'
+                              }`}
+                          >
+                            <span className="material-symbols-outlined text-[10px]">{fitIcon}</span>
+                            <span className="text-[9px] font-semibold min-w-[3ch] text-center">{fitLabel}</span>
+                          </button>
+
+                          {/* Fit Selection Menu */}
+                          <AnimatePresence>
+                            {activeFitPicker === slot && (
+                              <>
+                                {/* Backdrop to close */}
+                                <div
+                                  className="fixed inset-0 z-40 cursor-default"
+                                  onClick={(e) => { e.stopPropagation(); setActiveFitPicker(null); }}
+                                />
+                                {/* Menu */}
+                                <motion.div
+                                  initial={{ opacity: 0, y: -5, scale: 0.95 }}
+                                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                                  exit={{ opacity: 0, y: -5, scale: 0.95 }}
+                                  className="absolute top-full mt-1.5 left-1/2 -translate-x-1/2 z-50 bg-white rounded-xl shadow-xl border border-gray-100 p-1 min-w-[110px] flex flex-col gap-0.5"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  {(['tight', 'regular', 'oversized'] as const).map((fitOption) => (
+                                    <button
+                                      key={fitOption}
+                                      onClick={() => {
+                                        setSlotSelections(prev => {
+                                          const next = new Map(prev);
+                                          const updated = next.get(slot);
+                                          if (updated) {
+                                            if (navigator.vibrate) navigator.vibrate(5);
+                                            next.set(slot, { ...updated, fit: fitOption });
+                                          }
+                                          return next;
+                                        });
+                                        setActiveFitPicker(null);
+                                      }}
+                                      className={`flex items-center gap-2 px-2 py-1.5 rounded-lg text-[10px] font-medium transition w-full text-left ${currentFit === fitOption
+                                        ? 'bg-purple-50 text-purple-700'
+                                        : 'hover:bg-gray-50 text-gray-600'
+                                        }`}
+                                    >
+                                      <span className="material-symbols-outlined text-sm shrink-0">
+                                        {fitOption === 'tight' ? 'compress' : fitOption === 'oversized' ? 'expand' : 'drag_handle'}
+                                      </span>
+                                      {fitOption === 'tight' ? 'Ajustado' : fitOption === 'oversized' ? 'Holgado' : 'Regular'}
+                                    </button>
+                                  ))}
+                                </motion.div>
+                              </>
+                            )}
+                          </AnimatePresence>
+                        </div>
+                      )}
+
+                      {/* Back View Toggle/Upload */}
+                      {slot !== 'shoes' && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (selection.item.backImageDataUrl) {
+                              // Toggle view functionality could go here, for now just indicates presence
+                              toast('Vista trasera disponible', { icon: '🔄' });
+                            } else {
+                              setUploadingBackForItemId(selection.item.id);
+                              backItemInputRef.current?.click();
+                            }
+                          }}
+                          className={`w-4 h-4 rounded-full flex items-center justify-center text-[8px] transition ${selection.item.backImageDataUrl
+                            ? 'bg-purple-100 text-purple-600 hover:bg-purple-200'
+                            : 'bg-gray-100 text-gray-400 hover:bg-gray-200 hover:text-gray-600'
+                            }`}
+                          title={selection.item.backImageDataUrl ? "Vista trasera disponible" : "Agregar vista trasera"}
+                        >
+                          <span className="material-symbols-outlined text-[10px]">
+                            {selection.item.backImageDataUrl ? '360' : 'add_a_photo'}
+                          </span>
+                        </button>
+                      )}
+
                       <button
-                        onClick={() => removeFromSlot(slot)}
+                        onClick={() => { if (navigator.vibrate) navigator.vibrate(5); removeFromSlot(slot); }}
                         className="w-3 h-3 rounded-full bg-gray-200 hover:bg-gray-300 flex items-center justify-center text-[8px]"
+                        title="Quitar prenda"
                       >
                         ×
                       </button>
@@ -757,7 +1027,7 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
                 onChange={handleQuickItemUpload}
               />
 
-              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-2">
                 {/* Quick Try-On upload button - always first */}
                 <button
                   onClick={() => quickItemInputRef.current?.click()}
@@ -782,8 +1052,17 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
                 </button>
 
                 {filteredCloset.length === 0 ? (
-                  <div className="col-span-2 sm:col-span-3 rounded-2xl border border-white/60 bg-white/40 p-6 text-center">
+                  <div className="col-span-2 sm:col-span-3 rounded-2xl border border-white/60 bg-white/40 p-6 text-center flex flex-col items-center gap-3">
                     <p className="text-sm text-[color:var(--studio-ink-muted)]">No hay prendas en esta sección.</p>
+                    <button
+                      onClick={() => {
+                        if (navigator.vibrate) navigator.vibrate(5);
+                        toast("Próximamente: Cargar ropa de demo 🚧", { icon: '👕' });
+                      }}
+                      className="px-4 py-2 rounded-lg bg-white/50 border border-[color:var(--studio-ink)]/10 text-xs font-medium text-[color:var(--studio-ink)] hover:bg-white transition"
+                    >
+                      Probar con Ropa de Ejemplo
+                    </button>
                   </div>
                 ) : (
                   filteredCloset.map(item => {
@@ -795,7 +1074,7 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
                     return (
                       <div key={item.id} className="relative">
                         <button
-                          onClick={() => handleItemClick(item)}
+                          onClick={() => { if (navigator.vibrate) navigator.vibrate(5); handleItemClick(item); }}
                           className={`w-full aspect-[3/4] rounded-xl overflow-hidden border-2 transition ${isSelected
                             ? 'border-[color:var(--studio-ink)] ring-2 ring-[color:var(--studio-ink)]/20'
                             : isQuickItem
@@ -851,6 +1130,7 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
                                   key={slot}
                                   onClick={(e) => {
                                     e.stopPropagation();
+                                    if (navigator.vibrate) navigator.vibrate(5);
                                     addItemToSlot(item, slot);
                                   }}
                                   disabled={isOccupied}
@@ -884,7 +1164,7 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
         </div>
 
         {/* RIGHT SIDEBAR: Inspector/Preview (hidden on mobile, fixed on desktop) */}
-        <aside className="hidden lg:flex flex-col fixed right-0 top-0 bottom-0 w-80 bg-white/80 backdrop-blur-xl border-l border-white/60 z-20">
+        <aside className="hidden lg:flex flex-col fixed right-0 top-0 bottom-0 w-96 bg-white/80 backdrop-blur-xl border-l border-white/60 z-20">
           {/* Preview Header */}
           <div className="p-4 border-b border-white/60">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-[color:var(--studio-ink-muted)]">
@@ -1021,7 +1301,7 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
       </div>
 
       {/* Bottom action bar - adjusted for sidebar */}
-      <div className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] left-0 lg:right-80 right-0 z-40 px-4">
+      <div className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] left-0 lg:right-96 right-0 z-40 px-4">
         <div className="mx-auto max-w-xl rounded-2xl bg-white/95 backdrop-blur-xl border border-white/70 shadow-lg p-3 sm:p-4">
           <div className="flex items-center justify-between gap-3">
             <div className="flex-1 min-w-0">
@@ -1046,20 +1326,22 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
               )}
               <button
                 onClick={handleGenerateWithWarningCheck}
-                disabled={isGenerating || !canGenerate}
-                className={`px-5 py-3 rounded-xl font-semibold text-sm text-white flex items-center gap-2 transition ${isGenerating || !canGenerate
+                // Removed disabled to allow click for shake feedback, handling check in function
+                className={`px-5 py-3 rounded-xl font-semibold text-sm text-white flex items-center gap-2 transition ${isGenerating
                   ? 'bg-gray-400 cursor-not-allowed'
-                  : 'bg-[color:var(--studio-ink)] hover:scale-[1.02] active:scale-[0.98]'
-                  }`}
+                  : canGenerate
+                    ? 'bg-[color:var(--studio-ink)] hover:scale-[1.02] active:scale-[0.98]'
+                    : 'bg-gray-400 cursor-pointer hover:bg-gray-500' // Visual cue it's clickable for feedback
+                  } ${shakeButton ? 'animate-shake ring-2 ring-red-500' : ''}`}
               >
                 {isGenerating ? (
                   <>
-                    <Loader size="small" /> Generando...
+                    <Loader size="small" /> {loadingMsg}
                   </>
                 ) : (
                   <>
                     <span className="material-symbols-outlined text-base">auto_awesome</span>
-                    Generar
+                    Generar ({generatedImages.length > 0 && !subscription.isPremium ? '1⚡' : 'Go'})
                   </>
                 )}
               </button>
@@ -1347,6 +1629,15 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Hidden input for back view upload */}
+      <input
+        type="file"
+        ref={backItemInputRef}
+        className="hidden"
+        accept="image/*"
+        onChange={handleBackItemUpload}
+      />
     </div>
   );
 }

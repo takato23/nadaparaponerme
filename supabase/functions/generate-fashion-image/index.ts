@@ -114,7 +114,12 @@ serve(async (req) => {
 
     console.log('User authenticated:', user.id);
 
-    const rateLimit = await enforceRateLimit(supabase, user.id, 'generate-fashion-image');
+    // SAFETY: Strict rate limit for AI Designer
+    // Max 4 requests per 2 minutes to prevent abuse
+    const rateLimit = await enforceRateLimit(supabase, user.id, 'generate-fashion-image', {
+      maxRequests: 4,
+      windowSeconds: 120,
+    });
     if (!rateLimit.allowed) {
       const retryAfter = rateLimit.retryAfterSeconds || 60;
       const message = rateLimit.reason === 'blocked'

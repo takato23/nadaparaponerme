@@ -26,7 +26,6 @@ interface ProfileViewProps {
     onOpenColorPalette?: () => void;
     onOpenTopVersatile?: () => void;
     onOpenWeeklyPlanner?: () => void;
-    onOpenTestingPlayground?: () => void;
     onOpenAestheticPlayground?: () => void;
     onOpenBorrowedItems?: () => void;
     onDeleteAccount?: () => Promise<void> | void;
@@ -42,7 +41,6 @@ const ProfileView = ({
     onOpenColorPalette,
     onOpenTopVersatile,
     onOpenWeeklyPlanner,
-    onOpenTestingPlayground,
     onOpenAestheticPlayground,
     onOpenBorrowedItems,
     onDeleteAccount,
@@ -187,10 +185,28 @@ const ProfileView = ({
                     </button>
                 </div>
 
-                {/* Analytics Section (Prototype Integration) */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Fast Overview - Stats Grid (Moved to top for visibility) */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="bg-white/40 dark:bg-gray-800/40 p-4 rounded-2xl border border-white/10 text-center">
+                        <p className="text-3xl font-bold text-primary">{stats.totalItems}</p>
+                        <p className="text-xs text-gray-500 uppercase font-bold tracking-wider">Prendas</p>
+                    </div>
+                    <div className="bg-white/40 dark:bg-gray-800/40 p-4 rounded-2xl border border-white/10 text-center">
+                        <p className="text-3xl font-bold text-secondary">{stats.totalOutfits}</p>
+                        <p className="text-xs text-gray-500 uppercase font-bold tracking-wider">Outfits</p>
+                    </div>
+                    <div className="bg-white/40 dark:bg-gray-800/40 p-4 rounded-2xl border border-white/10 text-center">
+                        <p className="text-xl font-bold text-gray-800 dark:text-white truncate">{stats.favoriteBrand || '-'}</p>
+                        <p className="text-xs text-gray-500 uppercase font-bold tracking-wider">Marca Fav</p>
+                    </div>
+                    <div className="bg-white/40 dark:bg-gray-800/40 p-4 rounded-2xl border border-white/10 text-center">
+                        <p className="text-xl font-bold text-gray-800 dark:text-white truncate">{stats.mostWornColor || '-'}</p>
+                        <p className="text-xs text-gray-500 uppercase font-bold tracking-wider">Color Top</p>
+                    </div>
+                </div>
 
-                    {/* Most Worn Colors Chart */}
+                {/* Visual Analytics - Color Chart */}
+                <div className="flex flex-col gap-6">
                     <div className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-xl p-6 rounded-3xl shadow-soft-lg border border-white/20 dark:border-gray-700">
                         <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-6 flex items-center gap-2">
                             <span className="material-symbols-outlined text-primary">palette</span>
@@ -224,217 +240,158 @@ const ProfileView = ({
                             </div>
                         )}
                     </div>
-
-                    {/* Cost Per Wear (Mock for now, but visually impressive) */}
-                    <div className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-xl p-6 rounded-3xl shadow-soft-lg border border-white/20 dark:border-gray-700 flex flex-col justify-between">
-                        <div className="flex justify-between items-start">
-                            <div>
-                                <h3 className="text-lg font-bold text-gray-800 dark:text-white">Costo por Uso</h3>
-                                <p className="text-sm text-gray-500">Promedio del armario</p>
-                            </div>
-                            <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold">-12%</span>
-                        </div>
-
-                        <div className="flex items-center justify-center py-4">
-                            <div className="relative w-32 h-32">
-                                <svg className="w-full h-full -rotate-90">
-                                    <circle cx="64" cy="64" r="56" stroke="#e5e7eb" strokeWidth="10" fill="transparent" className="dark:stroke-gray-700" />
-                                    <motion.circle
-                                        cx="64" cy="64" r="56"
-                                        stroke="#10b981" strokeWidth="10" fill="transparent"
-                                        strokeDasharray="351"
-                                        strokeDashoffset="351"
-                                        animate={{ strokeDashoffset: 100 }}
-                                        transition={{ duration: 1.5, ease: "easeOut" }}
-                                        strokeLinecap="round"
-                                    />
-                                </svg>
-                                <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                    <span className="text-2xl font-bold text-gray-800 dark:text-white">$4.20</span>
-                                    <span className="text-[10px] text-gray-500">por uso</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="text-center">
-                            <p className="text-xs text-gray-400">Basado en precio estimado y frecuencia de uso</p>
-                        </div>
-                    </div>
                 </div>
 
-                {/* Quick Stats Grid */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="bg-white/40 dark:bg-gray-800/40 p-4 rounded-2xl border border-white/10 text-center">
-                        <p className="text-3xl font-bold text-primary">{stats.totalItems}</p>
-                        <p className="text-xs text-gray-500 uppercase font-bold tracking-wider">Prendas</p>
-                    </div>
-                    <div className="bg-white/40 dark:bg-gray-800/40 p-4 rounded-2xl border border-white/10 text-center">
-                        <p className="text-3xl font-bold text-secondary">{stats.totalOutfits}</p>
-                        <p className="text-xs text-gray-500 uppercase font-bold tracking-wider">Outfits</p>
-                    </div>
-                    <div className="bg-white/40 dark:bg-gray-800/40 p-4 rounded-2xl border border-white/10 text-center">
-                        <p className="text-xl font-bold text-gray-800 dark:text-white truncate">{stats.favoriteBrand || '-'}</p>
-                        <p className="text-xs text-gray-500 uppercase font-bold tracking-wider">Marca Fav</p>
-                    </div>
-                    <div className="bg-white/40 dark:bg-gray-800/40 p-4 rounded-2xl border border-white/10 text-center">
-                        <p className="text-xl font-bold text-gray-800 dark:text-white truncate">{stats.mostWornColor || '-'}</p>
-                        <p className="text-xs text-gray-500 uppercase font-bold tracking-wider">Color Top</p>
-                    </div>
-                </div>
+                {/* Visual Identity Section */}
+                <div className="space-y-4">
+                    <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider ml-2">Identidad Visual</h3>
 
-                {/* Face Reference for Virtual Try-On */}
-                <div className="space-y-3">
-                    <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider ml-2">Virtual Try-On</h3>
-                    <FaceReferenceUploader compact />
-                </div>
-
-                {/* Borrowed Items Section */}
-                {onOpenBorrowedItems && (
-                    <div className="space-y-3">
-                        <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider ml-2">Préstamos</h3>
-                        <Card
-                            variant="glass"
-                            padding="md"
-                            rounded="xl"
-                            onClick={onOpenBorrowedItems}
-                            className="w-full flex items-center gap-4 hover:bg-white/50 transition-colors cursor-pointer"
-                        >
-                            <div className="p-2 bg-teal-100 text-teal-600 rounded-lg relative">
-                                <span className="material-symbols-outlined">swap_horiz</span>
-                                {pendingRequests > 0 && (
-                                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-                                        {pendingRequests}
-                                    </span>
-                                )}
-                            </div>
-                            <div className="text-left flex-1">
-                                <p className="font-bold text-gray-800 dark:text-white">Gestionar Préstamos</p>
-                                <p className="text-xs text-gray-500">
-                                    {activeBorrows > 0
-                                        ? `${activeBorrows} ${activeBorrows === 1 ? 'prenda prestada' : 'prendas prestadas'}`
-                                        : 'Solicitudes y devoluciones'}
-                                </p>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                {pendingRequests > 0 && (
-                                    <span className="px-2 py-0.5 bg-red-100 text-red-600 text-xs font-bold rounded-full">
-                                        {pendingRequests} nueva{pendingRequests > 1 ? 's' : ''}
-                                    </span>
-                                )}
-                                <span className="material-symbols-outlined text-gray-400">chevron_right</span>
-                            </div>
-                        </Card>
-                    </div>
-                )}
-
-                {/* Menu Options */}
-                <div className="space-y-3">
-                    <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider ml-2">Configuración y Herramientas</h3>
-
-                    <Card variant="glass" padding="md" rounded="xl" onClick={onOpenColorPalette} className="w-full flex items-center gap-4 hover:bg-white/50 transition-colors cursor-pointer">
-                        <div className="p-2 bg-purple-100 text-purple-600 rounded-lg">
-                            <span className="material-symbols-outlined">palette</span>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Face Reference */}
+                        <div className="md:col-span-2">
+                            <FaceReferenceUploader compact />
                         </div>
-                        <div className="text-left">
-                            <p className="font-bold text-gray-800 dark:text-white">Paleta de Colores</p>
-                            <p className="text-xs text-gray-500">Gestiona tus colores preferidos</p>
-                        </div>
-                        <span className="material-symbols-outlined ml-auto text-gray-400">chevron_right</span>
-                    </Card>
 
-                    <Card variant="glass" padding="md" rounded="xl" onClick={onOpenTopVersatile} className="w-full flex items-center gap-4 hover:bg-white/50 transition-colors cursor-pointer">
-                        <div className="p-2 bg-amber-100 text-amber-600 rounded-lg">
-                            <span className="material-symbols-outlined">star</span>
-                        </div>
-                        <div className="text-left">
-                            <p className="font-bold text-gray-800 dark:text-white">Top Versátiles</p>
-                            <p className="text-xs text-gray-500">Tus prendas más combinables</p>
-                        </div>
-                        <span className="material-symbols-outlined ml-auto text-gray-400">chevron_right</span>
-                    </Card>
-
-                    {onOpenAestheticPlayground && (
-                        <Card variant="glass" padding="md" rounded="xl" onClick={onOpenAestheticPlayground} className="w-full flex items-center gap-4 hover:bg-white/50 transition-colors cursor-pointer">
-                            <div className="p-2 bg-gradient-to-br from-primary to-secondary text-white rounded-lg">
+                        {/* Color Palette */}
+                        <Card variant="glass" padding="md" rounded="xl" onClick={onOpenColorPalette} className="w-full flex items-center gap-4 hover:bg-white/50 transition-colors cursor-pointer">
+                            <div className="p-2 bg-purple-100 text-purple-600 rounded-lg">
                                 <span className="material-symbols-outlined">palette</span>
                             </div>
                             <div className="text-left">
-                                <p className="font-bold text-gray-800 dark:text-white">Aesthetic Playground</p>
-                                <p className="text-xs text-gray-500">Prototipos y diseños experimentales</p>
+                                <p className="font-bold text-gray-800 dark:text-white">Paleta de Colores</p>
+                                <p className="text-xs text-gray-500">Gestiona tus colores preferidos</p>
                             </div>
                             <span className="material-symbols-outlined ml-auto text-gray-400">chevron_right</span>
                         </Card>
-                    )}
 
-                    {onLoadSampleData && closet.length === 0 && (
-                        <Card variant="glass" padding="md" rounded="xl" onClick={onLoadSampleData} className="w-full flex items-center gap-4 hover:bg-white/50 transition-colors cursor-pointer border border-blue-100 dark:border-blue-900/30">
-                            <div className="p-2 bg-blue-100 text-blue-600 rounded-lg">
-                                <span className="material-symbols-outlined">dataset</span>
+                        {/* Top Versatile */}
+                        <Card variant="glass" padding="md" rounded="xl" onClick={onOpenTopVersatile} className="w-full flex items-center gap-4 hover:bg-white/50 transition-colors cursor-pointer">
+                            <div className="p-2 bg-amber-100 text-amber-600 rounded-lg">
+                                <span className="material-symbols-outlined">star</span>
                             </div>
                             <div className="text-left">
-                                <p className="font-bold text-gray-800 dark:text-white">Cargar Datos de Ejemplo</p>
-                                <p className="text-xs text-gray-500">Agrega prendas para probar la app</p>
+                                <p className="font-bold text-gray-800 dark:text-white">Top Versátiles</p>
+                                <p className="text-xs text-gray-500">Tus prendas más combinables</p>
                             </div>
-                            <span className="material-symbols-outlined ml-auto text-gray-400">add_circle</span>
+                            <span className="material-symbols-outlined ml-auto text-gray-400">chevron_right</span>
                         </Card>
-                    )}
-
-                    {/* AI Tone Settings */}
-                    <div className="bg-white/40 dark:bg-gray-800/40 p-4 rounded-xl border border-white/10">
-                        <p className="text-sm font-bold text-gray-800 dark:text-white mb-3 text-left">Tono de la IA</p>
-                        <div className="flex bg-gray-100 dark:bg-gray-900 p-1 rounded-lg">
-                            {(['concise', 'balanced', 'detailed'] as AITone[]).map((t) => (
-                                <button
-                                    key={t}
-                                    onClick={() => setAITone(t)}
-                                    className={`flex-1 py-2 text-xs font-medium rounded-md transition-all ${aiTone === t
-                                        ? 'bg-white dark:bg-gray-700 shadow-sm text-primary'
-                                        : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
-                                        }`}
-                                >
-                                    {t === 'concise' ? 'Conciso' : t === 'balanced' ? 'Balance' : 'Detalle'}
-                                </button>
-                            ))}
-                        </div>
                     </div>
                 </div>
 
-                {/* Privacy & Ads */}
-                <div className="space-y-3">
-                    <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider ml-2">Privacidad y anuncios</h3>
-                    <div className="bg-white/40 dark:bg-gray-800/40 p-4 rounded-xl border border-white/10 space-y-3">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm font-semibold text-gray-800 dark:text-white">Analytics</p>
-                                <p className="text-xs text-gray-500">Medición básica de uso</p>
+                {/* Management Section */}
+                {(onOpenBorrowedItems) && (
+                    <div className="space-y-4">
+                        <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider ml-2">Gestión</h3>
+
+                        {onOpenBorrowedItems && (
+                            <Card
+                                variant="glass"
+                                padding="md"
+                                rounded="xl"
+                                onClick={onOpenBorrowedItems}
+                                className="w-full flex items-center gap-4 hover:bg-white/50 transition-colors cursor-pointer"
+                            >
+                                <div className="p-2 bg-teal-100 text-teal-600 rounded-lg relative">
+                                    <span className="material-symbols-outlined">swap_horiz</span>
+                                    {pendingRequests > 0 && (
+                                        <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                                            {pendingRequests}
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="text-left flex-1">
+                                    <p className="font-bold text-gray-800 dark:text-white">Gestionar Préstamos</p>
+                                    <p className="text-xs text-gray-500">
+                                        {activeBorrows > 0
+                                            ? `${activeBorrows} ${activeBorrows === 1 ? 'prenda prestada' : 'prendas prestadas'}`
+                                            : 'Solicitudes y devoluciones'}
+                                    </p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    {pendingRequests > 0 && (
+                                        <span className="px-2 py-0.5 bg-red-100 text-red-600 text-xs font-bold rounded-full">
+                                            {pendingRequests} nueva{pendingRequests > 1 ? 's' : ''}
+                                        </span>
+                                    )}
+                                    <span className="material-symbols-outlined text-gray-400">chevron_right</span>
+                                </div>
+                            </Card>
+                        )}
+
+                        {onLoadSampleData && closet.length === 0 && (
+                            <Card variant="glass" padding="md" rounded="xl" onClick={onLoadSampleData} className="w-full flex items-center gap-4 hover:bg-white/50 transition-colors cursor-pointer border border-blue-100 dark:border-blue-900/30">
+                                <div className="p-2 bg-blue-100 text-blue-600 rounded-lg">
+                                    <span className="material-symbols-outlined">dataset</span>
+                                </div>
+                                <div className="text-left">
+                                    <p className="font-bold text-gray-800 dark:text-white">Cargar Datos de Ejemplo</p>
+                                    <p className="text-xs text-gray-500">Agrega prendas para probar la app</p>
+                                </div>
+                                <span className="material-symbols-outlined ml-auto text-gray-400">add_circle</span>
+                            </Card>
+                        )}
+                    </div>
+                )}
+
+                {/* AI & Preferences Section */}
+                <div className="space-y-4">
+                    <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider ml-2">IA y Preferencias</h3>
+
+                    <div className="grid grid-cols-1 gap-4">
+                        {/* AI Tone Settings */}
+                        <div className="bg-white/40 dark:bg-gray-800/40 p-4 rounded-xl border border-white/10">
+                            <p className="text-sm font-bold text-gray-800 dark:text-white mb-3 text-left">Tono de la IA</p>
+                            <div className="flex bg-gray-100 dark:bg-gray-900 p-1 rounded-lg">
+                                {(['concise', 'balanced', 'detailed'] as AITone[]).map((t) => (
+                                    <button
+                                        key={t}
+                                        onClick={() => setAITone(t)}
+                                        className={`flex-1 py-2 text-xs font-medium rounded-md transition-all ${aiTone === t
+                                            ? 'bg-white dark:bg-gray-700 shadow-sm text-primary'
+                                            : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+                                            }`}
+                                    >
+                                        {t === 'concise' ? 'Conciso' : t === 'balanced' ? 'Balance' : 'Detalle'}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Privacy & Ads */}
+                        <div className="bg-white/40 dark:bg-gray-800/40 p-4 rounded-xl border border-white/10 space-y-3">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-sm font-semibold text-gray-800 dark:text-white">Analytics</p>
+                                    <p className="text-xs text-gray-500">Medición básica de uso</p>
+                                </div>
+                                <button
+                                    onClick={() => setConsentDraft(prev => ({ ...prev, analytics: !prev.analytics }))}
+                                    className={`px-3 py-1 rounded-full text-xs font-semibold transition ${consentDraft.analytics ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-200 text-gray-600'
+                                        }`}
+                                >
+                                    {consentDraft.analytics ? 'Activado' : 'Desactivado'}
+                                </button>
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-sm font-semibold text-gray-800 dark:text-white">Anuncios</p>
+                                    <p className="text-xs text-gray-500">AdSense para planes Free</p>
+                                </div>
+                                <button
+                                    onClick={() => setConsentDraft(prev => ({ ...prev, ads: !prev.ads }))}
+                                    className={`px-3 py-1 rounded-full text-xs font-semibold transition ${consentDraft.ads ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-200 text-gray-600'
+                                        }`}
+                                >
+                                    {consentDraft.ads ? 'Activado' : 'Desactivado'}
+                                </button>
                             </div>
                             <button
-                                onClick={() => setConsentDraft(prev => ({ ...prev, analytics: !prev.analytics }))}
-                                className={`px-3 py-1 rounded-full text-xs font-semibold transition ${consentDraft.analytics ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-200 text-gray-600'
-                                    }`}
+                                onClick={() => setConsentPreferences(consentDraft)}
+                                className="w-full py-2 rounded-xl text-sm font-semibold text-white bg-gray-900 hover:bg-gray-800 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100 transition"
                             >
-                                {consentDraft.analytics ? 'Activado' : 'Desactivado'}
+                                Guardar preferencias
                             </button>
                         </div>
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm font-semibold text-gray-800 dark:text-white">Anuncios</p>
-                                <p className="text-xs text-gray-500">AdSense para planes Free</p>
-                            </div>
-                            <button
-                                onClick={() => setConsentDraft(prev => ({ ...prev, ads: !prev.ads }))}
-                                className={`px-3 py-1 rounded-full text-xs font-semibold transition ${consentDraft.ads ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-200 text-gray-600'
-                                    }`}
-                            >
-                                {consentDraft.ads ? 'Activado' : 'Desactivado'}
-                            </button>
-                        </div>
-                        <button
-                            onClick={() => setConsentPreferences(consentDraft)}
-                            className="w-full py-2 rounded-xl text-sm font-semibold text-white bg-gray-900 hover:bg-gray-800 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100 transition"
-                        >
-                            Guardar preferencias
-                        </button>
                     </div>
                 </div>
 

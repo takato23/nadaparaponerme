@@ -326,11 +326,15 @@ export async function generateVirtualTryOnWithSlots(
     slotItems?: Array<{ slot: string; item: ClothingItem }>;
     fit?: 'tight' | 'regular' | 'oversized';
     view?: 'front' | 'back' | 'side';
+    slotFits?: Record<string, 'tight' | 'regular' | 'oversized'>;
+    keepPose?: boolean;
+    useFaceReferences?: boolean;
   } = {}
 ): Promise<{
   resultImage: string;
   model: string;
   slotsUsed: string[];
+  faceReferencesUsed?: number;
 }> {
   // OpenAI Client-Side Test Path
   if (options.provider === 'openai') {
@@ -350,8 +354,8 @@ export async function generateVirtualTryOnWithSlots(
     if (options.slotItems && options.slotItems.length > 0) {
       const items = options.slotItems.map(s => {
         const item = s.item;
-        const color = item.color_primary || '';
-        const subcat = item.subcategory || item.category || 'garment';
+        const color = item.metadata?.color_primary || '';
+        const subcat = item.metadata?.subcategory || item.metadata?.category || 'garment';
         return `${color} ${subcat}`.trim();
       });
       clothingDescription = items.join(', ');
@@ -420,14 +424,39 @@ export async function searchProductsFromImage(...args: Parameters<typeof geminiS
 // Color Palette Analysis
 export async function analyzeColorPalette(...args: Parameters<typeof geminiServiceFull.analyzeColorPalette>) {
   if (V1_SAFE_MODE) return { palette: [], harmony: 'Mono', advice: 'Safe Mode' };
-  if (getFeatureFlag('useSupabaseAI')) return assertFeatureAvailable('Análisis de color');
+  const useSupabaseAI = getFeatureFlag('useSupabaseAI');
+  if (useSupabaseAI) {
+    // Extract closet items for Edge Function
+    const closet = args[0];
+    const closetItems = closet.map(item => ({
+      id: item.id,
+      category: item.metadata.category,
+      color_primary: item.metadata.color_primary,
+      vibes: item.metadata.vibe_tags,
+    }));
+    return await edgeClient.analyzeColorPaletteViaEdge(closetItems);
+  }
   return await geminiServiceFull.analyzeColorPalette(...args);
 }
 
 // Chat Services
 export async function chatWithFashionAssistant(...args: Parameters<typeof geminiServiceFull.chatWithFashionAssistant>) {
   if (V1_SAFE_MODE) return { role: 'assistant', content: 'Safe Mode enabled.' };
-  // if (getFeatureFlag('useSupabaseAI')) return assertFeatureAvailable('Chat IA');
+  const useSupabaseAI = getFeatureFlag('useSupabaseAI');
+  if (useSupabaseAI) {
+    // Route through Edge Function for security
+    const [userMessage, inventory, chatHistory, _onStreamChunk] = args;
+    const chatHistoryForEdge = (chatHistory || []).map(msg => ({
+      role: msg.role as 'user' | 'assistant',
+      content: msg.content,
+    }));
+    const closetContext = inventory.map(item => ({
+      id: item.id,
+      metadata: item.metadata,
+    }));
+    const response = await edgeClient.chatWithStylistViaEdge(userMessage, chatHistoryForEdge, closetContext);
+    return response.content;
+  }
   return await geminiServiceFull.chatWithFashionAssistant(...args);
 }
 
@@ -534,7 +563,7 @@ export async function generateCapsuleWardrobe(
 
 // Style DNA
 export async function analyzeStyleDNA(...args: Parameters<typeof geminiServiceFull.analyzeStyleDNA>) {
-  if (V1_SAFE_MODE) return { archetypes: [], traits: [], colorProfile: { primary: [], secondary: [], avoid: [] } };
+  // if (V1_SAFE_MODE) return { ... }; // Disabled to force real analysis as requested
 
   const useSupabaseAI = getFeatureFlag('useSupabaseAI');
   if (useSupabaseAI) {

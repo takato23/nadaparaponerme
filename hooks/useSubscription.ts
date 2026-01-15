@@ -74,17 +74,19 @@ const PLANS: SubscriptionPlan[] = [
     price_monthly_usd: 0,
     features: [
       'Hasta 50 prendas en tu armario',
-      '10 créditos IA por mes (Rápido)',
+      '50 créditos IA por mes',
+      'Probador Virtual (Try-On)',
+      'AI Fashion Designer',
       'Análisis básico de color',
       'Outfits guardados ilimitados',
       'Compartir en comunidad',
     ],
     limits: {
-      ai_generations_per_month: 10, // Source of truth: DB function can_user_generate_outfit()
+      ai_generations_per_month: 50, // Generous for testing phase
       max_closet_items: 50,
       max_saved_outfits: -1,
-      can_use_virtual_tryon: false,
-      can_use_ai_designer: false,
+      can_use_virtual_tryon: true,  // Enabled for all tiers during testing phase
+      can_use_ai_designer: true,  // Enabled for all tiers, limited by credits
       can_use_lookbook: false,
       can_use_style_dna: false,
       can_export_lookbooks: false,
@@ -164,7 +166,7 @@ export function useSubscription(): UseSubscriptionReturn {
     tier: 'free',
     status: 'active',
     aiGenerationsUsed: 0,
-    aiGenerationsLimit: 10,
+    aiGenerationsLimit: 50,
     currentPeriodEnd: null,
     isLoading: true,
     error: null,
@@ -184,7 +186,7 @@ export function useSubscription(): UseSubscriptionReturn {
           tier: 'free',
           status: 'active',
           aiGenerationsUsed: 0,
-          aiGenerationsLimit: 10,
+          aiGenerationsLimit: 50,
           currentPeriodEnd: null,
           isLoading: false,
           error: null,
@@ -213,7 +215,7 @@ export function useSubscription(): UseSubscriptionReturn {
           tier: 'free',
           status: 'active',
           aiGenerationsUsed: 0,
-          aiGenerationsLimit: 10,
+          aiGenerationsLimit: 50,
           currentPeriodEnd: null,
           isLoading: false,
           error: null,

@@ -56,7 +56,7 @@ function getSceneInstruction(preset: string, customScene?: string): string {
     return PRESET_INSTRUCTIONS[preset] || PRESET_INSTRUCTIONS['overlay'];
 }
 
-type PromptSlotInfo = { config: { label: string; bodyPart: string } };
+type PromptSlotInfo = { slot: string; config: { label: string; bodyPart: string } };
 
 /**
  * V13: Nano Banana Pro (Gemini 3 Pro Image Preview)
@@ -78,12 +78,27 @@ function buildTryOnPrompt(
     _modelId: string,
     hasFaceReferences: boolean = false,
     customScene?: string,
-    keepPose: boolean = false
+    keepPose: boolean = false,
+    view: string = 'front',
+    slotFits?: Record<string, string>
 ): string {
     // Build clothing description with fabric hints
     const clothingDesc = slots
-        .map(s => s.config.label)
+        .map(s => {
+            const label = s.config.label;
+            const fit = slotFits?.[s.slot] || 'regular';
+            const fitText = fit !== 'regular' ? `(${fit} fit)` : '';
+            return `${label} ${fitText}`.trim();
+        })
         .join(', ');
+
+    // View instructions
+    let viewInstruction = 'Front view';
+    if (view === 'back') {
+        viewInstruction = 'BACK VIEW (showing the back of the garment/person)';
+    } else if (view === 'side') {
+        viewInstruction = 'SIDE PROFILE VIEW';
+    }
 
     const backgroundInstruction = getSceneInstruction(preset, customScene);
 
@@ -106,6 +121,8 @@ function buildTryOnPrompt(
 - The person should look relaxed and natural`;
 
     return `Virtual try-on: Dress this person in the clothing shown.
+
+VIEW ANGLE: ${viewInstruction}
 
 ${faceRefInstructions}
 
@@ -152,7 +169,14 @@ async function toBase64DataUrl(src: string): Promise<string> {
         }
         const contentType = response.headers.get('content-type') || 'image/jpeg';
         const arrayBuffer = await response.arrayBuffer();
-        const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+        const uint8Array = new Uint8Array(arrayBuffer);
+        let binary = '';
+        const chunkSize = 0x8000; // 32KB chunks
+        for (let i = 0; i < uint8Array.length; i += chunkSize) {
+            const chunk = uint8Array.subarray(i, i + chunkSize);
+            binary += String.fromCharCode.apply(null, chunk as any);
+        }
+        const base64 = btoa(binary);
         return `data:${contentType};base64,${base64}`;
     }
 
@@ -213,7 +237,12 @@ serve(async (req) => {
             }
         }
 
-        const rateLimit = await enforceRateLimit(supabase, user.id, 'virtual-try-on');
+        // SAFETY: Strict rate limit for expensive generation
+        // Max 4 requests per 2 minutes per user to prevent rapid credit drain
+        const rateLimit = await enforceRateLimit(supabase, user.id, 'virtual-try-on', {
+            maxRequests: 4,
+            windowSeconds: 120, // 2 minutes
+        });
         if (!rateLimit.allowed) {
             const retryAfter = rateLimit.retryAfterSeconds || 60;
             const message = rateLimit.reason === 'blocked'
@@ -255,7 +284,7 @@ serve(async (req) => {
         // Parse request body
         // Supports both legacy format (topImage, bottomImage, shoesImage) and new slot format
         const body = await req.json();
-        const { userImage, slots, preset, quality, customScene, keepPose, useFaceReferences } = body;
+        const { userImage, slots, preset, quality, customScene, keepPose, useFaceReferences, view, slotFits } = body;
 
         // Legacy support: convert old format to slots
         let slotImages: Record<string, string> = {};
@@ -406,7 +435,10 @@ serve(async (req) => {
         const hasFaceRefs = faceRefBase64.length > 0;
         const customSceneText = typeof customScene === 'string' ? customScene : undefined;
         const shouldKeepPose = keepPose === true;
-        const prompt = buildTryOnPrompt(validSlots, presetName, modelId, hasFaceRefs, customSceneText, shouldKeepPose);
+        const viewAngle = (view as string) || 'front';
+        const fits = (slotFits as Record<string, string>) || {};
+
+        const prompt = buildTryOnPrompt(validSlots, presetName, modelId, hasFaceRefs, customSceneText, shouldKeepPose, viewAngle, fits);
 
         const response = await withRetry(() =>
             ai.models.generateContent({

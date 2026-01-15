@@ -68,12 +68,12 @@ export const QuickStatsWidget: React.FC<QuickStatsWidgetProps> = ({
     // Versatilidad promedio (basada en cantidad de vibes/seasons por prenda)
     const avgVersatility = closet.length > 0
       ? Math.round(
-          closet.reduce((acc, item) => {
-            const vibes = item.metadata.vibe_tags?.length || 0;
-            const seasons = item.metadata.seasons?.length || 0;
-            return acc + (vibes + seasons) / 2;
-          }, 0) / closet.length * 25
-        )
+        closet.reduce((acc, item) => {
+          const vibes = item.metadata.vibe_tags?.length || 0;
+          const seasons = item.metadata.seasons?.length || 0;
+          return acc + (vibes + seasons) / 2;
+        }, 0) / closet.length * 25
+      )
       : 0;
 
     return {
@@ -201,9 +201,9 @@ export const QuickStatsWidget: React.FC<QuickStatsWidgetProps> = ({
         </p>
         <div className="flex items-center gap-2">
           {[
-            { label: 'Tops', value: stats.categories.tops, color: 'bg-pink-400' },
-            { label: 'Bottoms', value: stats.categories.bottoms, color: 'bg-blue-400' },
-            { label: 'Zapatos', value: stats.categories.shoes, color: 'bg-amber-400' },
+            { label: 'Arriba', value: stats.categories.tops, color: 'bg-pink-400' },
+            { label: 'Abajo', value: stats.categories.bottoms, color: 'bg-blue-400' },
+            { label: 'Calzado', value: stats.categories.shoes, color: 'bg-purple-400' },
             { label: 'Accesorios', value: stats.categories.accessories, color: 'bg-emerald-400' },
           ].map(cat => {
             const percentage = stats.total > 0 ? (cat.value / stats.total) * 100 : 0;

@@ -201,6 +201,8 @@ export interface ClothingItem {
   color_primary: string;
   image_url: string;
   thumbnail_url: string | null;
+  back_image_url: string | null;
+  back_thumbnail_url: string | null;
   ai_metadata: AIMetadata;
   brand: string | null;
   size: string | null;
@@ -211,6 +213,7 @@ export interface ClothingItem {
   times_worn: number;
   last_worn_at: string | null;
   is_favorite: boolean;
+  status: 'owned' | 'wishlist' | 'virtual' | null;
   deleted_at: string | null;
   created_at: string;
   updated_at: string;
@@ -224,6 +227,8 @@ export interface ClothingItemInsert {
   color_primary: string;
   image_url: string;
   thumbnail_url?: string | null;
+  back_image_url?: string | null;
+  back_thumbnail_url?: string | null;
   ai_metadata?: AIMetadata;
   brand?: string | null;
   size?: string | null;
@@ -231,6 +236,7 @@ export interface ClothingItemInsert {
   purchase_price?: number | null;
   tags?: string[];
   notes?: string | null;
+  status?: 'owned' | 'wishlist' | 'virtual' | null;
   is_favorite?: boolean;
 }
 
@@ -239,11 +245,14 @@ export interface ClothingItemUpdate {
   category?: ClothingCategory;
   subcategory?: string | null;
   color_primary?: string;
+  back_image_url?: string | null;
+  back_thumbnail_url?: string | null;
   ai_metadata?: AIMetadata;
   brand?: string | null;
   size?: string | null;
   tags?: string[];
   notes?: string | null;
+  status?: 'owned' | 'wishlist' | 'virtual' | null;
   is_favorite?: boolean;
   times_worn?: number;
   last_worn_at?: string | null;

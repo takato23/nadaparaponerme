@@ -177,11 +177,10 @@ const FashionChatView = ({
         className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4 animate-fade-in`}
       >
         <div
-          className={`max-w-[75%] px-4 py-3 rounded-2xl ${
-            isUser
+          className={`max-w-[75%] px-4 py-3 rounded-2xl ${isUser
               ? 'bg-primary text-white rounded-br-sm'
               : 'liquid-glass text-text-primary dark:text-gray-200 rounded-bl-sm'
-          }`}
+            }`}
         >
           <p className="whitespace-pre-wrap break-words">{sanitizeUserInput(cleanContent)}</p>
 
@@ -365,7 +364,7 @@ const FashionChatView = ({
               type="text"
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
-              placeholder="Escribe tu mensaje..."
+              placeholder="Escribí tu mensaje..."
               disabled={isTyping}
               className="flex-grow px-4 py-3 liquid-glass rounded-xl border-none focus:ring-2 focus:ring-primary text-text-primary dark:text-gray-200 placeholder-text-secondary dark:placeholder-gray-500 disabled:opacity-50"
             />

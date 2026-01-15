@@ -151,12 +151,28 @@ const FashionChatViewImproved = ({
 
       onMessagesUpdate([...updatedMessages, assistantMessage]);
       setStreamingMessage('');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error sending message:', error);
+
+      // Determine specific error message based on error type
+      let userFacingError = 'Lo siento, hubo un error al procesar tu mensaje. Por favor intentá de nuevo.';
+
+      const errorMsg = error?.message || String(error);
+
+      if (errorMsg.includes('429') || errorMsg.includes('rate limit') || errorMsg.includes('RESOURCE_EXHAUSTED')) {
+        userFacingError = '⏳ Demasiadas solicitudes. Por favor esperá unos segundos e intentá de nuevo.';
+      } else if (errorMsg.includes('503') || errorMsg.includes('overloaded') || errorMsg.includes('UNAVAILABLE')) {
+        userFacingError = '🔧 El servicio de IA está temporalmente sobrecargado. Intentá de nuevo en unos segundos.';
+      } else if (errorMsg.includes('API not configured') || errorMsg.includes('VITE_GEMINI_API_KEY')) {
+        userFacingError = '⚠️ El servicio de chat no está configurado correctamente. Contactá al administrador.';
+      } else if (errorMsg.includes('network') || errorMsg.includes('fetch') || errorMsg.includes('Failed to fetch')) {
+        userFacingError = '📶 Error de conexión. Verificá tu conexión a internet e intentá de nuevo.';
+      }
+
       const errorMessage: ChatMessage = {
         id: `error_${Date.now()}`,
         role: 'assistant',
-        content: 'Lo siento, hubo un error al procesar tu mensaje. Por favor intentá de nuevo.',
+        content: userFacingError,
         timestamp: Date.now()
       };
       onMessagesUpdate([...updatedMessages, errorMessage]);
@@ -525,7 +541,7 @@ const FashionChatViewImproved = ({
                     handleSendMessage(inputValue);
                   }
                 }}
-                placeholder="Escribe un mensaje..."
+                placeholder="Escribí un mensaje..."
                 disabled={isTyping}
                 rows={1}
                 className="w-full pl-5 pr-12 py-4 bg-white/50 dark:bg-gray-800/50 rounded-3xl border border-white/30 dark:border-gray-600/30 focus:ring-2 focus:ring-purple-500/50 text-gray-800 dark:text-gray-200 placeholder-gray-400 resize-none min-h-[56px] max-h-[120px] transition-all text-sm shadow-inner"

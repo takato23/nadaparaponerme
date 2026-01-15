@@ -8,7 +8,7 @@
 import { supabase, uploadImage, compressImage, createThumbnail } from '../lib/supabase';
 import { logger } from '../utils/logger';
 import type { ClothingItem as LegacyClothingItem, ClothingItemMetadata } from '../../types';
-import type { Database } from '../types/api';
+import type { Database, ClothingCategory, Season } from '../types/api';
 
 type ClothingItemRow = Database['public']['Tables']['clothing_items']['Row'];
 type ClothingItemInsert = Database['public']['Tables']['clothing_items']['Insert'];
@@ -51,7 +51,7 @@ function safeParseSeasons(seasons: unknown): string[] {
 function convertToLegacyFormat(item: ClothingItemRow): LegacyClothingItem {
   return {
     id: item.id,
-    imageDataUrl: item.image_url, // Use the stored URL instead of base64
+    imageDataUrl: item.image_url,
     metadata: {
       category: safeParseCategory(item.category),
       subcategory: item.subcategory || '',
@@ -62,7 +62,8 @@ function convertToLegacyFormat(item: ClothingItemRow): LegacyClothingItem {
       seasons: safeParseSeasons(item.ai_metadata?.seasons),
       description: item.notes || undefined,
     },
-    status: (item.status as any) || 'owned', // Map status field, default to 'owned'
+    backImageDataUrl: item.back_image_url || undefined,
+    status: (item.status as LegacyClothingItem['status']) || 'owned',
   };
 }
 
@@ -123,25 +124,45 @@ export async function getClothingItem(id: string): Promise<LegacyClothingItem | 
  */
 export async function addClothingItem(
   imageFile: File,
-  metadata: ClothingItemMetadata
+  metadata: ClothingItemMetadata,
+  backImageFile?: File // Optional back view image
 ): Promise<LegacyClothingItem> {
   try {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Not authenticated');
 
-    // Compress image (uses WebP when available, falls back to JPEG)
+    // Compress main image
     const compressedImage = await compressImage(imageFile, 1200, 0.85);
     const thumbnail = await createThumbnail(compressedImage, 400);
-
-    // Get file extension from compressed file (will be .webp or .jpg)
     const extension = compressedImage.name.match(/\.[^.]+$/)?.[0] || '.jpg';
 
-    // Generate unique filename with correct extension
     const timestamp = Date.now();
     const imagePath = `${user.id}/${timestamp}/image${extension}`;
     const thumbnailPath = `${user.id}/${timestamp}/thumbnail${extension}`;
 
-    // Upload to storage
+    // Helper for back image processing if provided
+    let backImageUrl: string | null = null;
+    let backThumbnailUrl: string | null = null;
+    let backImagePath: string | null = null;
+    let backThumbnailPath: string | null = null;
+
+    if (backImageFile) {
+      const compressedBack = await compressImage(backImageFile, 1200, 0.85);
+      const thumbnailBack = await createThumbnail(compressedBack, 400);
+      const extBack = compressedBack.name.match(/\.[^.]+$/)?.[0] || '.jpg';
+
+      backImagePath = `${user.id}/${timestamp}/back_image${extBack}`;
+      backThumbnailPath = `${user.id}/${timestamp}/back_thumbnail${extBack}`;
+
+      const [bUrl, btUrl] = await Promise.all([
+        uploadImage('clothing-images', backImagePath, compressedBack),
+        uploadImage('clothing-images', backThumbnailPath, thumbnailBack),
+      ]);
+      backImageUrl = bUrl;
+      backThumbnailUrl = btUrl;
+    }
+
+    // Upload main images
     const [imageUrl, thumbnailUrl] = await Promise.all([
       uploadImage('clothing-images', imagePath, compressedImage),
       uploadImage('clothing-images', thumbnailPath, thumbnail),
@@ -151,30 +172,34 @@ export async function addClothingItem(
     const newItem: ClothingItemInsert = {
       user_id: user.id,
       name: metadata.subcategory,
-      category: metadata.category, // Database accepts string, metadata.category is already validated
+      category: metadata.category as ClothingCategory,
       subcategory: metadata.subcategory,
       color_primary: metadata.color_primary,
       image_url: imageUrl,
       thumbnail_url: thumbnailUrl,
+      back_image_url: backImageUrl,
+      back_thumbnail_url: backThumbnailUrl,
       ai_metadata: {
         neckline: metadata.neckline,
         sleeve_type: metadata.sleeve_type,
         vibe_tags: metadata.vibe_tags,
-        seasons: metadata.seasons, // Database JSONB accepts string[]
+        seasons: (metadata.seasons || []) as Season[],
       },
       tags: metadata.vibe_tags || [],
       notes: metadata.description || null,
     };
 
-    const { data, error } = await supabase
-      .from('clothing_items')
+    const { data, error } = await (supabase.from('clothing_items') as any)
       .insert(newItem)
       .select()
       .single();
 
     if (error) {
       // Cleanup uploaded images if database insert fails
-      await supabase.storage.from('clothing-images').remove([imagePath, thumbnailPath]);
+      const pathsToRemove = [imagePath, thumbnailPath];
+      if (backImagePath) pathsToRemove.push(backImagePath);
+      if (backThumbnailPath) pathsToRemove.push(backThumbnailPath);
+      await supabase.storage.from('clothing-images').remove(pathsToRemove);
       throw error;
     }
 
@@ -190,7 +215,8 @@ export async function addClothingItem(
  */
 export async function updateClothingItem(
   id: string,
-  metadata: ClothingItemMetadata
+  metadata: ClothingItemMetadata,
+  newBackImage?: File
 ): Promise<LegacyClothingItem> {
   try {
     const { data: { user } } = await supabase.auth.getUser();
@@ -198,21 +224,37 @@ export async function updateClothingItem(
 
     const update: ClothingItemUpdate = {
       name: metadata.subcategory,
-      category: metadata.category, // Database accepts string, metadata.category is already validated
+      category: metadata.category as ClothingCategory,
       subcategory: metadata.subcategory,
       color_primary: metadata.color_primary,
       ai_metadata: {
         neckline: metadata.neckline,
         sleeve_type: metadata.sleeve_type,
         vibe_tags: metadata.vibe_tags,
-        seasons: metadata.seasons, // Database JSONB accepts string[]
+        seasons: (metadata.seasons || []) as Season[],
       },
       tags: metadata.vibe_tags || [],
       notes: metadata.description || null,
     };
 
-    const { data, error } = await supabase
-      .from('clothing_items')
+    // Handle new back image if provided
+    if (newBackImage) {
+      const compressedBack = await compressImage(newBackImage, 1200, 0.85);
+      const thumbnailBack = await createThumbnail(compressedBack, 400);
+      const extBack = compressedBack.name.match(/\.[^.]+$/)?.[0] || '.jpg';
+      const timestamp = Date.now();
+      const backImagePath = `${user.id}/${timestamp}/back_image${extBack}`;
+      const backThumbnailPath = `${user.id}/${timestamp}/back_thumbnail${extBack}`;
+
+      const [bUrl, btUrl] = await Promise.all([
+        uploadImage('clothing-images', backImagePath, compressedBack),
+        uploadImage('clothing-images', backThumbnailPath, thumbnailBack),
+      ]);
+      update.back_image_url = bUrl;
+      update.back_thumbnail_url = btUrl;
+    }
+
+    const { data, error } = await (supabase.from('clothing_items') as any)
       .update(update)
       .eq('id', id)
       .eq('user_id', user.id)
@@ -236,8 +278,7 @@ export async function deleteClothingItem(id: string): Promise<void> {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Not authenticated');
 
-    const { error } = await supabase
-      .from('clothing_items')
+    const { error } = await (supabase.from('clothing_items') as any)
       .update({ deleted_at: new Date().toISOString() })
       .eq('id', id)
       .eq('user_id', user.id);
@@ -258,12 +299,12 @@ export async function incrementTimesWorn(id: string): Promise<void> {
     if (!user) throw new Error('Not authenticated');
 
     // Increment (atomic update)
-    const { error } = await supabase.rpc('increment_times_worn', { item_id: id });
+    const { error } = await (supabase.rpc('increment_times_worn', { item_id: id }) as any);
 
     if (error) {
       // Fallback to manual update if RPC fails (or doesn't exist yet)
-      const { data: item, error: fetchError } = await supabase
-        .from('clothing_items')
+      const { data: item, error: fetchError } = await (supabase
+        .from('clothing_items') as any)
         .select('times_worn')
         .eq('id', id)
         .eq('user_id', user.id)
@@ -271,10 +312,10 @@ export async function incrementTimesWorn(id: string): Promise<void> {
 
       if (fetchError) throw fetchError;
 
-      const { error: updateError } = await supabase
-        .from('clothing_items')
+      const { error: updateError } = await (supabase
+        .from('clothing_items') as any)
         .update({
-          times_worn: (item.times_worn || 0) + 1,
+          times_worn: (item?.times_worn || 0) + 1,
           last_worn_at: new Date().toISOString(),
         })
         .eq('id', id)
@@ -297,8 +338,8 @@ export async function toggleFavorite(id: string): Promise<boolean> {
     if (!user) throw new Error('Not authenticated');
 
     // Get current favorite status
-    const { data: item, error: fetchError } = await supabase
-      .from('clothing_items')
+    const { data: item, error: fetchError } = await (supabase
+      .from('clothing_items') as any)
       .select('is_favorite')
       .eq('id', id)
       .eq('user_id', user.id)
@@ -306,11 +347,11 @@ export async function toggleFavorite(id: string): Promise<boolean> {
 
     if (fetchError) throw fetchError;
 
-    const newFavoriteStatus = !item.is_favorite;
+    const newFavoriteStatus = !item?.is_favorite;
 
     // Toggle
-    const { error } = await supabase
-      .from('clothing_items')
+    const { error } = await (supabase
+      .from('clothing_items') as any)
       .update({ is_favorite: newFavoriteStatus })
       .eq('id', id)
       .eq('user_id', user.id);

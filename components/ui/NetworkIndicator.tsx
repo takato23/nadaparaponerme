@@ -17,6 +17,22 @@ export function NetworkIndicator({
 }: NetworkIndicatorProps) {
     const { isOnline, wasOffline } = useNetworkStatus();
     const [showReconnected, setShowReconnected] = useState(false);
+    const [isDismissed, setIsDismissed] = useState(false);
+
+    // Reset dismissed state when going from online to offline
+    useEffect(() => {
+        if (!isOnline) {
+            // Don't reset immediately - only reset after user has been online
+            // This prevents the banner from reappearing during initial page load
+        }
+    }, [isOnline]);
+
+    // Reset dismissed when coming back online (so it can show again if we go offline)
+    useEffect(() => {
+        if (isOnline) {
+            setIsDismissed(false);
+        }
+    }, [isOnline]);
 
     useEffect(() => {
         if (wasOffline && isOnline && showOnlineToast) {
@@ -32,11 +48,15 @@ export function NetworkIndicator({
         ? 'top-0 pt-safe'
         : 'bottom-20 pb-safe'; // Above navbar
 
+    const handleDismiss = () => {
+        setIsDismissed(true);
+    };
+
     return (
         <>
             {/* Offline Banner */}
             <AnimatePresence>
-                {!isOnline && (
+                {!isOnline && !isDismissed && (
                     <motion.div
                         initial={{ opacity: 0, y: position === 'top' ? -50 : 50 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -73,6 +93,17 @@ export function NetworkIndicator({
                             <span className="material-symbols-outlined text-gray-400 dark:text-gray-600">
                                 wifi_off
                             </span>
+
+                            {/* Close/Dismiss button */}
+                            <button
+                                onClick={handleDismiss}
+                                className="ml-2 w-6 h-6 rounded-full bg-gray-700/50 dark:bg-gray-300/50 hover:bg-gray-600 dark:hover:bg-gray-400 flex items-center justify-center transition-colors"
+                                aria-label="Cerrar"
+                            >
+                                <span className="material-symbols-outlined text-sm text-white dark:text-gray-900">
+                                    close
+                                </span>
+                            </button>
                         </div>
                     </motion.div>
                 )}

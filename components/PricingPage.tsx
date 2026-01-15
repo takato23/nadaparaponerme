@@ -35,8 +35,8 @@ const PLANS: SubscriptionPlan[] = [
             ai_generations_per_month: 10,
             max_closet_items: 50,
             max_saved_outfits: -1,
-            can_use_virtual_tryon: false,
-            can_use_ai_designer: false,
+            can_use_virtual_tryon: true,
+            can_use_ai_designer: true,
             can_use_lookbook: false,
             can_use_style_dna: false,
             can_export_lookbooks: false,
@@ -155,7 +155,7 @@ export default function PricingPage() {
         const tierOrder = { free: 0, pro: 1, premium: 2 };
         if (tierOrder[plan.id] < tierOrder[currentTier]) return 'Downgrade';
 
-        return 'Upgrade';
+        return 'Mejorar Plan';
     };
 
     const isButtonDisabled = (plan: SubscriptionPlan) => {
@@ -232,10 +232,10 @@ export default function PricingPage() {
                             <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
                                 <div
                                     className={`h-full rounded-full transition-all duration-500 ${usagePercentage >= 90
-                                            ? 'bg-red-500'
-                                            : usagePercentage >= 70
-                                                ? 'bg-yellow-500'
-                                                : 'bg-gradient-to-r from-purple-500 to-pink-500'
+                                        ? 'bg-red-500'
+                                        : usagePercentage >= 70
+                                            ? 'bg-yellow-500'
+                                            : 'bg-gradient-to-r from-purple-500 to-pink-500'
                                         }`}
                                     style={{ width: `${usagePercentage}%` }}
                                 />
@@ -283,10 +283,10 @@ export default function PricingPage() {
                                     key={plan.id}
                                     whileHover={{ y: -4 }}
                                     className={`relative flex flex-col p-6 rounded-3xl border-2 transition-all duration-300 ${isCurrentPlan
-                                            ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20'
-                                            : isPopular
-                                                ? 'border-pink-500 bg-white dark:bg-gray-800 shadow-xl shadow-pink-500/20'
-                                                : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600'
+                                        ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20'
+                                        : isPopular
+                                            ? 'border-pink-500 bg-white dark:bg-gray-800 shadow-xl shadow-pink-500/20'
+                                            : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600'
                                         }`}
                                 >
                                     {/* Popular Badge */}
@@ -349,12 +349,12 @@ export default function PricingPage() {
                                         onClick={() => handleUpgrade(plan.id)}
                                         disabled={isButtonDisabled(plan)}
                                         className={`w-full py-4 px-6 rounded-2xl font-semibold text-sm transition-all duration-200 ${isCurrentPlan
-                                                ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 cursor-not-allowed'
-                                                : plan.id === 'free'
-                                                    ? 'bg-gray-100 dark:bg-gray-700 text-gray-500 cursor-not-allowed'
-                                                    : isPopular
-                                                        ? 'bg-gradient-to-r from-pink-500 to-purple-500 text-white hover:from-pink-600 hover:to-purple-600 shadow-lg hover:shadow-xl hover:scale-[1.02]'
-                                                        : 'bg-purple-500 text-white hover:bg-purple-600'
+                                            ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 cursor-not-allowed'
+                                            : plan.id === 'free'
+                                                ? 'bg-gray-100 dark:bg-gray-700 text-gray-500 cursor-not-allowed'
+                                                : isPopular
+                                                    ? 'bg-gradient-to-r from-pink-500 to-purple-500 text-white hover:from-pink-600 hover:to-purple-600 shadow-lg hover:shadow-xl hover:scale-[1.02]'
+                                                    : 'bg-purple-500 text-white hover:bg-purple-600'
                                             } ${isLoading === plan.id ? 'opacity-50 cursor-wait' : ''}`}
                                     >
                                         {isLoading === plan.id && (

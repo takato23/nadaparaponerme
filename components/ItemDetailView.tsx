@@ -141,11 +141,10 @@ export const ItemDetailView = ({ item, inventory, onUpdate, onDelete, onBack, on
                         {/* Shopping Button */}
                         <button
                             onClick={handleSearchShopping}
-                            className={`w-full font-bold py-4 rounded-2xl transition-all flex items-center justify-center gap-2 ${
-                                showShopping
+                            className={`w-full font-bold py-4 rounded-2xl transition-all flex items-center justify-center gap-2 ${showShopping
                                     ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-2 border-emerald-500/30'
                                     : 'bg-white dark:bg-gray-800 border-2 border-emerald-500 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-gray-700'
-                            }`}
+                                }`}
                         >
                             <span className="material-symbols-outlined">storefront</span>
                             {showShopping ? 'Ocultar' : 'Dónde lo compro'}
@@ -229,7 +228,7 @@ export const ItemDetailView = ({ item, inventory, onUpdate, onDelete, onBack, on
                     <div className="space-y-4">
                         <div className="space-y-2">
                             <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Subcategoría</label>
-                            <input type="text" value={editableMetadata.subcategory} onChange={e => updateMetadataField('subcategory', e.target.value)} className="w-full p-3 border dark:border-gray-600 bg-gray-50 dark:bg-gray-800 rounded-xl dark:text-white focus:ring-2 focus:ring-primary outline-none transition-all" placeholder="Subcategory" />
+                            <input type="text" value={editableMetadata.subcategory} onChange={e => updateMetadataField('subcategory', e.target.value)} className="w-full p-3 border dark:border-gray-600 bg-gray-50 dark:bg-gray-800 rounded-xl dark:text-white focus:ring-2 focus:ring-primary outline-none transition-all" placeholder="Tipo de prenda" />
                         </div>
                         <div className="space-y-2">
                             <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Color</label>

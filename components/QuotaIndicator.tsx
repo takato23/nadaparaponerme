@@ -56,13 +56,12 @@ export function QuotaIndicator({
     return (
       <button
         onClick={onUpgradeClick}
-        className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium transition-all hover:scale-105 ${
-          isCritical
+        className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium transition-all hover:scale-105 ${isCritical
             ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
             : isLow
-            ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300'
-            : 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
-        } ${className}`}
+              ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300'
+              : 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
+          } ${className}`}
       >
         <span className="material-symbols-rounded text-sm">
           {isCritical ? 'warning' : 'auto_awesome'}
@@ -84,13 +83,12 @@ export function QuotaIndicator({
 
     return (
       <span
-        className={`text-xs font-medium ${
-          isCritical
+        className={`text-xs font-medium ${isCritical
             ? 'text-red-500'
             : isLow
-            ? 'text-yellow-500'
-            : 'text-gray-500 dark:text-gray-400'
-        } ${className}`}
+              ? 'text-yellow-500'
+              : 'text-gray-500 dark:text-gray-400'
+          } ${className}`}
       >
         {used}/{limit}
       </span>
@@ -111,15 +109,14 @@ export function QuotaIndicator({
         </div>
         <div className="h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
           <div
-            className={`h-full rounded-full transition-all duration-500 ${
-              isUnlimited
+            className={`h-full rounded-full transition-all duration-500 ${isUnlimited
                 ? 'bg-gradient-to-r from-purple-500 to-pink-500 w-full'
                 : isCritical
-                ? 'bg-red-500'
-                : isLow
-                ? 'bg-yellow-500'
-                : 'bg-gradient-to-r from-purple-500 to-pink-500'
-            }`}
+                  ? 'bg-red-500'
+                  : isLow
+                    ? 'bg-yellow-500'
+                    : 'bg-gradient-to-r from-purple-500 to-pink-500'
+              }`}
             style={{ width: isUnlimited ? '100%' : `${percentage}%` }}
           />
         </div>
@@ -138,13 +135,12 @@ export function QuotaIndicator({
   // Full variant - complete card with all info
   return (
     <div
-      className={`relative overflow-hidden rounded-2xl ${
-        isCritical
+      className={`relative overflow-hidden rounded-2xl ${isCritical
           ? 'bg-gradient-to-br from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20'
           : isLow
-          ? 'bg-gradient-to-br from-amber-50 to-yellow-50 dark:from-amber-900/20 dark:to-yellow-900/20'
-          : 'bg-gradient-to-br from-violet-50 via-purple-50 to-fuchsia-50 dark:from-violet-900/20 dark:via-purple-900/20 dark:to-fuchsia-900/20'
-      } shadow-lg shadow-purple-500/10 dark:shadow-purple-500/5 border border-white/50 dark:border-gray-700/50 ${className}`}
+            ? 'bg-gradient-to-br from-amber-50 to-yellow-50 dark:from-amber-900/20 dark:to-yellow-900/20'
+            : 'bg-gradient-to-br from-violet-50 via-purple-50 to-fuchsia-50 dark:from-violet-900/20 dark:via-purple-900/20 dark:to-fuchsia-900/20'
+        } shadow-lg shadow-purple-500/10 dark:shadow-purple-500/5 border border-white/50 dark:border-gray-700/50 ${className}`}
     >
       {/* Decorative sparkles */}
       <div className="absolute top-2 right-2 opacity-30">
@@ -163,22 +159,20 @@ export function QuotaIndicator({
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <div
-              className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                isCritical
+              className={`w-10 h-10 rounded-xl flex items-center justify-center ${isCritical
                   ? 'bg-red-500/20 dark:bg-red-500/30'
                   : isLow
-                  ? 'bg-amber-500/20 dark:bg-amber-500/30'
-                  : 'bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 dark:from-violet-500/30 dark:to-fuchsia-500/30'
-              }`}
+                    ? 'bg-amber-500/20 dark:bg-amber-500/30'
+                    : 'bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 dark:from-violet-500/30 dark:to-fuchsia-500/30'
+                }`}
             >
               <span
-                className={`material-symbols-rounded text-xl ${
-                  isCritical
+                className={`material-symbols-rounded text-xl ${isCritical
                     ? 'text-red-600 dark:text-red-400'
                     : isLow
-                    ? 'text-amber-600 dark:text-amber-400'
-                    : 'text-violet-600 dark:text-violet-400'
-                }`}
+                      ? 'text-amber-600 dark:text-amber-400'
+                      : 'text-violet-600 dark:text-violet-400'
+                  }`}
               >
                 {isUnlimited ? 'all_inclusive' : isCritical ? 'warning' : 'auto_awesome'}
               </span>
@@ -198,13 +192,12 @@ export function QuotaIndicator({
         {/* Main Stats */}
         <div className="flex items-end gap-1 mb-3">
           <span
-            className={`text-3xl font-bold ${
-              isCritical
+            className={`text-3xl font-bold ${isCritical
                 ? 'text-red-600 dark:text-red-400'
                 : isLow
-                ? 'text-amber-600 dark:text-amber-400'
-                : 'text-violet-600 dark:text-violet-400'
-            }`}
+                  ? 'text-amber-600 dark:text-amber-400'
+                  : 'text-violet-600 dark:text-violet-400'
+              }`}
           >
             {isUnlimited ? '∞' : remaining}
           </span>
@@ -219,15 +212,14 @@ export function QuotaIndicator({
         <div className="mb-3">
           <div className="h-2.5 bg-white/60 dark:bg-gray-700/60 rounded-full overflow-hidden backdrop-blur-sm">
             <div
-              className={`h-full rounded-full transition-all duration-700 ease-out ${
-                isUnlimited
+              className={`h-full rounded-full transition-all duration-700 ease-out ${isUnlimited
                   ? 'bg-gradient-to-r from-violet-500 via-purple-500 to-fuchsia-500'
                   : isCritical
-                  ? 'bg-gradient-to-r from-red-500 to-orange-500'
-                  : isLow
-                  ? 'bg-gradient-to-r from-amber-500 to-yellow-500'
-                  : 'bg-gradient-to-r from-violet-500 via-purple-500 to-fuchsia-500'
-              }`}
+                    ? 'bg-gradient-to-r from-red-500 to-orange-500'
+                    : isLow
+                      ? 'bg-gradient-to-r from-amber-500 to-yellow-500'
+                      : 'bg-gradient-to-r from-violet-500 via-purple-500 to-fuchsia-500'
+                }`}
               style={{ width: isUnlimited ? '100%' : `${100 - percentage}%` }}
             />
           </div>
@@ -237,11 +229,10 @@ export function QuotaIndicator({
         {!isUnlimited && tier !== 'premium' && onUpgradeClick && (
           <button
             onClick={onUpgradeClick}
-            className={`w-full py-2.5 px-4 rounded-xl font-medium text-sm transition-all duration-200 ${
-              isCritical || isLow
+            className={`w-full py-2.5 px-4 rounded-xl font-medium text-sm transition-all duration-200 ${isCritical || isLow
                 ? 'bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 text-white shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40 hover:-translate-y-0.5'
                 : 'bg-white/80 dark:bg-gray-800/80 hover:bg-white dark:hover:bg-gray-800 text-violet-600 dark:text-violet-400 border border-violet-200 dark:border-violet-800/50 hover:border-violet-300 dark:hover:border-violet-700'
-            }`}
+              }`}
           >
             {isCritical ? '¡Upgrade ahora!' : isLow ? 'Obtener más' : 'Ver planes'}
           </button>
@@ -268,7 +259,7 @@ export function QuotaIndicator({
 function TierBadge({ tier }: { tier: SubscriptionTier }) {
   const config = {
     free: {
-      label: 'Free',
+      label: 'Gratis',
       className: 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300',
     },
     pro: {

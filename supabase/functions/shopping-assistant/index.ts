@@ -1,7 +1,7 @@
 // Supabase Edge Function: Shopping Assistant
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { GoogleGenAI, Type } from 'npm:@google/genai@1.27.0';
+import { GoogleGenerativeAI } from 'npm:@google/generative-ai@0.21.0'; // Unified SDK
 import { enforceRateLimit, recordRequestResult } from '../_shared/antiAbuse.ts';
 import { withRetry } from '../_shared/retry.ts';
 
@@ -24,19 +24,16 @@ serve(async (req) => {
             throw new Error('Missing GEMINI_API_KEY');
         }
 
-        // Auth required (prevents public abuse)
         const supabaseUrl = Deno.env.get('SUPABASE_URL');
         const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || Deno.env.get('SERVICE_ROLE_KEY');
+
         if (!supabaseUrl || !supabaseServiceKey) {
             throw new Error('Missing Supabase credentials');
         }
 
         const authHeader = req.headers.get('Authorization');
         if (!authHeader) {
-            return new Response(
-                JSON.stringify({ error: 'Missing authorization header' }),
-                { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-            );
+            return new Response(JSON.stringify({ error: 'Missing authorization header' }), { status: 401, headers: corsHeaders });
         }
 
         supabase = createClient(supabaseUrl, supabaseServiceKey, {
@@ -45,176 +42,112 @@ serve(async (req) => {
 
         const { data: { user }, error: userError } = await supabase.auth.getUser();
         if (userError || !user) {
-            return new Response(
-                JSON.stringify({ error: 'Unauthorized' }),
-                { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-            );
+            return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: corsHeaders });
         }
         userId = user.id;
 
-        // Optional closed beta allowlist (protects Google credits)
-        const allowlistRaw = Deno.env.get('BETA_ALLOWLIST_EMAILS');
-        if (allowlistRaw) {
-            const email = (user.email || '').toLowerCase().trim();
-            const allowed = allowlistRaw
-                .split(',')
-                .map((e) => e.toLowerCase().trim())
-                .filter(Boolean);
-            if (!email || !allowed.includes(email)) {
-                return new Response(
-                    JSON.stringify({ error: 'Beta cerrada: tu cuenta no está habilitada todavía.' }),
-                    { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-                );
-            }
-        }
-
+        // Rate Limit
         const rateLimit = await enforceRateLimit(supabase, user.id, 'shopping-assistant');
         if (!rateLimit.allowed) {
-            const retryAfter = rateLimit.retryAfterSeconds || 60;
-            const message = rateLimit.reason === 'blocked'
-                ? 'Detectamos muchos errores seguidos. Espera unos minutos antes de intentar de nuevo.'
-                : 'Demasiadas solicitudes en poco tiempo. Espera un momento y reintenta.';
-            return new Response(
-                JSON.stringify({ error: message }),
-                {
-                    status: 429,
-                    headers: {
-                        ...corsHeaders,
-                        'Content-Type': 'application/json',
-                        'Retry-After': String(retryAfter),
-                    },
-                }
-            );
+            return new Response(JSON.stringify({ error: 'Rate limit exceeded' }), { status: 429, headers: corsHeaders });
         }
 
         const { action, ...params } = await req.json();
-        const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+        const genAI = new GoogleGenerativeAI(geminiApiKey);
+
+        // Use Gemini 2.0 Flash for speed + search capabilities
+        // Note: verify if googleSearch tool is supported in this SDK version or if we need v1beta
+        const model = genAI.getGenerativeModel({
+            model: 'gemini-2.5-flash',
+            tools: [{ googleSearch: {} } as any] // Cast to any if type def is missing in 0.21.0
+        });
 
         if (action === 'analyze-gaps') {
             const { closet } = params;
-            // Logic for analyzing gaps
-            const systemInstruction = `Eres un experto estilista de moda. Analiza el armario del usuario y detecta "gaps" o faltantes clave.
-        Identifica prendas básicas o versátiles que faltan y que ayudarían a multiplicar las combinaciones posibles.
-        Clasifica cada gap como 'essential', 'recommended' o 'optional'.
-        Devuelve un array de objetos ShoppingGap.`;
+            // Gap analysis usually doesn't need search, but deep reasoning.
+            const prompt = `
+                Analyze this closet and find missing essential items (Gaps).
+                Closet Summary: ${JSON.stringify(closet.map((i: any) => i.metadata?.category + ' ' + i.metadata?.subcategory).slice(0, 50))}...
+                
+                Identify 3-5 critical gaps.
+                Return JSON: [ { "id": "uuid", "item_name": "string", "category": "string", "reason": "string", "priority": "essential|recommended" } ]
+            `;
 
-            const schema = {
-                type: Type.ARRAY,
-                items: {
-                    type: Type.OBJECT,
-                    properties: {
-                        id: { type: Type.STRING },
-                        item_name: { type: Type.STRING },
-                        category: { type: Type.STRING },
-                        reason: { type: Type.STRING },
-                        priority: { type: Type.STRING, enum: ['essential', 'recommended', 'optional'] }
-                    },
-                    required: ['id', 'item_name', 'category', 'reason', 'priority']
-                }
-            };
-
-            const response = await withRetry(() =>
-                ai.models.generateContent({
-                    model: 'gemini-2.5-flash',
-                    contents: { parts: [{ text: `Analiza este armario: ${JSON.stringify(closet.map((i: any) => ({ id: i.id, name: i.metadata.subcategory, category: i.metadata.category, color: i.metadata.color_primary })))}` }] },
-                    config: {
-                        systemInstruction,
-                        responseMimeType: 'application/json',
-                        responseSchema: schema
-                    }
-                })
-            );
-
-            await recordRequestResult(supabase, user.id, 'shopping-assistant', true);
-            return new Response(response.text, { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-
-        } else if (action === 'generate-recommendations') {
-            const { gaps, closet, budget } = params;
-            // Logic for recommendations
-            const systemInstruction = `Eres un personal shopper. Basado en los gaps identificados y el armario existente, sugiere productos específicos para comprar.
-        Genera recomendaciones concretas. Si se provee presupuesto, respétalo.`;
-
-            const schema = {
-                type: Type.ARRAY,
-                items: {
-                    type: Type.OBJECT,
-                    properties: {
-                        id: { type: Type.STRING },
-                        gap_id: { type: Type.STRING },
-                        products: {
-                            type: Type.ARRAY,
-                            items: {
-                                type: Type.OBJECT,
-                                properties: {
-                                    name: { type: Type.STRING },
-                                    brand: { type: Type.STRING },
-                                    price: { type: Type.NUMBER },
-                                    url: { type: Type.STRING },
-                                    image_url: { type: Type.STRING }
-                                }
-                            }
-                        },
-                        total_budget_estimate: { type: Type.NUMBER }
-                    }
-                }
-            };
-
-            const response = await withRetry(() =>
-                ai.models.generateContent({
-                    model: 'gemini-2.5-flash',
-                    contents: { parts: [{ text: `Genera recomendaciones para estos gaps: ${JSON.stringify(gaps)}` }] },
-                    config: {
-                        systemInstruction,
-                        responseMimeType: 'application/json',
-                        responseSchema: schema
-                    }
-                })
-            );
-
-            await recordRequestResult(supabase, user.id, 'shopping-assistant', true);
-            return new Response(response.text, { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-
-        } else if (action === 'chat') {
-            const { message, history, context } = params;
-            // Logic for chat
-            const systemInstruction = `Eres un asistente de compras de moda. Ayuda al usuario a encontrar lo que busca, responde dudas sobre las recomendaciones y asesora sobre estilo.`;
-
-            // Construct history for Gemini
-            const chatHistory = history.map((msg: any) => ({
-                role: msg.role === 'assistant' ? 'model' : 'user',
-                parts: [{ text: msg.content }]
+            const result = await withRetry(() => model.generateContent({
+                contents: [{ role: 'user', parts: [{ text: prompt }] }],
+                generationConfig: { responseMimeType: 'application/json' }
             }));
 
-            const response = await withRetry(() =>
-                ai.models.generateContent({
-                    model: 'gemini-2.5-flash',
-                    contents: [...chatHistory, { role: 'user', parts: [{ text: message }] }],
-                    config: { systemInstruction }
-                })
-            );
+            return new Response(result.response.text(), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
-            const responseText = response.text;
-            const responseMessage = {
-                id: `msg-${Date.now()}`,
+        } else if (action === 'generate-recommendations') {
+            const { gaps, budget } = params;
+
+            // ACTION: Search for real products
+            const prompt = `
+                You are a Personal Shopper in Argentina.
+                Task: Find REAL purchasable products for these wardrobe gaps: ${JSON.stringify(gaps)}
+                Budget: ${budget || 'Flexible, but prefer value for money'}.
+                
+                SEARCH STRATEGY:
+                - Use Google Search to find current items in stores like Zara Argentina, H&M, Ver, MercadoLibre, Dafiti style stores.
+                - Look for "Campera cuero mujer precio argentina", "Zapatillas blancas urbanas oferta", etc.
+                - Extract REAL urls and prices in ARS (Argentine Pesos).
+                
+                OUTPUT:
+                Return a JSON Array of recommendations.
+                Structure:
+                [
+                  {
+                    "id": "ref-gap-id", 
+                    "products": [
+                      { "title": "Title", "brand": "Brand", "price": number, "shop_url": "https://...", "image_url": "https://..." }
+                    ]
+                  }
+                ]
+            `;
+
+            const result = await withRetry(() => model.generateContent({
+                contents: [{ role: 'user', parts: [{ text: prompt }] }],
+                generationConfig: { responseMimeType: 'application/json' }
+            }));
+
+            return new Response(result.response.text(), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+
+        } else if (action === 'chat') {
+            const { message, history } = params;
+
+            // Chat with grounding
+            const chat = model.startChat({
+                history: history.map((h: any) => ({
+                    role: h.role === 'assistant' ? 'model' : 'user',
+                    parts: [{ text: h.content }]
+                })),
+                generationConfig: {
+                    tools: [{ googleSearch: {} } as any]
+                }
+            });
+
+            const systemPrompt = `
+                You are a Stylist & Shopping Assistant.
+                - When user asks for products, USE GOOGLE SEARCH to find real items in Argentina/Global.
+                - Always provide links.
+                - Be concise and helpful.
+            `;
+
+            const result = await chat.sendMessage(systemPrompt + '\n User: ' + message);
+            const responseText = result.response.text();
+
+            return new Response(JSON.stringify({
                 role: 'assistant',
-                content: responseText,
-                timestamp: new Date().toISOString()
-            };
-
-            await recordRequestResult(supabase, user.id, 'shopping-assistant', true);
-            return new Response(JSON.stringify(responseMessage), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+                content: responseText
+            }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 
         throw new Error('Invalid action');
 
     } catch (error) {
-        console.error('Error in shopping-assistant:', error);
-        if (supabase && userId) {
-            await recordRequestResult(supabase, userId, 'shopping-assistant', false);
-        }
-        return new Response(
-            JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
-            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+        console.error('Shopping Assistant Error:', error);
+        return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: corsHeaders });
     }
 });

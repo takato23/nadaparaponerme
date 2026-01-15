@@ -113,7 +113,7 @@ const DupeFinderView = ({ item, brandInfo, onClose }: DupeFinderViewProps) => {
       </div>
 
       <h2 className="text-2xl font-bold text-center mb-2">
-        Buscador de Dupes
+        Buscador de Alternativas
       </h2>
 
       <p className="text-text-secondary dark:text-gray-400 text-center mb-6">
@@ -195,7 +195,7 @@ const DupeFinderView = ({ item, brandInfo, onClose }: DupeFinderViewProps) => {
         className="w-full py-4 bg-primary text-white rounded-2xl font-semibold hover:bg-primary/90 disabled:opacity-50 transition-all duration-200 flex items-center justify-center gap-2"
       >
         <span className="material-symbols-outlined">search</span>
-        Buscar Dupes
+        Buscar Alternativas
       </button>
     </div>
   );
@@ -203,7 +203,7 @@ const DupeFinderView = ({ item, brandInfo, onClose }: DupeFinderViewProps) => {
   const renderAnalyzing = () => (
     <div className="p-6 flex flex-col items-center justify-center min-h-[400px]">
       <Loader />
-      <h3 className="text-xl font-bold mt-6 mb-2">Buscando dupes...</h3>
+      <h3 className="text-xl font-bold mt-6 mb-2">Buscando alternativas...</h3>
       <p className="text-text-secondary dark:text-gray-400 text-center max-w-md">
         Analizando características visuales y buscando alternativas más baratas en tiendas online
       </p>
@@ -220,7 +220,7 @@ const DupeFinderView = ({ item, brandInfo, onClose }: DupeFinderViewProps) => {
         {/* Header */}
         <div className="text-center mb-6">
           <h2 className="text-2xl font-bold mb-2">
-            Dupes Encontrados
+            Alternativas Encontradas
           </h2>
           <p className="text-text-secondary dark:text-gray-400">
             {dupes.length} alternativa{dupes.length !== 1 ? 's' : ''} más barata{dupes.length !== 1 ? 's' : ''}
@@ -396,18 +396,16 @@ const DupeFinderView = ({ item, brandInfo, onClose }: DupeFinderViewProps) => {
           >
             <span className="material-symbols-outlined">arrow_back</span>
           </button>
-          <h1 className="ml-4 text-lg font-bold">Buscador de Dupes</h1>
+          <h1 className="ml-4 text-lg font-bold">Buscador de Alternativas</h1>
         </div>
         {/* Credits Indicator */}
-        <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg ${
-          credits.remaining <= 3
+        <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg ${credits.remaining <= 3
             ? 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
             : 'bg-gray-100 dark:bg-gray-800'
-        }`}>
-          <span className="material-symbols-rounded text-gray-500 text-sm">toll</span>
-          <span className={`text-xs font-medium ${
-            credits.remaining <= 3 ? 'text-red-600 dark:text-red-400' : 'text-gray-600 dark:text-gray-300'
           }`}>
+          <span className="material-symbols-rounded text-gray-500 text-sm">toll</span>
+          <span className={`text-xs font-medium ${credits.remaining <= 3 ? 'text-red-600 dark:text-red-400' : 'text-gray-600 dark:text-gray-300'
+            }`}>
             {credits.limit === -1 ? '∞' : credits.remaining}
           </span>
         </div>

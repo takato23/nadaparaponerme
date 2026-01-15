@@ -142,7 +142,7 @@ const SavedOutfitsView = ({ savedOutfits, closet, onSelectOutfit }: SavedOutfits
           </span>
           <input
             type="text"
-            placeholder="Buscar outfits..."
+            placeholder="Buscar looks..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-10 pr-4 py-2 rounded-xl liquid-glass text-text-primary dark:text-white placeholder-text-secondary dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-accent"
@@ -161,11 +161,10 @@ const SavedOutfitsView = ({ savedOutfits, closet, onSelectOutfit }: SavedOutfits
         <div className="flex gap-2">
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all ${
-              showFilters
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all ${showFilters
                 ? 'bg-accent text-white'
                 : 'liquid-glass text-text-primary dark:text-white'
-            }`}
+              }`}
           >
             <span className="material-symbols-outlined text-lg">tune</span>
             <span className="text-sm font-medium">Filtros</span>
@@ -192,11 +191,10 @@ const SavedOutfitsView = ({ savedOutfits, closet, onSelectOutfit }: SavedOutfits
               <button
                 key={option.value}
                 onClick={() => setFilterBy(option.value)}
-                className={`flex items-center gap-1.5 px-4 py-2 rounded-full whitespace-nowrap transition-all ${
-                  filterBy === option.value
+                className={`flex items-center gap-1.5 px-4 py-2 rounded-full whitespace-nowrap transition-all ${filterBy === option.value
                     ? 'bg-accent text-white'
                     : 'liquid-glass text-text-primary dark:text-white'
-                }`}
+                  }`}
               >
                 <span className="material-symbols-outlined text-lg">{option.icon}</span>
                 <span className="text-sm font-medium">{option.label}</span>

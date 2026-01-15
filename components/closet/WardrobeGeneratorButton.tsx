@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { generateWardrobeItem, TOTAL_GENERATED_ITEMS } from '../../src/utils/wardrobeGenerator';
 import { motion } from 'framer-motion';
 import type { ClothingItem } from '../../types';
@@ -12,21 +12,34 @@ export default function WardrobeGeneratorButton({ onGenerationComplete }: Wardro
     const [isGenerating, setIsGenerating] = useState(false);
     const [progress, setProgress] = useState(0);
 
+    // Debug: Log when component mounts
+    useEffect(() => {
+        console.log('[WardrobeGeneratorButton] Component mounted and visible');
+    }, []);
+
     const handleGenerate = async () => {
-        if (isGenerating) return;
+        console.log('[WardrobeGeneratorButton] Button clicked, isGenerating:', isGenerating);
+
+        if (isGenerating) {
+            console.log('[WardrobeGeneratorButton] Already generating, ignoring click');
+            return;
+        }
 
         setIsGenerating(true);
         setProgress(1);
+        console.log('[WardrobeGeneratorButton] Starting generation of', TOTAL_GENERATED_ITEMS, 'items');
 
         try {
             // Load existing closet from localStorage
             const existingClosetRaw = localStorage.getItem('ojodeloca-closet');
             const existingCloset: ClothingItem[] = existingClosetRaw ? JSON.parse(existingClosetRaw) : [];
+            console.log('[WardrobeGeneratorButton] Existing closet has', existingCloset.length, 'items');
 
             const newItems: ClothingItem[] = [];
 
             for (let i = 0; i < TOTAL_GENERATED_ITEMS; i++) {
                 try {
+                    console.log('[WardrobeGeneratorButton] Generating item', i + 1, 'of', TOTAL_GENERATED_ITEMS);
                     const { imageDataUrl, metadata } = await generateWardrobeItem(i);
 
                     const newItem: ClothingItem = {
@@ -36,15 +49,18 @@ export default function WardrobeGeneratorButton({ onGenerationComplete }: Wardro
                     };
                     newItems.push(newItem);
                 } catch (err: any) {
-                    console.error('Error generating item:', err);
+                    console.error('[WardrobeGeneratorButton] Error generating item', i, ':', err);
                 }
 
                 setProgress(((i + 1) / TOTAL_GENERATED_ITEMS) * 100);
             }
 
+            console.log('[WardrobeGeneratorButton] Generated', newItems.length, 'new items');
+
             // Save to localStorage
             const updatedCloset = [...newItems, ...existingCloset];
             localStorage.setItem('ojodeloca-closet', JSON.stringify(updatedCloset));
+            console.log('[WardrobeGeneratorButton] Saved to localStorage, total items:', updatedCloset.length);
 
             if (newItems.length > 0) {
                 alert(`¡Éxito! Se generaron ${newItems.length} prendas.\n\nLa página se recargará.`);
@@ -53,7 +69,7 @@ export default function WardrobeGeneratorButton({ onGenerationComplete }: Wardro
                 alert('No se pudieron generar prendas.');
             }
         } catch (error: any) {
-            console.error('Fatal error in generator:', error);
+            console.error('[WardrobeGeneratorButton] Fatal error in generator:', error);
             alert(`Error critico: ${error.message || error}`);
         } finally {
             setIsGenerating(false);

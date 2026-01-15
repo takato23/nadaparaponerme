@@ -91,27 +91,41 @@ const PhotoGuidanceModal = ({ onClose, onShowExample }: PhotoGuidanceModalProps)
           </div>
 
           {/* Pro Tips */}
-          <div className="p-4 rounded-2xl bg-gradient-to-br from-primary/5 to-secondary/5 border border-primary/10">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="material-symbols-outlined text-primary">lightbulb</span>
-              <h3 className="text-sm font-bold text-text-primary dark:text-gray-100 uppercase tracking-wider">
-                Consejos Pro
-              </h3>
+          <div className="p-4 rounded-2xl bg-gradient-to-br from-primary/5 to-secondary/5 border border-primary/10 space-y-4">
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="material-symbols-outlined text-primary text-sm">checkroom</span>
+                <h3 className="text-sm font-bold text-text-primary dark:text-gray-100 uppercase tracking-wider">
+                  Posición de la Prenda
+                </h3>
+              </div>
+              <p className="text-xs text-text-secondary dark:text-gray-400 mb-2">
+                Podés sacarlas de 3 formas:
+              </p>
+              <ul className="grid grid-cols-1 gap-2">
+                {[
+                  { title: 'Colgada (Recomendado)', desc: 'En una percha sobre una pared blanca.' },
+                  { title: 'Plana', desc: 'Sobre una mesa o piso liso y despejado.' },
+                  { title: 'Puesta', desc: 'Frente a un espejo o alguien te saca.' }
+                ].map((item, i) => (
+                  <li key={i} className="text-xs text-text-secondary dark:text-gray-400">
+                    <span className="font-bold text-primary">• {item.title}:</span> {item.desc}
+                  </li>
+                ))}
+              </ul>
             </div>
-            <ul className="space-y-2">
-              {[
-                'Coloca la prenda sobre una superficie o percha',
-                'Usa luz natural del día (no al atardecer)',
-                'Mantén el teléfono estable al capturar',
-                'Asegúrate que toda la prenda esté visible',
-                'Limpia el lente de tu cámara antes de tomar la foto'
-              ].map((tip, i) => (
-                <li key={i} className="flex items-start gap-2 text-sm text-text-secondary dark:text-gray-400">
-                  <span className="text-primary shrink-0">•</span>
-                  <span>{tip}</span>
-                </li>
-              ))}
-            </ul>
+
+            <div className="pt-3 border-t border-primary/10">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="material-symbols-outlined text-primary text-sm">settings_backup_restore</span>
+                <h3 className="text-sm font-bold text-text-primary dark:text-gray-100 uppercase tracking-wider">
+                  Vista de Espalda
+                </h3>
+              </div>
+              <p className="text-xs text-text-secondary dark:text-gray-400">
+                Si tomás la espalda, asegurate de usar el mismo método (si la colgaste para el frente, colgada para la espalda) y la misma distancia para que el tamaño coincida.
+              </p>
+            </div>
           </div>
         </div>
 

@@ -198,12 +198,28 @@ const AIStylistView: React.FC<AIStylistViewProps> = ({
 
       // Record usage after successful chat
       await subscription.incrementUsage('fashion_chat');
-    } catch (error) {
-      console.error('Error:', error);
+    } catch (error: any) {
+      console.error('Error in AIStylistView:', error);
+
+      // Determine specific error message based on error type
+      let userFacingError = '¡Ups! Algo salió mal. Intentá de nuevo en unos segundos.';
+
+      const errorMsg = error?.message || String(error);
+
+      if (errorMsg.includes('429') || errorMsg.includes('rate limit') || errorMsg.includes('RESOURCE_EXHAUSTED')) {
+        userFacingError = '⏳ Demasiadas solicitudes. Por favor esperá unos segundos e intentá de nuevo.';
+      } else if (errorMsg.includes('503') || errorMsg.includes('overloaded') || errorMsg.includes('UNAVAILABLE')) {
+        userFacingError = '🔧 El servicio de IA está temporalmente sobrecargado. Intentá de nuevo en unos segundos.';
+      } else if (errorMsg.includes('API not configured') || errorMsg.includes('VITE_GEMINI_API_KEY')) {
+        userFacingError = '⚠️ El servicio de chat no está configurado correctamente. Contactá al administrador.';
+      } else if (errorMsg.includes('network') || errorMsg.includes('fetch') || errorMsg.includes('Failed to fetch')) {
+        userFacingError = '📶 Error de conexión. Verificá tu conexión a internet e intentá de nuevo.';
+      }
+
       const errorMessage: ChatMessage = {
         id: `error_${Date.now()}`,
         role: 'assistant',
-        content: '¡Ups! Algo salió mal. Intentá de nuevo en unos segundos.',
+        content: userFacingError,
         timestamp: Date.now(),
       };
       onMessagesUpdate([...updatedMessages, errorMessage]);
@@ -243,7 +259,8 @@ const AIStylistView: React.FC<AIStylistViewProps> = ({
   }, [closet]);
 
   // Clean message content (remove IDs)
-  const cleanContent = (content: string) => {
+  const cleanContent = (content: any) => {
+    if (typeof content !== 'string') return '';
     return content.replace(/\[(?:top|bottom|shoes):\s*[^\]]+\]/gi, '').trim();
   };
 
@@ -317,11 +334,10 @@ const AIStylistView: React.FC<AIStylistViewProps> = ({
                         <div
                           key={conv.id}
                           onClick={() => { onSelectConversation(conv.id); setShowSidebar(false); }}
-                          className={`group p-3 rounded-lg cursor-pointer transition-all ${
-                            conv.id === currentConversationId
-                              ? 'bg-gray-100 dark:bg-gray-800'
-                              : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'
-                          }`}
+                          className={`group p-3 rounded-lg cursor-pointer transition-all ${conv.id === currentConversationId
+                            ? 'bg-gray-100 dark:bg-gray-800'
+                            : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'
+                            }`}
                         >
                           {deleteConfirmId === conv.id ? (
                             <div className="flex items-center justify-between">
@@ -503,11 +519,10 @@ const AIStylistView: React.FC<AIStylistViewProps> = ({
                       className={`flex gap-3 ${isUser ? 'flex-row-reverse' : ''}`}
                     >
                       {/* Avatar */}
-                      <div className={`w-8 h-8 rounded-lg flex-shrink-0 flex items-center justify-center ${
-                        isUser
-                          ? 'bg-gray-200 dark:bg-gray-700'
-                          : 'bg-gradient-to-br from-violet-500 to-fuchsia-500'
-                      }`}>
+                      <div className={`w-8 h-8 rounded-lg flex-shrink-0 flex items-center justify-center ${isUser
+                        ? 'bg-gray-200 dark:bg-gray-700'
+                        : 'bg-gradient-to-br from-violet-500 to-fuchsia-500'
+                        }`}>
                         <span className={`material-symbols-rounded text-lg ${isUser ? 'text-gray-600 dark:text-gray-300' : 'text-white'}`}>
                           {isUser ? 'person' : 'checkroom'}
                         </span>
@@ -515,11 +530,10 @@ const AIStylistView: React.FC<AIStylistViewProps> = ({
 
                       {/* Message */}
                       <div className={`flex-1 ${isUser ? 'max-w-[80%]' : ''}`}>
-                        <div className={`rounded-2xl px-4 py-3 ${
-                          isUser
-                            ? 'bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 ml-auto'
-                            : 'bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700'
-                        }`}>
+                        <div className={`rounded-2xl px-4 py-3 ${isUser
+                          ? 'bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 ml-auto'
+                          : 'bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700'
+                          }`}>
                           <p className="whitespace-pre-wrap break-words text-[15px] leading-relaxed">
                             {sanitizeUserInput(content)}
                           </p>

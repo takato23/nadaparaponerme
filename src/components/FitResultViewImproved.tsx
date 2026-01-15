@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import ConfettiEffect from './ConfettiEffect';
 import * as paymentService from '../services/paymentService';
 import { MONETIZATION_FLAGS, getFeatureFlag, getAffiliateLink, shouldShowWatermark } from '../services/monetizationService';
+import { grantBonusCredit, canClaimShareReward, recordShareReward } from '../../services/usageTrackingService';
 import ShopTheLookPanel from '../../components/ShopTheLookPanel';
 
 import type { ClothingItem, FitResult, SavedOutfit } from '../../types';
@@ -55,9 +56,17 @@ const FitResultViewImproved: React.FC<FitResultViewImprovedProps> = ({
   // Monetization features
   const [userTier, setUserTier] = useState<string>('free');
   const [hasSharedForReward, setHasSharedForReward] = useState(() => {
-    return localStorage.getItem('ojodeloca-shared-for-reward') === 'true';
+    // Check if shared this month (resets monthly)
+    const stored = localStorage.getItem('ojodeloca-shared-for-reward');
+    if (!stored) return false;
+    try {
+      const { month } = JSON.parse(stored);
+      const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
+      return month === currentMonth;
+    } catch {
+      return false;
+    }
   });
-  const [showShareRewardSuccess, setShowShareRewardSuccess] = useState(false);
 
   // Swipe gesture states
   const [touchStart, setTouchStart] = useState(0);
@@ -163,35 +172,51 @@ const FitResultViewImproved: React.FC<FitResultViewImprovedProps> = ({
   // Share to Unlock handler
   const handleShareForReward = () => {
     if (hasSharedForReward) {
-      toast.success('¡Ya reclamaste tu recompensa por compartir!');
+      toast.success('¡Ya reclamaste tu recompensa por compartir este mes!');
       return;
     }
 
-    // In a real app, this would integrate with Web Share API or Instagram Stories API
-    // For now, we simulate the share and grant the reward
+    // Anti-abuse: Check device-level limits
+    const deviceCheck = canClaimShareReward();
+    if (!deviceCheck.allowed) {
+      toast.error(deviceCheck.reason || 'Límite de recompensas alcanzado');
+      return;
+    }
+
+    // Function to grant the reward after sharing
+    const grantReward = () => {
+      // Grant the bonus credit
+      const result = grantBonusCredit(1);
+
+      // Record at device level for anti-abuse
+      recordShareReward();
+
+      // Mark as shared this month (account level)
+      const currentMonth = new Date().toISOString().slice(0, 7);
+      localStorage.setItem('ojodeloca-shared-for-reward', JSON.stringify({ month: currentMonth }));
+      setHasSharedForReward(true);
+      setShowConfetti(true);
+
+      toast.success(`🎉 ¡+1 crédito desbloqueado! Tenés ${result.newRemaining} créditos restantes.`);
+    };
+
+    // Try Web Share API first
     if (navigator.share) {
       navigator.share({
         title: '¡Mirá mi outfit!',
         text: `Creado con Ojo de Loca 👗✨`,
         url: window.location.href,
       }).then(() => {
-        // Mark as shared and show success
-        localStorage.setItem('ojodeloca-shared-for-reward', 'true');
-        setHasSharedForReward(true);
-        setShowShareRewardSuccess(true);
-
-        // In a real implementation, call backend to increment AI generations
-        console.log('✅ Share reward granted: +1 AI Generation');
+        grantReward();
       }).catch((err) => {
         console.log('Share canceled', err);
+        // Don't grant reward if share was canceled
       });
     } else {
-      // Fallback: Just open share sheet simulation
-      toast.success('📱 Compartí este outfit en tus Instagram Stories para desbloquear 1 generación de IA gratis!');
-      // For demo purposes, grant reward anyway
-      localStorage.setItem('ojodeloca-shared-for-reward', 'true');
-      setHasSharedForReward(true);
-      setShowShareRewardSuccess(true);
+      // Fallback: Copy link to clipboard and grant reward
+      navigator.clipboard?.writeText(window.location.href);
+      toast.success('📋 Link copiado al portapapeles');
+      grantReward();
     }
   };
 
@@ -687,24 +712,7 @@ const FitResultViewImproved: React.FC<FitResultViewImprovedProps> = ({
             </div>
           )}
 
-          {/* Similar Outfits (Mock) */}
-          <div>
-            <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">
-              Similares
-            </h3>
-            <div className="grid grid-cols-4 gap-2">
-              {[1, 2, 3, 4].map((i) => (
-                <div
-                  key={i}
-                  className="aspect-square bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-700 rounded-xl flex items-center justify-center"
-                >
-                  <span className="material-symbols-outlined text-gray-400 dark:text-gray-500 text-2xl">
-                    checkroom
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
+
         </div>
       </div>
 

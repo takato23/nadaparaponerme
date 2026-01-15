@@ -287,8 +287,8 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
       ai_generations_per_month: 10,
       max_closet_items: 50,
       max_saved_outfits: -1,  // Unlimited
-      can_use_virtual_tryon: false,
-      can_use_ai_designer: false,
+      can_use_virtual_tryon: true,  // Enabled during testing phase
+      can_use_ai_designer: true,  // Enabled for all tiers
       can_use_lookbook: false,
       can_use_style_dna: false,
       can_export_lookbooks: false,

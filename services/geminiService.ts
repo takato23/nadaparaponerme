@@ -140,7 +140,7 @@ export async function analyzeClothingItem(imageDataUrl: string): Promise<Clothin
         }
 
         const imagePart = base64ToGenerativePart(base64Data, imageMimeType);
-        const systemInstruction = `Eres un experto en moda. Analiza la prenda en la imagen y describe sus características, prestando especial atención a detalles como el tipo de cuello y de manga si son visibles.`;
+        const systemInstruction = `Eres un experto en moda argentino. Analiza la prenda y describe sus características usando vocabulario rioplatense (ej: "remera" en vez de "tshirt", "campera" en vez de "jacket", "zapatillas" en vez de "sneakers"). La 'subcategory' debe ser en español.`;
 
         const response = await retryAIOperation(async () => {
             return await getAIClient().models.generateContent({
@@ -2176,13 +2176,15 @@ IMPORTANTE:
         const [header, base64Data] = imageDataUrl.split(',');
         const mimeType = header.match(/:(.*?);/)?.[1] || 'image/jpeg';
 
-        const imagePart: Part = {
-            data: base64Data,
-            mimeType: mimeType as Modality,
+        const imagePart = {
+            inlineData: {
+                data: base64Data,
+                mimeType: mimeType,
+            }
         };
 
         const response = await getAIClient().models.generateContent({
-            model: 'gemini-2.5-flash', // Good balance for vision + structured output
+            model: 'gemini-2.5-flash', // Stable model from list
             contents: {
                 parts: [
                     imagePart,
@@ -2401,7 +2403,7 @@ REGLAS CRÍTICAS:
         // Step 1: Search for dupes using Google Search grounding
         const searchResponse = await getAIClient().models.generateContent({
             model: "gemini-2.5-flash",
-            contents: `Buscar productos similares más baratos: ${searchQuery}. Devolver enlaces de shopping online.`,
+            contents: `Buscar productos similares más baratos: ${searchQuery} en Argentina, Buenos Aires, Mercado Libre. Devolver enlaces de shopping online locales.`,
             config: {
                 tools: [{ googleSearch: {} }],
             },
@@ -2418,9 +2420,11 @@ REGLAS CRÍTICAS:
         const [header, base64Data] = item.imageDataUrl.split(',');
         const mimeType = header.match(/:(.*?);/)?.[1] || 'image/jpeg';
 
-        const imagePart: Part = {
-            data: base64Data,
-            mimeType: mimeType as Modality,
+        const imagePart = {
+            inlineData: {
+                data: base64Data,
+                mimeType: mimeType,
+            }
         };
 
         // Build prompt with shopping results
@@ -3265,71 +3269,71 @@ FORMATO DE SALIDA:
 Structured JSON con todos los campos requeridos del schema StyleEvolutionTimelineSchema.`;
 
     const styleEvolutionSchema = {
-        type: SchemaType.OBJECT,
+        type: Type.OBJECT,
         properties: {
             periods: {
-                type: SchemaType.ARRAY,
+                type: Type.ARRAY,
                 items: {
-                    type: SchemaType.OBJECT,
+                    type: Type.OBJECT,
                     properties: {
-                        period_name: { type: SchemaType.STRING },
-                        date_range: { type: SchemaType.STRING },
-                        item_count: { type: SchemaType.NUMBER },
-                        dominant_colors: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
-                        dominant_categories: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
-                        dominant_styles: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
-                        average_price_range: { type: SchemaType.STRING, nullable: true },
-                        key_characteristics: { type: SchemaType.STRING }
+                        period_name: { type: Type.STRING },
+                        date_range: { type: Type.STRING },
+                        item_count: { type: Type.NUMBER },
+                        dominant_colors: { type: Type.ARRAY, items: { type: Type.STRING } },
+                        dominant_categories: { type: Type.ARRAY, items: { type: Type.STRING } },
+                        dominant_styles: { type: Type.ARRAY, items: { type: Type.STRING } },
+                        average_price_range: { type: Type.STRING, nullable: true },
+                        key_characteristics: { type: Type.STRING }
                     },
                     required: ['period_name', 'date_range', 'item_count', 'dominant_colors', 'dominant_categories', 'dominant_styles', 'key_characteristics']
                 }
             },
             trends: {
-                type: SchemaType.ARRAY,
+                type: Type.ARRAY,
                 items: {
-                    type: SchemaType.OBJECT,
+                    type: Type.OBJECT,
                     properties: {
-                        trend_type: { type: SchemaType.STRING },
-                        title: { type: SchemaType.STRING },
-                        direction: { type: SchemaType.STRING },
-                        confidence: { type: SchemaType.NUMBER },
-                        description: { type: SchemaType.STRING },
-                        evidence: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } }
+                        trend_type: { type: Type.STRING },
+                        title: { type: Type.STRING },
+                        direction: { type: Type.STRING },
+                        confidence: { type: Type.NUMBER },
+                        description: { type: Type.STRING },
+                        evidence: { type: Type.ARRAY, items: { type: Type.STRING } }
                     },
                     required: ['trend_type', 'title', 'direction', 'confidence', 'description', 'evidence']
                 }
             },
             milestones: {
-                type: SchemaType.ARRAY,
+                type: Type.ARRAY,
                 items: {
-                    type: SchemaType.OBJECT,
+                    type: Type.OBJECT,
                     properties: {
-                        id: { type: SchemaType.STRING },
-                        milestone_type: { type: SchemaType.STRING },
-                        date: { type: SchemaType.STRING },
-                        title: { type: SchemaType.STRING },
-                        description: { type: SchemaType.STRING },
-                        related_item_ids: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING }, nullable: true },
-                        icon: { type: SchemaType.STRING }
+                        id: { type: Type.STRING },
+                        milestone_type: { type: Type.STRING },
+                        date: { type: Type.STRING },
+                        title: { type: Type.STRING },
+                        description: { type: Type.STRING },
+                        related_item_ids: { type: Type.ARRAY, items: { type: Type.STRING }, nullable: true },
+                        icon: { type: Type.STRING }
                     },
                     required: ['id', 'milestone_type', 'date', 'title', 'description', 'icon']
                 }
             },
             predictions: {
-                type: SchemaType.ARRAY,
+                type: Type.ARRAY,
                 items: {
-                    type: SchemaType.OBJECT,
+                    type: Type.OBJECT,
                     properties: {
-                        prediction: { type: SchemaType.STRING },
-                        confidence: { type: SchemaType.NUMBER },
-                        reasoning: { type: SchemaType.STRING },
-                        recommendations: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
-                        timeline: { type: SchemaType.STRING }
+                        prediction: { type: Type.STRING },
+                        confidence: { type: Type.NUMBER },
+                        reasoning: { type: Type.STRING },
+                        recommendations: { type: Type.ARRAY, items: { type: Type.STRING } },
+                        timeline: { type: Type.STRING }
                     },
                     required: ['prediction', 'confidence', 'reasoning', 'recommendations', 'timeline']
                 }
             },
-            overall_journey_summary: { type: SchemaType.STRING }
+            overall_journey_summary: { type: Type.STRING }
         },
         required: ['periods', 'trends', 'milestones', 'predictions', 'overall_journey_summary']
     };
@@ -3448,33 +3452,33 @@ Total de prendas: ${closet.length}
 Retorna un análisis de gaps priorizados.`;
 
     const gapSchema = {
-        type: SchemaType.OBJECT,
+        type: Type.OBJECT,
         properties: {
             gaps: {
-                type: SchemaType.ARRAY,
+                type: Type.ARRAY,
                 items: {
-                    type: SchemaType.OBJECT,
+                    type: Type.OBJECT,
                     properties: {
-                        category: { type: SchemaType.STRING },
-                        subcategory: { type: SchemaType.STRING },
-                        color_suggestion: { type: SchemaType.STRING },
+                        category: { type: Type.STRING },
+                        subcategory: { type: Type.STRING },
+                        color_suggestion: { type: Type.STRING },
                         priority: {
-                            type: SchemaType.STRING,
+                            type: Type.STRING,
                             enum: ['essential', 'recommended', 'optional']
                         },
-                        reasoning: { type: SchemaType.STRING },
+                        reasoning: { type: Type.STRING },
                         occasions: {
-                            type: SchemaType.ARRAY,
-                            items: { type: SchemaType.STRING }
+                            type: Type.ARRAY,
+                            items: { type: Type.STRING }
                         },
-                        estimated_budget: { type: SchemaType.STRING },
+                        estimated_budget: { type: Type.STRING },
                         alternatives: {
-                            type: SchemaType.ARRAY,
-                            items: { type: SchemaType.STRING },
+                            type: Type.ARRAY,
+                            items: { type: Type.STRING },
                             nullable: true
                         },
-                        current_inventory_count: { type: SchemaType.NUMBER },
-                        versatility_impact: { type: SchemaType.NUMBER }
+                        current_inventory_count: { type: Type.NUMBER },
+                        versatility_impact: { type: Type.NUMBER }
                     },
                     required: ['category', 'subcategory', 'color_suggestion', 'priority', 'reasoning', 'occasions', 'estimated_budget', 'current_inventory_count', 'versatility_impact']
                 }
@@ -3562,33 +3566,33 @@ ${budget ? `**PRESUPUESTO MÁXIMO:** AR$ ${budget.toLocaleString('es-AR')}` : '*
 Sugiere 2-4 productos específicos por gap prioritario. Sé realista con precios y disponibilidad.`;
 
     const recommendationSchema = {
-        type: SchemaType.OBJECT,
+        type: Type.OBJECT,
         properties: {
             recommendations: {
-                type: SchemaType.ARRAY,
+                type: Type.ARRAY,
                 items: {
-                    type: SchemaType.OBJECT,
+                    type: Type.OBJECT,
                     properties: {
-                        gap_id: { type: SchemaType.STRING },
+                        gap_id: { type: Type.STRING },
                         products: {
-                            type: SchemaType.ARRAY,
+                            type: Type.ARRAY,
                             items: {
-                                type: SchemaType.OBJECT,
+                                type: Type.OBJECT,
                                 properties: {
-                                    title: { type: SchemaType.STRING },
-                                    brand: { type: SchemaType.STRING },
-                                    price: { type: SchemaType.NUMBER },
-                                    subcategory: { type: SchemaType.STRING },
-                                    color_primary: { type: SchemaType.STRING },
-                                    similarity_to_gap: { type: SchemaType.NUMBER },
-                                    match_reasoning: { type: SchemaType.STRING },
-                                    estimated_quality: { type: SchemaType.STRING }
+                                    title: { type: Type.STRING },
+                                    brand: { type: Type.STRING },
+                                    price: { type: Type.NUMBER },
+                                    subcategory: { type: Type.STRING },
+                                    color_primary: { type: Type.STRING },
+                                    similarity_to_gap: { type: Type.NUMBER },
+                                    match_reasoning: { type: Type.STRING },
+                                    estimated_quality: { type: Type.STRING }
                                 },
                                 required: ['title', 'brand', 'price', 'subcategory', 'color_primary', 'similarity_to_gap', 'match_reasoning', 'estimated_quality']
                             }
                         },
-                        priority_order: { type: SchemaType.NUMBER },
-                        strategy_note: { type: SchemaType.STRING }
+                        priority_order: { type: Type.NUMBER },
+                        strategy_note: { type: Type.STRING }
                     },
                     required: ['gap_id', 'products', 'priority_order', 'strategy_note']
                 }

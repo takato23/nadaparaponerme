@@ -368,7 +368,7 @@ export default function LiquidDetailModal({ item, isOpen, onClose }: LiquidDetai
                                             }`}
                                     >
                                         <span className="material-symbols-outlined">shopping_bag</span>
-                                        Dupes
+                                        Alternativas
                                     </button>
                                 </div>
                             </div>

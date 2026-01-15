@@ -36,7 +36,7 @@ interface StudioToolbarProps {
 
 const itemVariants = {
     hidden: { opacity: 0, y: 12 },
-    show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: 'easeOut' } }
+    show: { opacity: 1, y: 0, transition: { duration: 0.35 } }
 };
 
 export const StudioToolbar: React.FC<StudioToolbarProps> = ({
@@ -135,9 +135,9 @@ export const StudioToolbar: React.FC<StudioToolbarProps> = ({
 
     return (
         <motion.section variants={itemVariants} className="mb-3">
-            <div className="flex items-center gap-3 p-2 rounded-xl bg-white/60 backdrop-blur-sm border border-white/70 overflow-x-auto no-scrollbar max-w-full">
-                {/* Selfie Section */}
-                <div className="relative shrink-0 flex flex-col items-center gap-1">
+            <div className="flex items-start gap-2 p-2 rounded-xl bg-white/60 backdrop-blur-sm border border-white/70 w-full relative">
+                {/* Selfie Section - Fixed Left */}
+                <div className="relative shrink-0 flex flex-col items-center gap-1 w-[80px]">
                     {userBaseImage ? (
                         <div
                             role="button"
@@ -148,25 +148,31 @@ export const StudioToolbar: React.FC<StudioToolbarProps> = ({
                                     fileInputRef.current?.click();
                                 }
                             }}
-                            className="relative w-20 h-28 rounded-xl overflow-hidden border-2 border-[color:var(--studio-ink)] shadow-md group cursor-pointer"
+                            className="relative w-20 h-28 group cursor-pointer"
                         >
-                            <img src={userBaseImage} alt="Tu selfie" className="w-full h-full object-cover" />
-                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
-                                <span className="material-symbols-outlined text-white text-lg">edit</span>
+                            <div className="w-full h-full rounded-xl overflow-hidden border-2 border-[color:var(--studio-ink)] shadow-md relative">
+                                <img src={userBaseImage} alt="Tu selfie" className="w-full h-full object-cover" />
+                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                                    <span className="material-symbols-outlined text-white text-lg">edit</span>
+                                </div>
                             </div>
+
+                            {/* Delete Button - Outside Top-Right */}
                             <button
                                 onClick={(e) => { e.stopPropagation(); setUserBaseImage(null); }}
-                                className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center text-xs shadow-md"
+                                className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center text-[10px] shadow-sm z-20 hover:scale-110 transition-transform"
                             >
-                                ×
+                                <span className="material-symbols-outlined text-xs">close</span>
                             </button>
+
+                            {/* Save Button - Overlaid Bottom-Right */}
                             {!savedSelfies.includes(userBaseImage) && (
                                 <button
                                     onClick={(e) => { e.stopPropagation(); saveSelfieForQuickAccess(userBaseImage); }}
-                                    className="absolute -bottom-1.5 -right-1.5 w-5 h-5 rounded-full bg-[color:var(--studio-mint)] text-white flex items-center justify-center shadow-md"
+                                    className="absolute -bottom-1.5 -right-1.5 w-6 h-6 rounded-full bg-[color:var(--studio-mint)] text-white flex items-center justify-center shadow-md hover:scale-110 active:scale-95 transition-transform z-20 border border-white"
                                     title="Guardar selfie"
                                 >
-                                    <span className="material-symbols-outlined text-xs">bookmark_add</span>
+                                    <span className="material-symbols-outlined text-sm">bookmark_add</span>
                                 </button>
                             )}
                         </div>
@@ -196,26 +202,125 @@ export const StudioToolbar: React.FC<StudioToolbarProps> = ({
                     )}
                 </div>
 
-                {/* Preset Tabs & Options */}
-                <div className="flex-1">
-                    <div className="grid grid-cols-5 gap-1">
-                        {GENERATION_PRESETS.map(preset => (
+                <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+                    {/* Top Controls Row: Quality, View, Counter */}
+                    <div className="flex items-center justify-between gap-1 border-b border-gray-100 pb-1 min-h-[26px]">
+                        <div className="flex items-center gap-2 flex-wrap">
+                            {/* Quality Toggle */}
+                            {setGenerationQuality && (
+                                <div className="flex items-center gap-1 border-r pr-2 border-gray-300">
+                                    <span className="text-[8px] text-[color:var(--studio-ink-muted)] font-bold uppercase tracking-tight hidden sm:inline">Cal:</span>
+                                    <div className="flex bg-gray-100 p-0.5 rounded-lg">
+                                        <button
+                                            onClick={() => { if (navigator.vibrate) navigator.vibrate(5); setGenerationQuality('flash'); }}
+                                            className={`px-1.5 py-0.5 rounded text-[9px] font-bold transition flex items-center gap-0.5 ${generationQuality === 'flash'
+                                                ? 'bg-white shadow-sm text-[color:var(--studio-ink)]'
+                                                : 'text-gray-400 hover:text-gray-600'
+                                                }`}
+                                            title="Rápido: calidad estándar"
+                                        >
+                                            Rápido <span className="text-[7px] opacity-60">1⚡</span>
+                                        </button>
+                                        <button
+                                            onClick={() => { if (navigator.vibrate) navigator.vibrate(5); setGenerationQuality('pro'); }}
+                                            className={`px-1.5 py-0.5 rounded text-[9px] font-bold transition flex items-center gap-0.5 ${generationQuality === 'pro'
+                                                ? 'bg-gradient-to-r from-purple-500 to-pink-500 shadow-sm text-white'
+                                                : 'text-gray-400 hover:text-gray-600'
+                                                }`}
+                                            title="Ultra: calidad pro"
+                                        >
+                                            Ultra <span className="text-[7px] opacity-90">4⚡</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* View Selection */}
+                            {setGenerationView && (
+                                <div className="flex items-center gap-1">
+                                    <span className="text-[8px] text-[color:var(--studio-ink-muted)] font-bold uppercase tracking-tight hidden sm:inline">Visto:</span>
+                                    <div className="flex bg-gray-100 p-0.5 rounded-lg">
+                                        <button
+                                            onClick={() => { if (navigator.vibrate) navigator.vibrate(5); setGenerationView('front'); }}
+                                            className={`px-1 rounded text-[9px] font-medium transition ${generationView === 'front'
+                                                ? 'bg-white shadow-sm text-[color:var(--studio-ink)]'
+                                                : 'text-gray-400 hover:text-gray-600'
+                                                }`}
+                                        >
+                                            Front
+                                        </button>
+                                        <button
+                                            onClick={() => { if (navigator.vibrate) navigator.vibrate(5); setGenerationView('back'); }}
+                                            className={`px-1 rounded text-[9px] font-medium transition ${generationView === 'back'
+                                                ? 'bg-white shadow-sm text-[color:var(--studio-ink)]'
+                                                : 'text-gray-400 hover:text-gray-600'
+                                                }`}
+                                        >
+                                            Back
+                                        </button>
+                                        <button
+                                            onClick={() => { if (navigator.vibrate) navigator.vibrate(5); setGenerationView('side'); }}
+                                            className={`px-1 rounded text-[9px] font-medium transition ${generationView === 'side'
+                                                ? 'bg-white shadow-sm text-[color:var(--studio-ink)]'
+                                                : 'text-gray-400 hover:text-gray-600'
+                                                }`}
+                                        >
+                                            Side
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Slot Counter - Moved here */}
+                        <div className="flex items-center gap-1.5 shrink-0 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-100">
+                            <div className={`text-[10px] font-bold ${hasCoverage ? 'text-green-700' : 'text-amber-700'}`}>
+                                {slotCount}/{MAX_SLOTS_PER_GENERATION}
+                            </div>
+                            {slotCount > 0 && (
+                                <button
+                                    onClick={() => {
+                                        if (window.confirm('¿Borrar todas las prendas seleccionadas?')) {
+                                            if (navigator.vibrate) navigator.vibrate(5);
+                                            onClearSelections();
+                                        }
+                                    }}
+                                    className="w-4 h-4 rounded-full bg-black/5 hover:bg-black/10 flex items-center justify-center text-[10px] text-gray-500"
+                                    title="Limpiar selección"
+                                >
+                                    ×
+                                </button>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Preset Pills - Full Width Below Header */}
+                    <div className="py-0.5">
+                        <div className="flex flex-wrap gap-1">
+                            {GENERATION_PRESETS.filter(p => p.id !== 'custom').map(preset => (
+                                <button
+                                    key={preset.id}
+                                    onClick={() => { if (navigator.vibrate) navigator.vibrate(5); setPresetId(preset.id); }}
+                                    className={`flex items-center gap-1 px-2 py-0.5 rounded-full whitespace-nowrap text-[9px] font-medium transition-all ${presetId === preset.id
+                                        ? 'bg-[color:var(--studio-ink)] text-white shadow-md'
+                                        : 'bg-white/90 text-[color:var(--studio-ink)] hover:bg-white border border-gray-100'
+                                        }`}
+                                >
+                                    <span className="material-symbols-outlined text-[12px]">{preset.icon}</span>
+                                    {preset.label}
+                                </button>
+                            ))}
                             <button
-                                key={preset.id}
-                                onClick={() => setPresetId(preset.id)}
-                                title={preset.description}
-                                className={`relative flex items-center justify-center gap-0.5 px-1 py-1 rounded-md text-[9px] font-medium transition ${presetId === preset.id
-                                    ? 'bg-[color:var(--studio-ink)] text-white shadow-sm'
-                                    : 'bg-white/50 text-[color:var(--studio-ink-muted)] hover:bg-white/80'
+                                onClick={() => setPresetId('custom')}
+                                className={`flex items-center gap-1 px-2 py-0.5 rounded-full whitespace-nowrap text-[9px] font-medium transition-all ${presetId === 'custom'
+                                    ? 'bg-[color:var(--studio-ink)] text-white shadow-md'
+                                    : 'bg-white/90 text-[color:var(--studio-ink)] hover:bg-white border border-gray-200'
                                     }`}
                             >
-                                <span className="material-symbols-outlined text-xs">{preset.icon}</span>
-                                <span className="truncate">{preset.label}</span>
-                                {preset.id === 'editorial' && (
-                                    <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-purple-500" />
-                                )}
+                                <span className="material-symbols-outlined text-[12px]">edit</span>
+                                Otro
                             </button>
-                        ))}
+                        </div>
                     </div>
 
                     {presetId === 'custom' && (
@@ -228,20 +333,20 @@ export const StudioToolbar: React.FC<StudioToolbarProps> = ({
                         />
                     )}
 
-                    <div className="mt-2 flex items-center gap-4 flex-wrap">
+                    <div className="mt-1 flex items-center gap-4 flex-wrap">
                         {/* Keep pose toggle */}
                         <div className="relative group">
-                            <label className="flex items-center gap-1.5 cursor-pointer">
+                            <label className="flex items-center gap-1 cursor-pointer">
                                 <input
                                     type="checkbox"
                                     checked={keepPose}
                                     onChange={(e) => setKeepPose(e.target.checked)}
-                                    className="w-3.5 h-3.5 rounded border-gray-300 text-[color:var(--studio-ink)] focus:ring-[color:var(--studio-ink)]"
+                                    className="w-3 h-3 rounded border-gray-300 text-[color:var(--studio-ink)] focus:ring-[color:var(--studio-ink)]"
                                 />
-                                <span className="text-[10px] font-medium text-[color:var(--studio-ink-muted)] group-hover:text-[color:var(--studio-ink)]">
+                                <span className="text-[9px] font-medium text-[color:var(--studio-ink-muted)] group-hover:text-[color:var(--studio-ink)] whitespace-nowrap">
                                     Mantener pose
                                 </span>
-                                <span className="material-symbols-rounded text-[12px] text-purple-400 group-hover:text-purple-600">
+                                <span className="material-symbols-rounded text-[11px] text-purple-400 group-hover:text-purple-600">
                                     info
                                 </span>
                             </label>
@@ -298,241 +403,74 @@ export const StudioToolbar: React.FC<StudioToolbarProps> = ({
                             )}
                         </div>
 
-                        {/* Quality Toggle */}
-                        {setGenerationQuality && (
-                            <div className="flex items-center gap-1.5 ml-2 border-l pl-2 border-gray-300">
-                                <span className="text-[9px] text-[color:var(--studio-ink-muted)] font-medium">Calidad:</span>
-                                <div className="flex bg-gray-100 p-0.5 rounded-lg">
-                                    <button
-                                        onClick={() => setGenerationQuality('flash')}
-                                        className={`px-1.5 py-0.5 rounded text-[9px] font-medium transition ${generationQuality === 'flash'
-                                            ? 'bg-white shadow-sm text-[color:var(--studio-ink)]'
-                                            : 'text-gray-400 hover:text-gray-600'
-                                            }`}
-                                        title="Rápido: calidad estándar y veloz. 1 crédito."
-                                    >
-                                        Rápido
-                                    </button>
-                                    <button
-                                        onClick={() => setGenerationQuality('pro')}
-                                        disabled={!isPremium}
-                                        title={isPremium ? 'Ultra: máxima calidad y detalle. 4 créditos.' : 'Solo Premium'}
-                                        className={`px-1.5 py-0.5 rounded text-[9px] font-medium transition ${generationQuality === 'pro'
-                                            ? 'bg-white shadow-sm text-[color:var(--studio-ink)]'
-                                            : 'text-gray-400 hover:text-gray-600'
-                                            } ${!isPremium ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                    >
-                                        Ultra
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* View Selection */}
-                        {setGenerationView && (
-                            <div className="flex items-center gap-1.5 border-l pl-2 border-gray-300">
-                                <span className="text-[9px] text-[color:var(--studio-ink-muted)] font-medium">Vista:</span>
-                                <div className="flex bg-gray-100 p-0.5 rounded-lg">
-                                    <button
-                                        onClick={() => setGenerationView('front')}
-                                        className={`px-1.5 py-0.5 rounded text-[9px] font-medium transition ${generationView === 'front'
-                                            ? 'bg-white shadow-sm text-[color:var(--studio-ink)]'
-                                            : 'text-gray-400 hover:text-gray-600'
-                                            }`}
-                                    >
-                                        Frente
-                                    </button>
-                                    <button
-                                        onClick={() => setGenerationView('back')}
-                                        className={`px-1.5 py-0.5 rounded text-[9px] font-medium transition ${generationView === 'back'
-                                            ? 'bg-white shadow-sm text-[color:var(--studio-ink)]'
-                                            : 'text-gray-400 hover:text-gray-600'
-                                            }`}
-                                    >
-                                        Espalda
-                                    </button>
-                                    <button
-                                        onClick={() => setGenerationView('side')}
-                                        className={`px-1.5 py-0.5 rounded text-[9px] font-medium transition ${generationView === 'side'
-                                            ? 'bg-white shadow-sm text-[color:var(--studio-ink)]'
-                                            : 'text-gray-400 hover:text-gray-600'
-                                            }`}
-                                    >
-                                        Lado
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Fit Selection */}
-                        {setGenerationFit && (
-                            <div className="flex items-center gap-1.5 border-l pl-2 border-gray-300">
-                                <span className="text-[9px] text-[color:var(--studio-ink-muted)] font-medium">Ajuste:</span>
-                                <div className="flex bg-gray-100 p-0.5 rounded-lg">
-                                    <button
-                                        onClick={() => setGenerationFit('tight')}
-                                        className={`px-1.5 py-0.5 rounded text-[9px] font-medium transition ${generationFit === 'tight'
-                                            ? 'bg-white shadow-sm text-[color:var(--studio-ink)]'
-                                            : 'text-gray-400 hover:text-gray-600'
-                                            }`}
-                                    >
-                                        Ajustado
-                                    </button>
-                                    <button
-                                        onClick={() => setGenerationFit('regular')}
-                                        className={`px-1.5 py-0.5 rounded text-[9px] font-medium transition ${generationFit === 'regular'
-                                            ? 'bg-white shadow-sm text-[color:var(--studio-ink)]'
-                                            : 'text-gray-400 hover:text-gray-600'
-                                            }`}
-                                    >
-                                        Regular
-                                    </button>
-                                    <button
-                                        onClick={() => setGenerationFit('oversized')}
-                                        className={`px-1.5 py-0.5 rounded text-[9px] font-medium transition ${generationFit === 'oversized'
-                                            ? 'bg-white shadow-sm text-[color:var(--studio-ink)]'
-                                            : 'text-gray-400 hover:text-gray-600'
-                                            }`}
-                                    >
-                                        Holgado
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-
-
+                        {/* Old Control Section Removed - Moved to Header */}
                     </div>
 
-                    {/* Face Reference Preview */}
+                    {/* Saved selfies gallery (expandable) */}
                     <AnimatePresence>
-                        {showFaceRefPreview && faceRefs.length > 0 && (
+                        {showSelfieManager && savedSelfies.length > 0 && (
                             <motion.div
                                 initial={{ height: 0, opacity: 0 }}
                                 animate={{ height: 'auto', opacity: 1 }}
                                 exit={{ height: 0, opacity: 0 }}
                                 className="overflow-hidden"
                             >
-                                <div className="mt-2 p-2 rounded-lg bg-[color:var(--studio-mint)]/10 border border-[color:var(--studio-mint)]/30">
-                                    <div className="flex items-center gap-2">
-                                        {faceRefs.map((ref) => (
-                                            <div
-                                                key={ref.id}
-                                                className={`relative w-10 h-10 rounded-full overflow-hidden border-2 shrink-0 ${ref.is_primary
-                                                    ? 'border-[color:var(--studio-mint)] ring-2 ring-[color:var(--studio-mint)]/30'
-                                                    : 'border-white/80'
-                                                    }`}
-                                                title={ref.label + (ref.is_primary ? ' (Principal)' : '')}
-                                            >
-                                                <img
-                                                    src={ref.image_url}
-                                                    alt={ref.label}
-                                                    className="w-full h-full object-cover"
-                                                />
-                                                {ref.is_primary && (
-                                                    <div className="absolute bottom-0 right-0 w-3 h-3 bg-[color:var(--studio-mint)] rounded-full flex items-center justify-center">
-                                                        <span className="material-symbols-outlined text-white text-[8px]">star</span>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        ))}
+                                <div className="mt-2 p-3 rounded-xl bg-white/70 border border-white/80 shadow-sm">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <p className="text-xs font-semibold text-[color:var(--studio-ink)]">
+                                            📷 Mis selfies guardadas
+                                        </p>
                                         <button
-                                            onClick={() => navigate(ROUTES.PROFILE)}
-                                            className="w-8 h-8 rounded-full border border-dashed border-[color:var(--studio-mint)] flex items-center justify-center text-[color:var(--studio-mint)] hover:bg-[color:var(--studio-mint)]/10 transition"
-                                            title="Administrar fotos de cara"
+                                            onClick={() => setShowSelfieManager(false)}
+                                            className="text-[color:var(--studio-ink-muted)] hover:text-[color:var(--studio-ink)]"
                                         >
-                                            <span className="material-symbols-outlined text-sm">settings</span>
+                                            <span className="material-symbols-outlined text-sm">close</span>
                                         </button>
                                     </div>
-                                    <p className="text-[9px] text-[color:var(--studio-ink-muted)] mt-1.5">
-                                        {useFaceRefs ? '✓ Se usarán para mejorar tu cara en la generación' : '○ Desactivadas'}
+                                    <div className="flex gap-3 overflow-x-auto pb-1">
+                                        {savedSelfies.map((selfie, idx) => (
+                                            <div
+                                                key={idx}
+                                                role="button"
+                                                tabIndex={0}
+                                                onClick={() => { setUserBaseImage(selfie); setShowSelfieManager(false); toast.success('Selfie cargada'); }}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter' || e.key === ' ') {
+                                                        setUserBaseImage(selfie);
+                                                        setShowSelfieManager(false);
+                                                        toast.success('Selfie cargada');
+                                                    }
+                                                }}
+                                                className={`relative w-16 h-24 rounded-xl overflow-hidden border-2 shrink-0 transition shadow-sm cursor-pointer group ${userBaseImage === selfie
+                                                    ? 'border-[color:var(--studio-ink)] ring-2 ring-[color:var(--studio-ink)]/20'
+                                                    : 'border-white hover:border-[color:var(--studio-mint)] hover:shadow-md'
+                                                    }`}
+                                            >
+                                                <img src={selfie} alt={`Selfie ${idx + 1}`} className="w-full h-full object-cover" />
+                                                {userBaseImage === selfie && (
+                                                    <div className="absolute inset-0 bg-[color:var(--studio-ink)]/20 flex items-center justify-center">
+                                                        <span className="material-symbols-outlined text-white text-lg">check_circle</span>
+                                                    </div>
+                                                )}
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); if (navigator.vibrate) navigator.vibrate(5); removeSavedSelfie(selfie); }}
+                                                    className="absolute top-1 right-1 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center shadow-md z-10"
+                                                >
+                                                    <span className="material-symbols-outlined text-[10px]">close</span>
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <p className="text-[9px] text-[color:var(--studio-ink-muted)] mt-2">
+                                        Tocá una selfie para usarla • Máximo 5 guardadas
                                     </p>
                                 </div>
                             </motion.div>
                         )}
                     </AnimatePresence>
-                </div>
 
-                {/* Slot Counter */}
-                <div className="flex items-center gap-2 shrink-0">
-                    <div className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold ${hasCoverage ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
-                        }`}>
-                        <span className="material-symbols-outlined text-sm">{hasCoverage ? 'check_circle' : 'pending'}</span>
-                        {slotCount}/{MAX_SLOTS_PER_GENERATION}
-                    </div>
-                    {slotCount > 0 && (
-                        <button
-                            onClick={onClearSelections}
-                            className="w-6 h-6 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-xs"
-                            title="Limpiar selección"
-                        >
-                            ×
-                        </button>
-                    )}
                 </div>
             </div>
-
-            {/* Saved selfies gallery (expandable) */}
-            <AnimatePresence>
-                {showSelfieManager && savedSelfies.length > 0 && (
-                    <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        className="overflow-hidden"
-                    >
-                        <div className="mt-2 p-3 rounded-xl bg-white/70 border border-white/80 shadow-sm">
-                            <div className="flex items-center justify-between mb-2">
-                                <p className="text-xs font-semibold text-[color:var(--studio-ink)]">
-                                    📷 Mis selfies guardadas
-                                </p>
-                                <button
-                                    onClick={() => setShowSelfieManager(false)}
-                                    className="text-[color:var(--studio-ink-muted)] hover:text-[color:var(--studio-ink)]"
-                                >
-                                    <span className="material-symbols-outlined text-sm">close</span>
-                                </button>
-                            </div>
-                            <div className="flex gap-3 overflow-x-auto pb-1">
-                                {savedSelfies.map((selfie, idx) => (
-                                    <div
-                                        key={idx}
-                                        role="button"
-                                        tabIndex={0}
-                                        onClick={() => { setUserBaseImage(selfie); setShowSelfieManager(false); toast.success('Selfie cargada'); }}
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter' || e.key === ' ') {
-                                                setUserBaseImage(selfie);
-                                                setShowSelfieManager(false);
-                                                toast.success('Selfie cargada');
-                                            }
-                                        }}
-                                        className={`relative w-16 h-24 rounded-xl overflow-hidden border-2 shrink-0 transition shadow-sm cursor-pointer group ${userBaseImage === selfie
-                                            ? 'border-[color:var(--studio-ink)] ring-2 ring-[color:var(--studio-ink)]/20'
-                                            : 'border-white hover:border-[color:var(--studio-mint)] hover:shadow-md'
-                                            }`}
-                                    >
-                                        <img src={selfie} alt={`Selfie ${idx + 1}`} className="w-full h-full object-cover" />
-                                        {userBaseImage === selfie && (
-                                            <div className="absolute inset-0 bg-[color:var(--studio-ink)]/20 flex items-center justify-center">
-                                                <span className="material-symbols-outlined text-white text-lg">check_circle</span>
-                                            </div>
-                                        )}
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); removeSavedSelfie(selfie); }}
-                                            className="absolute top-1 right-1 w-4 h-4 rounded-full bg-red-500/90 text-white flex items-center justify-center text-[8px] opacity-0 group-hover:opacity-100 hover:!opacity-100 shadow"
-                                        >
-                                            ×
-                                        </button>
-                                    </div>
-                                ))}
-                            </div>
-                            <p className="text-[9px] text-[color:var(--studio-ink-muted)] mt-2">
-                                Tocá una selfie para usarla • Máximo 5 guardadas
-                            </p>
-                        </div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
 
             <input
                 type="file"
