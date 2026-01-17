@@ -681,7 +681,7 @@ const AppContent = () => {
         const uniqueInventory = Array.from(new Map(combinedInventory.map(item => [item.id, item])).values());
 
         try {
-            let result: FitResult;
+            let result: FitResult | null;
 
             // V1 SAFE: evitamos paths alternativos que puedan depender de integraciones no validadas
             if (professionalProfile && !(V1_SAFE_MODE && import.meta.env.PROD)) {
@@ -705,8 +705,13 @@ const AppContent = () => {
                 result = professionalResult as FitResult;
             } else {
                 // Fallback al servicio básico
-                // Fallback al servicio básico
-                result = await generateOutfit(prompt); // Use hook's generateOutfit
+                result = await generateOutfit(prompt); // Use hook's generateOutfit - may return null on error
+            }
+
+            // Check if generation failed (returned null)
+            if (!result) {
+                // Error is already set in the hook's error state
+                return;
             }
 
             setFitResult(result);
@@ -729,10 +734,10 @@ const AppContent = () => {
                 }
             }, 100);
         } catch (e) {
-            // const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.'; // Handled by hook
-            // setError(errorMessage); // Handled by hook
+            // Catch any other unexpected errors
+            console.error('Unexpected error in handleGenerateFit:', e);
+            setGenerationError(e instanceof Error ? e.message : 'Ocurrió un error inesperado');
         } finally {
-            // setIsGenerating(false); // Handled by hook
             modals.setBorrowedItems([]);
             modals.setViewingFriend(null);
         }
@@ -1298,7 +1303,6 @@ const AppContent = () => {
                                                 onOpenColorPalette={() => modals.setShowColorPalette(true)}
                                                 onOpenTopVersatile={() => modals.setShowTopVersatile(true)}
                                                 onOpenWeeklyPlanner={() => modals.setShowWeeklyPlanner(true)}
-                                                onOpenTestingPlayground={() => startTransition(() => setShowTestingPlayground(true))}
                                                 onOpenAestheticPlayground={!import.meta.env.PROD ? () => startTransition(() => setShowAestheticPlayground(true)) : undefined}
                                                 onOpenBorrowedItems={() => modals.setShowBorrowedItems(true)}
                                                 onDeleteAccount={handleDeleteAccount}

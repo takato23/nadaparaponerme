@@ -44,7 +44,9 @@ export const FaceReferenceUploader: React.FC<FaceReferenceUploaderProps> = ({
             const refs = await getFaceReferences();
             setReferences(refs);
         } catch (e) {
-            console.error('Error loading references:', e);
+            // Safe fail - if table doesn't exist or other error, just show empty state
+            console.warn('Face references not available:', e);
+            setReferences([]);
         } finally {
             setLoading(false);
         }
@@ -126,8 +128,8 @@ export const FaceReferenceUploader: React.FC<FaceReferenceUploaderProps> = ({
                             >
                                 <div
                                     className={`w-14 h-14 rounded-full overflow-hidden border-2 ${ref.is_primary
-                                            ? 'border-primary shadow-lg'
-                                            : 'border-gray-300 dark:border-gray-600'
+                                        ? 'border-primary shadow-lg'
+                                        : 'border-gray-300 dark:border-gray-600'
                                         }`}
                                 >
                                     <img
@@ -251,8 +253,8 @@ export const FaceReferenceUploader: React.FC<FaceReferenceUploaderProps> = ({
                                             <div
                                                 onClick={() => !ref.is_primary && handleSetPrimary(ref.id)}
                                                 className={`w-20 h-20 rounded-2xl overflow-hidden border-3 cursor-pointer transition-all ${ref.is_primary
-                                                        ? 'border-primary shadow-lg ring-2 ring-primary/30'
-                                                        : 'border-gray-200 dark:border-gray-700 hover:border-primary/50'
+                                                    ? 'border-primary shadow-lg ring-2 ring-primary/30'
+                                                    : 'border-gray-200 dark:border-gray-700 hover:border-primary/50'
                                                     }`}
                                             >
                                                 <img

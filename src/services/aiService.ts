@@ -111,7 +111,10 @@ export async function generateOutfit(
       bottom_id: randomItem(closet.filter(i => i.metadata.category === 'bottom')),
       shoes_id: randomItem(closet.filter(i => i.metadata.category === 'shoes')),
       explanation: 'Este es un outfit generado en Modo Seguro (sin IA real). Combina tus prendas disponibles de forma aleatoria para testing.',
-      missing_piece_suggestion: 'Accesorio de prueba'
+      missing_piece_suggestion: {
+        item_name: 'Accesorio de prueba',
+        reason: 'Para completar el look'
+      }
     };
   }
 
@@ -155,9 +158,9 @@ export async function generatePackingList(
     await new Promise(resolve => setTimeout(resolve, 3000));
     return {
       packing_list: [
-        { item: 'Camiseta de prueba', category: 'top', reasoning: 'Básico esencial' },
-        { item: 'Jeans cómodos', category: 'bottom', reasoning: 'Versatilidad' },
-        { item: 'Zapatillas', category: 'shoes', reasoning: 'Caminar mucho' }
+        'Camiseta de prueba - Básico esencial',
+        'Jeans cómodos - Versatilidad',
+        'Zapatillas - Caminar mucho'
       ],
       outfit_suggestions: 'Este es un plan de viaje simulado en Modo Seguro.'
     };
@@ -265,8 +268,10 @@ export async function conversationalShoppingAssistant(
 ): Promise<import('../../types').ShoppingChatMessage> {
   if (V1_SAFE_MODE) {
     return {
+      id: `system_${Date.now()}`,
       role: 'assistant',
-      content: 'El asistente de compras está desactivado en Modo Seguro.'
+      content: 'El asistente de compras está desactivado en Modo Seguro.',
+      timestamp: new Date().toISOString()
     };
   }
 
@@ -443,9 +448,16 @@ export async function analyzeColorPalette(...args: Parameters<typeof geminiServi
 export async function chatWithFashionAssistant(...args: Parameters<typeof geminiServiceFull.chatWithFashionAssistant>) {
   if (V1_SAFE_MODE) return { role: 'assistant', content: 'Safe Mode enabled.' };
   const useSupabaseAI = getFeatureFlag('useSupabaseAI');
+
   if (useSupabaseAI) {
     // Route through Edge Function for security
-    const [userMessage, inventory, chatHistory, _onStreamChunk] = args;
+    const [userMessage, inventory, chatHistory, onStreamChunk] = args;
+
+    // Simulate streaming for better UX while waiting for Edge Function
+    if (onStreamChunk) {
+      onStreamChunk('...'); // Initial typing indicator
+    }
+
     const chatHistoryForEdge = (chatHistory || []).map(msg => ({
       role: msg.role as 'user' | 'assistant',
       content: msg.content,
@@ -454,8 +466,22 @@ export async function chatWithFashionAssistant(...args: Parameters<typeof gemini
       id: item.id,
       metadata: item.metadata,
     }));
-    const response = await edgeClient.chatWithStylistViaEdge(userMessage, chatHistoryForEdge, closetContext);
-    return response.content;
+
+    // Add timeout to prevent hanging indefinitely
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('La respuesta está tardando demasiado. Por favor intentá de nuevo.')), 25000)
+    );
+
+    try {
+      const response: any = await Promise.race([
+        edgeClient.chatWithStylistViaEdge(userMessage, chatHistoryForEdge, closetContext),
+        timeoutPromise
+      ]);
+      return response.content;
+    } catch (error) {
+      console.error('Error in chatWithFashionAssistant via Edge:', error);
+      throw error;
+    }
   }
   return await geminiServiceFull.chatWithFashionAssistant(...args);
 }
@@ -541,10 +567,16 @@ export async function generateCapsuleWardrobe(
     // Mock response
     return {
       name: 'Cápsula Safe Mode',
-      description: 'Generada para testing',
+      strategy_explanation: 'Generada para testing',
       items: [],
-      outfits: [],
-      colorPalette: []
+      // outfits: [], // Removed as not in CapsuleWardrobe type
+      compatibility_matrix: [],
+      suggested_outfits: [],
+      colorPalette: [],
+      total_combinations: 0,
+      size: targetSize,
+      theme: theme,
+      created_at: new Date().toISOString()
     };
   }
 

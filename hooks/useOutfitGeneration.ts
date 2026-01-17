@@ -34,9 +34,10 @@ export const useOutfitGeneration = (closet: ClothingItem[]) => {
             setFitResult(result);
             return result;
         } catch (e) {
-            const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
+            const errorMessage = e instanceof Error ? e.message : 'Ocurrió un error al generar el outfit. Intentá de nuevo.';
             setError(errorMessage);
-            throw e;
+            // Don't re-throw - let the error be handled via the error state
+            return null;
         } finally {
             setIsGenerating(false);
         }

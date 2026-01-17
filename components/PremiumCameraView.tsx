@@ -67,6 +67,10 @@ const PremiumCameraView: React.FC<PremiumCameraViewProps> = ({ onClose, onAddToC
             // Stop any existing stream first
             stopCamera();
 
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                throw new Error('Tu navegador no soporta acceso a la cámara o el sitio no es seguro (HTTPS).');
+            }
+
             const stream = await navigator.mediaDevices.getUserMedia({
                 video: {
                     facingMode: cameraFacing,
@@ -81,7 +85,8 @@ const PremiumCameraView: React.FC<PremiumCameraViewProps> = ({ onClose, onAddToC
             }
         } catch (err) {
             console.error('Error accessing camera:', err);
-            setError('No se pudo acceder a la cámara. Podés subir una foto en su lugar.');
+            const msg = err instanceof Error ? err.message : 'No se pudo acceder a la cámara.';
+            setError(`${msg} Podés subir una foto en su lugar.`);
             setIsCameraActive(false);
         }
     };
