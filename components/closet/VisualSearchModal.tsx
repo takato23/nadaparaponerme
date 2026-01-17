@@ -131,8 +131,13 @@ export default function VisualSearchModal({
                                     accept="image/*"
                                     onChange={handleFileChange}
                                 />
-                                <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4 text-primary">
-                                    <span className="material-symbols-outlined text-3xl">add_a_photo</span>
+                                <div className="w-24 h-24 mx-auto mb-4 relative group">
+                                    <div className="absolute inset-0 rounded-full bg-purple-500/20 blur-xl group-hover:bg-purple-500/30 transition-all duration-500"></div>
+                                    <img
+                                        src="/images/ai-assets/visual_search_scanner.png"
+                                        alt="Scan"
+                                        className="relative w-full h-full object-cover rounded-full border-2 border-primary/50 shadow-lg group-hover:scale-105 transition-transform duration-300"
+                                    />
                                 </div>
                                 <p className="font-medium text-text-primary dark:text-gray-200 mb-1">
                                     Sube una foto o arrástrala aquí

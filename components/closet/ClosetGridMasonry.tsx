@@ -134,21 +134,13 @@ export default function ClosetGridMasonry({
   if (items.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-center px-8 animate-fade-in">
-        <div className="relative w-32 h-32 mb-6">
-          {/* Background glow */}
-          <div className="absolute inset-0 rounded-full bg-gradient-to-br from-primary/20 to-secondary/20 blur-2xl animate-pulse-glow" />
-
-          {/* Main icon container */}
-          <div className="relative w-32 h-32 rounded-full bg-gradient-to-br from-primary/10 to-secondary/10 flex items-center justify-center shadow-glow animate-float">
-            <span className="material-symbols-outlined text-primary text-6xl">
-              checkroom
-            </span>
-          </div>
-
-          {/* Orbiting particles */}
-          <div className="absolute top-0 right-0 w-3 h-3 rounded-full bg-primary animate-bounce-small" style={{ animationDelay: '0s' }} />
-          <div className="absolute bottom-0 left-0 w-2 h-2 rounded-full bg-secondary animate-bounce-small" style={{ animationDelay: '0.3s' }} />
-          <div className="absolute top-1/2 right-0 w-2 h-2 rounded-full bg-accent animate-bounce-small" style={{ animationDelay: '0.6s' }} />
+        <div className="relative w-64 h-64 mb-6 animate-float">
+          <div className="absolute inset-0 bg-secondary/10 blur-[80px] rounded-full"></div>
+          <img
+            src="/images/ai-assets/empty_closet_illustration.png"
+            alt="Empty Closet"
+            className="relative w-full h-full object-contain drop-shadow-2xl z-10"
+          />
         </div>
 
         <h2 className="text-3xl font-serif font-bold text-text-primary dark:text-gray-100 mb-3 tracking-tight">

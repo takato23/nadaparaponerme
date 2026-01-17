@@ -16,7 +16,11 @@ export const GenerationLoader: React.FC<GenerationLoaderProps> = ({ userImage })
                     className="absolute inset-0 w-full h-full object-cover opacity-50 blur-sm scale-110 transition-transform duration-[10s] ease-linear group-hover:scale-125"
                 />
             ) : (
-                <div className="absolute inset-0 bg-gradient-to-br from-gray-800 to-black opacity-80" />
+                <img
+                    src="/images/ai-assets/fashion_ai_loader.png"
+                    alt="AI Generating"
+                    className="absolute inset-0 w-full h-full object-cover opacity-60 scale-105 animate-pulse-slow"
+                />
             )}
 
             {/* Pulsing Gradient Layer (Simulated Diffusion) */}
