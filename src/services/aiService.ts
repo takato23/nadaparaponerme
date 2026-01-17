@@ -468,8 +468,8 @@ export async function chatWithFashionAssistant(...args: Parameters<typeof gemini
     }));
 
     // Add timeout to prevent hanging indefinitely
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('La respuesta está tardando demasiado. Por favor intentá de nuevo.')), 25000)
+    const timeoutPromise = new Promise((resolve) =>
+      setTimeout(() => resolve({ content: "¡Ups! Mi cerebro de fashionista se fue de shopping 🛍️. Probá de nuevo en un ratito 💅" }), 25000)
     );
 
     try {
