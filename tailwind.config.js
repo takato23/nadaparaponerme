@@ -22,7 +22,7 @@ export default {
       },
       fontFamily: {
         sans: ['Manrope', 'system-ui', 'sans-serif'],
-        display: ['Syne', 'Poppins', 'sans-serif'],
+        display: ['Outfit', 'Poppins', 'sans-serif'],
         serif: ['Playfair Display', 'serif'],
       },
       borderRadius: {
