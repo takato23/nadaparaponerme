@@ -485,9 +485,12 @@ const CommunityView = ({ friends: propFriends, onViewFriendCloset }: CommunityVi
                 ))}
               </div>
             ) : (
-              <p className="text-text-secondary text-sm text-center py-4">
-                No se encontraron usuarios
-              </p>
+              <div className="text-text-secondary text-sm text-center py-4 space-y-2">
+                <p>No se encontraron usuarios</p>
+                <p className="text-xs opacity-70">
+                  Pediles que activen "Perfil público" para poder encontrarlos.
+                </p>
+              </div>
             )}
           </div>
         )}
@@ -672,6 +675,9 @@ const CommunityView = ({ friends: propFriends, onViewFriendCloset }: CommunityVi
                       search_off
                     </span>
                     <p className="text-text-secondary text-sm">No se encontraron usuarios</p>
+                    <p className="text-[11px] text-text-secondary/70 mt-2">
+                      Pediles que activen "Perfil público" para que aparezcan.
+                    </p>
                   </Card>
                 )}
               </div>

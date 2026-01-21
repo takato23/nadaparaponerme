@@ -5,6 +5,7 @@ import { Card } from './ui/Card';
 import { clearToneCache } from '../services/aiToneHelper';
 import { FaceReferenceUploader } from './FaceReferenceUploader';
 import { getPendingRequestsCount, getActiveBorrowsCount } from '../src/services/borrowedItemsService';
+import { getProfileVisibility, updateProfileVisibility } from '../src/services/profileService';
 import ConfirmDeleteModal from './ui/ConfirmDeleteModal';
 import { useConsentPreferences } from '../src/hooks/useConsentPreferences';
 import { setConsentPreferences } from '../src/services/consentService';
@@ -51,12 +52,29 @@ const ProfileView = ({
     const [activeBorrows, setActiveBorrows] = useState(0);
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+    const [isPublicProfile, setIsPublicProfile] = useState<boolean | null>(null);
+    const [isUpdatingVisibility, setIsUpdatingVisibility] = useState(false);
     const consent = useConsentPreferences();
     const [consentDraft, setConsentDraft] = useState({ analytics: false, ads: false });
 
     useEffect(() => {
         loadBorrowCounts();
     }, []);
+
+    useEffect(() => {
+        if (!user?.id) return;
+        let isActive = true;
+        const loadVisibility = async () => {
+            const visibility = await getProfileVisibility(user.id);
+            if (isActive) {
+                setIsPublicProfile(visibility);
+            }
+        };
+        loadVisibility();
+        return () => {
+            isActive = false;
+        };
+    }, [user?.id]);
 
     const loadBorrowCounts = async () => {
         const [pending, active] = await Promise.all([
@@ -138,6 +156,22 @@ const ProfileView = ({
     };
 
     const displayName = user?.user_metadata?.display_name || user?.email?.split('@')[0] || 'Usuario';
+    const username = user?.user_metadata?.username || displayName.toLowerCase().replace(/\s+/g, '_');
+
+    const handleTogglePublicProfile = async () => {
+        if (!user?.id || isPublicProfile === null || isUpdatingVisibility) return;
+        const nextValue = !isPublicProfile;
+        setIsPublicProfile(nextValue);
+        setIsUpdatingVisibility(true);
+        try {
+            await updateProfileVisibility(user.id, nextValue);
+        } catch (error) {
+            console.error('Failed to update profile visibility:', error);
+            setIsPublicProfile(!nextValue);
+        } finally {
+            setIsUpdatingVisibility(false);
+        }
+    };
 
     return (
         <div className="w-full h-full overflow-y-auto p-6 animate-fade-in">
@@ -184,6 +218,31 @@ const ProfileView = ({
                         Cerrar Sesión
                     </button>
                 </div>
+
+                {/* Profile visibility */}
+                <Card variant="glass" padding="md" rounded="2xl" className="flex items-center justify-between">
+                    <div>
+                        <p className="text-sm font-semibold text-gray-900 dark:text-white">Perfil público</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                            Si está activo, podrán encontrarte como @{username}
+                        </p>
+                    </div>
+                    <button
+                        onClick={handleTogglePublicProfile}
+                        disabled={isPublicProfile === null || isUpdatingVisibility}
+                        className={`relative w-14 h-8 rounded-full transition-colors ${
+                            isPublicProfile ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-700'
+                        } ${isUpdatingVisibility ? 'opacity-60 cursor-not-allowed' : ''}`}
+                        aria-pressed={Boolean(isPublicProfile)}
+                        aria-label="Alternar perfil público"
+                    >
+                        <span
+                            className={`absolute top-1 left-1 w-6 h-6 rounded-full bg-white shadow transition-transform ${
+                                isPublicProfile ? 'translate-x-6' : 'translate-x-0'
+                            }`}
+                        />
+                    </button>
+                </Card>
 
                 {/* Fast Overview - Stats Grid (Moved to top for visibility) */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

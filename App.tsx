@@ -1093,8 +1093,9 @@ const AppContent = () => {
     };
 
     const handleLogin = () => {
-        // Authentication is handled by useAuth hook
-        // This is just a callback when login succeeds
+        if (location.pathname === ROUTES.ONBOARDING_STYLIST) {
+            navigate(ROUTES.HOME);
+        }
     };
 
     const handleLogout = async () => {
@@ -1388,9 +1389,13 @@ const AppContent = () => {
                                         <Route path={ROUTES.PLANES} element={<Navigate to={ROUTES.PRICING} replace />} />
 
                                         <Route path={ROUTES.ONBOARDING_STYLIST} element={
-                                            <Suspense fallback={<LazyLoader type="view" />}>
-                                                <OnboardingStylistFlow />
-                                            </Suspense>
+                                            isAuthenticated ? (
+                                                <Navigate to={ROUTES.HOME} replace />
+                                            ) : (
+                                                <Suspense fallback={<LazyLoader type="view" />}>
+                                                    <OnboardingStylistFlow />
+                                                </Suspense>
+                                            )
                                         } />
 
                                         {/* Redirect unknown routes to home */}

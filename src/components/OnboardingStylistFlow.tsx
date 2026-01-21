@@ -285,7 +285,7 @@ export const OnboardingStylistFlow = () => {
                             </div>
 
                             <div className="space-y-4">
-                                <FeatureRow icon={<User />} text="Análisis de Morfología" />
+                                <FeatureRow icon={<User />} text="Morfología personalizada" />
                                 <FeatureRow icon={<Palette />} text="Colorimetría Personalizada" />
                                 <FeatureRow icon={<Shirt />} text="Outfits Infalibles" />
                             </div>
@@ -294,7 +294,7 @@ export const OnboardingStylistFlow = () => {
                                 onClick={handleNext}
                                 className="w-full py-4 bg-white text-black font-bold text-lg rounded-xl hover:bg-gray-100 transition-all flex items-center justify-center gap-2 group"
                             >
-                                Comenzar Análisis
+                                Crear mi perfil
                                 <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                             </button>
                         </motion.div>
@@ -411,10 +411,10 @@ export const OnboardingStylistFlow = () => {
                         >
                             <div className="mb-8">
                                 <h2 className="text-2xl font-bold mb-3">
-                                    Tu análisis está listo para comenzar
+                                    Tu perfil inicial está listo
                                 </h2>
                                 <p className="text-gray-400">
-                                    Toca el círculo para activar tu análisis personalizado
+                                    Toca el círculo para guardar tu perfil y entrar
                                 </p>
                             </div>
 
@@ -456,7 +456,7 @@ export const OnboardingStylistFlow = () => {
                                 >
                                     <Fingerprint className="w-12 h-12 text-white mb-2" />
                                     <span className="text-white font-bold text-sm">
-                                        {commitmentActive ? 'Activando...' : 'Toca aquí'}
+                                        {commitmentActive ? 'Guardando...' : 'Toca para continuar'}
                                     </span>
                                 </motion.button>
                             </div>
@@ -518,7 +518,7 @@ export const OnboardingStylistFlow = () => {
                             <div className="text-center mb-8">
                                 <div className="inline-flex items-center gap-2 bg-green-500/10 text-green-400 px-3 py-1 rounded-full text-sm font-medium mb-4">
                                     <Check className="w-4 h-4" />
-                                    Análisis Completado
+                                    Perfil guardado
                                 </div>
                                 <h2 className="text-3xl font-bold mb-2">Tu perfil está listo</h2>
                                 <p className="text-gray-400">
@@ -543,7 +543,7 @@ export const OnboardingStylistFlow = () => {
                                     </div>
                                 </div>
                                 <ul className="space-y-3 mb-6">
-                                    <CheckItem text="Análisis de Cuerpo & Color Completo" />
+                                    <CheckItem text="Perfil de cuerpo y color completo" />
                                     <CheckItem text="Outfits Ilimitados Diarios" />
                                     <CheckItem text="Asistente de Compras Inteligente" />
                                 </ul>
