@@ -141,6 +141,21 @@ export function FloatingDock({ onCameraClick }: { onCameraClick?: () => void }) 
     const navigate = useNavigateTransition();
     const location = useLocation();
 
+    // Hide dock on fullscreen/immersive routes
+    const fullscreenRoutes = [
+        ROUTES.ONBOARDING_STYLIST,
+        '/stylist-onboarding',
+        '/onboarding',
+    ];
+
+    const shouldHideDock = fullscreenRoutes.some(route =>
+        location.pathname === route || location.pathname.startsWith(route + '/')
+    );
+
+    if (shouldHideDock) {
+        return null;
+    }
+
     const items = [
         { id: 'home', icon: 'home', label: 'Inicio', path: ROUTES.HOME },
         { id: 'closet', icon: 'checkroom', label: 'Armario', path: ROUTES.CLOSET },

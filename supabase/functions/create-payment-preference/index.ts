@@ -12,6 +12,7 @@ interface RequestBody {
   currency: 'ARS' | 'USD';
   user_email: string;
   user_id: string;
+  idempotency_key?: string;  // Client-generated key to prevent duplicate payments
 }
 
 interface SubscriptionPlan {
@@ -54,7 +55,7 @@ serve(async (req) => {
 
     // Parse request body
     const body: RequestBody = await req.json();
-    const { tier, currency, user_email, user_id } = body;
+    const { tier, currency, user_email, user_id, idempotency_key } = body;
 
     if (!tier || !currency || !user_email || !user_id) {
       return new Response(
@@ -74,6 +75,45 @@ serve(async (req) => {
 
     // Calculate price based on currency
     const price = currency === 'ARS' ? plan.price_monthly_ars : plan.price_monthly_usd;
+
+    // ============================================================================
+    // IDEMPOTENCY CHECK: If we already have a pending payment for this key, return it
+    // ============================================================================
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || Deno.env.get('SERVICE_ROLE_KEY');
+
+    if (!supabaseServiceKey) {
+      throw new Error('Missing SUPABASE_SERVICE_ROLE_KEY');
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Check for recent pending payment for this user+tier (within last 5 minutes)
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    const { data: existingPayment } = await supabase
+      .from('payment_transactions')
+      .select('metadata')
+      .eq('user_id', user_id)
+      .eq('status', 'pending')
+      .gte('created_at', fiveMinutesAgo)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    // If there's a recent pending payment with init_point, return it (idempotent)
+    if (existingPayment?.metadata?.init_point && existingPayment?.metadata?.preference_id) {
+      console.log(`Idempotency: Returning existing preference ${existingPayment.metadata.preference_id} for user ${user_id}`);
+      return new Response(
+        JSON.stringify({
+          id: existingPayment.metadata.preference_id,
+          init_point: existingPayment.metadata.init_point,
+          sandbox_init_point: existingPayment.metadata.sandbox_init_point,
+          _idempotent: true,  // Flag to indicate this was a cached response
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    // ============================================================================
 
     // Determine if we should use auto_return
     // MercadoPago requires HTTPS URLs for auto_return, not localhost
@@ -140,15 +180,8 @@ serve(async (req) => {
 
     const preference = await response.json();
 
-    // Store payment intent in database
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || Deno.env.get('SERVICE_ROLE_KEY');
-
-    if (!supabaseServiceKey) {
-      throw new Error('Missing SUPABASE_SERVICE_ROLE_KEY');
-    }
-
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    // Store payment intent in database (supabase client already created above)
+    console.log(`Creating new payment transaction for user ${user_id}, tier ${tier}, idempotency_key: ${idempotency_key || 'none'}`);
 
     const { error: dbError } = await supabase
       .from('payment_transactions')
@@ -164,6 +197,8 @@ serve(async (req) => {
           tier,
           preference_id: preference.id,
           init_point: preference.init_point,
+          sandbox_init_point: preference.sandbox_init_point,
+          idempotency_key: idempotency_key || null,  // Store idempotency key for tracking
         },
       });
 

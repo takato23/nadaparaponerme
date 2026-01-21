@@ -2,7 +2,7 @@
  * Usage Tracking Service - SIMPLIFIED
  *
  * Single pool of AI credits per month.
- * Free: 10 credits/month | Pro: 150 credits/month | Premium: 400 credits/month
+ * Free: 200 credits/month | Pro: 300 credits/month | Premium: 400 credits/month
  */
 
 // ============================================================================
@@ -55,8 +55,8 @@ export type FeatureType =
 // ============================================================================
 
 export const CREDIT_LIMITS: Record<UserTier, number> = {
-  free: 50,   // Increased from 10 - generous for testing phase
-  pro: 150,
+  free: 200,
+  pro: 300,
   premium: 400,
 };
 

@@ -21,8 +21,9 @@ export default {
         "surface-dark": "rgba(15, 23, 42, 0.7)",
       },
       fontFamily: {
-        display: ["Poppins", "sans-serif"],
-        serif: ["Playfair Display", "serif"],
+        sans: ['Manrope', 'system-ui', 'sans-serif'],
+        display: ['Syne', 'Poppins', 'sans-serif'],
+        serif: ['Playfair Display', 'serif'],
       },
       borderRadius: {
         "DEFAULT": "0.75rem",

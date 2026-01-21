@@ -71,7 +71,7 @@ const FeatureLockedView = ({
                 <>
                   <li className="flex items-start gap-2">
                     <span className="material-symbols-outlined text-green-500 text-sm mt-0.5">check_circle</span>
-                    <span className="text-sm text-text-primary dark:text-gray-300">150 créditos IA por mes</span>
+                    <span className="text-sm text-text-primary dark:text-gray-300">300 créditos IA por mes</span>
                   </li>
                   <li className="flex items-start gap-2">
                     <span className="material-symbols-outlined text-green-500 text-sm mt-0.5">check_circle</span>

@@ -375,7 +375,7 @@ const FitResultViewImproved: React.FC<FitResultViewImprovedProps> = ({
               >
                 {/* Top */}
                 {topItem && (
-                  <div className="relative group overflow-hidden rounded-2xl shadow-soft-lg hover:animate-float">
+                  <div className="relative group overflow-hidden rounded-2xl shadow-soft-lg hover:animate-float cursor-pointer">
                     <img
                       src={topItem.imageDataUrl}
                       alt="Top"
@@ -418,7 +418,7 @@ const FitResultViewImproved: React.FC<FitResultViewImprovedProps> = ({
 
                 {/* Bottom */}
                 {bottomItem && (
-                  <div className="relative group overflow-hidden rounded-2xl shadow-soft-lg hover:animate-float">
+                  <div className="relative group overflow-hidden rounded-2xl shadow-soft-lg hover:animate-float cursor-pointer">
                     <img
                       src={bottomItem.imageDataUrl}
                       alt="Bottom"
@@ -438,7 +438,7 @@ const FitResultViewImproved: React.FC<FitResultViewImprovedProps> = ({
 
                 {/* Shoes */}
                 {shoesItem && (
-                  <div className="relative group overflow-hidden rounded-2xl shadow-soft-lg hover:animate-float">
+                  <div className="relative group overflow-hidden rounded-2xl shadow-soft-lg hover:animate-float cursor-pointer">
                     <img
                       src={shoesItem.imageDataUrl}
                       alt="Shoes"
@@ -486,11 +486,11 @@ const FitResultViewImproved: React.FC<FitResultViewImprovedProps> = ({
                 </div>
                 {rating > 0 && (
                   <p className="text-sm font-medium text-primary mt-2 animate-fade-in">
-                    {rating === 5 && '¡Increíble! 🎉'}
-                    {rating === 4 && '¡Muy bueno! 👍'}
-                    {rating === 3 && 'Me gusta 😊'}
-                    {rating === 2 && 'Está bien 🤔'}
-                    {rating === 1 && 'No me convence 😕'}
+                    {rating === 5 && '¡Increíble!'}
+                    {rating === 4 && '¡Muy bueno!'}
+                    {rating === 3 && 'Me gusta'}
+                    {rating === 2 && 'Está bien'}
+                    {rating === 1 && 'No me convence'}
                   </p>
                 )}
               </div>
@@ -514,7 +514,7 @@ const FitResultViewImproved: React.FC<FitResultViewImprovedProps> = ({
                 <div className="glass-card p-5 rounded-2xl space-y-4">
                   <h3 className="text-sm font-bold text-text-primary dark:text-white mb-3 flex items-center gap-2">
                     <span className="material-symbols-outlined text-purple-500 text-xl">psychology</span>
-                    💡 ¿Por qué te favorece?
+                    ¿Por qué te favorece?
                   </h3>
 
                   {/* Morfología */}

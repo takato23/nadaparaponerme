@@ -74,7 +74,7 @@ const PLANS: SubscriptionPlan[] = [
     price_monthly_usd: 0,
     features: [
       'Hasta 50 prendas en tu armario',
-      '50 créditos IA por mes',
+      '200 créditos IA por mes',
       'Probador Virtual (Try-On)',
       'AI Fashion Designer',
       'Análisis básico de color',
@@ -82,7 +82,7 @@ const PLANS: SubscriptionPlan[] = [
       'Compartir en comunidad',
     ],
     limits: {
-      ai_generations_per_month: 50, // Generous for testing phase
+      ai_generations_per_month: 200,
       max_closet_items: 50,
       max_saved_outfits: -1,
       can_use_virtual_tryon: true,  // Enabled for all tiers during testing phase
@@ -101,7 +101,7 @@ const PLANS: SubscriptionPlan[] = [
     features: [
       'Todo lo de Free +',
       'Prendas ilimitadas',
-      '150 créditos IA por mes',
+      '300 créditos IA por mes',
       'Probador virtual Rápido',
       'Ultra habilitado',
       'AI Fashion Designer',
@@ -111,7 +111,7 @@ const PLANS: SubscriptionPlan[] = [
       'Sin anuncios',
     ],
     limits: {
-      ai_generations_per_month: 150,
+      ai_generations_per_month: 300,
       max_closet_items: -1,
       max_saved_outfits: -1,
       can_use_virtual_tryon: true,

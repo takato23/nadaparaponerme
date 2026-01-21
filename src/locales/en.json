@@ -1,0 +1,167 @@
+{
+    "common": {
+        "loading": "Loading...",
+        "error": "Error",
+        "save": "Save",
+        "cancel": "Cancel",
+        "continue": "Continue",
+        "back": "Back",
+        "close": "Close",
+        "search": "Search",
+        "delete": "Delete",
+        "edit": "Edit",
+        "share": "Share",
+        "download": "Download"
+    },
+    "onboarding": {
+        "welcome": {
+            "title": "Your AI Image Advisor",
+            "subtitle": "Discover what to wear based on your body, colors, and occasion. Stop guessing.",
+            "cta": "Start Analysis",
+            "features": {
+                "morphology": "Body Shape Analysis",
+                "colorimetry": "Custom Color Analysis",
+                "outfits": "Perfect Outfits"
+            }
+        },
+        "bodyShape": {
+            "title": "How would you describe your body?",
+            "subtitle": "This helps us balance your proportions visually.",
+            "shapes": {
+                "hourglass": "Hourglass",
+                "triangle": "Triangle",
+                "inverted_triangle": "Inverted Triangle",
+                "rectangle": "Rectangle",
+                "oval": "Oval"
+            }
+        },
+        "colorSeason": {
+            "title": "What colors make you glow?",
+            "subtitle": "We'll determine your color season.",
+            "seasons": {
+                "spring": "Spring",
+                "summer": "Summer",
+                "autumn": "Autumn",
+                "winter": "Winter"
+            }
+        },
+        "styleGoals": {
+            "title": "What's your main goal?",
+            "subtitle": "Select the ones that resonate with you.",
+            "goals": {
+                "confidence": "Feel more confident",
+                "professional": "Look more professional",
+                "trendy": "Stay on trend",
+                "express": "Express my personality",
+                "optimize": "Optimize my wardrobe"
+            }
+        },
+        "commitment": {
+            "title": "Your analysis is ready to begin",
+            "subtitle": "Tap the circle to activate your personalized analysis",
+            "button": "Tap here",
+            "activating": "Activating...",
+            "disclaimer": "By activating, you agree to let the AI analyze your style profile"
+        },
+        "analyzing": {
+            "title": "Analyzing Your Profile...",
+            "steps": {
+                "morphology": "Scanning body shape...",
+                "seasons": "Matching with 12 Seasons...",
+                "strategy": "Generating style strategy..."
+            }
+        },
+        "paywall": {
+            "analysisComplete": "Analysis Complete",
+            "title": "Your Strategy is Ready",
+            "subtitle": "We've created a unique plan for your {{bodyShape}} body type and colors.",
+            "recommended": "RECOMMENDED",
+            "planName": "Stylist Pro Plan",
+            "planDescription": "Unlimited access to your personal AI",
+            "perMonth": "/month",
+            "features": {
+                "analysis": "Complete Body & Color Analysis",
+                "unlimited": "Unlimited Daily Outfits",
+                "shopping": "Smart Shopping Assistant"
+            },
+            "cta": "Unlock My Plan",
+            "restore": "Restore Purchases"
+        }
+    },
+    "home": {
+        "greeting": "Hello!",
+        "whatToWear": "What should I wear today?",
+        "generateOutfit": "Generate Outfit",
+        "recentOutfits": "Recent Outfits",
+        "suggestions": "Suggestions"
+    },
+    "closet": {
+        "title": "My Closet",
+        "items": "items",
+        "empty": "Your closet is empty",
+        "addFirst": "Add your first item",
+        "addItem": "Add item",
+        "categories": {
+            "all": "All",
+            "tops": "Tops",
+            "bottoms": "Bottoms",
+            "dresses": "Dresses",
+            "outerwear": "Outerwear",
+            "shoes": "Shoes",
+            "accessories": "Accessories"
+        }
+    },
+    "stylist": {
+        "title": "AI Stylist",
+        "occasion": "What's the occasion?",
+        "style": "What style are you looking for?",
+        "generate": "Create my Outfit",
+        "generating": "Generating your outfit...",
+        "occasions": {
+            "work": "Work",
+            "casual": "Casual",
+            "date": "Date",
+            "party": "Party",
+            "formal": "Formal"
+        }
+    },
+    "rating": {
+        "title": "Enjoying the app?",
+        "subtitle": "Your opinion helps us improve",
+        "later": "Not now",
+        "feedbackTitle": "What could we improve?",
+        "feedbackPlaceholder": "Tell us about your experience...",
+        "send": "Send",
+        "thanks": "Thanks for your feedback!"
+    },
+    "pricing": {
+        "title": "Choose Your Plan",
+        "free": {
+            "name": "Free",
+            "price": "$0",
+            "features": [
+                "10 outfits per month",
+                "Basic closet",
+                "No ads"
+            ]
+        },
+        "pro": {
+            "name": "Pro",
+            "price": "$4.99",
+            "features": [
+                "Unlimited outfits",
+                "Virtual Try-On",
+                "Style analysis"
+            ]
+        },
+        "premium": {
+            "name": "Premium",
+            "price": "$9.99",
+            "features": [
+                "Everything in Pro",
+                "Personal advisor",
+                "Smart shopping"
+            ]
+        }
+    }
+}

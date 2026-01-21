@@ -44,7 +44,7 @@ export interface PlanLimits {
 
 const PLAN_LIMITS: Record<SubscriptionTier, PlanLimits> = {
     free: {
-        aiGenerations: 100,
+        aiGenerations: 200,
         closetItems: 200,
         virtualTryOn: true,
         analytics: true,
@@ -53,7 +53,7 @@ const PLAN_LIMITS: Record<SubscriptionTier, PlanLimits> = {
         prioritySupport: false,
     },
     pro: {
-        aiGenerations: 150,
+        aiGenerations: 300,
         closetItems: -1, // unlimited
         virtualTryOn: true,
         analytics: true,

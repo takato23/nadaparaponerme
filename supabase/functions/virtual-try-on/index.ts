@@ -7,6 +7,14 @@ import { GoogleGenAI } from 'npm:@google/genai@1.27.0';
 import { enforceRateLimit, recordRequestResult } from '../_shared/antiAbuse.ts';
 import { withRetry } from '../_shared/retry.ts';
 
+const MONTH_SECONDS = 60 * 60 * 24 * 30;
+const getMonthlyLimit = (envName: string, fallback: number) => {
+    const raw = Deno.env.get(envName);
+    if (!raw) return fallback;
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) ? parsed : fallback;
+};
+
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-application-name',
@@ -364,6 +372,23 @@ serve(async (req) => {
         const canUseProModel = isSubscriptionActive && tier === 'premium';
         const useProModel = wantsProQuality && canUseProModel;
         const modelId = useProModel ? 'gemini-3-pro-image-preview' : 'gemini-2.5-flash-image';
+
+        const flashMonthlyLimit = getMonthlyLimit('BETA_MONTHLY_TRYON_FLASH_LIMIT', 150);
+        const proMonthlyLimit = getMonthlyLimit('BETA_MONTHLY_TRYON_PRO_LIMIT', 10);
+        const monthlyLimit = useProModel ? proMonthlyLimit : flashMonthlyLimit;
+        if (monthlyLimit > 0) {
+            const featureKey = useProModel ? 'beta-tryon-pro-monthly' : 'beta-tryon-flash-monthly';
+            const monthlyCap = await enforceRateLimit(supabase, user.id, featureKey, {
+                windowSeconds: MONTH_SECONDS,
+                maxRequests: monthlyLimit,
+            });
+            if (!monthlyCap.allowed) {
+                return new Response(
+                    JSON.stringify({ error: 'Límite mensual de probador virtual alcanzado. Probá de nuevo el próximo mes.' }),
+                    { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+                );
+            }
+        }
 
         // Credit cost based on actual model used
         const creditCost = useProModel ? 4 : 1;

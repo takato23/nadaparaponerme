@@ -1,7 +1,9 @@
 /**
  * Payment Service
  *
- * Handles MercadoPago integration and subscription management
+ * Handles dual payment system:
+ * - MercadoPago for Argentina (primary)
+ * - RevenueCat/Stripe for international users
  */
 
 import { supabase } from '../lib/supabase';
@@ -10,11 +12,18 @@ import type {
   Subscription,
   SubscriptionTier,
   SubscriptionPlan,
-  PaymentTransaction,
   MercadoPagoPreference,
   UsageMetrics,
-  SUBSCRIPTION_PLANS,
 } from '../../types-payment';
+import {
+  shouldUseRevenueCat,
+  initRevenueCat,
+  getOfferings as getRCOfferings,
+  purchasePackage as purchaseRCPackage,
+  restorePurchases as restoreRCPurchases,
+  getCurrentTier as getRCCurrentTier,
+  isRevenueCatAvailable,
+} from './revenueCatService';
 
 // ============================================================================
 // CONSTANTS
@@ -28,6 +37,24 @@ const MERCADOPAGO_PUBLIC_KEY =
   '';
 const APP_URL = import.meta.env.VITE_APP_URL || window.location.origin;
 
+// ============================================================================
+// IDEMPOTENCY KEY GENERATION
+// ============================================================================
+
+/**
+ * Generate a unique idempotency key for payment requests.
+ * This prevents duplicate charges if users tap "Pay" multiple times.
+ * Format: user_id_tier_timestamp_random
+ */
+function generateIdempotencyKey(userId: string, tier: string): string {
+  const timestamp = Date.now();
+  const random = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15);
+  return `${userId}_${tier}_${timestamp}_${random}`;
+}
+
+// Track in-flight payment requests to prevent double-tap
+const inFlightPayments = new Map<string, Promise<MercadoPagoPreference>>();
+
 // Import subscription plans
 const PLANS: SubscriptionPlan[] = [
   {
@@ -38,14 +65,14 @@ const PLANS: SubscriptionPlan[] = [
     price_monthly_usd: 0,
     features: [
       'Hasta 200 prendas en tu armario',
-      '100 créditos IA por mes',
+      '200 créditos IA por mes',
       'Probador virtual habilitado',
       'Análisis avanzado de color',
       'Outfits guardados ilimitados',
       'Compartir en comunidad',
     ],
     limits: {
-      ai_generations_per_month: 100,
+      ai_generations_per_month: 200,
       max_closet_items: 200,
       max_saved_outfits: -1,
       can_use_virtual_tryon: true,
@@ -64,7 +91,7 @@ const PLANS: SubscriptionPlan[] = [
     features: [
       'Todo lo de Free +',
       'Prendas ilimitadas',
-      '150 créditos IA por mes',
+      '300 créditos IA por mes',
       'Probador virtual Rápido',
       'Ultra habilitado',
       'AI Fashion Designer',
@@ -74,7 +101,7 @@ const PLANS: SubscriptionPlan[] = [
       'Sin anuncios',
     ],
     limits: {
-      ai_generations_per_month: 150,
+      ai_generations_per_month: 300,
       max_closet_items: -1,
       max_saved_outfits: -1,
       can_use_virtual_tryon: true,
@@ -199,6 +226,7 @@ export function getSubscriptionPlan(tier: SubscriptionTier): SubscriptionPlan | 
 
 /**
  * Create MercadoPago payment preference
+ * Includes client-side idempotency protection against double-tap
  */
 export async function createPaymentPreference(
   tier: SubscriptionTier,
@@ -211,19 +239,47 @@ export async function createPaymentPreference(
     const plan = getSubscriptionPlan(tier);
     if (!plan) throw new Error('Plan de suscripción inválido');
 
-    // Call Supabase Edge Function to create preference
-    const { data, error } = await supabase.functions.invoke('create-payment-preference', {
-      body: {
-        tier,
-        currency,
-        user_email: user.email,
-        user_id: user.id,
-      },
-    });
+    // ============================================================================
+    // DOUBLE-TAP PROTECTION: If there's already a payment in flight for this tier,
+    // return that promise instead of creating a new one
+    // ============================================================================
+    const cacheKey = `${user.id}_${tier}`;
+    const existingRequest = inFlightPayments.get(cacheKey);
+    if (existingRequest) {
+      logger.log('⚠️ Duplicate payment request detected, returning existing promise');
+      return existingRequest;
+    }
 
-    if (error) throw error;
+    // Generate idempotency key for this payment attempt
+    const idempotencyKey = generateIdempotencyKey(user.id, tier);
 
-    return data as MercadoPagoPreference;
+    // Create the payment request promise
+    const paymentPromise = (async () => {
+      try {
+        // Call Supabase Edge Function to create preference
+        const { data, error } = await supabase.functions.invoke('create-payment-preference', {
+          body: {
+            tier,
+            currency,
+            user_email: user.email,
+            user_id: user.id,
+            idempotency_key: idempotencyKey,  // Send idempotency key to server
+          },
+        });
+
+        if (error) throw error;
+        return data as MercadoPagoPreference;
+      } finally {
+        // Clean up after request completes (success or failure)
+        inFlightPayments.delete(cacheKey);
+      }
+    })();
+
+    // Store the in-flight request
+    inFlightPayments.set(cacheKey, paymentPromise);
+
+    // Wait for the payment to complete
+    return await paymentPromise;
   } catch (error: any) {
     logger.error('Error creating payment preference:', error);
 

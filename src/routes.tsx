@@ -12,6 +12,7 @@ export const ROUTES = {
   SAVED: '/guardados',
   STYLIST: '/estilista',
   PROFILE: '/perfil',
+  ONBOARDING_STYLIST: '/stylist-onboarding',
 
   // Feature views
   VIRTUAL_TRY_ON: '/prueba-virtual',

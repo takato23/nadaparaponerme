@@ -5,6 +5,14 @@ import { GoogleGenAI, Type } from 'npm:@google/genai@1.27.0';
 import { enforceRateLimit, recordRequestResult } from '../_shared/antiAbuse.ts';
 import { withRetry } from '../_shared/retry.ts';
 
+const MONTH_SECONDS = 60 * 60 * 24 * 30;
+const getMonthlyLimit = (envName: string, fallback: number) => {
+  const raw = Deno.env.get(envName);
+  if (!raw) return fallback;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-application-name',
@@ -70,6 +78,20 @@ serve(async (req) => {
         return new Response(
           JSON.stringify({ error: 'Beta cerrada: tu cuenta no está habilitada todavía.' }),
           { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+
+    const monthlyLimit = getMonthlyLimit('BETA_MONTHLY_SCAN_LIMIT', 400);
+    if (monthlyLimit > 0) {
+      const monthlyCap = await enforceRateLimit(supabase, user.id, 'beta-scan-monthly', {
+        windowSeconds: MONTH_SECONDS,
+        maxRequests: monthlyLimit,
+      });
+      if (!monthlyCap.allowed) {
+        return new Response(
+          JSON.stringify({ error: 'Límite mensual de escaneos alcanzado. Probá de nuevo el próximo mes.' }),
+          { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
     }

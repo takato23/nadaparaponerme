@@ -60,7 +60,7 @@ export function UpgradeModal({
       priceLabel: 'Gratis',
       description: 'Para empezar',
       features: [
-        '10 créditos IA/mes (Rápido)',
+        '200 créditos IA/mes (Rápido)',
         'Escaneo limitado de prendas',
         'Chat limitado',
         'Items ilimitados en closet',
@@ -81,7 +81,7 @@ export function UpgradeModal({
       priceLabel: 'AR$ 2.999/mes',
       description: 'Para fashionistas',
       features: [
-        '150 créditos IA/mes',
+        '300 créditos IA/mes',
         'Escaneo ampliado de prendas',
         'Chat ampliado',
         'Probador virtual Rápido',

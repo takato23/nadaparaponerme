@@ -126,6 +126,7 @@ const DigitalTwinSetup = lazy(() => import('./components/digital-twin/DigitalTwi
 const BorrowedItemsView = lazy(() => import('./components/BorrowedItemsView'));
 const ShopLookView = lazy(() => import('./components/ShopLookView'));
 const PricingPage = lazy(() => import('./components/PricingPage'));
+const OnboardingStylistFlow = lazy(() => import('./src/components/OnboardingStylistFlow').then(module => ({ default: module.OnboardingStylistFlow })));
 
 /**
  * AppContent - Main app component with routing logic
@@ -279,22 +280,26 @@ const AppContent = () => {
         }
     }, [isAuthenticated, hasOnboarded, useSupabaseCloset]);
 
-    // Load closet from Supabase when flag is enabled
+    // Load closet and outfits from Supabase in parallel when flags are enabled
     useEffect(() => {
-        if (useSupabaseCloset && isAuthenticated && user) {
-            loadClosetFromSupabase();
-        }
-    }, [useSupabaseCloset, isAuthenticated, user]);
+        if (!isAuthenticated || !user) return;
 
-    // Migration is now handled exclusively through MigrationModal component
-    // Auto-migration removed to avoid conflicts and provide better UX with progress feedback
+        const loadDataInParallel = async () => {
+            const promises: Promise<void>[] = [];
 
-    // Load outfits from Supabase when flag is enabled
-    useEffect(() => {
-        if (useSupabaseOutfits && isAuthenticated && user) {
-            loadOutfitsFromSupabase();
-        }
-    }, [useSupabaseOutfits, isAuthenticated, user]);
+            if (useSupabaseCloset) {
+                promises.push(loadClosetFromSupabase());
+            }
+            if (useSupabaseOutfits) {
+                promises.push(loadOutfitsFromSupabase());
+            }
+
+            // Start all fetches in parallel
+            await Promise.all(promises);
+        };
+
+        loadDataInParallel();
+    }, [useSupabaseCloset, useSupabaseOutfits, isAuthenticated, user]);
 
     const loadClosetFromSupabase = async () => {
         try {
@@ -1148,8 +1153,21 @@ const AppContent = () => {
 
     const [showAuthView, setShowAuthView] = useState(false);
     const [authInitialMode, setAuthInitialMode] = useState<'login' | 'signup'>('login');
+    useEffect(() => {
+        if (isAuthenticated) return;
+        const params = new URLSearchParams(location.search);
+        const authIntent = params.get('auth');
+        if (authIntent === 'login' || authIntent === 'signup') {
+            setAuthInitialMode(authIntent);
+            setShowAuthView(true);
+            window.history.replaceState({}, '', window.location.pathname);
+        }
+    }, [isAuthenticated, location.search]);
 
-    if (!isAuthenticated) {
+    // Allow access to specific public routes (like Onboarding) without auth
+    const isPublicRoute = location.pathname === ROUTES.ONBOARDING_STYLIST;
+
+    if (!isAuthenticated && !isPublicRoute) {
         if (showAuthView) {
             return (
                 <>
@@ -1169,12 +1187,7 @@ const AppContent = () => {
                 <div className="relative w-full h-dvh overflow-hidden">
                     <Suspense fallback={<LazyLoader type="view" />}>
                         <LandingPage
-                            onGetStarted={() =>
-                                startTransition(() => {
-                                    setAuthInitialMode('signup');
-                                    setShowAuthView(true);
-                                })
-                            }
+                            onGetStarted={() => navigate(ROUTES.ONBOARDING_STYLIST)}
                             onLogin={() =>
                                 startTransition(() => {
                                     setAuthInitialMode('login');
@@ -1373,6 +1386,12 @@ const AppContent = () => {
                                             </Suspense>
                                         } />
                                         <Route path={ROUTES.PLANES} element={<Navigate to={ROUTES.PRICING} replace />} />
+
+                                        <Route path={ROUTES.ONBOARDING_STYLIST} element={
+                                            <Suspense fallback={<LazyLoader type="view" />}>
+                                                <OnboardingStylistFlow />
+                                            </Suspense>
+                                        } />
 
                                         {/* Redirect unknown routes to home */}
                                         <Route path="*" element={<Navigate to={ROUTES.HOME} replace />} />
