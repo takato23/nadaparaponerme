@@ -471,12 +471,12 @@ const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }
               <div className="flex w-full h-full">
                 <div className="relative w-full h-full">
                   <img src={imageDataUrl} alt="front view" className="w-full h-full object-cover" />
-                  <div className="absolute top-2 left-2 px-2 py-0.5 rounded bg-black/50 text-white text-[10px] uppercase font-bold">Frente</div>
+                  <div className="absolute top-2 left-2 px-2 py-0.5 rounded bg-black/50 text-white text-xs uppercase font-bold">Frente</div>
                 </div>
                 {backImageDataUrl && (
                   <div className="relative w-full h-full border-l border-white/20">
                     <img src={backImageDataUrl} alt="back view" className="w-full h-full object-cover" />
-                    <div className="absolute top-2 left-2 px-2 py-0.5 rounded bg-black/50 text-white text-[10px] uppercase font-bold">Espalda</div>
+                    <div className="absolute top-2 left-2 px-2 py-0.5 rounded bg-black/50 text-white text-xs uppercase font-bold">Espalda</div>
                     <button
                       onClick={() => setBackImageDataUrl(null)}
                       className="absolute top-2 right-2 w-6 h-6 rounded-full bg-black/50 text-white flex items-center justify-center"
@@ -504,7 +504,7 @@ const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }
                     className="p-3 rounded-full bg-white/20 backdrop-blur-md text-white hover:bg-white/30 transition-colors flex flex-col items-center gap-1 group"
                   >
                     <span className="material-symbols-outlined group-hover:scale-110 transition-transform">add_a_photo</span>
-                    <span className="text-[10px] font-bold">VISTA ATRÁS</span>
+                    <span className="text-xs font-bold">VISTA ATRÁS</span>
                   </button>
                 )}
               </div>

@@ -91,7 +91,7 @@ export const HomeHero = ({
                         </div>
                         <div className="text-center">
                             <div className="text-xl sm:text-2xl font-black text-text-primary leading-none mb-1">{closetLength}</div>
-                            <div className="text-[10px] sm:text-xs font-bold text-text-secondary uppercase tracking-wider">Prendas</div>
+                            <div className="text-xs sm:text-xs font-bold text-text-secondary uppercase tracking-wider">Prendas</div>
                         </div>
                     </div>
 
@@ -101,7 +101,7 @@ export const HomeHero = ({
                         </div>
                         <div className="text-center">
                             <div className="text-xl sm:text-2xl font-black text-text-primary leading-none mb-1">{totalOutfits}</div>
-                            <div className="text-[10px] sm:text-xs font-bold text-text-secondary uppercase tracking-wider">Outfits</div>
+                            <div className="text-xs sm:text-xs font-bold text-text-secondary uppercase tracking-wider">Outfits</div>
                         </div>
                     </div>
 
@@ -111,7 +111,7 @@ export const HomeHero = ({
                         </div>
                         <div className="text-center">
                             <div className="text-xl sm:text-2xl font-black text-text-primary leading-none mb-1">{daysActive}</div>
-                            <div className="text-[10px] sm:text-xs font-bold text-text-secondary uppercase tracking-wider">Racha</div>
+                            <div className="text-xs sm:text-xs font-bold text-text-secondary uppercase tracking-wider">Racha</div>
                         </div>
                     </div>
                 </div>

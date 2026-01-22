@@ -34,7 +34,7 @@ export const LegalTemplate: React.FC<LegalTemplateProps> = ({
         </button>
 
         <header className="mt-6 mb-10">
-          <p className="text-[11px] uppercase tracking-[0.35em] text-[#8a8278]">Legal</p>
+          <p className="text-xs uppercase tracking-[0.35em] text-[#8a8278]">Legal</p>
           <h1 className="mt-2 text-3xl md:text-4xl font-serif font-semibold text-[#1f1d1a]">
             {title}
           </h1>

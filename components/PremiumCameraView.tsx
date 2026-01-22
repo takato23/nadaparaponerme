@@ -725,7 +725,7 @@ const PremiumCameraView: React.FC<PremiumCameraViewProps> = ({ onClose, onAddToC
                                                             className="w-12 h-12 rounded-full border-2 border-white/10 shadow-lg"
                                                             style={{ backgroundColor: color }}
                                                         />
-                                                        <span className="text-[10px] text-white/40 font-mono">{color}</span>
+                                                        <span className="text-xs text-white/40 font-mono">{color}</span>
                                                     </div>
                                                 ))}
                                             </div>

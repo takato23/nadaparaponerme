@@ -325,7 +325,7 @@ export default function ClosetViewEnhanced({
                   </div>
                   <div className="text-left">
                     <p className="text-sm font-semibold text-text-primary dark:text-gray-100">Armario de looks</p>
-                    <p className="text-[10px] text-text-secondary dark:text-gray-400">Tus looks guardados</p>
+                    <p className="text-xs text-text-secondary dark:text-gray-400">Tus looks guardados</p>
                   </div>
                 </div>
                 <span className="material-symbols-outlined text-text-secondary dark:text-gray-400 text-sm">arrow_forward_ios</span>

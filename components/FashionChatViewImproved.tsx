@@ -281,7 +281,7 @@ const FashionChatViewImproved = ({
             </div>
           )}
 
-          <p className={`text-[10px] mt-2 text-right ${isUser ? 'text-white/70' : 'text-gray-500 dark:text-gray-400'}`}>
+          <p className={`text-xs mt-2 text-right ${isUser ? 'text-white/70' : 'text-gray-500 dark:text-gray-400'}`}>
             {new Date(message.timestamp).toLocaleTimeString('es-AR', {
               hour: '2-digit',
               minute: '2-digit'
@@ -408,7 +408,7 @@ const FashionChatViewImproved = ({
                           <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 mb-2 leading-relaxed">
                             {conversation.preview || 'Nueva conversación...'}
                           </p>
-                          <div className="flex items-center justify-between text-[10px] font-medium text-gray-400 uppercase tracking-wide">
+                          <div className="flex items-center justify-between text-xs font-medium text-gray-400 uppercase tracking-wide">
                             <span>{conversation.messages.length} msgs</span>
                             <span>{formatDate(conversation.updatedAt)}</span>
                           </div>
@@ -482,7 +482,7 @@ const FashionChatViewImproved = ({
                     className="p-4 bg-white/60 dark:bg-gray-800/60 border border-white/40 dark:border-gray-700 rounded-3xl hover:shadow-lg hover:shadow-purple-500/10 transition-all group flex flex-col items-center justify-center text-center aspect-[4/3]"
                   >
                     <span className="block font-bold text-gray-800 dark:text-gray-200 text-sm mb-1 group-hover:text-purple-600 transition-colors">{preset.label}</span>
-                    <span className="block text-[10px] text-gray-500 line-clamp-2">{preset.prompt}</span>
+                    <span className="block text-xs text-gray-500 line-clamp-2">{preset.prompt}</span>
                   </motion.button>
                 ))}
               </div>
@@ -561,7 +561,7 @@ const FashionChatViewImproved = ({
               </div>
             </div>
           </form>
-          <p className="text-[10px] text-center text-gray-400 mt-3">
+          <p className="text-xs text-center text-gray-400 mt-3">
             La IA puede cometer errores. Verifica la información importante.
           </p>
         </div>

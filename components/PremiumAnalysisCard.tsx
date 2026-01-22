@@ -55,7 +55,7 @@ export const PremiumAnalysisCard: React.FC<PremiumAnalysisCardProps> = ({ metada
                                     className="w-8 h-8 rounded-full border border-gray-200 dark:border-gray-600 shadow-sm"
                                     style={{ backgroundColor: color }}
                                 />
-                                <span className="absolute -bottom-6 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] bg-black text-white px-1 rounded">{color}</span>
+                                <span className="absolute -bottom-6 opacity-0 group-hover:opacity-100 transition-opacity text-xs bg-black text-white px-1 rounded">{color}</span>
                             </div>
                         ))}
                     </div>

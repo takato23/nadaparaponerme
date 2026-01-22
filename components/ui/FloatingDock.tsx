@@ -38,8 +38,8 @@ function DockItem({ icon, label, isActive, onClick, isCamera }: DockItemProps) {
                         w-16 h-16 rounded-full
                         flex items-center justify-center
                         bg-gradient-to-br from-primary via-primary to-secondary
-                        shadow-[0_4px_20px_rgba(var(--primary),0.5)]
-                        group-hover:shadow-[0_8px_30px_rgba(var(--primary),0.6)]
+                        shadow-lg
+                        group-hover:shadow-xl
                         transition-shadow duration-300
                         cursor-pointer
                         border-4 border-white/20
@@ -47,18 +47,15 @@ function DockItem({ icon, label, isActive, onClick, isCamera }: DockItemProps) {
                     "
                 >
                     {/* Shine effect */}
-                    <div className="absolute inset-0 bg-gradient-to-tr from-white/30 via-transparent to-transparent opacity-60" />
+                    <div className="absolute inset-0 bg-gradient-to-tr from-white/30 via-transparent to-transparent opacity-40" />
 
                     {/* Pulsing ring */}
                     <div className="absolute inset-0 rounded-full animate-ping bg-primary/30 opacity-0 group-hover:opacity-100" style={{ animationDuration: '2s' }} />
 
-                    <span className="material-symbols-outlined text-3xl text-white relative z-10 drop-shadow-lg">
+                    <span className="material-symbols-outlined text-3xl text-white relative z-10 drop-shadow-sm">
                         {icon}
                     </span>
                 </motion.div>
-
-                {/* Glow effect underneath */}
-                <div className="absolute -bottom-1 w-10 h-2 rounded-full bg-primary/40 blur-md group-hover:bg-primary/60 transition-colors" />
 
                 {/* Tooltip */}
                 <div className={`
@@ -98,7 +95,7 @@ function DockItem({ icon, label, isActive, onClick, isCamera }: DockItemProps) {
           w-14 h-14 rounded-2xl
           flex items-center justify-center
           glass-card
-          shadow-lg group-hover:shadow-[0_0_20px_rgba(var(--primary),0.4)]
+          shadow-md
           transition-shadow duration-300
           cursor-pointer
           ${isActive ? 'bg-white/90 dark:bg-white/20 border-primary/50' : ''}
@@ -179,12 +176,13 @@ export function FloatingDock({ onCameraClick }: { onCameraClick?: () => void }) 
         >
             <div className="
     flex items-end gap-2 sm:gap-3 px-4 sm:px-6 py-3 sm:py-4
-    liquid-glass !overflow-visible
-    shadow-[0_20px_40px_-10px_rgba(0,0,0,0.15)] dark:shadow-[0_20px_40px_-10px_rgba(0,0,0,0.4)]
+    backdrop-blur-2xl bg-white/80 dark:bg-gray-900/80 border border-white/20 dark:border-white/10 rounded-2xl
+    !overflow-visible
+    shadow-lg
     pointer-events-auto
     max-w-full
     transition-all duration-300
-" style={{ ['--glass-opacity' as any]: 0.35, ['--glass-blur' as any]: '26px' }}>
+" style={{}}>
                 {items.map((item) => (
                     <DockItem
                         key={item.id}

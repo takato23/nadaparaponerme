@@ -179,7 +179,7 @@ export function CreditsDetailView({ isOpen, onClose, onUpgrade }: CreditsDetailV
             <div className="p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50">
               <div className="flex items-center justify-between mb-2">
                 <p className="text-xs text-gray-500 dark:text-gray-400">Uso del mes</p>
-                <span className="text-[10px] uppercase tracking-wide text-gray-400">{monthLabel}</span>
+                <span className="text-xs uppercase tracking-wide text-gray-400">{monthLabel}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">
@@ -212,15 +212,15 @@ export function CreditsDetailView({ isOpen, onClose, onUpgrade }: CreditsDetailV
               <div className="grid grid-cols-3 gap-2 text-center">
                 <div className={`p-2 rounded-lg ${subscription.tier === 'free' ? 'bg-primary/10 ring-1 ring-primary' : ''}`}>
                   <p className="text-lg font-bold text-gray-900 dark:text-white">{CREDIT_LIMITS.free}</p>
-                  <p className="text-[10px] text-gray-500">Free</p>
+                  <p className="text-xs text-gray-500">Free</p>
                 </div>
                 <div className={`p-2 rounded-lg ${subscription.tier === 'pro' ? 'bg-blue-50 dark:bg-blue-900/20 ring-1 ring-blue-500' : ''}`}>
                   <p className="text-lg font-bold text-gray-900 dark:text-white">{CREDIT_LIMITS.pro}</p>
-                  <p className="text-[10px] text-gray-500">Pro</p>
+                  <p className="text-xs text-gray-500">Pro</p>
                 </div>
                 <div className={`p-2 rounded-lg ${subscription.tier === 'premium' ? 'bg-purple-50 dark:bg-purple-900/20 ring-1 ring-purple-500' : ''}`}>
                   <p className="text-lg font-bold text-gray-900 dark:text-white">{CREDIT_LIMITS.premium}</p>
-                  <p className="text-[10px] text-gray-500">Premium</p>
+                  <p className="text-xs text-gray-500">Premium</p>
                 </div>
               </div>
             </div>
@@ -232,7 +232,7 @@ export function CreditsDetailView({ isOpen, onClose, onUpgrade }: CreditsDetailV
                 {['Look (1 crédito)', 'Analizar prenda (1)', 'Chat moda (1)', 'Probador Rápido (1)', 'Probador Ultra (4)'].map((item) => (
                   <span
                     key={item}
-                    className="text-[10px] px-2 py-1 rounded-full bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300"
+                    className="text-xs px-2 py-1 rounded-full bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300"
                   >
                     {item}
                   </span>
@@ -246,7 +246,7 @@ export function CreditsDetailView({ isOpen, onClose, onUpgrade }: CreditsDetailV
                 <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Créditos por feature</p>
                 <div className="grid grid-cols-2 gap-2">
                   {featureUsage.map((entry) => (
-                    <div key={entry.feature} className="flex items-center justify-between rounded-lg bg-white/80 dark:bg-gray-700/60 px-2 py-1 text-[10px] text-gray-600 dark:text-gray-300">
+                    <div key={entry.feature} className="flex items-center justify-between rounded-lg bg-white/80 dark:bg-gray-700/60 px-2 py-1 text-xs text-gray-600 dark:text-gray-300">
                       <span className="truncate">{featureLabels[entry.feature] || entry.feature}</span>
                       <span className="font-semibold">{entry.used}</span>
                     </div>
@@ -262,7 +262,7 @@ export function CreditsDetailView({ isOpen, onClose, onUpgrade }: CreditsDetailV
                 <span>Rápido: {status.used} créditos</span>
                 <span>Ultra: {Math.floor(status.used / 4)} usos</span>
               </div>
-              <p className="mt-1 text-[10px] text-gray-400">Equivalencia: 1 crédito = Rápido, 4 créditos = Ultra.</p>
+              <p className="mt-1 text-xs text-gray-400">Equivalencia: 1 crédito = Rápido, 4 créditos = Ultra.</p>
             </div>
 
             {/* Rewarded ads */}
@@ -280,7 +280,7 @@ export function CreditsDetailView({ isOpen, onClose, onUpgrade }: CreditsDetailV
                     <p className="text-sm font-semibold text-gray-700 dark:text-gray-200">
                       Ganá créditos viendo anuncios
                     </p>
-                    <p className="text-[10px] text-gray-500 dark:text-gray-400">
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
                       Disponible pronto con {REWARDED_ADS_PROVIDER}. Te suma créditos extras sin pagar.
                     </p>
                   </div>

@@ -77,7 +77,7 @@ export default function AestheticPlayground({ onClose }: AestheticPlaygroundProp
               `}
                         >
                             <span className="material-symbols-outlined text-base">{tab.icon}</span>
-                            <span className="text-[10px] leading-tight text-center">{tab.label}</span>
+                            <span className="text-xs leading-tight text-center">{tab.label}</span>
                         </button>
                     ))}
                 </div>

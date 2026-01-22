@@ -14,11 +14,6 @@ import {
     Briefcase,
     PartyPopper,
     Fingerprint,
-    Hourglass,
-    Triangle,
-    Circle,
-    Square,
-    Diamond
 } from 'lucide-react';
 import { triggerHaptic, hapticSuccess, hapticCommitment, hapticTap } from '../services/hapticService';
 import { getCurrentSubscription, getSubscriptionPlan, upgradeSubscription } from '../services/paymentService';
@@ -30,11 +25,11 @@ import { ROUTES } from '../routes';
 type OnboardingStep = 'welcome' | 'body_shape' | 'color_season' | 'style_goals' | 'commitment' | 'analyzing' | 'paywall';
 
 const BODY_SHAPES = [
-    { id: 'hourglass', label: 'Reloj de Arena', Icon: Hourglass },
-    { id: 'triangle', label: 'Triángulo', Icon: Triangle },
-    { id: 'inverted_triangle', label: 'Triángulo Invertido', Icon: Diamond },
-    { id: 'rectangle', label: 'Rectángulo', Icon: Square },
-    { id: 'oval', label: 'Oval', Icon: Circle }
+    { id: 'hourglass', label: 'Reloj de Arena', image: '/images/onboarding/hourglass.png' },
+    { id: 'triangle', label: 'Triángulo', image: '/images/onboarding/triangle.png' },
+    { id: 'inverted_triangle', label: 'Triángulo Invertido', image: '/images/onboarding/inverted_triangle.png' },
+    { id: 'rectangle', label: 'Rectángulo', image: '/images/onboarding/rectangle.png' },
+    { id: 'oval', label: 'Oval', image: '/images/onboarding/oval.png' }
 ];
 
 const SEASONS = [
@@ -310,18 +305,28 @@ export const OnboardingStylistFlow = () => {
                         >
                             <div className="grid grid-cols-2 gap-4">
                                 {BODY_SHAPES.map((shape) => {
-                                    const ShapeIcon = shape.Icon;
                                     return (
                                         <button
                                             key={shape.id}
                                             onClick={() => updateForm('bodyShape', shape.id)}
-                                            className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-3 cursor-pointer ${formData.bodyShape === shape.id
-                                                ? 'border-purple-500 bg-purple-500/10'
-                                                : 'border-white/10 hover:border-white/30 bg-white/5'
+                                            className={`relative overflow-hidden group transition-all duration-300 rounded-2xl border-2 flex flex-col items-center cursor-pointer ${formData.bodyShape === shape.id
+                                                ? 'border-purple-500 shadow-xl shadow-purple-500/20 scale-[1.02]'
+                                                : 'border-white/10 hover:border-white/30 bg-white/5 hover:bg-white/10'
                                                 }`}
                                         >
-                                            <ShapeIcon className="w-10 h-10 text-purple-400" />
-                                            <span className="font-medium text-sm">{shape.label}</span>
+                                            <div className="w-full aspect-[3/4] relative bg-white p-4">
+                                                <img
+                                                    src={shape.image}
+                                                    alt={shape.label}
+                                                    className="w-full h-full object-contain mix-blend-multiply opacity-90 group-hover:opacity-100 transition-opacity"
+                                                />
+                                            </div>
+                                            <div className={`w-full p-3 text-center transition-colors ${formData.bodyShape === shape.id
+                                                ? 'bg-purple-500/10 text-white font-bold'
+                                                : 'text-gray-300'
+                                                }`}>
+                                                <span className="text-sm">{shape.label}</span>
+                                            </div>
                                         </button>
                                     );
                                 })}
@@ -551,22 +556,20 @@ export const OnboardingStylistFlow = () => {
                                     <button
                                         onClick={handleUpgrade}
                                         disabled={isUpgrading || isRestoring || loading || paymentsDisabled}
-                                        className={`w-full py-3 text-white font-bold rounded-xl transition-all shadow-lg shadow-purple-500/25 ${
-                                            isUpgrading || isRestoring || loading || paymentsDisabled
-                                                ? 'bg-purple-400 cursor-not-allowed opacity-80'
-                                                : 'bg-purple-500 hover:bg-purple-600'
-                                        }`}
+                                        className={`w-full py-3 text-white font-bold rounded-xl transition-all shadow-lg shadow-purple-500/25 ${isUpgrading || isRestoring || loading || paymentsDisabled
+                                            ? 'bg-purple-400 cursor-not-allowed opacity-80'
+                                            : 'bg-purple-500 hover:bg-purple-600'
+                                            }`}
                                     >
                                         {isUpgrading ? 'Procesando...' : 'Desbloquear Mi Plan'}
                                     </button>
                                     <button
                                         onClick={handleContinueFree}
                                         disabled={isUpgrading || isRestoring}
-                                        className={`w-full py-3 rounded-xl font-bold transition-all ${
-                                            isUpgrading || isRestoring
-                                                ? 'bg-white/5 text-gray-500 cursor-not-allowed'
-                                                : 'bg-white text-black hover:bg-gray-100'
-                                        }`}
+                                        className={`w-full py-3 rounded-xl font-bold transition-all ${isUpgrading || isRestoring
+                                            ? 'bg-white/5 text-gray-500 cursor-not-allowed'
+                                            : 'bg-white text-black hover:bg-gray-100'
+                                            }`}
                                     >
                                         Continuar gratis
                                     </button>
@@ -574,11 +577,10 @@ export const OnboardingStylistFlow = () => {
                                         <button
                                             onClick={handleLogin}
                                             disabled={isUpgrading || isRestoring}
-                                            className={`w-full text-sm transition-colors ${
-                                                isUpgrading || isRestoring
-                                                    ? 'text-gray-600 cursor-not-allowed'
-                                                    : 'text-gray-400 hover:text-white'
-                                            }`}
+                                            className={`w-full text-sm transition-colors ${isUpgrading || isRestoring
+                                                ? 'text-gray-600 cursor-not-allowed'
+                                                : 'text-gray-400 hover:text-white'
+                                                }`}
                                         >
                                             Ya tengo cuenta
                                         </button>
@@ -589,20 +591,18 @@ export const OnboardingStylistFlow = () => {
                             <button
                                 onClick={handleRestorePurchases}
                                 disabled={isUpgrading || isRestoring}
-                                className={`w-full text-sm transition-colors ${
-                                    isUpgrading || isRestoring
-                                        ? 'text-gray-600 cursor-not-allowed'
-                                        : 'text-gray-500 hover:text-white'
-                                }`}
+                                className={`w-full text-sm transition-colors ${isUpgrading || isRestoring
+                                    ? 'text-gray-600 cursor-not-allowed'
+                                    : 'text-gray-500 hover:text-white'
+                                    }`}
                             >
                                 {isRestoring ? 'Restaurando...' : 'Restaurar Compras'}
                             </button>
 
                             {(actionError || actionMessage) && (
                                 <p
-                                    className={`mt-4 text-xs text-center ${
-                                        actionError ? 'text-red-400' : 'text-green-400'
-                                    }`}
+                                    className={`mt-4 text-xs text-center ${actionError ? 'text-red-400' : 'text-green-400'
+                                        }`}
                                 >
                                     {actionError || actionMessage}
                                 </p>

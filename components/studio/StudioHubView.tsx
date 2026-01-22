@@ -269,7 +269,7 @@ export default function StudioHubView({ closet = [] }: StudioHubViewProps) {
                     <div className="mt-5 grid grid-cols-3 gap-2">
                       {room.stats.map((stat) => (
                         <div key={stat.label} className="rounded-2xl bg-black/30 border border-white/10 px-3 py-2">
-                          <p className="text-[10px] uppercase tracking-[0.2em] text-white/40">{stat.label}</p>
+                          <p className="text-xs uppercase tracking-[0.2em] text-white/40">{stat.label}</p>
                           <p className="mt-1 text-sm font-semibold text-white">{stat.value}</p>
                         </div>
                       ))}

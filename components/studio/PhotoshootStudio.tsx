@@ -859,7 +859,7 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
                   <button
                     key={filter.id}
                     onClick={() => setFilterStatus(filter.id)}
-                    className={`px-2.5 py-1 rounded-full text-[11px] font-semibold transition ${filterStatus === filter.id
+                    className={`px-2.5 py-1 rounded-full text-xs font-semibold transition ${filterStatus === filter.id
                       ? 'bg-[color:var(--studio-ink)] text-white shadow-sm'
                       : 'bg-white/60 text-[color:var(--studio-ink-muted)] border border-white/70'
                       }`}
@@ -889,7 +889,7 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
                         alt={config?.labelShort}
                         className="w-5 h-5 rounded-full object-cover"
                       />
-                      <span className="text-[10px] font-medium text-[color:var(--studio-ink)]">
+                      <span className="text-xs font-medium text-[color:var(--studio-ink)]">
                         {config?.labelShort}
                       </span>
 
@@ -906,8 +906,8 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
                               : 'bg-gray-100 hover:bg-gray-200 text-gray-600'
                               }`}
                           >
-                            <span className="material-symbols-outlined text-[10px]">{fitIcon}</span>
-                            <span className="text-[9px] font-semibold min-w-[3ch] text-center">{fitLabel}</span>
+                            <span className="material-symbols-outlined text-xs">{fitIcon}</span>
+                            <span className="text-xs font-semibold min-w-[3ch] text-center">{fitLabel}</span>
                           </button>
 
                           {/* Fit Selection Menu */}
@@ -942,7 +942,7 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
                                         });
                                         setActiveFitPicker(null);
                                       }}
-                                      className={`flex items-center gap-2 px-2 py-1.5 rounded-lg text-[10px] font-medium transition w-full text-left ${currentFit === fitOption
+                                      className={`flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-medium transition w-full text-left ${currentFit === fitOption
                                         ? 'bg-purple-50 text-purple-700'
                                         : 'hover:bg-gray-50 text-gray-600'
                                         }`}
@@ -979,7 +979,7 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
                             }`}
                           title={selection.item.backImageDataUrl ? "Vista trasera disponible" : "Agregar vista trasera"}
                         >
-                          <span className="material-symbols-outlined text-[10px]">
+                          <span className="material-symbols-outlined text-xs">
                             {selection.item.backImageDataUrl ? '360' : 'add_a_photo'}
                           </span>
                         </button>
@@ -998,7 +998,7 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
 
                 {/* Empty slot hints (only show required if nothing selected) */}
                 {slotCount === 0 && (
-                  <span className="text-[10px] text-[color:var(--studio-ink-muted)] italic">
+                  <span className="text-xs text-[color:var(--studio-ink-muted)] italic">
                     Tocá una prenda para agregarla
                   </span>
                 )}
@@ -1011,7 +1011,7 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
                     onChange={(e) => setAutoSave(e.target.checked)}
                     className="w-3 h-3 rounded border-gray-300"
                   />
-                  <span className="text-[10px] text-[color:var(--studio-ink-muted)]">Auto-guardar</span>
+                  <span className="text-xs text-[color:var(--studio-ink-muted)]">Auto-guardar</span>
                 </label>
               </div>
             </motion.section>
@@ -1044,7 +1044,7 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
                         <span className="material-symbols-rounded text-purple-600 text-xl">add_photo_alternate</span>
                       </div>
                       <div className="text-center px-2">
-                        <p className="text-[10px] font-semibold text-purple-700">Quick Try-On</p>
+                        <p className="text-xs font-semibold text-purple-700">Quick Try-On</p>
                         <p className="text-[8px] text-purple-500">Subí captura de Instagram</p>
                       </div>
                     </>
@@ -1091,7 +1091,7 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
                           ) : (
                             <div className="w-full h-full bg-gray-100 flex flex-col items-center justify-center text-gray-400">
                               <span className="material-symbols-outlined text-2xl">image_not_supported</span>
-                              <span className="text-[10px] mt-1">{item.metadata?.subcategory || 'Sin imagen'}</span>
+                              <span className="text-xs mt-1">{item.metadata?.subcategory || 'Sin imagen'}</span>
                             </div>
                           )}
                           {isSelected && (
@@ -1121,7 +1121,7 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
                         {/* Slot picker dropdown */}
                         {showSlotPicker && validSlots.length > 1 && (
                           <div className="absolute bottom-full mb-1 sm:bottom-auto sm:mb-0 sm:top-full sm:mt-1 left-0 right-0 z-50 bg-white rounded-xl shadow-xl border border-gray-100 p-2">
-                            <p className="text-[10px] uppercase text-gray-500 mb-1 px-1">Elegir slot:</p>
+                            <p className="text-xs uppercase text-gray-500 mb-1 px-1">Elegir slot:</p>
                             {validSlots.map(slot => {
                               const config = SLOT_CONFIGS.find(c => c.id === slot);
                               const isOccupied = slotSelections.has(slot);
@@ -1192,27 +1192,27 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
                   />
                   {/* Badges overlay */}
                   <div className="absolute top-2 left-2 right-2 flex flex-wrap gap-1">
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${generatedImages[0].model?.includes('3-pro')
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${generatedImages[0].model?.includes('3-pro')
                       ? 'bg-purple-500/90 text-white'
                       : 'bg-white/90 text-gray-700'
                       }`}>
                       {generatedImages[0].model?.includes('3-pro') ? 'Ultra' : 'Rápido'}
                     </span>
-                    <span className="px-2 py-0.5 rounded-full bg-white/90 text-gray-700 text-[10px] font-semibold">
+                    <span className="px-2 py-0.5 rounded-full bg-white/90 text-gray-700 text-xs font-semibold">
                       {GENERATION_PRESETS.find(p => p.id === generatedImages[0].preset)?.label || generatedImages[0].preset}
                     </span>
                   </div>
                   {/* Bottom badges */}
                   <div className="absolute bottom-2 left-2 flex gap-1">
                     {generatedImages[0].keepPose && (
-                      <span className="px-1.5 py-0.5 rounded-full bg-blue-500/90 text-white text-[9px] font-semibold flex items-center gap-0.5">
-                        <span className="material-symbols-outlined text-[10px]">person_pin</span>
+                      <span className="px-1.5 py-0.5 rounded-full bg-blue-500/90 text-white text-xs font-semibold flex items-center gap-0.5">
+                        <span className="material-symbols-outlined text-xs">person_pin</span>
                         Pose
                       </span>
                     )}
                     {generatedImages[0].faceRefsUsed > 0 && (
-                      <span className="px-1.5 py-0.5 rounded-full bg-green-500/90 text-white text-[9px] font-semibold flex items-center gap-0.5">
-                        <span className="material-symbols-outlined text-[10px]">face</span>
+                      <span className="px-1.5 py-0.5 rounded-full bg-green-500/90 text-white text-xs font-semibold flex items-center gap-0.5">
+                        <span className="material-symbols-outlined text-xs">face</span>
                         {generatedImages[0].faceRefsUsed}
                       </span>
                     )}
@@ -1248,7 +1248,7 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
                 {/* Previous results with metadata */}
                 {generatedImages.length > 1 && (
                   <div>
-                    <p className="text-[10px] uppercase tracking-wider text-[color:var(--studio-ink-muted)] mb-2">
+                    <p className="text-xs uppercase tracking-wider text-[color:var(--studio-ink-muted)] mb-2">
                       Anteriores ({generatedImages.length - 1})
                     </p>
                     <div className="grid grid-cols-3 gap-2">
@@ -1266,10 +1266,10 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
                             </span>
                             <div className="flex gap-1">
                               {gen.keepPose && (
-                                <span className="material-symbols-outlined text-blue-300 text-[10px]">person_pin</span>
+                                <span className="material-symbols-outlined text-blue-300 text-xs">person_pin</span>
                               )}
                               {gen.faceRefsUsed > 0 && (
-                                <span className="material-symbols-outlined text-green-300 text-[10px]">face</span>
+                                <span className="material-symbols-outlined text-green-300 text-xs">face</span>
                               )}
                             </div>
                           </div>
@@ -1307,10 +1307,10 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
             <div className="flex-1 min-w-0">
               <p className="text-xs sm:text-sm font-medium truncate">{helperText}</p>
               <div className="flex flex-wrap gap-1 mt-1">
-                <span className={`text-[10px] px-2 py-0.5 rounded-full border ${hasCoverage ? 'border-green-500 text-green-700' : 'border-gray-300 text-gray-500'}`}>
+                <span className={`text-xs px-2 py-0.5 rounded-full border ${hasCoverage ? 'border-green-500 text-green-700' : 'border-gray-300 text-gray-500'}`}>
                   {hasCoverage ? '✓' : '○'} Prenda
                 </span>
-                <span className={`text-[10px] px-2 py-0.5 rounded-full border ${hasSelfie ? 'border-green-500 text-green-700' : 'border-gray-300 text-gray-500'}`}>
+                <span className={`text-xs px-2 py-0.5 rounded-full border ${hasSelfie ? 'border-green-500 text-green-700' : 'border-gray-300 text-gray-500'}`}>
                   {hasSelfie ? '✓' : '○'} Selfie
                 </span>
               </div>
@@ -1464,33 +1464,33 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
               {/* Generation metadata */}
               <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
                 {/* Model */}
-                <span className={`px-2 py-1 rounded-full text-[10px] font-semibold ${selectedImage.model?.includes('3-pro')
+                <span className={`px-2 py-1 rounded-full text-xs font-semibold ${selectedImage.model?.includes('3-pro')
                   ? 'bg-purple-500 text-white'
                   : 'bg-white/20 text-white'
                   }`}>
                   {selectedImage.model?.includes('3-pro') ? 'Ultra' : 'Rápido'}
                 </span>
                 {/* Preset */}
-                <span className="px-2 py-1 rounded-full bg-white/20 text-white text-[10px] font-semibold">
+                <span className="px-2 py-1 rounded-full bg-white/20 text-white text-xs font-semibold">
                   {GENERATION_PRESETS.find(p => p.id === selectedImage.preset)?.label || selectedImage.preset}
                 </span>
                 {/* Keep pose */}
                 {selectedImage.keepPose && (
-                  <span className="px-2 py-1 rounded-full bg-blue-500/80 text-white text-[10px] font-semibold flex items-center gap-1">
+                  <span className="px-2 py-1 rounded-full bg-blue-500/80 text-white text-xs font-semibold flex items-center gap-1">
                     <span className="material-symbols-outlined text-xs">person_pin</span>
                     Pose fija
                   </span>
                 )}
                 {/* Face refs */}
                 {selectedImage.faceRefsUsed > 0 && (
-                  <span className="px-2 py-1 rounded-full bg-green-500/80 text-white text-[10px] font-semibold flex items-center gap-1">
+                  <span className="px-2 py-1 rounded-full bg-green-500/80 text-white text-xs font-semibold flex items-center gap-1">
                     <span className="material-symbols-outlined text-xs">face</span>
                     {selectedImage.faceRefsUsed} ref
                   </span>
                 )}
                 {/* Custom scene */}
                 {selectedImage.customScene && (
-                  <span className="px-2 py-1 rounded-full bg-orange-500/80 text-white text-[10px] font-semibold max-w-[150px] truncate">
+                  <span className="px-2 py-1 rounded-full bg-orange-500/80 text-white text-xs font-semibold max-w-[150px] truncate">
                     "{selectedImage.customScene}"
                   </span>
                 )}

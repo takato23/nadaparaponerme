@@ -76,7 +76,7 @@ const WeatherCard = () => {
                         <button
                             key={w}
                             onClick={() => setWeather(w as any)}
-                            className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] transition-all ${weather === w ? 'bg-white text-black shadow-sm' : 'text-white hover:bg-white/20'}`}
+                            className={`w-6 h-6 rounded-full flex items-center justify-center text-xs transition-all ${weather === w ? 'bg-white text-black shadow-sm' : 'text-white hover:bg-white/20'}`}
                             title={w}
                         >
                             {w[0].toUpperCase()}

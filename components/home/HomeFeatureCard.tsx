@@ -42,7 +42,7 @@ export const HomeFeatureCard = ({ feature, variant = 'default' }: HomeFeatureCar
 
             {/* Badge */}
             {badgeStyle && (
-                <div className={`absolute top-2 right-2 px-2 py-0.5 rounded-full text-[10px] font-semibold ${badgeStyle.bg} ${badgeStyle.text} z-20 border border-white/60 dark:border-white/10 backdrop-blur-sm`}>
+                <div className={`absolute top-2 right-2 px-2 py-0.5 rounded-full text-xs font-semibold ${badgeStyle.bg} ${badgeStyle.text} z-20 border border-white/60 dark:border-white/10 backdrop-blur-sm`}>
                     {badgeStyle.label}
                 </div>
             )}
@@ -74,7 +74,7 @@ export const HomeFeatureCard = ({ feature, variant = 'default' }: HomeFeatureCar
                     </h3>
                     <p className={`
                         text-text-secondary dark:text-gray-400
-                        ${variant === 'compact' ? 'text-[11px] line-clamp-1' : 'text-xs line-clamp-2'}
+                        ${variant === 'compact' ? 'text-xs line-clamp-1' : 'text-xs line-clamp-2'}
                         leading-snug font-medium opacity-75 mt-0.5
                     `}>
                         {feature.description}

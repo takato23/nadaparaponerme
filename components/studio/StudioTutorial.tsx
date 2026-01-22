@@ -207,7 +207,7 @@ export const TermTooltip: React.FC<{ term: string; children: React.ReactNode }> 
             onTouchEnd={() => setTimeout(() => setShow(false), 2000)}
         >
             {children}
-            <span className="material-symbols-outlined text-[10px] text-gray-400">help</span>
+            <span className="material-symbols-outlined text-xs text-gray-400">help</span>
 
             <AnimatePresence>
                 {show && (

@@ -176,7 +176,7 @@ export default function ClosetCollections({
                     {collection.name}
                   </div>
                   {collection.description && (
-                    <div className="text-[10px] text-text-secondary dark:text-gray-400 truncate">
+                    <div className="text-xs text-text-secondary dark:text-gray-400 truncate">
                       {collection.description}
                     </div>
                   )}
@@ -184,7 +184,7 @@ export default function ClosetCollections({
 
                 {/* Item Count Badge */}
                 <span className={`
-                  text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 transition-colors
+                  text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0 transition-colors
                   ${isActive
                     ? 'bg-primary text-white shadow-sm'
                     : 'bg-gray-200 dark:bg-gray-700 text-text-secondary dark:text-gray-400 group-hover:bg-gray-300 dark:group-hover:bg-gray-600'

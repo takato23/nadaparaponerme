@@ -187,7 +187,7 @@ export default function ClosetBulkActions({
                     {totalCount} disponibles
                   </div>
                   {helperText && (
-                    <div className="text-[11px] text-text-secondary dark:text-gray-400 mt-1">
+                    <div className="text-xs text-text-secondary dark:text-gray-400 mt-1">
                       {helperText}
                     </div>
                   )}

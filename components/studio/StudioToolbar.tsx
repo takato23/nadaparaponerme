@@ -160,7 +160,7 @@ export const StudioToolbar: React.FC<StudioToolbarProps> = ({
                             {/* Delete Button - Outside Top-Right */}
                             <button
                                 onClick={(e) => { e.stopPropagation(); setUserBaseImage(null); }}
-                                className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center text-[10px] shadow-sm z-20 hover:scale-110 transition-transform"
+                                className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center text-xs shadow-sm z-20 hover:scale-110 transition-transform"
                             >
                                 <span className="material-symbols-outlined text-xs">close</span>
                             </button>
@@ -186,7 +186,7 @@ export const StudioToolbar: React.FC<StudioToolbarProps> = ({
                             ) : (
                                 <>
                                     <span className="material-symbols-outlined text-2xl text-[color:var(--studio-rose)] group-hover:scale-110 transition-transform">add_a_photo</span>
-                                    <span className="text-[9px] font-medium text-[color:var(--studio-rose)]">Tu foto</span>
+                                    <span className="text-xs font-medium text-[color:var(--studio-rose)]">Tu foto</span>
                                 </>
                             )}
                         </button>
@@ -194,7 +194,7 @@ export const StudioToolbar: React.FC<StudioToolbarProps> = ({
                     {savedSelfies.length > 0 && (
                         <button
                             onClick={() => setShowSelfieManager(!showSelfieManager)}
-                            className="flex items-center gap-1 px-2 py-1 rounded-full bg-white/80 shadow-sm text-[10px] font-semibold text-[color:var(--studio-ink)] hover:bg-white transition"
+                            className="flex items-center gap-1 px-2 py-1 rounded-full bg-white/80 shadow-sm text-xs font-semibold text-[color:var(--studio-ink)] hover:bg-white transition"
                         >
                             <span className="material-symbols-outlined text-xs">photo_library</span>
                             {savedSelfies.length} guardada{savedSelfies.length > 1 ? 's' : ''}
@@ -213,7 +213,7 @@ export const StudioToolbar: React.FC<StudioToolbarProps> = ({
                                     <div className="flex bg-gray-100 p-0.5 rounded-lg">
                                         <button
                                             onClick={() => { if (navigator.vibrate) navigator.vibrate(5); setGenerationQuality('flash'); }}
-                                            className={`px-1.5 py-0.5 rounded text-[9px] font-bold transition flex items-center gap-0.5 ${generationQuality === 'flash'
+                                            className={`px-1.5 py-0.5 rounded text-xs font-bold transition flex items-center gap-0.5 ${generationQuality === 'flash'
                                                 ? 'bg-white shadow-sm text-[color:var(--studio-ink)]'
                                                 : 'text-gray-400 hover:text-gray-600'
                                                 }`}
@@ -223,7 +223,7 @@ export const StudioToolbar: React.FC<StudioToolbarProps> = ({
                                         </button>
                                         <button
                                             onClick={() => { if (navigator.vibrate) navigator.vibrate(5); setGenerationQuality('pro'); }}
-                                            className={`px-1.5 py-0.5 rounded text-[9px] font-bold transition flex items-center gap-0.5 ${generationQuality === 'pro'
+                                            className={`px-1.5 py-0.5 rounded text-xs font-bold transition flex items-center gap-0.5 ${generationQuality === 'pro'
                                                 ? 'bg-gradient-to-r from-purple-500 to-pink-500 shadow-sm text-white'
                                                 : 'text-gray-400 hover:text-gray-600'
                                                 }`}
@@ -242,7 +242,7 @@ export const StudioToolbar: React.FC<StudioToolbarProps> = ({
                                     <div className="flex bg-gray-100 p-0.5 rounded-lg">
                                         <button
                                             onClick={() => { if (navigator.vibrate) navigator.vibrate(5); setGenerationView('front'); }}
-                                            className={`px-1 rounded text-[9px] font-medium transition ${generationView === 'front'
+                                            className={`px-1 rounded text-xs font-medium transition ${generationView === 'front'
                                                 ? 'bg-white shadow-sm text-[color:var(--studio-ink)]'
                                                 : 'text-gray-400 hover:text-gray-600'
                                                 }`}
@@ -251,7 +251,7 @@ export const StudioToolbar: React.FC<StudioToolbarProps> = ({
                                         </button>
                                         <button
                                             onClick={() => { if (navigator.vibrate) navigator.vibrate(5); setGenerationView('back'); }}
-                                            className={`px-1 rounded text-[9px] font-medium transition ${generationView === 'back'
+                                            className={`px-1 rounded text-xs font-medium transition ${generationView === 'back'
                                                 ? 'bg-white shadow-sm text-[color:var(--studio-ink)]'
                                                 : 'text-gray-400 hover:text-gray-600'
                                                 }`}
@@ -260,7 +260,7 @@ export const StudioToolbar: React.FC<StudioToolbarProps> = ({
                                         </button>
                                         <button
                                             onClick={() => { if (navigator.vibrate) navigator.vibrate(5); setGenerationView('side'); }}
-                                            className={`px-1 rounded text-[9px] font-medium transition ${generationView === 'side'
+                                            className={`px-1 rounded text-xs font-medium transition ${generationView === 'side'
                                                 ? 'bg-white shadow-sm text-[color:var(--studio-ink)]'
                                                 : 'text-gray-400 hover:text-gray-600'
                                                 }`}
@@ -274,7 +274,7 @@ export const StudioToolbar: React.FC<StudioToolbarProps> = ({
 
                         {/* Slot Counter - Moved here */}
                         <div className="flex items-center gap-1.5 shrink-0 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-100">
-                            <div className={`text-[10px] font-bold ${hasCoverage ? 'text-green-700' : 'text-amber-700'}`}>
+                            <div className={`text-xs font-bold ${hasCoverage ? 'text-green-700' : 'text-amber-700'}`}>
                                 {slotCount}/{MAX_SLOTS_PER_GENERATION}
                             </div>
                             {slotCount > 0 && (
@@ -285,7 +285,7 @@ export const StudioToolbar: React.FC<StudioToolbarProps> = ({
                                             onClearSelections();
                                         }
                                     }}
-                                    className="w-4 h-4 rounded-full bg-black/5 hover:bg-black/10 flex items-center justify-center text-[10px] text-gray-500"
+                                    className="w-4 h-4 rounded-full bg-black/5 hover:bg-black/10 flex items-center justify-center text-xs text-gray-500"
                                     title="Limpiar selección"
                                 >
                                     ×
@@ -301,23 +301,23 @@ export const StudioToolbar: React.FC<StudioToolbarProps> = ({
                                 <button
                                     key={preset.id}
                                     onClick={() => { if (navigator.vibrate) navigator.vibrate(5); setPresetId(preset.id); }}
-                                    className={`flex items-center gap-1 px-2 py-0.5 rounded-full whitespace-nowrap text-[9px] font-medium transition-all ${presetId === preset.id
+                                    className={`flex items-center gap-1 px-2 py-0.5 rounded-full whitespace-nowrap text-xs font-medium transition-all ${presetId === preset.id
                                         ? 'bg-[color:var(--studio-ink)] text-white shadow-md'
                                         : 'bg-white/90 text-[color:var(--studio-ink)] hover:bg-white border border-gray-100'
                                         }`}
                                 >
-                                    <span className="material-symbols-outlined text-[12px]">{preset.icon}</span>
+                                    <span className="material-symbols-outlined text-xs">{preset.icon}</span>
                                     {preset.label}
                                 </button>
                             ))}
                             <button
                                 onClick={() => setPresetId('custom')}
-                                className={`flex items-center gap-1 px-2 py-0.5 rounded-full whitespace-nowrap text-[9px] font-medium transition-all ${presetId === 'custom'
+                                className={`flex items-center gap-1 px-2 py-0.5 rounded-full whitespace-nowrap text-xs font-medium transition-all ${presetId === 'custom'
                                     ? 'bg-[color:var(--studio-ink)] text-white shadow-md'
                                     : 'bg-white/90 text-[color:var(--studio-ink)] hover:bg-white border border-gray-200'
                                     }`}
                             >
-                                <span className="material-symbols-outlined text-[12px]">edit</span>
+                                <span className="material-symbols-outlined text-xs">edit</span>
                                 Otro
                             </button>
                         </div>
@@ -343,14 +343,14 @@ export const StudioToolbar: React.FC<StudioToolbarProps> = ({
                                     onChange={(e) => setKeepPose(e.target.checked)}
                                     className="w-3 h-3 rounded border-gray-300 text-[color:var(--studio-ink)] focus:ring-[color:var(--studio-ink)]"
                                 />
-                                <span className="text-[9px] font-medium text-[color:var(--studio-ink-muted)] group-hover:text-[color:var(--studio-ink)] whitespace-nowrap">
+                                <span className="text-xs font-medium text-[color:var(--studio-ink-muted)] group-hover:text-[color:var(--studio-ink)] whitespace-nowrap">
                                     Mantener pose
                                 </span>
-                                <span className="material-symbols-rounded text-[11px] text-purple-400 group-hover:text-purple-600">
+                                <span className="material-symbols-rounded text-xs text-purple-400 group-hover:text-purple-600">
                                     info
                                 </span>
                             </label>
-                            <div className="absolute bottom-full left-0 mb-2 w-48 p-2 bg-gray-900 text-white text-[10px] rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 shadow-lg pointer-events-none">
+                            <div className="absolute bottom-full left-0 mb-2 w-48 p-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 shadow-lg pointer-events-none">
                                 <p className="font-semibold mb-1">Mejora la cara</p>
                                 <p className="text-gray-300">
                                     Al activar esta opción, la IA mantiene tu pose y expresión original,
@@ -376,27 +376,27 @@ export const StudioToolbar: React.FC<StudioToolbarProps> = ({
                                     disabled={faceRefs.length === 0}
                                     className="w-3.5 h-3.5 rounded border-gray-300 text-[color:var(--studio-ink)] focus:ring-[color:var(--studio-ink)] disabled:opacity-50"
                                 />
-                                <span className="text-[10px] font-medium text-[color:var(--studio-ink-muted)] group-hover:text-[color:var(--studio-ink)]">
+                                <span className="text-xs font-medium text-[color:var(--studio-ink-muted)] group-hover:text-[color:var(--studio-ink)]">
                                     Fotos de cara
                                 </span>
                             </label>
                             {faceRefs.length > 0 ? (
                                 <button
                                     onClick={() => setShowFaceRefPreview(!showFaceRefPreview)}
-                                    className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold transition ${showFaceRefPreview
+                                    className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs font-bold transition ${showFaceRefPreview
                                         ? 'bg-[color:var(--studio-mint)] text-white'
                                         : 'bg-[color:var(--studio-mint)]/20 text-[color:var(--studio-mint)] hover:bg-[color:var(--studio-mint)]/30'
                                         }`}
                                 >
                                     {faceRefs.length}
-                                    <span className="material-symbols-outlined text-[10px]">
+                                    <span className="material-symbols-outlined text-xs">
                                         {showFaceRefPreview ? 'expand_less' : 'expand_more'}
                                     </span>
                                 </button>
                             ) : (
                                 <button
                                     onClick={() => navigate(ROUTES.PROFILE)}
-                                    className="text-[9px] text-[color:var(--studio-rose)] underline"
+                                    className="text-xs text-[color:var(--studio-rose)] underline"
                                 >
                                     Agregar
                                 </button>
@@ -456,12 +456,12 @@ export const StudioToolbar: React.FC<StudioToolbarProps> = ({
                                                     onClick={(e) => { e.stopPropagation(); if (navigator.vibrate) navigator.vibrate(5); removeSavedSelfie(selfie); }}
                                                     className="absolute top-1 right-1 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center shadow-md z-10"
                                                 >
-                                                    <span className="material-symbols-outlined text-[10px]">close</span>
+                                                    <span className="material-symbols-outlined text-xs">close</span>
                                                 </button>
                                             </div>
                                         ))}
                                     </div>
-                                    <p className="text-[9px] text-[color:var(--studio-ink-muted)] mt-2">
+                                    <p className="text-xs text-[color:var(--studio-ink-muted)] mt-2">
                                         Tocá una selfie para usarla • Máximo 5 guardadas
                                     </p>
                                 </div>

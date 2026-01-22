@@ -200,8 +200,8 @@ const HomeViewImproved: React.FC<HomeViewImprovedProps> = (props) => {
         {/* Eye3D desenfocado - Visible en ambos modos con ajustes */}
         <div className="absolute inset-0 flex items-center justify-center overflow-hidden">
           <div className={`w-[120%] h-[120%] -translate-y-[5%] ${isDark
-              ? 'blur-sm opacity-50'
-              : 'blur-md opacity-30'
+            ? 'blur-sm opacity-50'
+            : 'blur-md opacity-30'
             }`}>
             <Suspense fallback={null}>
               <Eye3D
@@ -260,15 +260,15 @@ const HomeViewImproved: React.FC<HomeViewImprovedProps> = (props) => {
                   <button
                     onClick={props.onStartWeatherOutfit}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full backdrop-blur-md transition-colors ${isDark
-                        ? 'bg-white/10 hover:bg-white/15'
-                        : 'bg-black/5 hover:bg-black/10'
+                      ? 'bg-white/10 hover:bg-white/15'
+                      : 'bg-black/5 hover:bg-black/10'
                       }`}
                   >
                     <span className={`material-symbols-rounded text-lg ${isDark ? 'text-amber-300' : 'text-amber-500'}`}>
                       {WEATHER_ICONS[weather.condition] || 'partly_cloudy_day'}
                     </span>
                     <span className={`text-sm font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>{weather.temp}°</span>
-                    <span className={`text-xs ${isDark ? 'text-white/50' : 'text-gray-500'}`}>{weather.city}</span>
+                    <span className={`text-xs ${isDark ? 'text-white/60' : 'text-gray-600'}`}>{weather.city}</span>
                   </button>
                 ) : (
                   <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full ${isDark ? 'bg-white/5' : 'bg-black/5'}`}>
@@ -280,8 +280,8 @@ const HomeViewImproved: React.FC<HomeViewImprovedProps> = (props) => {
                 <button
                   onClick={toggleTheme}
                   className={`flex items-center justify-center w-9 h-9 rounded-full backdrop-blur-md transition-all ${isDark
-                      ? 'bg-white/10 hover:bg-white/15'
-                      : 'bg-black/5 hover:bg-black/10'
+                    ? 'bg-white/10 hover:bg-white/15'
+                    : 'bg-black/5 hover:bg-black/10'
                     }`}
                   aria-label={isDark ? 'Cambiar a modo día' : 'Cambiar a modo noche'}
                 >
@@ -294,8 +294,8 @@ const HomeViewImproved: React.FC<HomeViewImprovedProps> = (props) => {
                 <button
                   onClick={toggleLayoutMode}
                   className={`flex items-center justify-center w-9 h-9 rounded-full backdrop-blur-md transition-all ${isDark
-                      ? 'bg-white/10 hover:bg-white/15'
-                      : 'bg-black/5 hover:bg-black/10'
+                    ? 'bg-white/10 hover:bg-white/15'
+                    : 'bg-black/5 hover:bg-black/10'
                     }`}
                   aria-label={isMinimalMode ? 'Ver más opciones' : 'Modo simplificado'}
                   title={isMinimalMode ? 'Ver más opciones' : 'Modo simplificado'}
@@ -317,8 +317,8 @@ const HomeViewImproved: React.FC<HomeViewImprovedProps> = (props) => {
                   <button
                     onClick={props.onShowCredits}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full backdrop-blur-md transition-colors ${isDark
-                        ? 'bg-white/10 hover:bg-white/15'
-                        : 'bg-black/5 hover:bg-black/10'
+                      ? 'bg-white/10 hover:bg-white/15'
+                      : 'bg-black/5 hover:bg-black/10'
                       }`}
                   >
                     <span className="material-symbols-rounded text-amber-500 text-lg">toll</span>
@@ -331,8 +331,8 @@ const HomeViewImproved: React.FC<HomeViewImprovedProps> = (props) => {
             </div>
 
             {/* Greeting */}
-            <h1 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-              ¿Qué te ponés hoy, <span className="text-purple-500">{displayName}</span>?
+            <h1 className={`text-3xl font-bold leading-tight ${isDark ? 'text-white' : 'text-gray-900'}`}>
+              ¿Qué te ponés hoy, <span className={`${isDark ? 'text-purple-400' : 'text-purple-600'}`}>{displayName}</span>?
             </h1>
           </motion.div>
         </header>
@@ -351,8 +351,8 @@ const HomeViewImproved: React.FC<HomeViewImprovedProps> = (props) => {
                   transition={{ delay: idx * 0.05 }}
                   onClick={handler}
                   className={`group relative p-5 rounded-2xl backdrop-blur-xl border transition-all text-left overflow-hidden ${isDark
-                      ? 'bg-white/10 border-white/10 hover:bg-white/15 hover:border-white/20'
-                      : 'bg-white/80 border-gray-200/50 hover:bg-white hover:border-purple-200 shadow-sm'
+                    ? 'bg-white/10 border-white/10 hover:bg-white/15 hover:border-white/20'
+                    : 'bg-white/80 border-gray-200/50 hover:bg-white hover:border-purple-200 shadow-sm'
                     } ${isLastOdd ? 'col-span-2' : ''}`}
                 >
                   {/* Glow effect */}
@@ -360,13 +360,13 @@ const HomeViewImproved: React.FC<HomeViewImprovedProps> = (props) => {
 
                   <div className="relative">
                     <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 ${isDark
-                        ? 'bg-gradient-to-br from-purple-500/30 to-pink-500/30'
-                        : 'bg-gradient-to-br from-purple-100 to-pink-100'
+                      ? 'bg-gradient-to-br from-purple-500/30 to-pink-500/30'
+                      : 'bg-gradient-to-br from-purple-100 to-pink-100'
                       }`}>
                       <span className={`material-symbols-rounded text-2xl ${isDark ? 'text-white' : 'text-purple-600'}`}>{action.icon}</span>
                     </div>
                     <h3 className={`font-bold text-lg ${isDark ? 'text-white' : 'text-gray-900'}`}>{action.label}</h3>
-                    <p className={`text-sm mt-0.5 ${isDark ? 'text-white/50' : 'text-gray-500'}`}>{action.description}</p>
+                    <p className={`text-sm mt-0.5 ${isDark ? 'text-white/60' : 'text-gray-600'}`}>{action.description}</p>
                   </div>
                 </motion.button>
               );
@@ -378,7 +378,7 @@ const HomeViewImproved: React.FC<HomeViewImprovedProps> = (props) => {
         {subscription?.tier === 'free' && ADSENSE_ENABLED && ADSENSE_HOME_SLOT && (
           <section className="mb-6">
             <div className={`rounded-2xl border ${isDark ? 'border-white/10 bg-white/5' : 'border-gray-200/60 bg-white/70'} p-3`}>
-              <p className={`text-[10px] uppercase tracking-[0.3em] ${isDark ? 'text-white/40' : 'text-gray-400'} mb-2`}>
+              <p className={`text-xs uppercase tracking-[0.3em] ${isDark ? 'text-white/40' : 'text-gray-400'} mb-2`}>
                 Publicidad
               </p>
               <AdSenseBanner slot={ADSENSE_HOME_SLOT} className="rounded-xl overflow-hidden" />
@@ -397,8 +397,8 @@ const HomeViewImproved: React.FC<HomeViewImprovedProps> = (props) => {
             <button
               onClick={props.onNavigateToSavedLooks}
               className={`w-full relative p-4 rounded-2xl backdrop-blur-xl border transition-all overflow-hidden text-left ${isDark
-                  ? 'bg-white/10 border-white/10 hover:bg-white/15 hover:border-white/20'
-                  : 'bg-white/80 border-gray-200/50 hover:bg-white hover:border-purple-200 shadow-sm'
+                ? 'bg-white/10 border-white/10 hover:bg-white/15 hover:border-white/20'
+                : 'bg-white/80 border-gray-200/50 hover:bg-white hover:border-purple-200 shadow-sm'
                 }`}
             >
               <div className="flex items-center gap-4">
@@ -413,7 +413,7 @@ const HomeViewImproved: React.FC<HomeViewImprovedProps> = (props) => {
 
                 {/* Info */}
                 <div className="flex-1 min-w-0">
-                  <p className={`text-xs mb-1 ${isDark ? 'text-white/50' : 'text-gray-500'}`}>Último look en tu armario</p>
+                  <p className={`text-xs mb-1 ${isDark ? 'text-white/60' : 'text-gray-600'}`}>Último look en tu armario</p>
                   <h3 className={`font-semibold truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>
                     {latestLook.title || 'Look generado'}
                   </h3>
@@ -428,7 +428,7 @@ const HomeViewImproved: React.FC<HomeViewImprovedProps> = (props) => {
                 {/* Arrow */}
                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${isDark ? 'bg-white/10' : 'bg-gray-100'
                   }`}>
-                  <span className={`material-symbols-rounded ${isDark ? 'text-white/60' : 'text-gray-500'}`}>
+                  <span className={`material-symbols-rounded ${isDark ? 'text-white/60' : 'text-gray-600'}`}>
                     arrow_forward
                   </span>
                 </div>
@@ -437,7 +437,7 @@ const HomeViewImproved: React.FC<HomeViewImprovedProps> = (props) => {
               {/* Favorite badge */}
               {latestLook.is_favorite && (
                 <div className="absolute top-3 right-3">
-                  <span className="text-sm">❤️</span>
+                  <span className="material-symbols-rounded text-red-500 text-lg">favorite</span>
                 </div>
               )}
             </button>
@@ -451,8 +451,8 @@ const HomeViewImproved: React.FC<HomeViewImprovedProps> = (props) => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
             className={`mb-6 p-5 rounded-2xl backdrop-blur-xl border ${isDark
-                ? 'bg-gradient-to-br from-purple-500/20 to-pink-500/20 border-purple-500/20'
-                : 'bg-gradient-to-br from-purple-100 to-pink-100 border-purple-200/50'
+              ? 'bg-gradient-to-br from-purple-500/20 to-pink-500/20 border-purple-500/20'
+              : 'bg-gradient-to-br from-purple-100 to-pink-100 border-purple-200/50'
               }`}
           >
             <div className="flex items-start gap-4">
@@ -469,8 +469,8 @@ const HomeViewImproved: React.FC<HomeViewImprovedProps> = (props) => {
                   <button
                     onClick={props.onAddItem}
                     className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${isDark
-                        ? 'bg-white text-gray-900 hover:bg-white/90'
-                        : 'bg-purple-600 text-white hover:bg-purple-700'
+                      ? 'bg-white text-gray-900 hover:bg-white/90'
+                      : 'bg-purple-600 text-white hover:bg-purple-700'
                       }`}
                   >
                     Agregar prenda
@@ -478,8 +478,8 @@ const HomeViewImproved: React.FC<HomeViewImprovedProps> = (props) => {
                   <button
                     onClick={props.onStartBulkUpload}
                     className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${isDark
-                        ? 'bg-white/10 text-white hover:bg-white/20'
-                        : 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+                      ? 'bg-white/10 text-white hover:bg-white/20'
+                      : 'bg-purple-100 text-purple-700 hover:bg-purple-200'
                       }`}
                   >
                     Carga múltiple
@@ -500,9 +500,9 @@ const HomeViewImproved: React.FC<HomeViewImprovedProps> = (props) => {
           >
             <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
               {[
-                { icon: 'stylus', label: 'Arriba', value: closetStats.tops, color: isDark ? 'text-blue-400' : 'text-blue-600' },
-                { icon: 'straighten', label: 'Abajo', value: closetStats.bottoms, color: isDark ? 'text-green-400' : 'text-green-600' },
-                { icon: 'steps', label: 'Calzado', value: closetStats.shoes, color: isDark ? 'text-purple-400' : 'text-purple-600' },
+                { icon: 'stylus', label: 'Arriba', value: closetStats.tops, color: isDark ? 'text-blue-400' : 'text-blue-700' },
+                { icon: 'straighten', label: 'Abajo', value: closetStats.bottoms, color: isDark ? 'text-green-400' : 'text-green-700' },
+                { icon: 'steps', label: 'Calzado', value: closetStats.shoes, color: isDark ? 'text-purple-400' : 'text-purple-700' },
               ].map((stat) => (
                 <div
                   key={stat.label}
@@ -511,7 +511,7 @@ const HomeViewImproved: React.FC<HomeViewImprovedProps> = (props) => {
                 >
                   <div className="flex items-center gap-2">
                     <span className={`material-symbols-rounded ${stat.color} text-lg`}>{stat.icon}</span>
-                    <span className={`text-xs ${isDark ? 'text-white/50' : 'text-gray-500'}`}>{stat.label}</span>
+                    <span className={`text-xs ${isDark ? 'text-white/60' : 'text-gray-600'}`}>{stat.label}</span>
                   </div>
                   <p className={`font-bold text-xl mt-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>{stat.value}</p>
                 </div>
@@ -530,8 +530,8 @@ const HomeViewImproved: React.FC<HomeViewImprovedProps> = (props) => {
             <button
               onClick={() => setShowMoreTools(!showMoreTools)}
               className={`w-full flex items-center justify-between p-4 rounded-2xl backdrop-blur-md border transition-colors mb-3 ${isDark
-                  ? 'bg-white/5 border-white/10 hover:bg-white/10'
-                  : 'bg-white/80 border-gray-200/50 hover:bg-white'
+                ? 'bg-white/5 border-white/10 hover:bg-white/10'
+                : 'bg-white/80 border-gray-200/50 hover:bg-white'
                 }`}
             >
               <div className="flex items-center gap-3">
@@ -565,17 +565,17 @@ const HomeViewImproved: React.FC<HomeViewImprovedProps> = (props) => {
                           transition={{ delay: idx * 0.03 }}
                           onClick={handler}
                           className={`flex flex-col items-center gap-2 p-4 rounded-xl backdrop-blur-md border transition-colors relative ${isDark
-                              ? 'bg-white/5 border-white/10 hover:bg-white/10'
-                              : 'bg-white/80 border-gray-200/50 hover:bg-white'
+                            ? 'bg-white/5 border-white/10 hover:bg-white/10'
+                            : 'bg-white/80 border-gray-200/50 hover:bg-white'
                             }`}
                         >
                           {tool.isPro && (
-                            <span className="absolute top-2 right-2 text-[9px] font-bold text-amber-500 bg-amber-500/20 px-1.5 py-0.5 rounded">
+                            <span className="absolute top-2 right-2 text-xs font-bold text-amber-500 bg-amber-500/20 px-1.5 py-0.5 rounded">
                               PRO
                             </span>
                           )}
-                          <span className={`material-symbols-rounded text-2xl ${isDark ? 'text-white/70' : 'text-gray-600'}`}>{tool.icon}</span>
-                          <span className={`text-xs font-medium text-center ${isDark ? 'text-white/80' : 'text-gray-700'}`}>{tool.label}</span>
+                          <span className={`material-symbols-rounded text-2xl ${isDark ? 'text-white/70' : 'text-gray-700'}`}>{tool.icon}</span>
+                          <span className={`text-xs font-medium text-center ${isDark ? 'text-white/80' : 'text-gray-800'}`}>{tool.label}</span>
                         </motion.button>
                       );
                     })}
@@ -597,8 +597,8 @@ const HomeViewImproved: React.FC<HomeViewImprovedProps> = (props) => {
             <button
               onClick={props.onShowPricing}
               className={`w-full p-4 rounded-2xl backdrop-blur-xl border flex items-center justify-between transition-all ${isDark
-                  ? 'bg-gradient-to-r from-amber-500/20 to-orange-500/20 border-amber-500/30 hover:from-amber-500/30 hover:to-orange-500/30'
-                  : 'bg-gradient-to-r from-amber-100 to-orange-100 border-amber-200 hover:from-amber-200 hover:to-orange-200'
+                ? 'bg-gradient-to-r from-amber-500/20 to-orange-500/20 border-amber-500/30 hover:from-amber-500/30 hover:to-orange-500/30'
+                : 'bg-gradient-to-r from-amber-100 to-orange-100 border-amber-200 hover:from-amber-200 hover:to-orange-200'
                 }`}
             >
               <div className="flex items-center gap-3">

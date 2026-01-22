@@ -141,7 +141,7 @@ const ProfessionalStyleWizardView: React.FC<ProfessionalStyleWizardViewProps> = 
           {step === 1 && (
             <div className="space-y-6 animate-fade-in">
               <div className="text-center">
-                <div className="text-6xl mb-4">✨</div>
+                <div className="flex justify-center mb-4"><span className="material-symbols-outlined text-6xl text-purple-400">auto_awesome</span></div>
                 <h3 className="text-2xl font-bold mb-3">
                   ¡Mejoremos tus outfits!
                 </h3>
@@ -188,8 +188,8 @@ const ProfessionalStyleWizardView: React.FC<ProfessionalStyleWizardViewProps> = 
                 </div>
               </div>
 
-              <p className="text-center text-sm opacity-60 mt-6">
-                ⏱️ Toma solo 2-3 minutos completar tu perfil
+              <p className="text-center text-sm opacity-60 mt-6 flex items-center justify-center gap-2">
+                <span className="material-symbols-outlined text-sm">timer</span> Toma solo 2-3 minutos completar tu perfil
               </p>
             </div>
           )}
@@ -208,13 +208,12 @@ const ProfessionalStyleWizardView: React.FC<ProfessionalStyleWizardViewProps> = 
                 {/* Triángulo */}
                 <button
                   onClick={() => setBodyShape('triangulo')}
-                  className={`p-4 rounded-xl border-2 transition-all text-left ${
-                    bodyShape === 'triangulo'
+                  className={`p-4 rounded-xl border-2 transition-all text-left cursor-pointer ${bodyShape === 'triangulo'
                       ? 'border-purple-500 bg-purple-500/20'
                       : 'border-white/20 hover:border-white/40'
-                  }`}
+                    }`}
                 >
-                  <div className="text-3xl mb-2">🔻</div>
+                  <div className="mb-2"><span className="material-symbols-outlined text-3xl">change_history</span></div>
                   <h4 className="font-semibold mb-1">Triángulo (Pera)</h4>
                   <p className="text-xs opacity-70">Cadera más ancha que hombros</p>
                 </button>
@@ -222,13 +221,12 @@ const ProfessionalStyleWizardView: React.FC<ProfessionalStyleWizardViewProps> = 
                 {/* Triángulo Invertido */}
                 <button
                   onClick={() => setBodyShape('triangulo_invertido')}
-                  className={`p-4 rounded-xl border-2 transition-all text-left ${
-                    bodyShape === 'triangulo_invertido'
+                  className={`p-4 rounded-xl border-2 transition-all text-left cursor-pointer ${bodyShape === 'triangulo_invertido'
                       ? 'border-purple-500 bg-purple-500/20'
                       : 'border-white/20 hover:border-white/40'
-                  }`}
+                    }`}
                 >
-                  <div className="text-3xl mb-2">🔺</div>
+                  <div className="mb-2 rotate-180 inline-block"><span className="material-symbols-outlined text-3xl">change_history</span></div>
                   <h4 className="font-semibold mb-1">Triángulo Invertido</h4>
                   <p className="text-xs opacity-70">Hombros más anchos que cadera</p>
                 </button>
@@ -236,13 +234,12 @@ const ProfessionalStyleWizardView: React.FC<ProfessionalStyleWizardViewProps> = 
                 {/* Rectángulo */}
                 <button
                   onClick={() => setBodyShape('rectangulo')}
-                  className={`p-4 rounded-xl border-2 transition-all text-left ${
-                    bodyShape === 'rectangulo'
+                  className={`p-4 rounded-xl border-2 transition-all text-left cursor-pointer ${bodyShape === 'rectangulo'
                       ? 'border-purple-500 bg-purple-500/20'
                       : 'border-white/20 hover:border-white/40'
-                  }`}
+                    }`}
                 >
-                  <div className="text-3xl mb-2">⬜</div>
+                  <div className="mb-2"><span className="material-symbols-outlined text-3xl">crop_portrait</span></div>
                   <h4 className="font-semibold mb-1">Rectángulo</h4>
                   <p className="text-xs opacity-70">Hombros ≈ Cadera, sin cintura definida</p>
                 </button>
@@ -250,13 +247,12 @@ const ProfessionalStyleWizardView: React.FC<ProfessionalStyleWizardViewProps> = 
                 {/* Reloj de Arena */}
                 <button
                   onClick={() => setBodyShape('reloj_arena')}
-                  className={`p-4 rounded-xl border-2 transition-all text-left ${
-                    bodyShape === 'reloj_arena'
+                  className={`p-4 rounded-xl border-2 transition-all text-left cursor-pointer ${bodyShape === 'reloj_arena'
                       ? 'border-purple-500 bg-purple-500/20'
                       : 'border-white/20 hover:border-white/40'
-                  }`}
+                    }`}
                 >
-                  <div className="text-3xl mb-2">⏳</div>
+                  <div className="mb-2"><span className="material-symbols-outlined text-3xl">hourglass_empty</span></div>
                   <h4 className="font-semibold mb-1">Reloj de Arena</h4>
                   <p className="text-xs opacity-70">Hombros ≈ Cadera, cintura marcada</p>
                 </button>
@@ -264,13 +260,12 @@ const ProfessionalStyleWizardView: React.FC<ProfessionalStyleWizardViewProps> = 
                 {/* Oval */}
                 <button
                   onClick={() => setBodyShape('oval')}
-                  className={`p-4 rounded-xl border-2 transition-all text-left md:col-span-2 ${
-                    bodyShape === 'oval'
+                  className={`p-4 rounded-xl border-2 transition-all text-left md:col-span-2 cursor-pointer ${bodyShape === 'oval'
                       ? 'border-purple-500 bg-purple-500/20'
                       : 'border-white/20 hover:border-white/40'
-                  }`}
+                    }`}
                 >
-                  <div className="text-3xl mb-2">⭕</div>
+                  <div className="mb-2"><span className="material-symbols-outlined text-3xl">circle</span></div>
                   <h4 className="font-semibold mb-1">Oval</h4>
                   <p className="text-xs opacity-70">Sin definición marcada de cintura</p>
                 </button>
@@ -330,24 +325,22 @@ const ProfessionalStyleWizardView: React.FC<ProfessionalStyleWizardViewProps> = 
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     onClick={() => setUndertone('warm')}
-                    className={`p-3 rounded-lg border-2 transition-all ${
-                      undertone === 'warm'
+                    className={`p-3 rounded-lg border-2 transition-all cursor-pointer ${undertone === 'warm'
                         ? 'border-yellow-500 bg-yellow-500/20'
                         : 'border-white/20 hover:border-white/40'
-                    }`}
+                      }`}
                   >
-                    <div className="text-2xl mb-1">☀️</div>
+                    <div className="flex justify-center mb-1"><span className="material-symbols-outlined text-2xl text-yellow-500 mb-1">wb_sunny</span></div>
                     <div className="text-sm font-semibold">Dorado/Cálido</div>
                   </button>
                   <button
                     onClick={() => setUndertone('cool')}
-                    className={`p-3 rounded-lg border-2 transition-all ${
-                      undertone === 'cool'
+                    className={`p-3 rounded-lg border-2 transition-all cursor-pointer ${undertone === 'cool'
                         ? 'border-blue-500 bg-blue-500/20'
                         : 'border-white/20 hover:border-white/40'
-                    }`}
+                      }`}
                   >
-                    <div className="text-2xl mb-1">❄️</div>
+                    <div className="flex justify-center mb-1"><span className="material-symbols-outlined text-2xl text-blue-500 mb-1">ac_unit</span></div>
                     <div className="text-sm font-semibold">Plateado/Frío</div>
                   </button>
                 </div>
@@ -392,11 +385,10 @@ const ProfessionalStyleWizardView: React.FC<ProfessionalStyleWizardViewProps> = 
                     <button
                       key={level}
                       onClick={() => setContrastLevel(level)}
-                      className={`p-3 rounded-lg border-2 transition-all ${
-                        contrastLevel === level
+                      className={`p-3 rounded-lg border-2 transition-all cursor-pointer ${contrastLevel === level
                           ? 'border-purple-500 bg-purple-500/20'
                           : 'border-white/20 hover:border-white/40'
-                      }`}
+                        }`}
                     >
                       <div className="text-sm font-semibold capitalize">{level}</div>
                     </button>
@@ -427,11 +419,10 @@ const ProfessionalStyleWizardView: React.FC<ProfessionalStyleWizardViewProps> = 
                     <button
                       key={item}
                       onClick={() => toggleLove(item)}
-                      className={`px-3 py-1.5 rounded-full text-sm transition-all ${
-                        loves.includes(item)
+                      className={`px-3 py-1.5 rounded-full text-sm transition-all cursor-pointer ${loves.includes(item)
                           ? 'bg-pink-500 text-white'
                           : 'bg-white/10 hover:bg-white/20'
-                      }`}
+                        }`}
                     >
                       {item}
                     </button>
@@ -450,11 +441,10 @@ const ProfessionalStyleWizardView: React.FC<ProfessionalStyleWizardViewProps> = 
                     <button
                       key={item}
                       onClick={() => toggleHate(item)}
-                      className={`px-3 py-1.5 rounded-full text-sm transition-all ${
-                        hates.includes(item)
+                      className={`px-3 py-1.5 rounded-full text-sm transition-all cursor-pointer ${hates.includes(item)
                           ? 'bg-red-500 text-white'
                           : 'bg-white/10 hover:bg-white/20'
-                      }`}
+                        }`}
                     >
                       {item}
                     </button>
@@ -468,7 +458,7 @@ const ProfessionalStyleWizardView: React.FC<ProfessionalStyleWizardViewProps> = 
           {step === 5 && (
             <div className="space-y-6 animate-fade-in">
               <div className="text-center">
-                <div className="text-6xl mb-4">🎉</div>
+                <div className="flex justify-center mb-4"><span className="material-symbols-outlined text-6xl text-pink-400">celebration</span></div>
                 <h3 className="text-2xl font-bold mb-2">¡Tu perfil está listo!</h3>
                 <p className="text-sm opacity-70">
                   Revisá los datos antes de confirmar
@@ -505,13 +495,13 @@ const ProfessionalStyleWizardView: React.FC<ProfessionalStyleWizardViewProps> = 
                     <h4 className="font-semibold mb-2">Preferencias</h4>
                     {loves.length > 0 && (
                       <div className="mb-2">
-                        <p className="text-xs opacity-60 mb-1">❤️ Me encanta:</p>
+                        <p className="text-xs opacity-60 mb-1 flex items-center gap-1"><span className="material-symbols-outlined text-sm text-pink-500">favorite</span> Me encanta:</p>
                         <p className="text-sm opacity-80">{loves.join(', ')}</p>
                       </div>
                     )}
                     {hates.length > 0 && (
                       <div>
-                        <p className="text-xs opacity-60 mb-1">❌ Evito:</p>
+                        <p className="text-xs opacity-60 mb-1 flex items-center gap-1"><span className="material-symbols-outlined text-sm text-red-500">block</span> Evito:</p>
                         <p className="text-sm opacity-80">{hates.join(', ')}</p>
                       </div>
                     )}

@@ -221,7 +221,7 @@ export const QuickStatsWidget: React.FC<QuickStatsWidgetProps> = ({
                     className={`h-full ${cat.color} rounded-full`}
                   />
                 </div>
-                <p className="text-[10px] text-text-secondary dark:text-gray-500 mt-1 text-center">
+                <p className="text-xs text-text-secondary dark:text-gray-500 mt-1 text-center">
                   {cat.label}
                 </p>
               </div>

@@ -289,7 +289,7 @@ const ProfileView = ({
                                             <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent"></div>
                                         </motion.div>
                                         <span className="text-xs font-medium text-gray-500 truncate w-full text-center">{bar.label}</span>
-                                        <span className="text-[10px] text-gray-400">{bar.count}</span>
+                                        <span className="text-xs text-gray-400">{bar.count}</span>
                                     </div>
                                 ))}
                             </div>
@@ -353,7 +353,7 @@ const ProfileView = ({
                                 <div className="p-2 bg-teal-100 text-teal-600 rounded-lg relative">
                                     <span className="material-symbols-outlined">swap_horiz</span>
                                     {pendingRequests > 0 && (
-                                        <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                                        <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center">
                                             {pendingRequests}
                                         </span>
                                     )}

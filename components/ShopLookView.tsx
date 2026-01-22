@@ -260,7 +260,7 @@ export default function ShopLookView({ onClose }: ShopLookViewProps) {
                     >
                       <span className="material-symbols-outlined text-2xl mb-2 block">{link.icon}</span>
                       <span className="text-sm font-medium">{link.name}</span>
-                      <span className="block text-[10px] text-emerald-400 font-bold uppercase mt-1">Afiliado</span>
+                      <span className="block text-xs text-emerald-400 font-bold uppercase mt-1">Afiliado</span>
                     </a>
                   ))}
                 </div>

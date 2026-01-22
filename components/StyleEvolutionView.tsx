@@ -348,7 +348,7 @@ const StyleEvolutionView = ({ closet, onClose }: StyleEvolutionViewProps) => {
                                             <ul className="space-y-1">
                                                 {trend.evidence.map((ev, idx) => (
                                                     <li key={idx} className="text-text-secondary dark:text-gray-400 text-xs flex items-start gap-1">
-                                                        <span className="material-symbols-outlined text-[10px] mt-0.5">check_circle</span>
+                                                        <span className="material-symbols-outlined text-xs mt-0.5">check_circle</span>
                                                         <span>{ev}</span>
                                                     </li>
                                                 ))}

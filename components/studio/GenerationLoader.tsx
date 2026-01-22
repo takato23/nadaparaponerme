@@ -83,7 +83,7 @@ export const GenerationLoader: React.FC<GenerationLoaderProps> = ({ userImage })
                     >
                         Generando
                     </motion.p>
-                    <p className="text-[9px] text-purple-200/80 mt-1">Creando tu look...</p>
+                    <p className="text-xs text-purple-200/80 mt-1">Creando tu look...</p>
                 </div>
             </motion.div>
         </div>

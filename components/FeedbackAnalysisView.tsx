@@ -193,8 +193,8 @@ const FeedbackAnalysisView = ({ closet, savedOutfits, onClose }: FeedbackAnalysi
 
         {/* Top Preferences */}
         <Card variant="glass" padding="lg" rounded="3xl">
-          <h3 className="text-lg font-bold text-text-primary dark:text-gray-200 mb-4">
-            ❤️ Lo que Más Te Gusta
+          <h3 className="text-lg font-bold text-text-primary dark:text-gray-200 mb-4 flex items-center gap-2">
+            <span className="material-symbols-outlined text-red-500">favorite</span> Lo que Más Te Gusta
           </h3>
           <div className="space-y-3">
             {insights.top_preferences.map(pattern => renderPreferencePattern(pattern, true))}
@@ -204,8 +204,8 @@ const FeedbackAnalysisView = ({ closet, savedOutfits, onClose }: FeedbackAnalysi
         {/* Least Favorites */}
         {insights.least_favorites.length > 0 && (
           <Card variant="glass" padding="lg" rounded="3xl">
-            <h3 className="text-lg font-bold text-text-primary dark:text-gray-200 mb-4">
-              👎 Lo que Menos Te Gusta
+            <h3 className="text-lg font-bold text-text-primary dark:text-gray-200 mb-4 flex items-center gap-2">
+              <span className="material-symbols-outlined text-orange-500">thumb_down</span> Lo que Menos Te Gusta
             </h3>
             <div className="space-y-3">
               {insights.least_favorites.map(pattern => renderPreferencePattern(pattern, false))}
@@ -215,8 +215,8 @@ const FeedbackAnalysisView = ({ closet, savedOutfits, onClose }: FeedbackAnalysi
 
         {/* Style Evolution */}
         <Card variant="glass" padding="lg" rounded="3xl">
-          <h3 className="text-lg font-bold text-text-primary dark:text-gray-200 mb-4">
-            📈 Evolución de tu Estilo
+          <h3 className="text-lg font-bold text-text-primary dark:text-gray-200 mb-4 flex items-center gap-2">
+            <span className="material-symbols-outlined text-purple-500">trending_up</span> Evolución de tu Estilo
           </h3>
           <p className="text-text-secondary dark:text-gray-300 leading-relaxed">
             {insights.style_evolution}
@@ -225,8 +225,8 @@ const FeedbackAnalysisView = ({ closet, savedOutfits, onClose }: FeedbackAnalysi
 
         {/* Improvement Suggestions */}
         <Card variant="glass" padding="lg" rounded="3xl">
-          <h3 className="text-lg font-bold text-text-primary dark:text-gray-200 mb-4">
-            💡 Sugerencias de Mejora
+          <h3 className="text-lg font-bold text-text-primary dark:text-gray-200 mb-4 flex items-center gap-2">
+            <span className="material-symbols-outlined text-yellow-500">lightbulb</span> Sugerencias de Mejora
           </h3>
           <ul className="space-y-2">
             {insights.improvement_suggestions.map((suggestion, idx) => (
@@ -240,8 +240,8 @@ const FeedbackAnalysisView = ({ closet, savedOutfits, onClose }: FeedbackAnalysi
 
         {/* Shopping Recommendations */}
         <Card variant="glass" padding="lg" rounded="3xl">
-          <h3 className="text-lg font-bold text-text-primary dark:text-gray-200 mb-4">
-            🛍️ Recomendaciones de Compra
+          <h3 className="text-lg font-bold text-text-primary dark:text-gray-200 mb-4 flex items-center gap-2">
+            <span className="material-symbols-outlined text-pink-500">shopping_bag</span> Recomendaciones de Compra
           </h3>
           <ul className="space-y-2">
             {insights.shopping_recommendations.map((rec, idx) => (
@@ -256,8 +256,8 @@ const FeedbackAnalysisView = ({ closet, savedOutfits, onClose }: FeedbackAnalysi
         {/* Unused Potential */}
         {insights.unused_potential.length > 0 && (
           <Card variant="glass" padding="lg" rounded="3xl">
-            <h3 className="text-lg font-bold text-text-primary dark:text-gray-200 mb-4">
-              ✨ Potencial Sin Explotar
+            <h3 className="text-lg font-bold text-text-primary dark:text-gray-200 mb-4 flex items-center gap-2">
+              <span className="material-symbols-outlined text-amber-500">auto_awesome</span> Potencial Sin Explotar
             </h3>
             <ul className="space-y-2">
               {insights.unused_potential.map((item, idx) => (

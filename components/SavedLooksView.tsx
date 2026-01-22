@@ -278,7 +278,7 @@ export default function SavedLooksView({ closet }: SavedLooksViewProps) {
             <span className="material-symbols-outlined text-[color:var(--studio-ink)]">arrow_back</span>
           </button>
           <div className="text-right">
-            <p className="text-[10px] uppercase tracking-[0.35em] text-[color:var(--studio-ink-muted)]">Armario de looks</p>
+            <p className="text-xs uppercase tracking-[0.35em] text-[color:var(--studio-ink-muted)]">Armario de looks</p>
             <h1 className="text-2xl font-semibold" style={{ fontFamily: '"Playfair Display", serif' }}>
               Armario de looks
             </h1>
@@ -312,8 +312,8 @@ export default function SavedLooksView({ closet }: SavedLooksViewProps) {
                 />
               </div>
               <div className="flex gap-4 mt-3 text-xs text-[color:var(--studio-ink-muted)]">
-                <span>❤️ {stats.favorites} favoritos</span>
-                <span>🔗 {stats.shared} compartidos</span>
+                <span className="flex items-center gap-1"><span className="material-symbols-outlined text-red-500 text-sm">favorite</span> {stats.favorites} favoritos</span>
+                <span className="flex items-center gap-1"><span className="material-symbols-outlined text-blue-500 text-sm">link</span> {stats.shared} compartidos</span>
               </div>
             </div>
           </motion.section>
@@ -389,16 +389,16 @@ export default function SavedLooksView({ closet }: SavedLooksViewProps) {
                     {/* Badges */}
                     <div className="absolute top-2 right-2 flex gap-1">
                       {look.is_favorite && (
-                        <span className="w-6 h-6 rounded-full bg-white/90 flex items-center justify-center text-xs">❤️</span>
+                        <span className="w-6 h-6 rounded-full bg-white/90 flex items-center justify-center"><span className="material-symbols-rounded text-red-500 text-sm">favorite</span></span>
                       )}
                       {look.is_public && (
-                        <span className="w-6 h-6 rounded-full bg-white/90 flex items-center justify-center text-xs">🔗</span>
+                        <span className="w-6 h-6 rounded-full bg-white/90 flex items-center justify-center"><span className="material-symbols-rounded text-blue-500 text-sm">link</span></span>
                       )}
                     </div>
 
                     {/* Date */}
                     <div className="absolute bottom-2 left-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <p className="text-[10px] text-white/80 truncate">
+                      <p className="text-xs text-white/80 truncate">
                         {new Date(look.created_at).toLocaleDateString('es-AR', {
                           day: 'numeric',
                           month: 'short'
@@ -507,9 +507,8 @@ export default function SavedLooksView({ closet }: SavedLooksViewProps) {
                     {selectedLook.selfie_url && (
                       <button
                         onClick={() => setCompareMode(!compareMode)}
-                        className={`absolute top-4 left-4 w-10 h-10 rounded-full flex items-center justify-center shadow-lg transition ${
-                          compareMode ? 'bg-yellow-500 text-black' : 'bg-white/90 text-gray-700'
-                        }`}
+                        className={`absolute top-4 left-4 w-10 h-10 rounded-full flex items-center justify-center shadow-lg transition ${compareMode ? 'bg-yellow-500 text-black' : 'bg-white/90 text-gray-700'
+                          }`}
                       >
                         <span className="material-symbols-outlined">compare</span>
                       </button>
@@ -537,11 +536,10 @@ export default function SavedLooksView({ closet }: SavedLooksViewProps) {
                     {/* Generation metadata badges */}
                     <div className="flex flex-wrap gap-1.5 mb-4">
                       {/* Model */}
-                      <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                        selectedLook.generation_model?.includes('3-pro')
+                      <span className={`px-2 py-1 rounded-full text-xs font-semibold ${selectedLook.generation_model?.includes('3-pro')
                           ? 'bg-purple-100 text-purple-700'
                           : 'bg-gray-100 text-gray-700'
-                      }`}>
+                        }`}>
                         {selectedLook.generation_model?.includes('3-pro') ? 'Ultra' : 'Rápido'}
                       </span>
                       {/* Preset */}
@@ -577,7 +575,7 @@ export default function SavedLooksView({ closet }: SavedLooksViewProps) {
                                 className="w-6 h-6 rounded object-cover"
                               />
                             ) : (
-                              <span className="w-6 h-6 rounded bg-gray-200 flex items-center justify-center text-[10px]">?</span>
+                              <span className="w-6 h-6 rounded bg-gray-200 flex items-center justify-center text-xs">?</span>
                             )}
                             <span className="text-xs text-gray-600">{slot.slot}</span>
                           </div>
@@ -636,7 +634,7 @@ export default function SavedLooksView({ closet }: SavedLooksViewProps) {
                           <Loader size="small" />
                         ) : (
                           <>
-                            <span className="text-base">{selectedLook.is_favorite ? '❤️' : '🤍'}</span>
+                            <span className="material-symbols-rounded text-lg">{selectedLook.is_favorite ? 'favorite' : 'favorite_border'}</span>
                             {selectedLook.is_favorite ? 'Favorito' : 'Agregar'}
                           </>
                         )}

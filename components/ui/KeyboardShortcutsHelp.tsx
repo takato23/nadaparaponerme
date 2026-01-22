@@ -140,7 +140,7 @@ export function KeyboardShortcutsHelp({ isOpen, onClose }: KeyboardShortcutsHelp
                         {/* Footer */}
                         <div className="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
                             <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
-                                Presioná <kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded text-[10px]">Esc</kbd> para cerrar
+                                Presioná <kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded text-xs">Esc</kbd> para cerrar
                             </p>
                         </div>
                     </motion.div>

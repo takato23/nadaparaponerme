@@ -10,15 +10,24 @@ export default {
   theme: {
     extend: {
       colors: {
-        primary: "#0D9488", // Teal original
-        secondary: "#A78BFA", // Soft Purple
-        accent: "#F472B6", // Rose Pink
+        primary: "#4F46E5", // Indigo 600 - New Primary
+        secondary: "#7C3AED", // Violet 600 - New Secondary
+        accent: "#F97316", // Orange 500 - New Accent
         "background-light": "#F8FAFC", // Cool Gray 50
         "background-dark": "#0F172A", // Slate 900
         "text-primary": "#1E293B", // Slate 800
         "text-secondary": "#64748B", // Slate 500
         "surface-light": "rgba(255, 255, 255, 0.7)",
         "surface-dark": "rgba(15, 23, 42, 0.7)",
+      },
+      fontSize: {
+        xs: ['0.8125rem', { lineHeight: '1.5' }], // 13px
+        sm: ['0.9375rem', { lineHeight: '1.5' }], // 15px
+        base: ['1rem', { lineHeight: '1.6' }], // 16px
+        lg: ['1.125rem', { lineHeight: '1.6' }], // 18px
+        xl: ['1.25rem', { lineHeight: '1.5' }], // 20px
+        '2xl': ['1.5rem', { lineHeight: '1.4' }], // 24px
+        '3xl': ['1.875rem', { lineHeight: '1.3' }], // 30px
       },
       fontFamily: {
         sans: ['Manrope', 'system-ui', 'sans-serif'],

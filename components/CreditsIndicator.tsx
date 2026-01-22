@@ -72,7 +72,7 @@ export function CreditsIndicator({ variant = 'compact', className = '', onClick 
         <span className={`text-xs font-semibold ${colors.text}`}>
           {status.limit === -1 ? '∞' : `${status.remaining}/${status.limit}`}
         </span>
-        <span className="text-[10px] text-gray-400">créditos</span>
+        <span className="text-xs text-gray-400">créditos</span>
       </div>
     </button>
   );

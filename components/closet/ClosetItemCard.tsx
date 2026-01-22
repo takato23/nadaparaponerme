@@ -187,7 +187,7 @@ export default function ClosetItemCard({
           </p>
           {statusBadge && (
             <span
-              className={`mt-1 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border ${statusBadge.className}`}
+              className={`mt-1 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${statusBadge.className}`}
             >
               {statusBadge.label}
             </span>
@@ -197,7 +197,7 @@ export default function ClosetItemCard({
               {item.metadata.vibe_tags.slice(0, 2).map((tag, i) => (
                 <span
                   key={i}
-                  className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-surface-light dark:bg-surface-dark border border-gray-200 dark:border-gray-700 text-text-secondary dark:text-gray-400"
+                  className="text-xs uppercase tracking-wider px-2 py-0.5 rounded-full bg-surface-light dark:bg-surface-dark border border-gray-200 dark:border-gray-700 text-text-secondary dark:text-gray-400"
                 >
                   {tag}
                 </span>
@@ -312,7 +312,7 @@ export default function ClosetItemCard({
 
         {statusBadge && (
           <div className={`absolute top-3 ${isSelectionMode ? 'left-12' : 'left-3'} z-20`}>
-            <span className={`px-2 py-1 rounded-full text-[10px] font-semibold border backdrop-blur-sm ${statusBadge.className}`}>
+            <span className={`px-2 py-1 rounded-full text-xs font-semibold border backdrop-blur-sm ${statusBadge.className}`}>
               {statusBadge.label}
             </span>
           </div>
@@ -483,7 +483,7 @@ export default function ClosetItemCard({
             {item.metadata.vibe_tags.slice(0, 2).map((tag, i) => (
               <span
                 key={i}
-                className="text-[10px] font-medium px-2 py-1 rounded-md bg-white/50 dark:bg-white/10 text-text-secondary dark:text-gray-300 truncate border border-white/20 dark:border-white/5"
+                className="text-xs font-medium px-2 py-1 rounded-md bg-white/50 dark:bg-white/10 text-text-secondary dark:text-gray-300 truncate border border-white/20 dark:border-white/5"
               >
                 {tag}
               </span>

@@ -270,7 +270,7 @@ export const FaceReferenceUploader: React.FC<FaceReferenceUploaderProps> = ({
                                                 <span className="material-symbols-outlined text-sm">close</span>
                                             </button>
                                             {ref.is_primary && (
-                                                <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-primary text-white text-[10px] px-2 py-0.5 rounded-full whitespace-nowrap">
+                                                <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-primary text-white text-xs px-2 py-0.5 rounded-full whitespace-nowrap">
                                                     Principal
                                                 </div>
                                             )}
@@ -290,7 +290,7 @@ export const FaceReferenceUploader: React.FC<FaceReferenceUploaderProps> = ({
                                                 ) : (
                                                     <>
                                                         <span className="material-symbols-outlined text-gray-400">{option.icon}</span>
-                                                        <span className="text-[10px] text-gray-400">Subir</span>
+                                                        <span className="text-xs text-gray-400">Subir</span>
                                                     </>
                                                 )}
                                             </div>

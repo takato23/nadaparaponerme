@@ -186,7 +186,7 @@ const VirtualMirrorView: React.FC<VirtualMirrorViewProps> = ({ closet = [], onOp
                             <div className="absolute inset-0 bg-gradient-to-r from-gray-100 to-gray-300 opacity-0 group-hover:opacity-100 transition-opacity" />
                         </button>
 
-                        <p className="text-[10px] uppercase tracking-widest text-white/30 mt-6">
+                        <p className="text-xs uppercase tracking-widest text-white/30 mt-6">
                             Potenciado por IA
                         </p>
 
@@ -291,7 +291,7 @@ const VirtualMirrorView: React.FC<VirtualMirrorViewProps> = ({ closet = [], onOp
                                         <p className="font-bold capitalize text-sm md:text-base">{selectedItem.metadata.subcategory}</p>
                                         <p className="text-xs text-gray-500 capitalize">{selectedItem.metadata.category}</p>
                                     </div>
-                                    <div className="absolute top-2 right-2 bg-purple-100 text-purple-600 px-2 py-1 rounded text-[10px] font-bold uppercase">
+                                    <div className="absolute top-2 right-2 bg-purple-100 text-purple-600 px-2 py-1 rounded text-xs font-bold uppercase">
                                         {selectedItem.status === 'virtual' ? 'Virtual' : 'Propio'}
                                     </div>
                                 </>
@@ -337,7 +337,7 @@ const VirtualMirrorView: React.FC<VirtualMirrorViewProps> = ({ closet = [], onOp
                     </button>
 
                     {/* Helper text */}
-                    <p className="text-[10px] text-center text-gray-400">
+                    <p className="text-xs text-center text-gray-400">
                         Calidad alta activada
                     </p>
                 </div>
@@ -375,7 +375,7 @@ const VirtualMirrorView: React.FC<VirtualMirrorViewProps> = ({ closet = [], onOp
 
                             {/* Context Label Overlay */}
                             <div className="absolute bottom-6 left-0 right-0 text-center pointer-events-none">
-                                <span className="inline-block px-3 py-1 rounded-full bg-black/30 backdrop-blur-md text-white text-[10px] font-medium uppercase tracking-widest border border-white/20">
+                                <span className="inline-block px-3 py-1 rounded-full bg-black/30 backdrop-blur-md text-white text-xs font-medium uppercase tracking-widest border border-white/20">
                                     {CONTEXTS.find(c => c.id === selectedContext)?.name}
                                 </span>
                             </div>

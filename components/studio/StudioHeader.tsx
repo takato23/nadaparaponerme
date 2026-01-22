@@ -59,7 +59,7 @@ export const StudioHeader: React.FC<StudioHeaderProps> = ({
                                 initial={{ opacity: 0, y: 6, scale: 0.95 }}
                                 animate={{ opacity: 1, y: 0, scale: 1 }}
                                 exit={{ opacity: 0, y: 6, scale: 0.95 }}
-                                className="absolute -bottom-9 right-1/2 translate-x-1/2 px-2 py-1 rounded-lg bg-[color:var(--studio-ink)] text-white text-[10px] font-semibold shadow-lg whitespace-nowrap"
+                                className="absolute -bottom-9 right-1/2 translate-x-1/2 px-2 py-1 rounded-lg bg-[color:var(--studio-ink)] text-white text-xs font-semibold shadow-lg whitespace-nowrap"
                             >
                                 Tu look listo
                             </motion.span>

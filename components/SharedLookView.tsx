@@ -142,7 +142,7 @@ export default function SharedLookView() {
           animate={{ opacity: 1, y: 0 }}
           className="text-center mb-6"
         >
-          <p className="text-[10px] uppercase tracking-[0.35em] text-[color:var(--studio-ink-muted)] mb-1">
+          <p className="text-xs uppercase tracking-[0.35em] text-[color:var(--studio-ink-muted)] mb-1">
             Look compartido
           </p>
           <h1

@@ -165,12 +165,12 @@ const FitResultView = ({ result, inventory, savedOutfits, onSaveOutfit, onVirtua
                           <p className="text-xs font-semibold text-text-primary dark:text-gray-200">
                             {placement.name}
                           </p>
-                          <p className="text-[10px] text-text-secondary dark:text-gray-400">
+                          <p className="text-xs text-text-secondary dark:text-gray-400">
                             {placement.description}
                           </p>
                         </div>
                       </div>
-                      <p className="text-[10px] font-semibold text-emerald-600 mt-2">{placement.cta}</p>
+                      <p className="text-xs font-semibold text-emerald-600 mt-2">{placement.cta}</p>
                     </a>
                   ))}
                 </div>

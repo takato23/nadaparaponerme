@@ -37,7 +37,7 @@ export const HomeQuickActions = ({ actions }: HomeQuickActionsProps) => {
                                 {action.icon}
                             </span>
                         </div>
-                        <span className="text-[10px] sm:text-xs md:text-sm font-bold text-text-secondary group-hover:text-text-primary transition-colors text-center leading-tight px-0.5">
+                        <span className="text-xs sm:text-xs md:text-sm font-bold text-text-secondary group-hover:text-text-primary transition-colors text-center leading-tight px-0.5">
                             {action.label}
                         </span>
                     </button>

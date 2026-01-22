@@ -82,7 +82,7 @@ export const HomeQuickActionsImproved: React.FC<HomeQuickActionsImprovedProps> =
               </motion.span>
             </motion.div>
 
-            <span className="text-[11px] sm:text-xs md:text-sm font-semibold text-text-secondary dark:text-gray-400 group-hover:text-text-primary dark:group-hover:text-gray-200 transition-colors text-center leading-tight px-0.5 line-clamp-1">
+            <span className="text-xs sm:text-xs md:text-sm font-semibold text-text-secondary dark:text-gray-400 group-hover:text-text-primary dark:group-hover:text-gray-200 transition-colors text-center leading-tight px-0.5 line-clamp-1">
               {action.label}
             </span>
           </motion.button>

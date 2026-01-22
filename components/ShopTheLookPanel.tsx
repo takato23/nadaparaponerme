@@ -129,7 +129,7 @@ const ShopTheLookPanel = ({
         <div className="space-y-3">
           {lookPlacements.length > 0 && (
             <div className="space-y-2">
-              <p className="text-[11px] font-bold text-emerald-600 uppercase tracking-wide">
+              <p className="text-xs font-bold text-emerald-600 uppercase tracking-wide">
                 Patrocinado
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -165,7 +165,7 @@ const ShopTheLookPanel = ({
 
           {lookLinks.length > 0 && (
             <div className="space-y-2">
-              <p className="text-[11px] font-bold text-text-secondary uppercase tracking-wide">
+              <p className="text-xs font-bold text-text-secondary uppercase tracking-wide">
                 Buscar el look completo
               </p>
               <div className="grid grid-cols-3 gap-2">
@@ -178,8 +178,8 @@ const ShopTheLookPanel = ({
                     className="p-2 rounded-lg bg-white/60 dark:bg-white/10 border border-white/20 hover:border-emerald-400/50 hover:bg-emerald-50/60 dark:hover:bg-emerald-900/20 transition-all text-center"
                   >
                     <span className="material-symbols-outlined text-lg block mb-1">{link.icon}</span>
-                    <span className="text-[11px] font-semibold">{link.name}</span>
-                    <span className="block text-[9px] text-emerald-600 font-bold uppercase">Afiliado</span>
+                    <span className="text-xs font-semibold">{link.name}</span>
+                    <span className="block text-xs text-emerald-600 font-bold uppercase">Afiliado</span>
                   </a>
                 ))}
               </div>
@@ -216,7 +216,7 @@ const ShopTheLookPanel = ({
                         className="w-12 h-12 rounded-lg object-cover"
                       />
                       {borrowedItemIds?.has(entry.item.id) && (
-                        <span className="absolute -top-1 -right-1 bg-primary text-white text-[9px] px-1.5 py-0.5 rounded-full">
+                        <span className="absolute -top-1 -right-1 bg-primary text-white text-xs px-1.5 py-0.5 rounded-full">
                           Prestado
                         </span>
                       )}
@@ -243,7 +243,7 @@ const ShopTheLookPanel = ({
                   <div className="border-t border-white/30 dark:border-white/10 px-3 py-3 space-y-3 animate-fade-in">
                     {placements.length > 0 && (
                       <div className="space-y-2">
-                        <p className="text-[11px] font-bold text-emerald-600 uppercase tracking-wide">
+                        <p className="text-xs font-bold text-emerald-600 uppercase tracking-wide">
                           Patrocinado
                         </p>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -279,7 +279,7 @@ const ShopTheLookPanel = ({
 
                     {quickLinks.length > 0 && (
                       <div className="space-y-2">
-                        <p className="text-[11px] font-bold text-text-secondary uppercase tracking-wide">
+                        <p className="text-xs font-bold text-text-secondary uppercase tracking-wide">
                           Links afiliados
                         </p>
                         <div className="grid grid-cols-3 gap-2">
@@ -294,7 +294,7 @@ const ShopTheLookPanel = ({
                               <span className="material-symbols-outlined text-lg block mb-1">
                                 {link.icon}
                               </span>
-                              <span className="text-[11px] font-semibold">{link.name}</span>
+                              <span className="text-xs font-semibold">{link.name}</span>
                             </a>
                           ))}
                         </div>
@@ -302,7 +302,7 @@ const ShopTheLookPanel = ({
                     )}
 
                     <div className="space-y-2">
-                      <p className="text-[11px] font-bold text-text-secondary uppercase tracking-wide">
+                      <p className="text-xs font-bold text-text-secondary uppercase tracking-wide">
                         Resultados AI
                       </p>
 

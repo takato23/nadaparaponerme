@@ -93,7 +93,7 @@ export const PresetBottomSheet: React.FC<PresetBottomSheetProps> = ({
 
                                             {/* Premium badge for editorial */}
                                             {preset.id === 'editorial' && (
-                                                <span className="absolute top-3 right-3 px-1.5 py-0.5 bg-purple-100 text-purple-700 text-[9px] font-bold rounded-full">
+                                                <span className="absolute top-3 right-3 px-1.5 py-0.5 bg-purple-100 text-purple-700 text-xs font-bold rounded-full">
                                                     PRO
                                                 </span>
                                             )}

@@ -174,7 +174,7 @@ const FriendProfileView = ({ friend, onClose, onAddBorrowedItems, onTryBorrowedI
                                 {friend.name}
                             </h1>
                             {isCloseFriendStatus && (
-                                <span className="text-[10px] text-yellow-600 dark:text-yellow-500 font-medium flex items-center gap-0.5">
+                                <span className="text-xs text-yellow-600 dark:text-yellow-500 font-medium flex items-center gap-0.5">
                                     <span className="material-symbols-oriented text-xs">star</span>
                                     Close Friend
                                 </span>
@@ -198,15 +198,15 @@ const FriendProfileView = ({ friend, onClose, onAddBorrowedItems, onTryBorrowedI
                                 <div className="flex gap-4 mb-2">
                                     <div className="text-center">
                                         <div className="font-bold text-base bg-gradient-to-br from-primary to-purple-600 bg-clip-text text-transparent">{stats.outfits}</div>
-                                        <div className="text-[10px] font-medium text-text-secondary uppercase">outfits</div>
+                                        <div className="text-xs font-medium text-text-secondary uppercase">outfits</div>
                                     </div>
                                     <div className="text-center">
                                         <div className="font-bold text-base bg-gradient-to-br from-primary to-purple-600 bg-clip-text text-transparent">{stats.followers}</div>
-                                        <div className="text-[10px] font-medium text-text-secondary uppercase">seguidores</div>
+                                        <div className="text-xs font-medium text-text-secondary uppercase">seguidores</div>
                                     </div>
                                     <div className="text-center">
                                         <div className="font-bold text-base bg-gradient-to-br from-primary to-purple-600 bg-clip-text text-transparent">{stats.items}</div>
-                                        <div className="text-[10px] font-medium text-text-secondary uppercase">prendas</div>
+                                        <div className="text-xs font-medium text-text-secondary uppercase">prendas</div>
                                     </div>
                                 </div>
 
@@ -237,18 +237,18 @@ const FriendProfileView = ({ friend, onClose, onAddBorrowedItems, onTryBorrowedI
                                         </div>
                                         <div className="text-left">
                                             <div className="font-bold text-sm bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">{styleMatch}% Match</div>
-                                            <div className="text-[10px] text-text-secondary">Alta compatibilidad</div>
+                                            <div className="text-xs text-text-secondary">Alta compatibilidad</div>
                                         </div>
                                     </div>
                                     <span className="material-symbols-outlined text-sm text-text-secondary">{showStyleMatch ? 'expand_less' : 'expand_more'}</span>
                                 </div>
                                 {showStyleMatch && (
                                     <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700 space-y-1">
-                                        <div className="flex justify-between text-[10px]">
+                                        <div className="flex justify-between text-xs">
                                             <span className="text-text-secondary">Colores</span>
                                             <span className="font-semibold text-primary">92%</span>
                                         </div>
-                                        <div className="flex justify-between text-[10px]">
+                                        <div className="flex justify-between text-xs">
                                             <span className="text-text-secondary">Estilo</span>
                                             <span className="font-semibold text-primary">85%</span>
                                         </div>
@@ -261,9 +261,9 @@ const FriendProfileView = ({ friend, onClose, onAddBorrowedItems, onTryBorrowedI
                                 {badges.map((badge, i) => (
                                     <div key={i} className="flex items-center gap-1 px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-800 hover:shadow-sm transition-all">
                                         <div className="w-4 h-4 rounded-full bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center">
-                                            <span className="material-symbols-outlined text-white text-[10px]">{badge.icon}</span>
+                                            <span className="material-symbols-outlined text-white text-xs">{badge.icon}</span>
                                         </div>
-                                        <span className="text-[10px] font-semibold text-text-secondary">{badge.label}</span>
+                                        <span className="text-xs font-semibold text-text-secondary">{badge.label}</span>
                                     </div>
                                 ))}
                             </div>
@@ -277,7 +277,7 @@ const FriendProfileView = ({ friend, onClose, onAddBorrowedItems, onTryBorrowedI
                             { key: 'closet', icon: 'checkroom', label: 'Armario' },
                             { key: 'stats', icon: 'analytics', label: 'Stats' },
                         ].map((tab) => (
-                            <button key={tab.key} onClick={() => setActiveTab(tab.key as Tab)} className={`flex-1 py-2.5 text-[10px] font-bold relative transition-all ${activeTab === tab.key ? 'text-primary' : 'text-text-secondary'}`}>
+                            <button key={tab.key} onClick={() => setActiveTab(tab.key as Tab)} className={`flex-1 py-2.5 text-xs font-bold relative transition-all ${activeTab === tab.key ? 'text-primary' : 'text-text-secondary'}`}>
                                 <span className="flex flex-col items-center gap-0.5">
                                     <span className="material-symbols-outlined text-base">{tab.icon}</span>
                                     {tab.label}
@@ -319,10 +319,10 @@ const FriendProfileView = ({ friend, onClose, onAddBorrowedItems, onTryBorrowedI
                                             </div>
                                             <div>
                                                 <p className="font-semibold text-xs">{selectedItems.length} {selectedItems.length === 1 ? 'prenda' : 'prendas'}</p>
-                                                <p className="text-[10px] text-text-secondary">Seleccionadas</p>
+                                                <p className="text-xs text-text-secondary">Seleccionadas</p>
                                             </div>
                                         </div>
-                                        <button onClick={() => { setSelectedItems([]); setSelectedIds(new Set()); }} className="text-[10px] font-semibold text-primary">Limpiar</button>
+                                        <button onClick={() => { setSelectedItems([]); setSelectedIds(new Set()); }} className="text-xs font-semibold text-primary">Limpiar</button>
                                     </div>
                                 </div>
                             )}
@@ -339,7 +339,7 @@ const FriendProfileView = ({ friend, onClose, onAddBorrowedItems, onTryBorrowedI
                                     </div>
                                     <div>
                                         <h3 className="font-bold text-sm">Style DNA</h3>
-                                        <p className="text-[10px] text-text-secondary">Análisis de estilo</p>
+                                        <p className="text-xs text-text-secondary">Análisis de estilo</p>
                                     </div>
                                 </div>
                                 <div className="space-y-2">
@@ -368,7 +368,7 @@ const FriendProfileView = ({ friend, onClose, onAddBorrowedItems, onTryBorrowedI
                                     </div>
                                     <div>
                                         <h3 className="font-bold text-sm">Paleta</h3>
-                                        <p className="text-[10px] text-text-secondary">Colores favoritos</p>
+                                        <p className="text-xs text-text-secondary">Colores favoritos</p>
                                     </div>
                                 </div>
                                 <div className="flex gap-3">
@@ -380,7 +380,7 @@ const FriendProfileView = ({ friend, onClose, onAddBorrowedItems, onTryBorrowedI
                                     ].map((color, i) => (
                                         <div key={i} className="flex-1 text-center">
                                             <div className={`w-10 h-10 mx-auto rounded-xl ${color.color} mb-1`}></div>
-                                            <p className="text-[10px] font-semibold">{color.name}</p>
+                                            <p className="text-xs font-semibold">{color.name}</p>
                                         </div>
                                     ))}
                                 </div>
@@ -393,7 +393,7 @@ const FriendProfileView = ({ friend, onClose, onAddBorrowedItems, onTryBorrowedI
                                     </div>
                                     <div>
                                         <h3 className="font-bold text-sm">Actividad</h3>
-                                        <p className="text-[10px] text-text-secondary">Últimos 30 días</p>
+                                        <p className="text-xs text-text-secondary">Últimos 30 días</p>
                                     </div>
                                 </div>
                                 <div className="grid grid-cols-2 gap-2">
@@ -404,7 +404,7 @@ const FriendProfileView = ({ friend, onClose, onAddBorrowedItems, onTryBorrowedI
                                         <div key={i} className="liquid-glass rounded-xl p-2 text-center">
                                             <span className="material-symbols-outlined text-primary text-lg">{metric.icon}</span>
                                             <div className="text-xl font-bold bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">{metric.value}</div>
-                                            <div className="text-[10px] font-medium text-text-secondary uppercase">{metric.label}</div>
+                                            <div className="text-xs font-medium text-text-secondary uppercase">{metric.label}</div>
                                         </div>
                                     ))}
                                 </div>
@@ -441,7 +441,7 @@ const FriendProfileView = ({ friend, onClose, onAddBorrowedItems, onTryBorrowedI
                             </button>
                         </div>
                         {!hasSelection && (
-                            <p className="text-[10px] text-center text-text-secondary">Selecciona prendas para probar.</p>
+                            <p className="text-xs text-center text-text-secondary">Selecciona prendas para probar.</p>
                         )}
                     </div>
                 )}

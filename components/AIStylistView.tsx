@@ -422,7 +422,7 @@ const AIStylistView: React.FC<AIStylistViewProps> = ({
                         </>
                       )}
                     </span>
-                    <span className="text-[10px] text-gray-400">mensajes</span>
+                    <span className="text-xs text-gray-400">mensajes</span>
                   </div>
                 </div>
                 {/* Mini progress bar */}
@@ -563,12 +563,12 @@ const AIStylistView: React.FC<AIStylistViewProps> = ({
                                   <div className="relative aspect-square rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-700 ring-1 ring-gray-200 dark:ring-gray-600">
                                     <img src={item.imageDataUrl} alt="" className="w-full h-full object-cover" />
                                     {item.isAIGenerated && (
-                                      <div className="absolute top-1.5 right-1.5 px-1.5 py-0.5 bg-violet-600 text-white text-[10px] rounded font-medium">
+                                      <div className="absolute top-1.5 right-1.5 px-1.5 py-0.5 bg-violet-600 text-white text-xs rounded font-medium">
                                         AI
                                       </div>
                                     )}
                                   </div>
-                                  <p className="text-[10px] text-center text-gray-500 dark:text-gray-400 font-medium">{label}</p>
+                                  <p className="text-xs text-center text-gray-500 dark:text-gray-400 font-medium">{label}</p>
                                 </div>
                               ))}
                             </div>
@@ -583,7 +583,7 @@ const AIStylistView: React.FC<AIStylistViewProps> = ({
                           </motion.div>
                         )}
 
-                        <p className={`text-[10px] mt-1.5 px-1 text-gray-400 ${isUser ? 'text-right' : ''}`}>
+                        <p className={`text-xs mt-1.5 px-1 text-gray-400 ${isUser ? 'text-right' : ''}`}>
                           {new Date(msg.timestamp).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
                         </p>
                       </div>

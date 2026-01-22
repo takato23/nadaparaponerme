@@ -154,7 +154,7 @@ export function Tooltip({
                                     px-1.5 py-0.5
                                     bg-gray-700 dark:bg-gray-300
                                     rounded
-                                    text-[10px] font-mono
+                                    text-xs font-mono
                                     opacity-70
                                 ">
                                     {shortcut}

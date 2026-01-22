@@ -177,7 +177,7 @@ const DigitalTwinSetup: React.FC<DigitalTwinSetupProps> = ({ onClose, onComplete
                                     />
                                 ))}
                             </div>
-                            <span className="text-[10px] font-bold uppercase tracking-widest text-white/40">Paso {step + 1}/5</span>
+                            <span className="text-xs font-bold uppercase tracking-widest text-white/40">Paso {step + 1}/5</span>
                         </div>
 
                         {/* Content Area */}

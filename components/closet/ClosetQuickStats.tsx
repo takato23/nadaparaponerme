@@ -77,7 +77,7 @@ export default function ClosetQuickStats({
               <div className="text-2xl font-bold text-text-primary dark:text-gray-100 leading-none mb-1">
                 {animatedTotal}
               </div>
-              <div className="text-[10px] font-bold text-text-secondary/70 dark:text-gray-500 uppercase tracking-wider">
+              <div className="text-xs font-bold text-text-secondary/70 dark:text-gray-500 uppercase tracking-wider">
                 Prendas totales
               </div>
             </div>
@@ -94,7 +94,7 @@ export default function ClosetQuickStats({
               <div className="text-2xl font-bold text-text-primary dark:text-gray-100 leading-none mb-1">
                 {animatedVersatility}
               </div>
-              <div className="text-[10px] font-bold text-text-secondary/70 dark:text-gray-500 uppercase tracking-wider">
+              <div className="text-xs font-bold text-text-secondary/70 dark:text-gray-500 uppercase tracking-wider">
                 Versatilidad
               </div>
             </div>
@@ -104,7 +104,7 @@ export default function ClosetQuickStats({
         {/* Top Category */}
         {topCategory && (
           <div className="bg-white/40 dark:bg-gray-800/40 backdrop-blur-md p-4 rounded-2xl border border-white/10 shadow-sm hover:shadow-md transition-shadow">
-            <div className="text-[10px] font-bold text-text-secondary/70 dark:text-gray-500 uppercase tracking-wider mb-2">
+            <div className="text-xs font-bold text-text-secondary/70 dark:text-gray-500 uppercase tracking-wider mb-2">
               Categoría Top
             </div>
             <div className="flex items-center justify-between">

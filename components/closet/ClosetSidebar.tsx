@@ -125,7 +125,7 @@ export default function ClosetSidebar({
               </div>
               <div className="text-left">
                 <p className="font-bold text-sm text-gray-800 dark:text-gray-200">Probar look</p>
-                <p className="text-[10px] text-gray-500 dark:text-gray-400">2 prendas + modo foto</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">2 prendas + modo foto</p>
               </div>
             </div>
             <span className="material-symbols-outlined text-gray-400 group-hover:translate-x-1 transition-transform text-sm">arrow_forward_ios</span>
@@ -144,7 +144,7 @@ export default function ClosetSidebar({
               </div>
               <div className="text-left">
                 <p className="font-bold text-sm text-gray-800 dark:text-gray-200">Armario de looks</p>
-                <p className="text-[10px] text-gray-500 dark:text-gray-400">Tus looks guardados</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Tus looks guardados</p>
               </div>
             </div>
             <span className="material-symbols-outlined text-gray-400 group-hover:translate-x-1 transition-transform text-sm">arrow_forward_ios</span>
@@ -171,7 +171,7 @@ export default function ClosetSidebar({
               Filtros Activos
             </h3>
             {activeFiltersCount > 0 && (
-              <span className="px-2 py-0.5 rounded-full bg-primary text-white text-[10px] font-bold shadow-sm">
+              <span className="px-2 py-0.5 rounded-full bg-primary text-white text-xs font-bold shadow-sm">
                 {activeFiltersCount}
               </span>
             )}
@@ -194,7 +194,7 @@ export default function ClosetSidebar({
 
       {/* Footer / Branding */}
       <div className="p-4 text-center border-t border-white/10">
-        <p className="text-[10px] text-text-secondary/50 dark:text-gray-600 font-medium">
+        <p className="text-xs text-text-secondary/50 dark:text-gray-600 font-medium">
           Ojo de Loca v1.0
         </p>
       </div>

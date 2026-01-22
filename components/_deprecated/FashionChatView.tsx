@@ -197,7 +197,7 @@ const FashionChatView = ({
                       className="w-full h-full object-cover"
                     />
                     {topItem.isAIGenerated && (
-                      <div className="absolute top-1 right-1 bg-purple-600 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold flex items-center gap-0.5">
+                      <div className="absolute top-1 right-1 bg-purple-600 text-white text-xs px-1.5 py-0.5 rounded-full font-bold flex items-center gap-0.5">
                         <span className="material-symbols-outlined" style={{ fontSize: '10px' }}>auto_awesome</span>
                         AI
                       </div>
@@ -212,7 +212,7 @@ const FashionChatView = ({
                       className="w-full h-full object-cover"
                     />
                     {bottomItem.isAIGenerated && (
-                      <div className="absolute top-1 right-1 bg-purple-600 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold flex items-center gap-0.5">
+                      <div className="absolute top-1 right-1 bg-purple-600 text-white text-xs px-1.5 py-0.5 rounded-full font-bold flex items-center gap-0.5">
                         <span className="material-symbols-outlined" style={{ fontSize: '10px' }}>auto_awesome</span>
                         AI
                       </div>
@@ -227,7 +227,7 @@ const FashionChatView = ({
                       className="w-full h-full object-cover"
                     />
                     {shoesItem.isAIGenerated && (
-                      <div className="absolute top-1 right-1 bg-purple-600 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold flex items-center gap-0.5">
+                      <div className="absolute top-1 right-1 bg-purple-600 text-white text-xs px-1.5 py-0.5 rounded-full font-bold flex items-center gap-0.5">
                         <span className="material-symbols-outlined" style={{ fontSize: '10px' }}>auto_awesome</span>
                         AI
                       </div>

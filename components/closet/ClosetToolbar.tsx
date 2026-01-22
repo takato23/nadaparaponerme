@@ -259,7 +259,7 @@ export default function ClosetToolbar({
           <span className={`material-symbols-outlined text-lg ${activeFiltersCount > 0 ? 'fill-current' : ''}`}>tune</span>
           <span>Filtros</span>
           {activeFiltersCount > 0 && (
-            <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-primary text-white text-[10px] font-bold flex items-center justify-center shadow-sm animate-bounce-small">
+            <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-primary text-white text-xs font-bold flex items-center justify-center shadow-sm animate-bounce-small">
               {activeFiltersCount}
             </span>
           )}
