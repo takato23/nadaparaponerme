@@ -14,7 +14,7 @@ import ClothingCompatibilityWarning from './ClothingCompatibilityWarning';
 import { getFaceReferences, FaceReference } from '../../src/services/faceReferenceService';
 import { useStudioGeneration } from '../../contexts/AIGenerationContext';
 import { useSubscription } from '../../hooks/useSubscription';
-import { useAuth } from '../../src/hooks/useAuth';
+import { useAuth } from '../../hooks/useAuth';
 import { StudioHeader } from './StudioHeader';
 import { StudioToolbar } from './StudioToolbar';
 import { GenerationLoader } from './GenerationLoader';

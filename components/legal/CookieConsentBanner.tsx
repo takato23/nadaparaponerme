@@ -2,7 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { ROUTES } from '../../src/routes';
 import { setConsentPreferences } from '../../src/services/consentService';
-import { useConsentPreferences } from '../../src/hooks/useConsentPreferences';
+import { useConsentPreferences } from '../../hooks/useConsentPreferences';
 
 export const CookieConsentBanner: React.FC = () => {
   const consent = useConsentPreferences();

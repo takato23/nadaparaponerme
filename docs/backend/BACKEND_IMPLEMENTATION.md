@@ -12,7 +12,7 @@ Backend completo con migración gradual de localStorage a Supabase usando featur
 
 **Archivos creados:**
 - `src/config/features.ts` - Sistema de feature flags (6 flags)
-- `src/hooks/useFeatureFlag.ts` - Hook React reactivo para flags
+- `hooks/useFeatureFlag.ts` - Hook React reactivo para flags
 - `src/services/migrationService.ts` - Migración automática localStorage → Supabase
 - `src/components/MigrationModal.tsx` - UI del modal de migración con progreso
 - `src/vite-env.d.ts` - Definiciones TypeScript para Vite
@@ -32,7 +32,7 @@ Backend completo con migración gradual de localStorage a Supabase usando featur
 ### ✅ Fase 1: Autenticación con Supabase Auth (3-4h)
 
 **Archivos creados:**
-- `src/hooks/useAuth.ts` - Hook unificado de autenticación
+- `hooks/useAuth.ts` - Hook unificado de autenticación
 
 **Archivos modificados:**
 - `components/AuthView.tsx` - Login/signup real con validación

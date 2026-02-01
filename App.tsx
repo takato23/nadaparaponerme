@@ -18,8 +18,8 @@ import { dataUrlToFile } from './src/lib/supabase';
 import * as preferencesService from './src/services/preferencesService';
 import { communityData } from './data/communityData';
 import { sampleData } from './data/sampleData';
-import { useFeatureFlag } from './src/hooks/useFeatureFlag';
-import { useAuth } from './src/hooks/useAuth';
+import { useFeatureFlag } from './hooks/useFeatureFlag';
+import { useAuth } from './hooks/useAuth';
 import * as closetService from './src/services/closetService';
 import * as outfitService from './src/services/outfitService';
 import * as paymentService from './src/services/paymentService';
@@ -47,7 +47,7 @@ import { CreditsDetailView } from './components/CreditsDetailView';
 import AuthEyeScreen from './components/AuthEyeScreen';
 import CookieConsentBanner from './components/legal/CookieConsentBanner';
 import { PWAInstallPrompt } from './components/PWAInstallPrompt';
-import { useConsentPreferences } from './src/hooks/useConsentPreferences';
+import { useConsentPreferences } from './hooks/useConsentPreferences';
 
 // Eager load critical components (above the fold)
 import ClosetGrid from './components/ClosetGrid';

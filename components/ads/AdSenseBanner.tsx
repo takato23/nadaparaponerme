@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { ADSENSE_CLIENT_ID, ADSENSE_ENABLED } from '../../src/config/runtime';
-import { useConsentPreferences } from '../../src/hooks/useConsentPreferences';
+import { useConsentPreferences } from '../../hooks/useConsentPreferences';
 
 interface AdSenseBannerProps {
   slot: string;

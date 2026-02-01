@@ -18,7 +18,7 @@ import {
 import { triggerHaptic, hapticSuccess, hapticCommitment, hapticTap } from '../src/services/hapticService';
 import { getCurrentSubscription, getSubscriptionPlan, upgradeSubscription } from '../src/services/paymentService';
 import { PAYMENTS_ENABLED, V1_SAFE_MODE } from '../src/config/runtime';
-import { useAuth } from '../src/hooks/useAuth';
+import { useAuth } from '../hooks/useAuth';
 import { ROUTES } from '../src/routes';
 
 // Types

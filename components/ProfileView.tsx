@@ -7,7 +7,7 @@ import { FaceReferenceUploader } from './FaceReferenceUploader';
 import { getPendingRequestsCount, getActiveBorrowsCount } from '../src/services/borrowedItemsService';
 import { getProfileVisibility, updateProfileVisibility } from '../src/services/profileService';
 import ConfirmDeleteModal from './ui/ConfirmDeleteModal';
-import { useConsentPreferences } from '../src/hooks/useConsentPreferences';
+import { useConsentPreferences } from '../hooks/useConsentPreferences';
 import { setConsentPreferences } from '../src/services/consentService';
 import type { ClothingItem } from '../types';
 
