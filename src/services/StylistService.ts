@@ -16,7 +16,7 @@ import type {
   WeatherData
 } from '../../types';
 import { Type } from '@google/genai';
-import { getToneInstructions } from './aiToneHelper';
+import { getToneInstructions } from '../../services/aiToneHelper';
 import * as geminiService from '../../services/geminiService';
 
 // =====================================================
