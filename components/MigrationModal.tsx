@@ -3,8 +3,8 @@ import {
   migrateUserData,
   needsMigration,
   type MigrationProgress,
-} from '../services/migrationService';
-import { enableFeature } from '../config/features';
+} from '../src/services/migrationService';
+import { enableFeature } from '../src/config/features';
 
 interface MigrationModalProps {
   onComplete: () => void;

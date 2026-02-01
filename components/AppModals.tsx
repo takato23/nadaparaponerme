@@ -20,8 +20,8 @@ import { useInventoryMap } from '../hooks/useInventoryMap';
 const AddItemView = lazy(() => import('./AddItemView'));
 const ItemDetailView = lazy(() => import('./ItemDetailView'));
 const OutfitDetailView = lazy(() => import('./OutfitDetailView'));
-const GenerateFitViewImproved = lazy(() => import('../src/components/GenerateFitViewImproved'));
-const FitResultViewImproved = lazy(() => import('../src/components/FitResultViewImproved'));
+const GenerateFitViewImproved = lazy(() => import('./GenerateFitViewImproved'));
+const FitResultViewImproved = lazy(() => import('./FitResultViewImproved'));
 const FitResultView = lazy(() => import('./FitResultView'));
 // VirtualTryOnView removed - consolidated into PhotoshootStudio
 const ShareOutfitView = lazy(() => import('./ShareOutfitView'));
@@ -33,7 +33,7 @@ const FriendProfileView = lazy(() => import('./FriendProfileView'));
 const BulkUploadView = lazy(() => import('./BulkUploadView'));
 const PremiumCameraView = lazy(() => import('./PremiumCameraView'));
 const OnboardingView = lazy(() => import('./OnboardingView'));
-const MigrationModal = lazy(() => import('../src/components/MigrationModal'));
+const MigrationModal = lazy(() => import('./MigrationModal'));
 const ConfirmDeleteModal = lazy(() => import('./ui/ConfirmDeleteModal'));
 
 // Feature modals
@@ -62,7 +62,7 @@ const MultiplayerChallengesView = lazy(() => import('./MultiplayerChallengesView
 const PaywallView = lazy(() => import('./PaywallView'));
 const FeatureLockedView = lazy(() => import('./FeatureLockedView'));
 const ProfessionalStyleWizardView = lazy(() => import('./ProfessionalStyleWizardView'));
-const OutfitGenerationTestingPlayground = lazy(() => import('../src/components/OutfitGenerationTestingPlayground'));
+const OutfitGenerationTestingPlayground = lazy(() => import('./OutfitGenerationTestingPlayground'));
 const AestheticPlayground = lazy(() => import('./AestheticPlayground'));
 const LiquidMorphDemo = lazy(() => import('./LiquidMorphDemo'));
 const DigitalTwinSetup = lazy(() => import('./digital-twin/DigitalTwinSetup'));

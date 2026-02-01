@@ -1,6 +1,6 @@
 import React from 'react';
 import type { SortOption } from '../types';
-import { SwipeableModal } from '../src/components/ui/SwipeableModal';
+import { SwipeableModal } from './ui/SwipeableModal';
 
 interface SortOptionsViewProps {
   currentSort: SortOption;

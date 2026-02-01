@@ -18,9 +18,9 @@ import {
   generateOutfitEnhancedV3,
   type EnhancedFitResult,
   type MultiStageFitResult
-} from '../../services/generateOutfit-enhanced';
-import { generateOutfit } from '../../services/geminiService';
-import { sampleData } from '../../data/sampleData';
+} from '../services/generateOutfit-enhanced';
+import { generateOutfit } from '../services/geminiService';
+import { sampleData } from '../data/sampleData';
 
 interface TestResult {
   version: 'original' | 'v1' | 'v2' | 'v3';

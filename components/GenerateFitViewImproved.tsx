@@ -9,10 +9,10 @@
 
 import React, { useState, useMemo, useEffect, Suspense, lazy } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { getCreditStatus } from '../../services/usageTrackingService';
+import { getCreditStatus } from '../services/usageTrackingService';
 
 // Lazy load Eye3D para mejor performance
-const Eye3D = lazy(() => import('../../components/Eye3D'));
+const Eye3D = lazy(() => import('./Eye3D'));
 
 interface ClothingItem {
   id: string;

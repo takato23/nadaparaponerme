@@ -13,7 +13,7 @@ import { useNavigateTransition } from './hooks/useNavigateTransition';
 import { useChatConversations } from './hooks/useChatConversations';
 import type { ClothingItem, FitResult, ClothingItemMetadata, SavedOutfit, CommunityUser, PackingListResult, SortOption, BrandRecognitionResult, OutfitSuggestionForEvent, ChatConversation, ChatMessage, CategoryFilter, ProfessionalProfile, ProfessionalFitResult } from './types';
 import * as aiService from './src/services/aiService';
-import { generateProfessionalOutfit } from './src/services/professionalStylistService';
+import { generateProfessionalOutfit } from './src/services/StylistService';
 import { dataUrlToFile } from './src/lib/supabase';
 import * as preferencesService from './src/services/preferencesService';
 import { communityData } from './data/communityData';
@@ -55,8 +55,7 @@ import LazyLoader from './components/LazyLoader';
 
 // Enhanced Closet System
 import { ClosetProvider } from './contexts/ClosetContext';
-import { ThemeProvider as GlassThemeProvider } from './context/ThemeContext';
-import { ThemeProvider as UIThemeProvider } from './contexts/ThemeContext';
+import { ThemeProvider } from './contexts/ThemeContext';
 import { AIGenerationProvider } from './contexts/AIGenerationContext';
 import ClosetViewEnhanced from './components/closet/ClosetViewEnhanced';
 import { GlobalCanvas } from './components/3d/GlobalCanvas';
@@ -65,9 +64,9 @@ import { DISALLOW_CLIENT_GEMINI_KEY_IN_PROD, PAYMENTS_ENABLED, V1_SAFE_MODE } fr
 
 // Lazy load all view components
 const AddItemView = lazy(() => import('./components/AddItemView'));
-const GenerateFitViewImproved = lazy(() => import('./src/components/GenerateFitViewImproved'));
+const GenerateFitViewImproved = lazy(() => import('./components/GenerateFitViewImproved'));
 const FitResultView = lazy(() => import('./components/FitResultView'));
-const FitResultViewImproved = lazy(() => import('./src/components/FitResultViewImproved'));
+const FitResultViewImproved = lazy(() => import('./components/FitResultViewImproved'));
 const ItemDetailView = lazy(() => import('./components/ItemDetailView'));
 const SavedOutfitsView = lazy(() => import('./components/SavedOutfitsView'));
 const OutfitDetailView = lazy(() => import('./components/OutfitDetailView'));
@@ -86,7 +85,7 @@ const ShareItemView = lazy(() => import('./components/ShareItemView'));
 const SortOptionsView = lazy(() => import('./components/SortOptionsView'));
 const TermsView = lazy(() => import('./components/legal/TermsView'));
 const PrivacyView = lazy(() => import('./components/legal/PrivacyView'));
-const MigrationModal = lazy(() => import('./src/components/MigrationModal'));
+const MigrationModal = lazy(() => import('./components/MigrationModal'));
 const ClosetAnalyticsView = lazy(() => import('./components/ClosetAnalyticsView'));
 const ColorPaletteView = lazy(() => import('./components/ColorPaletteView'));
 const TopVersatileView = lazy(() => import('./components/TopVersatileView'));
@@ -112,7 +111,7 @@ const VirtualShoppingAssistantView = lazy(() => import('./components/VirtualShop
 const MultiplayerChallengesView = lazy(() => import('./components/MultiplayerChallengesView'));
 const PaywallView = lazy(() => import('./components/PaywallView'));
 const FeatureLockedView = lazy(() => import('./components/FeatureLockedView'));
-const OutfitGenerationTestingPlayground = lazy(() => import('./src/components/OutfitGenerationTestingPlayground'));
+const OutfitGenerationTestingPlayground = lazy(() => import('./components/OutfitGenerationTestingPlayground'));
 const AestheticPlayground = lazy(() => import('./components/AestheticPlayground'));
 const LandingPage = lazy(() => import('./components/LandingPage'));
 const ProfessionalStyleWizardView = lazy(() => import('./components/ProfessionalStyleWizardView'));
@@ -126,7 +125,7 @@ const DigitalTwinSetup = lazy(() => import('./components/digital-twin/DigitalTwi
 const BorrowedItemsView = lazy(() => import('./components/BorrowedItemsView'));
 const ShopLookView = lazy(() => import('./components/ShopLookView'));
 const PricingPage = lazy(() => import('./components/PricingPage'));
-const OnboardingStylistFlow = lazy(() => import('./src/components/OnboardingStylistFlow').then(module => ({ default: module.OnboardingStylistFlow })));
+const OnboardingStylistFlow = lazy(() => import('./components/OnboardingStylistFlow').then(module => ({ default: module.OnboardingStylistFlow })));
 
 /**
  * AppContent - Main app component with routing logic
@@ -694,7 +693,7 @@ const AppContent = () => {
                 // Will integrate with OpenWeatherMap API for location-based outfit suggestions
                 const weatherData = undefined;
 
-                // ⛔ SECURITY: API key removed - professionalStylistService must use Edge Functions
+                // ⛔ SECURITY: API key removed - StylistService must use Edge Functions
                 // The service should get the key from Supabase secrets, not client-side env
 
                 // Generar outfit profesional
@@ -2232,13 +2231,11 @@ const App = () => (
 );
 
 const AppWithProviders = () => (
-    <GlassThemeProvider>
-        <UIThemeProvider>
-            <AIGenerationProvider>
-                <App />
-            </AIGenerationProvider>
-        </UIThemeProvider>
-    </GlassThemeProvider>
+    <ThemeProvider>
+        <AIGenerationProvider>
+            <App />
+        </AIGenerationProvider>
+    </ThemeProvider>
 );
 
 export default AppWithProviders;

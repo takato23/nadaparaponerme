@@ -14,8 +14,8 @@ import {
     handlePositiveRating,
     handleNegativeRating,
     dismissRatingPrompt,
-} from '../services/appRatingService';
-import { triggerHaptic } from '../services/hapticService';
+} from '../src/services/appRatingService';
+import { triggerHaptic } from '../src/services/hapticService';
 
 interface AppRatingPromptProps {
     /** Force show for testing */

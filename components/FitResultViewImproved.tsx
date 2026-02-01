@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import toast from 'react-hot-toast';
 import ConfettiEffect from './ConfettiEffect';
-import * as paymentService from '../services/paymentService';
-import { MONETIZATION_FLAGS, getFeatureFlag, getAffiliateLink, shouldShowWatermark } from '../services/monetizationService';
-import { grantBonusCredit, canClaimShareReward, recordShareReward } from '../../services/usageTrackingService';
-import ShopTheLookPanel from '../../components/ShopTheLookPanel';
+import * as paymentService from '../src/services/paymentService';
+import { MONETIZATION_FLAGS, getFeatureFlag, getAffiliateLink, shouldShowWatermark } from '../src/services/monetizationService';
+import { grantBonusCredit, canClaimShareReward, recordShareReward } from '../services/usageTrackingService';
+import ShopTheLookPanel from './ShopTheLookPanel';
 
-import type { ClothingItem, FitResult, SavedOutfit } from '../../types';
+import type { ClothingItem, FitResult, SavedOutfit } from '../types';
 
 interface FitResultViewImprovedProps {
   result: FitResult;

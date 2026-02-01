@@ -21,7 +21,7 @@ import ActivityCommentsDrawer from './ActivityCommentsDrawer';
 import Loader from './Loader';
 import { EmptyState } from './ui/EmptyState';
 import { Card } from './ui/Card';
-import { SuggestedUsers } from '../src/components/SuggestedUsers';
+import { SuggestedUsers } from './SuggestedUsers';
 
 interface ActivityFeedViewProps {
   closet: ClothingItem[];

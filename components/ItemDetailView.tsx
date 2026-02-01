@@ -6,7 +6,7 @@ import { buildSearchTermFromItem, getShoppingLinks } from '../src/services/monet
 // FIX: The Loader component is now correctly created and exported, resolving the 'not a module' error.
 import Loader from './Loader';
 import { Card } from './ui/Card';
-import { SwipeableModal } from '../src/components/ui/SwipeableModal';
+import { SwipeableModal } from './ui/SwipeableModal';
 import { PremiumAnalysisCard } from './PremiumAnalysisCard';
 import { useToast } from '../hooks/useToast';
 

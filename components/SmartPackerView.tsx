@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { ClothingItem } from '../types';
-import { SwipeableModal } from '../src/components/ui/SwipeableModal';
+import { SwipeableModal } from './ui/SwipeableModal';
 import { getCreditStatus } from '../services/usageTrackingService';
 
 interface SmartPackerViewProps {

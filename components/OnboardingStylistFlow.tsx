@@ -15,11 +15,11 @@ import {
     PartyPopper,
     Fingerprint,
 } from 'lucide-react';
-import { triggerHaptic, hapticSuccess, hapticCommitment, hapticTap } from '../services/hapticService';
-import { getCurrentSubscription, getSubscriptionPlan, upgradeSubscription } from '../services/paymentService';
-import { PAYMENTS_ENABLED, V1_SAFE_MODE } from '../config/runtime';
-import { useAuth } from '../hooks/useAuth';
-import { ROUTES } from '../routes';
+import { triggerHaptic, hapticSuccess, hapticCommitment, hapticTap } from '../src/services/hapticService';
+import { getCurrentSubscription, getSubscriptionPlan, upgradeSubscription } from '../src/services/paymentService';
+import { PAYMENTS_ENABLED, V1_SAFE_MODE } from '../src/config/runtime';
+import { useAuth } from '../src/hooks/useAuth';
+import { ROUTES } from '../src/routes';
 
 // Types
 type OnboardingStep = 'welcome' | 'body_shape' | 'color_season' | 'style_goals' | 'commitment' | 'analyzing' | 'paywall';
