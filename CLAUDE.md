@@ -323,16 +323,44 @@ See `CHANGELOG.md` for complete feature documentation and implementation details
 - **Error handling**: Supabase service layers include fallback for missing tables (returns empty arrays instead of throwing)
 - **Migration execution**: All database migrations must be applied via `supabase db push` before features work
 
-## Service Layer Split
+## Project Structure (Updated 2026-02-01)
 
-The codebase has two service directories:
+All code is now in canonical locations. NO duplicate folders.
 
 | Directory | Purpose | Examples |
 |-----------|---------|----------|
-| `services/` (root) | AI/Gemini services, social features | `geminiService.ts`, `communityService.ts`, `weatherService.ts` |
-| `src/services/` | Supabase CRUD, payments, subscriptions | `closetService.ts`, `paymentService.ts`, `authService.ts` |
+| `src/services/` | ALL services (AI, CRUD, payments) | `geminiService.ts`, `closetService.ts`, `paymentService.ts` |
+| `components/` | ALL components | `ClosetGrid.tsx`, `AppModals.tsx` |
+| `hooks/` | ALL hooks | `useAuth.ts`, `useClosetState.ts` |
+| `contexts/` | ALL React contexts | `ThemeContext.tsx`, `ClosetContext.tsx` |
+| `utils/` | Root utilities | `retryWithBackoff.ts` |
+| `src/utils/` | Src utilities | `rateLimiter.ts`, `logger.ts` |
+| `src/config/` | Feature flags, runtime config | `features.ts` |
+| `data/` | Sample/mock data | `sampleData.ts` |
+| `types.ts` | Main type definitions | Root level |
 
 When adding new features:
-- AI generation logic → `services/geminiService.ts` or new file in `services/`
-- Database CRUD → new file in `src/services/`
+- Services → `src/services/` (always)
+- Components → `components/` (always)
+- Hooks → `hooks/` (always)
+- Database CRUD → `src/services/`
 - Edge Function calls → `src/services/edgeFunctionClient.ts`
+
+## Coding Rules (Learned from mistakes)
+
+### NEVER do:
+- Create files in root `services/` — use `src/services/` only
+- Create files in `src/components/` — use `components/` only
+- Create files in `src/hooks/` — use `hooks/` only
+- Create files in `context/` — use `contexts/` (plural)
+- Skip `npx tsc --noEmit` after changes — ALWAYS verify
+- Use `../src/lib/` from src/services — use `../lib/` instead
+- Use `../types` from src/services — use `../../types` instead
+- Import between services with `../../services/` — use `./` (same folder)
+
+### ALWAYS do:
+- Run `npx tsc --noEmit` after any refactor
+- Verify 0 "Cannot find module" errors before committing
+- Use relative imports, not aliases
+- Keep all services in `src/services/` — this is the SINGLE canonical location
+- Commit with descriptive messages explaining what changed and why
