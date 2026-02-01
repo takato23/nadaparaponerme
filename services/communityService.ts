@@ -1,5 +1,5 @@
-import { supabase } from '../supabase/client';
-import { Community, CommunityInsert, CommunityMember } from '../types/api';
+import { supabase } from '../src/lib/supabase';
+import type { Community, CommunityInsert } from '../src/types/api';
 
 /**
  * Fetches all public communities
