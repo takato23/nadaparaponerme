@@ -18,7 +18,7 @@ import {
   type FeatureType,
   type UsageStatus,
   type UserTier,
-} from '../services/usageTrackingService';
+} from '../src/services/usageTrackingService';
 
 // ============================================================================
 // TYPES

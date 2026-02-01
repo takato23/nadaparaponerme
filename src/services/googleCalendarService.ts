@@ -15,8 +15,8 @@ import type {
   OutfitSuggestionForEvent,
   ClothingItem,
   FitResult
-} from '../types';
-import * as geminiService from '../src/services/aiService';
+} from '../../types';
+import * as geminiService from './aiService';
 
 const STORAGE_KEY = 'ojodeloca-google-calendar-connection';
 const GOOGLE_CALENDAR_API_BASE = 'https://www.googleapis.com/calendar/v3';

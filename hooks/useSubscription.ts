@@ -15,7 +15,7 @@ import {
   canUseFeature as canUseLocalFeature,
   getUserTier as getLocalTier,
   type FeatureType,
-} from '../services/usageTrackingService';
+} from '../src/services/usageTrackingService';
 
 // ============================================================================
 // TYPES

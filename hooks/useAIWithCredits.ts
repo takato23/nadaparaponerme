@@ -10,7 +10,7 @@ import {
   canUseFeature,
   recordUsage,
   type FeatureType,
-} from '../services/usageTrackingService';
+} from '../src/services/usageTrackingService';
 
 export interface AICallResult<T> {
   success: boolean;

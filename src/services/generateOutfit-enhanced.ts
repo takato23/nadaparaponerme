@@ -9,7 +9,7 @@
  */
 
 import { GoogleGenAI, Type } from "@google/genai";
-import type { ClothingItem } from '../types';
+import type { ClothingItem } from '../../types';
 import { getToneInstructions } from './aiToneHelper';
 
 // =============================================================================

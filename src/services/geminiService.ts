@@ -1,8 +1,8 @@
 import { GoogleGenAI, Type, Part, Modality } from "@google/genai";
-import type { ClothingItemMetadata, ClothingItem, FitResult, PackingListResult, GroundingChunk, ColorPaletteAnalysis, ChatMessage, WeatherData, WeatherOutfitResult, Lookbook, LookbookTheme, ChallengeType, ChallengeDifficulty, FeedbackInsights, FeedbackPatternData, OutfitRating, SavedOutfit, ShoppingGap, ShoppingRecommendation, ShoppingChatMessage } from '../types';
+import type { ClothingItemMetadata, ClothingItem, FitResult, PackingListResult, GroundingChunk, ColorPaletteAnalysis, ChatMessage, WeatherData, WeatherOutfitResult, Lookbook, LookbookTheme, ChallengeType, ChallengeDifficulty, FeedbackInsights, FeedbackPatternData, OutfitRating, SavedOutfit, ShoppingGap, ShoppingRecommendation, ShoppingChatMessage } from '../../types';
 import { getSeason } from './weatherService';
 import { getToneInstructions } from './aiToneHelper';
-import { retryAIOperation, retryAIOperation as retryWithBackoff } from '../utils/retryWithBackoff';
+import { retryAIOperation, retryAIOperation as retryWithBackoff } from '../../utils/retryWithBackoff';
 
 /**
  * SECURITY NOTICE: API Key Management

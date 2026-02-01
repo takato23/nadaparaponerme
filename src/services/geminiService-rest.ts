@@ -5,8 +5,8 @@
  * instead of the @google/genai SDK to avoid model compatibility issues.
  */
 
-import type { ClothingItemMetadata } from '../types';
-import { geminiRateLimiter, retryWithBackoff } from '../src/utils/rateLimiter';
+import type { ClothingItemMetadata } from '../../types';
+import { geminiRateLimiter, retryWithBackoff } from '../utils/rateLimiter';
 
 const GEMINI_MODEL = "gemini-2.0-flash";
 const API_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models";

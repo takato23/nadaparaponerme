@@ -11,7 +11,7 @@ import type {
   ChallengeType,
   ChallengeStatus,
   ChallengeDifficulty
-} from '../types';
+} from '../../types';
 
 // ===================================
 // MOCK DATA GENERATION

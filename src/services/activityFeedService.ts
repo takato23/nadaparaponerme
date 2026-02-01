@@ -9,9 +9,9 @@ import type {
   ActivityFeedItem,
   ActivityComment,
   ActivityType
-} from '../types';
+} from '../../types';
 
-import { supabase } from '../src/lib/supabase';
+import { supabase } from '../lib/supabase';
 
 /**
  * Fetches the activity feed from Supabase

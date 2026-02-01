@@ -11,8 +11,8 @@ import type { ClothingItem, ClothingItemMetadata, FitResult, PackingListResult, 
 import { getFeatureFlag } from '../config/features';
 import { V1_SAFE_MODE } from '../config/runtime';
 import * as edgeClient from './edgeFunctionClient';
-import * as geminiService from '../../services/geminiService-rest';
-import * as geminiServiceFull from '../../services/geminiService';
+import * as geminiService from './geminiService-rest';
+import * as geminiServiceFull from './geminiService';
 
 import { GENERATION_PRESETS } from '../../types';
 import { canGenerateOutfit } from './subscriptionService';

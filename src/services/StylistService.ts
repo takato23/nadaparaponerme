@@ -16,8 +16,8 @@ import type {
   WeatherData
 } from '../../types';
 import { Type } from '@google/genai';
-import { getToneInstructions } from '../../services/aiToneHelper';
-import * as geminiService from '../../services/geminiService';
+import { getToneInstructions } from './aiToneHelper';
+import * as geminiService from './geminiService';
 
 // =====================================================
 // REGLAS DE MORFOLOGÍA
