@@ -8,6 +8,7 @@ import * as aiService from '../../src/services/aiService';
 import { buildSearchTermFromItem, getShoppingLinks } from '../../src/services/monetizationService';
 import Loader from '../Loader';
 import { isRealImage } from '../../src/utils/imagePlaceholder';
+import { useToast } from '../../hooks/useToast';
 
 interface LiquidDetailModalProps {
     item: ClothingItem | null;
@@ -17,18 +18,51 @@ interface LiquidDetailModalProps {
 
 export default function LiquidDetailModal({ item, isOpen, onClose }: LiquidDetailModalProps) {
     const navigate = useNavigate();
-    const [isAnalyzing, setIsAnalyzing] = useState(false);
-    const [brandResult, setBrandResult] = useState<BrandRecognitionResult | null>(null);
-    const [dupeResult, setDupeResult] = useState<DupeFinderResult | null>(null);
-    const [activeTab, setActiveTab] = useState<'details' | 'brand' | 'dupes'>('details');
-    const [error, setError] = useState<string | null>(null);
+    const [imageSide, setImageSide] = useState<'front' | 'back'>('front');
+    const [isUploadingBack, setIsUploadingBack] = useState(false);
+    const backFileInputRef = React.useRef<HTMLInputElement>(null);
+    const toast = useToast();
+    const [localItem, setLocalItem] = useState(item);
 
-    if (!item) return null;
+    // Sync localItem with prop
+    useEffect(() => {
+        setLocalItem(item);
+        setImageSide('front'); // Reset to front when item changes
+    }, [item]);
 
-    const hasRealImage = isRealImage(item.imageDataUrl || (item as any).image_url);
+    if (!localItem) return null;
+
+    const hasRealImage = isRealImage(localItem.imageDataUrl || (localItem as any).image_url);
+
+    const handleBackFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file || !localItem) return;
+
+        setIsUploadingBack(true);
+        try {
+            // Import dynamically to avoid circular dependencies if any, or just standard import
+            const { updateClothingItem } = await import('../../src/services/closetService');
+            const updatedItem = await updateClothingItem(localItem.id, localItem.metadata, file);
+
+            // Update local state to show new image immediately
+            setLocalItem(prev => {
+                if (!prev) return null;
+                return {
+                    ...prev,
+                    backImageDataUrl: updatedItem.backImageDataUrl
+                };
+            });
+            toast.success('Foto del dorso agregada!');
+        } catch (error) {
+            console.error('Error uploading back image:', error);
+            toast.error('Error al subir la imagen');
+        } finally {
+            setIsUploadingBack(false);
+        }
+    };
 
     const handleAnalyzeBrand = async () => {
-        if (!item || brandResult) {
+        if (!localItem || brandResult) {
             // If already analyzed, just show the results
             setActiveTab('brand');
             return;
@@ -38,7 +72,7 @@ export default function LiquidDetailModal({ item, isOpen, onClose }: LiquidDetai
         setActiveTab('brand');
         setError(null);
         try {
-            const result = await aiService.recognizeBrandAndPrice(item.imageDataUrl);
+            const result = await aiService.recognizeBrandAndPrice(localItem.imageDataUrl);
             setBrandResult(result);
         } catch (error) {
             console.error('Error analyzing brand:', error);
@@ -50,7 +84,7 @@ export default function LiquidDetailModal({ item, isOpen, onClose }: LiquidDetai
     };
 
     const handleFindDupes = async () => {
-        if (!item) return;
+        if (!localItem) return;
 
         setIsAnalyzing(true);
         setActiveTab('dupes');
@@ -59,11 +93,11 @@ export default function LiquidDetailModal({ item, isOpen, onClose }: LiquidDetai
             // Get brand result first if not available
             let brandInfo = brandResult;
             if (!brandInfo) {
-                brandInfo = await aiService.recognizeBrandAndPrice(item.imageDataUrl);
+                brandInfo = await aiService.recognizeBrandAndPrice(localItem.imageDataUrl);
                 setBrandResult(brandInfo);
             }
 
-            const result = await aiService.findDupeAlternatives(item, brandInfo);
+            const result = await aiService.findDupeAlternatives(localItem, brandInfo);
             setDupeResult(result);
         } catch (error) {
             console.error('Error finding dupes:', error);
@@ -92,7 +126,7 @@ export default function LiquidDetailModal({ item, isOpen, onClose }: LiquidDetai
 
                     {/* Modal Content - Peep-hole effect */}
                     <motion.div
-                        layoutId={`item-${item.id}`}
+                        layoutId={`item-${localItem.id}`}
                         className="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-[3rem] overflow-hidden shadow-2xl z-[110] max-h-[90vh] overflow-y-auto"
                         initial={{ scale: 0.9, opacity: 0, borderRadius: "3rem" }}
                         animate={{ scale: 1, opacity: 1, borderRadius: "3rem" }}
@@ -100,17 +134,78 @@ export default function LiquidDetailModal({ item, isOpen, onClose }: LiquidDetai
                         transition={{ type: "spring", damping: 25, stiffness: 300 }}
                     >
                         {/* Image Section */}
-                        <div className="relative h-96 w-full">
-                            <img
-                                src={item.imageDataUrl}
-                                alt={item.metadata?.subcategory}
-                                className="w-full h-full object-cover"
-                            />
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                        <div className="relative h-96 w-full bg-gray-100 dark:bg-gray-800">
+                            {imageSide === 'front' ? (
+                                <img
+                                    src={localItem.imageDataUrl}
+                                    alt={localItem.metadata?.subcategory}
+                                    className="w-full h-full object-cover"
+                                />
+                            ) : (
+                                localItem.backImageDataUrl ? (
+                                    <img
+                                        src={localItem.backImageDataUrl}
+                                        alt={`${localItem.metadata?.subcategory} (Dorso)`}
+                                        className="w-full h-full object-cover"
+                                    />
+                                ) : (
+                                    <div className="w-full h-full flex flex-col items-center justify-center text-gray-400 gap-4">
+                                        <div className="w-20 h-20 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
+                                            <span className="material-symbols-outlined text-4xl">no_photography</span>
+                                        </div>
+                                        <p>No hay foto del dorso</p>
+                                        <input
+                                            type="file"
+                                            ref={backFileInputRef}
+                                            accept="image/*"
+                                            className="hidden"
+                                            onChange={handleBackFileUpload}
+                                        />
+                                        <button
+                                            onClick={() => backFileInputRef.current?.click()}
+                                            disabled={isUploadingBack}
+                                            className="px-6 py-3 rounded-xl bg-white dark:bg-gray-700 text-black dark:text-white font-bold shadow-lg hover:scale-105 transition-transform flex items-center gap-2"
+                                        >
+                                            {isUploadingBack ? (
+                                                <Loader size="small" />
+                                            ) : (
+                                                <span className="material-symbols-outlined">add_a_photo</span>
+                                            )}
+                                            {isUploadingBack ? 'Subiendo...' : 'Agregar Foto'}
+                                        </button>
+                                    </div>
+                                )
+                            )}
+
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
+
+                            {/* View Toggle */}
+                            <div className="absolute bottom-4 left-0 right-0 flex justify-center z-20 pointer-events-auto">
+                                <div className="bg-white/20 backdrop-blur-md rounded-full p-1 flex border border-white/20">
+                                    <button
+                                        onClick={() => setImageSide('front')}
+                                        className={`px-4 py-1.5 rounded-full text-sm font-bold transition-all ${imageSide === 'front'
+                                            ? 'bg-white text-black shadow-sm'
+                                            : 'text-white hover:bg-white/10'
+                                            }`}
+                                    >
+                                        Frente
+                                    </button>
+                                    <button
+                                        onClick={() => setImageSide('back')}
+                                        className={`px-4 py-1.5 rounded-full text-sm font-bold transition-all ${imageSide === 'back'
+                                            ? 'bg-white text-black shadow-sm'
+                                            : 'text-white hover:bg-white/10'
+                                            }`}
+                                    >
+                                        Dorso
+                                    </button>
+                                </div>
+                            </div>
 
                             <button
                                 onClick={onClose}
-                                className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white hover:bg-white/40 transition-colors"
+                                className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white hover:bg-white/40 transition-colors z-20"
                             >
                                 <span className="material-symbols-outlined">close</span>
                             </button>
@@ -160,14 +255,33 @@ export default function LiquidDetailModal({ item, isOpen, onClose }: LiquidDetai
                                         {item.metadata?.subcategory || 'Prenda'}
                                     </h2>
 
-                                    <div className="flex flex-wrap gap-2 mb-6">
-                                        <span className="px-3 py-1 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 text-sm font-medium capitalize">
+                                    <div className="flex flex-wrap gap-2 mb-4">
+                                        <span className="px-3 py-1 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 text-sm font-medium capitalize flex items-center gap-1">
+                                            <span className="material-symbols-outlined text-sm">palette</span>
                                             {item.metadata?.color_primary}
                                         </span>
-                                        <span className="px-3 py-1 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-300 text-sm font-medium capitalize">
+                                        <span className="px-3 py-1 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-300 text-sm font-medium capitalize flex items-center gap-1">
+                                            <span className="material-symbols-outlined text-sm">styler</span>
                                             {item.metadata?.category}
                                         </span>
+                                        {item.metadata?.seasons?.map(season => (
+                                            <span key={season} className="px-3 py-1 rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-300 text-sm font-medium capitalize flex items-center gap-1">
+                                                <span className="material-symbols-outlined text-sm">wb_sunny</span>
+                                                {season}
+                                            </span>
+                                        ))}
                                     </div>
+
+                                    {/* Vibe Tags */}
+                                    {item.metadata?.vibe_tags && item.metadata.vibe_tags.length > 0 && (
+                                        <div className="flex flex-wrap gap-2 mb-6">
+                                            {item.metadata.vibe_tags.map(tag => (
+                                                <span key={tag} className="px-3 py-1 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 text-sm font-medium border border-gray-200 dark:border-gray-700">
+                                                    #{tag}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    )}
 
                                     <div className="grid grid-cols-2 gap-4 mb-6">
                                         <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50">
@@ -178,6 +292,18 @@ export default function LiquidDetailModal({ item, isOpen, onClose }: LiquidDetai
                                             <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Subcategoría</p>
                                             <p className="font-medium text-slate-900 dark:text-white capitalize">{item.metadata?.subcategory || '-'}</p>
                                         </div>
+                                        {item.metadata?.neckline && (
+                                            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50">
+                                                <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Cuello</p>
+                                                <p className="font-medium text-slate-900 dark:text-white capitalize">{item.metadata.neckline}</p>
+                                            </div>
+                                        )}
+                                        {item.metadata?.sleeve_type && (
+                                            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50">
+                                                <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Manga</p>
+                                                <p className="font-medium text-slate-900 dark:text-white capitalize">{item.metadata.sleeve_type}</p>
+                                            </div>
+                                        )}
                                     </div>
 
                                     {/* Extended Details */}
