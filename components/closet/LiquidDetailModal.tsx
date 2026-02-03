@@ -23,6 +23,11 @@ export default function LiquidDetailModal({ item, isOpen, onClose }: LiquidDetai
     const backFileInputRef = React.useRef<HTMLInputElement>(null);
     const toast = useToast();
     const [localItem, setLocalItem] = useState(item);
+    const [activeTab, setActiveTab] = useState<'details' | 'brand' | 'dupes'>('details');
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [brandResult, setBrandResult] = useState<BrandRecognitionResult | null>(null);
+    const [dupeResult, setDupeResult] = useState<DupeFinderResult | null>(null);
+    const [error, setError] = useState<string | null>(null);
 
     // Sync localItem with prop
     useEffect(() => {
