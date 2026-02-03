@@ -11,7 +11,7 @@ import {
   fetchActivityComments,
   formatRelativeTime,
   getActivityDescription
-} from '../services/activityFeedService';
+} from '../src/services/activityFeedService';
 import { sanitizeUserInput } from '../utils/sanitize';
 
 interface ActivityCommentsDrawerProps {

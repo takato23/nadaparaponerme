@@ -7,7 +7,7 @@
 
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { getCreditStatus, CREDIT_LIMITS, getMonthlyUsage, getFeatureUsageSummary, type FeatureType } from '../services/usageTrackingService';
+import { getCreditStatus, CREDIT_LIMITS, getMonthlyUsage, getFeatureUsageSummary, type FeatureType } from '../src/services/usageTrackingService';
 import { useSubscription } from '../hooks/useSubscription';
 import { ADSENSE_CREDITS_SLOT, ADSENSE_ENABLED, REWARDED_ADS_ENABLED, REWARDED_ADS_PROVIDER } from '../src/config/runtime';
 import toast from 'react-hot-toast';

@@ -14,7 +14,7 @@ import { chatWithFashionAssistant, parseOutfitFromChat } from '../src/services/a
 import { sanitizeUserInput } from '../utils/sanitize';
 import { useSubscription } from '../hooks/useSubscription';
 import { LimitReachedModal } from './QuotaIndicator';
-import { getCreditStatus } from '../services/usageTrackingService';
+import { getCreditStatus } from '../src/services/usageTrackingService';
 
 // ============================================================================
 // TYPES

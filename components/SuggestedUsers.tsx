@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { fetchSuggestedUsers, followUser, SuggestedUser } from '@/services/socialService';
+import { fetchSuggestedUsers, followUser, SuggestedUser } from '@/src/services/socialService';
 
 
 export const SuggestedUsers: React.FC = () => {

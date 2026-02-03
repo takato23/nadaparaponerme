@@ -19,7 +19,7 @@ import type {
   OutfitSuggestionForEvent,
   CalendarEventType,
 } from '../types';
-import * as calendarService from '../services/googleCalendarService';
+import * as calendarService from '../src/services/googleCalendarService';
 import Loader from './Loader';
 
 interface CalendarSyncViewProps {

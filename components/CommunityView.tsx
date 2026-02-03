@@ -27,7 +27,7 @@ import {
   type FriendWithProfile,
   type PendingRequest,
   type FriendProfile,
-} from '../services/friendshipService';
+} from '../src/services/friendshipService';
 
 // ===== Types =====
 
@@ -198,11 +198,10 @@ const UserSuggestionCard = ({ user, onFollow, isLoading, isSent }: UserSuggestio
     <button
       onClick={onFollow}
       disabled={isLoading || isSent}
-      className={`px-4 py-1.5 text-sm font-semibold rounded-xl transition-all active:scale-95 disabled:opacity-50 ${
-        isSent
+      className={`px-4 py-1.5 text-sm font-semibold rounded-xl transition-all active:scale-95 disabled:opacity-50 ${isSent
           ? 'bg-gray-100 dark:bg-gray-800 text-text-secondary'
           : 'bg-gradient-to-r from-primary to-purple-600 text-white'
-      }`}
+        }`}
     >
       {isSent ? 'Enviado' : 'Seguir'}
     </button>
@@ -437,20 +436,18 @@ const CommunityView = ({ friends: propFriends, onViewFriendCloset }: CommunityVi
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              className={`flex-1 py-2.5 px-3 rounded-xl font-semibold text-sm transition-all flex items-center justify-center gap-1.5 ${
-                activeTab === tab.key
+              className={`flex-1 py-2.5 px-3 rounded-xl font-semibold text-sm transition-all flex items-center justify-center gap-1.5 ${activeTab === tab.key
                   ? 'bg-white dark:bg-gray-900 text-primary shadow-sm'
                   : 'text-text-secondary hover:text-text-primary'
-              }`}
+                }`}
             >
               <span className="material-symbols-outlined text-lg">{tab.icon}</span>
               <span className="hidden sm:inline">{tab.label}</span>
               {tab.count !== undefined && tab.count > 0 && (
-                <span className={`text-xs px-1.5 py-0.5 rounded-full ${
-                  activeTab === tab.key
+                <span className={`text-xs px-1.5 py-0.5 rounded-full ${activeTab === tab.key
                     ? 'bg-primary/10 text-primary'
                     : 'bg-gray-200 dark:bg-gray-700'
-                }`}>
+                  }`}>
                   {tab.count}
                 </span>
               )}

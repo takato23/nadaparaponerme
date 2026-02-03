@@ -6,7 +6,7 @@
  */
 
 import React, { useMemo } from 'react';
-import { getCreditStatus } from '../services/usageTrackingService';
+import { getCreditStatus } from '../src/services/usageTrackingService';
 
 interface CreditsIndicatorProps {
   variant?: 'badge' | 'compact' | 'minimal';

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getFeatureFlag, type FeatureFlags } from '../config/features';
+import { getFeatureFlag, type FeatureFlags } from '../src/config/features';
 
 /**
  * React hook to use feature flags with reactive updates

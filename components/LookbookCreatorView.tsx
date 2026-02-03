@@ -4,7 +4,7 @@ import type { ClothingItem, Lookbook, LookbookTheme } from '../types';
 import { generateLookbook } from '../src/services/aiService';
 import Loader from './Loader';
 import { Card } from './ui/Card';
-import { getCreditStatus } from '../services/usageTrackingService';
+import { getCreditStatus } from '../src/services/usageTrackingService';
 
 interface LookbookCreatorViewProps {
   closet: ClothingItem[];
@@ -94,7 +94,7 @@ const LookbookCreatorView = ({ closet, onClose }: LookbookCreatorViewProps) => {
     try {
       // Check if Web Share API is supported
       if (!navigator.share) {
-        toast.warning('Tu navegador no soporta compartir. Usa "Exportar Imagen" en su lugar.');
+        toast('Tu navegador no soporta compartir. Usa "Exportar Imagen" en su lugar.', { icon: '⚠️' });
         return;
       }
 
@@ -151,15 +151,13 @@ const LookbookCreatorView = ({ closet, onClose }: LookbookCreatorViewProps) => {
           </div>
           <div className="flex items-center gap-3">
             {/* Credits Indicator */}
-            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg ${
-              credits.remaining <= 3
-                ? 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
-                : 'bg-gray-100 dark:bg-gray-800'
-            }`}>
-              <span className="material-symbols-rounded text-gray-500 text-sm">toll</span>
-              <span className={`text-xs font-medium ${
-                credits.remaining <= 3 ? 'text-red-600 dark:text-red-400' : 'text-gray-600 dark:text-gray-300'
+            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg ${credits.remaining <= 3
+              ? 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
+              : 'bg-gray-100 dark:bg-gray-800'
               }`}>
+              <span className="material-symbols-rounded text-gray-500 text-sm">toll</span>
+              <span className={`text-xs font-medium ${credits.remaining <= 3 ? 'text-red-600 dark:text-red-400' : 'text-gray-600 dark:text-gray-300'
+                }`}>
                 {credits.limit === -1 ? '∞' : credits.remaining}
               </span>
             </div>
@@ -207,9 +205,8 @@ const LookbookCreatorView = ({ closet, onClose }: LookbookCreatorViewProps) => {
                     key={theme.id}
                     onClick={() => handleThemeSelect(theme.id)}
                     disabled={theme.id === 'custom'}
-                    className={`text-center transition-all cursor-pointer ${
-                      theme.id === 'custom' ? '' : 'hover:scale-105 active:scale-95'
-                    } ${selectedTheme === theme.id ? 'ring-2 ring-primary' : ''}`}
+                    className={`text-center transition-all cursor-pointer ${theme.id === 'custom' ? '' : 'hover:scale-105 active:scale-95'
+                      } ${selectedTheme === theme.id ? 'ring-2 ring-primary' : ''}`}
                   >
                     <div className="w-16 h-16 mx-auto mb-3 rounded-full bg-primary/10 flex items-center justify-center">
                       <span className="material-symbols-outlined text-primary text-3xl">{theme.icon}</span>

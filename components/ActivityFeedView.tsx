@@ -15,7 +15,7 @@ import {
   formatEngagementCount,
   toggleActivityLike,
   toggleActivityShare
-} from '../services/activityFeedService';
+} from '../src/services/activityFeedService';
 import ActivityCard from './ActivityCard';
 import ActivityCommentsDrawer from './ActivityCommentsDrawer';
 import Loader from './Loader';

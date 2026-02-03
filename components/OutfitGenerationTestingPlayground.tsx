@@ -18,8 +18,8 @@ import {
   generateOutfitEnhancedV3,
   type EnhancedFitResult,
   type MultiStageFitResult
-} from '../services/generateOutfit-enhanced';
-import { generateOutfit } from '../services/geminiService';
+} from '../src/services/generateOutfit-enhanced';
+import { generateOutfit } from '../src/services/geminiService';
 import { sampleData } from '../data/sampleData';
 
 interface TestResult {
@@ -242,8 +242,8 @@ export default function OutfitGenerationTestingPlayground({
                 width: `${result.confidence_score}%`,
                 backgroundColor:
                   result.confidence_score >= 90 ? '#10b981' :
-                  result.confidence_score >= 70 ? '#fbbf24' :
-                  '#ef4444'
+                    result.confidence_score >= 70 ? '#fbbf24' :
+                      '#ef4444'
               }}
             />
           </div>

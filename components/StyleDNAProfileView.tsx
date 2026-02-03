@@ -6,7 +6,7 @@ import { analyzeStyleDNA } from '../src/services/aiService';
 import Loader from './Loader';
 import { Card } from './ui/Card';
 import { HelpIcon } from './ui/HelpIcon';
-import { getCreditStatus } from '../services/usageTrackingService';
+import { getCreditStatus } from '../src/services/usageTrackingService';
 
 interface StyleDNAProfileViewProps {
     closet: ClothingItem[];
@@ -49,9 +49,9 @@ const StyleDNAProfileView = ({ closet, onClose }: StyleDNAProfileViewProps) => {
 
     const handleShare = async () => {
         if (!dnaProfile) return;
-        
+
         const shareText = `Mi Style DNA: ${dnaProfile.primary_archetype.charAt(0).toUpperCase() + dnaProfile.primary_archetype.slice(1)} 🧬\n\nVersatilidad: ${dnaProfile.versatility_score}/100\nUniqueness: ${dnaProfile.uniqueness_score}/100\n\n¡Descubrí tu ADN de estilo en No Tengo Nada Para Ponerme! 👗`;
-        
+
         if (navigator.share) {
             try {
                 await navigator.share({
@@ -70,24 +70,24 @@ const StyleDNAProfileView = ({ closet, onClose }: StyleDNAProfileViewProps) => {
 
     const handleExportPDF = async () => {
         if (!resultsRef.current) return;
-        
+
         try {
             const html2canvas = (await import('html2canvas')).default;
             const jsPDF = (await import('jspdf')).default;
-            
+
             const canvas = await html2canvas(resultsRef.current, {
                 scale: 2,
                 backgroundColor: '#ffffff',
                 logging: false
             });
-            
+
             const imgData = canvas.toDataURL('image/png');
             const pdf = new jsPDF({
                 orientation: 'portrait',
                 unit: 'px',
                 format: [canvas.width / 2, canvas.height / 2]
             });
-            
+
             pdf.addImage(imgData, 'PNG', 0, 0, canvas.width / 2, canvas.height / 2);
             pdf.save(`style-dna-${Date.now()}.pdf`);
         } catch (err) {
@@ -122,7 +122,7 @@ const StyleDNAProfileView = ({ closet, onClose }: StyleDNAProfileViewProps) => {
     // Intro Step
     if (currentStep === 'intro') {
         return (
-            <motion.div 
+            <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
@@ -130,7 +130,7 @@ const StyleDNAProfileView = ({ closet, onClose }: StyleDNAProfileViewProps) => {
             >
                 <div onClick={onClose} className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
 
-                <motion.div 
+                <motion.div
                     initial={{ scale: 0.9, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
                     transition={{ type: 'spring', stiffness: 200, damping: 20 }}
@@ -138,7 +138,7 @@ const StyleDNAProfileView = ({ closet, onClose }: StyleDNAProfileViewProps) => {
                 >
                     <header className="p-6 flex items-center justify-between border-b border-gray-200 dark:border-gray-700">
                         <div className="flex items-center gap-2">
-                            <motion.h2 
+                            <motion.h2
                                 initial={{ x: -20, opacity: 0 }}
                                 animate={{ x: 0, opacity: 1 }}
                                 className="text-2xl font-bold dark:text-gray-200"
@@ -152,25 +152,23 @@ const StyleDNAProfileView = ({ closet, onClose }: StyleDNAProfileViewProps) => {
                         </div>
                         <div className="flex items-center gap-3">
                             {/* Credits Indicator */}
-                            <motion.div 
+                            <motion.div
                                 whileHover={{ scale: 1.05 }}
-                                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg ${
-                                    credits.remaining <= 3
+                                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg ${credits.remaining <= 3
                                         ? 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
                                         : 'bg-gray-100 dark:bg-gray-800'
-                                }`}
+                                    }`}
                             >
                                 <span className="material-symbols-rounded text-gray-500 text-sm">toll</span>
-                                <span className={`text-xs font-medium ${
-                                    credits.remaining <= 3 ? 'text-red-600 dark:text-red-400' : 'text-gray-600 dark:text-gray-300'
-                                }`}>
+                                <span className={`text-xs font-medium ${credits.remaining <= 3 ? 'text-red-600 dark:text-red-400' : 'text-gray-600 dark:text-gray-300'
+                                    }`}>
                                     {credits.limit === -1 ? '∞' : credits.remaining}
                                 </span>
                             </motion.div>
-                            <motion.button 
+                            <motion.button
                                 whileHover={{ scale: 1.1, rotate: 90 }}
                                 whileTap={{ scale: 0.9 }}
-                                onClick={onClose} 
+                                onClick={onClose}
                                 className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl dark:text-gray-200"
                             >
                                 <span className="material-symbols-outlined">close</span>
@@ -179,7 +177,7 @@ const StyleDNAProfileView = ({ closet, onClose }: StyleDNAProfileViewProps) => {
                     </header>
 
                     <div className="flex-grow overflow-y-auto p-6">
-                        <motion.div 
+                        <motion.div
                             variants={containerVariants}
                             initial="hidden"
                             animate="visible"
@@ -197,12 +195,12 @@ const StyleDNAProfileView = ({ closet, onClose }: StyleDNAProfileViewProps) => {
 
                             <motion.div variants={itemVariants}>
                                 <Card variant="glass" padding="xl" rounded="3xl" className="text-center">
-                                    <motion.div 
-                                        animate={{ 
+                                    <motion.div
+                                        animate={{
                                             rotate: [0, 360],
                                             scale: [1, 1.1, 1]
                                         }}
-                                        transition={{ 
+                                        transition={{
                                             rotate: { duration: 20, repeat: Infinity, ease: "linear" },
                                             scale: { duration: 2, repeat: Infinity, ease: "easeInOut" }
                                         }}
@@ -217,7 +215,7 @@ const StyleDNAProfileView = ({ closet, onClose }: StyleDNAProfileViewProps) => {
                                 </Card>
                             </motion.div>
 
-                            <motion.div 
+                            <motion.div
                                 variants={containerVariants}
                                 className="grid md:grid-cols-2 gap-4"
                             >
@@ -229,7 +227,7 @@ const StyleDNAProfileView = ({ closet, onClose }: StyleDNAProfileViewProps) => {
                                 ].map((feature, idx) => (
                                     <motion.div key={idx} variants={itemVariants}>
                                         <Card variant="glass" padding="lg" rounded="2xl" className="hover:shadow-lg transition-shadow">
-                                            <motion.div 
+                                            <motion.div
                                                 whileHover={{ scale: 1.1, rotate: 5 }}
                                                 className="flex items-center gap-3 mb-3"
                                             >
@@ -259,7 +257,7 @@ const StyleDNAProfileView = ({ closet, onClose }: StyleDNAProfileViewProps) => {
                                             'Celebrity matches: influencers con estilo similar',
                                             'Insights de evolución: cómo está cambiando tu estilo'
                                         ].map((item, idx) => (
-                                            <motion.li 
+                                            <motion.li
                                                 key={idx}
                                                 initial={{ opacity: 0, x: -10 }}
                                                 animate={{ opacity: 1, x: 0 }}
@@ -283,7 +281,7 @@ const StyleDNAProfileView = ({ closet, onClose }: StyleDNAProfileViewProps) => {
                                             <p className="text-sm text-text-secondary dark:text-gray-400">
                                                 Necesitás al menos 10 prendas para un análisis básico. Con 15+ prendas obtenés confidence medium. Con 30+ prendas el análisis es altamente confiable.
                                             </p>
-                                            <motion.p 
+                                            <motion.p
                                                 animate={{ scale: [1, 1.05, 1] }}
                                                 transition={{ duration: 2, repeat: Infinity }}
                                                 className="text-sm font-bold mt-2 dark:text-gray-200"
@@ -316,7 +314,7 @@ const StyleDNAProfileView = ({ closet, onClose }: StyleDNAProfileViewProps) => {
     // Analyzing Step
     if (currentStep === 'analyzing') {
         return (
-            <motion.div 
+            <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 className="fixed inset-0 z-50"
@@ -326,7 +324,7 @@ const StyleDNAProfileView = ({ closet, onClose }: StyleDNAProfileViewProps) => {
                 <div className="absolute inset-0 bg-white/90 dark:bg-background-dark/90 backdrop-blur-xl flex flex-col items-center justify-center p-6">
                     <Card variant="glass" padding="xl" rounded="3xl" className="max-w-md w-full text-center">
                         <Loader />
-                        <motion.h3 
+                        <motion.h3
                             animate={{ opacity: [0.5, 1, 0.5] }}
                             transition={{ duration: 2, repeat: Infinity }}
                             className="text-2xl font-bold mt-6 mb-2 dark:text-gray-200"
@@ -386,23 +384,23 @@ const StyleDNAProfileView = ({ closet, onClose }: StyleDNAProfileViewProps) => {
         }));
 
         return (
-            <motion.div 
+            <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 className="fixed inset-0 z-50"
             >
                 <div onClick={onClose} className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
 
-                <motion.div 
+                <motion.div
                     initial={{ scale: 0.95, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
                     className="absolute inset-0 bg-white/90 dark:bg-background-dark/90 backdrop-blur-xl flex flex-col md:inset-y-4 md:inset-x-4 md:rounded-3xl md:border md:border-white/20"
                 >
                     <header className="p-6 flex items-center justify-between border-b border-gray-200 dark:border-gray-700">
-                        <motion.button 
+                        <motion.button
                             whileHover={{ scale: 1.1 }}
                             whileTap={{ scale: 0.9 }}
-                            onClick={() => setCurrentStep('intro')} 
+                            onClick={() => setCurrentStep('intro')}
                             className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl dark:text-gray-200"
                         >
                             <span className="material-symbols-outlined">arrow_back</span>
@@ -430,25 +428,23 @@ const StyleDNAProfileView = ({ closet, onClose }: StyleDNAProfileViewProps) => {
                                 <span className="material-symbols-outlined">download</span>
                             </motion.button>
                             {/* Credits Indicator */}
-                            <motion.div 
+                            <motion.div
                                 whileHover={{ scale: 1.05 }}
-                                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg ${
-                                    credits.remaining <= 3
+                                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg ${credits.remaining <= 3
                                         ? 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
                                         : 'bg-gray-100 dark:bg-gray-800'
-                                }`}
+                                    }`}
                             >
                                 <span className="material-symbols-rounded text-gray-500 text-sm">toll</span>
-                                <span className={`text-xs font-medium ${
-                                    credits.remaining <= 3 ? 'text-red-600 dark:text-red-400' : 'text-gray-600 dark:text-gray-300'
-                                }`}>
+                                <span className={`text-xs font-medium ${credits.remaining <= 3 ? 'text-red-600 dark:text-red-400' : 'text-gray-600 dark:text-gray-300'
+                                    }`}>
                                     {credits.limit === -1 ? '∞' : credits.remaining}
                                 </span>
                             </motion.div>
-                            <motion.button 
+                            <motion.button
                                 whileHover={{ scale: 1.1, rotate: 90 }}
                                 whileTap={{ scale: 0.9 }}
-                                onClick={onClose} 
+                                onClick={onClose}
                                 className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl dark:text-gray-200"
                             >
                                 <span className="material-symbols-outlined">close</span>
@@ -457,7 +453,7 @@ const StyleDNAProfileView = ({ closet, onClose }: StyleDNAProfileViewProps) => {
                     </header>
 
                     <div className="flex-grow overflow-y-auto p-6 pb-24" ref={resultsRef}>
-                        <motion.div 
+                        <motion.div
                             variants={containerVariants}
                             initial="hidden"
                             animate="visible"
@@ -467,12 +463,12 @@ const StyleDNAProfileView = ({ closet, onClose }: StyleDNAProfileViewProps) => {
                             <motion.div variants={itemVariants}>
                                 <Card variant="glass" padding="lg" rounded="3xl" className="bg-gradient-to-br from-primary/10 to-purple-600/10">
                                     <div className="text-center mb-4">
-                                        <motion.div 
-                                            animate={{ 
+                                        <motion.div
+                                            animate={{
                                                 rotate: [0, 360],
                                                 scale: [1, 1.1, 1]
                                             }}
-                                            transition={{ 
+                                            transition={{
                                                 rotate: { duration: 20, repeat: Infinity, ease: "linear" },
                                                 scale: { duration: 2, repeat: Infinity, ease: "easeInOut" }
                                             }}
@@ -496,7 +492,7 @@ const StyleDNAProfileView = ({ closet, onClose }: StyleDNAProfileViewProps) => {
                                             { label: 'Uniqueness', value: dnaProfile.uniqueness_score, icon: 'auto_awesome' },
                                             { label: 'Confidence', value: dnaProfile.confidence_level, icon: 'verified' }
                                         ].map((stat, idx) => (
-                                            <motion.div 
+                                            <motion.div
                                                 key={idx}
                                                 whileHover={{ scale: 1.05, y: -5 }}
                                                 className="text-center bg-white/50 dark:bg-gray-800/50 rounded-2xl p-4"
@@ -528,11 +524,10 @@ const StyleDNAProfileView = ({ closet, onClose }: StyleDNAProfileViewProps) => {
                                                 whileHover={{ scale: 1.05 }}
                                                 whileTap={{ scale: 0.95 }}
                                                 onClick={() => setActiveSection(tab.id)}
-                                                className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all whitespace-nowrap ${
-                                                    activeSection === tab.id
+                                                className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all whitespace-nowrap ${activeSection === tab.id
                                                         ? 'bg-primary text-white'
                                                         : 'hover:bg-gray-100 dark:hover:bg-gray-800 dark:text-gray-200'
-                                                }`}
+                                                    }`}
                                             >
                                                 <span className="material-symbols-outlined text-sm">{tab.icon}</span>
                                                 <span className="text-sm font-medium">{tab.label}</span>
@@ -573,7 +568,7 @@ const StyleDNAProfileView = ({ closet, onClose }: StyleDNAProfileViewProps) => {
                                                 {dnaProfile.occasion_breakdown
                                                     .sort((a, b) => b.percentage - a.percentage)
                                                     .map((occasion, idx) => (
-                                                        <motion.div 
+                                                        <motion.div
                                                             key={occasion.occasion}
                                                             initial={{ opacity: 0, scale: 0.9 }}
                                                             animate={{ opacity: 1, scale: 1 }}
@@ -608,7 +603,7 @@ const StyleDNAProfileView = ({ closet, onClose }: StyleDNAProfileViewProps) => {
                                                 </h3>
                                                 <div className="space-y-4">
                                                     {dnaProfile.style_evolution_insights.map((insight, idx) => (
-                                                        <motion.div 
+                                                        <motion.div
                                                             key={idx}
                                                             initial={{ opacity: 0, x: -20 }}
                                                             animate={{ opacity: 1, x: 0 }}
@@ -697,7 +692,7 @@ const StyleDNAProfileView = ({ closet, onClose }: StyleDNAProfileViewProps) => {
                                                     .sort((a, b) => b.percentage - a.percentage)
                                                     .filter(a => a.percentage > 0)
                                                     .map((archetype, idx) => (
-                                                        <motion.div 
+                                                        <motion.div
                                                             key={archetype.archetype}
                                                             initial={{ opacity: 0, x: -20 }}
                                                             animate={{ opacity: 1, x: 0 }}
@@ -738,7 +733,7 @@ const StyleDNAProfileView = ({ closet, onClose }: StyleDNAProfileViewProps) => {
                                                 <span className="material-symbols-outlined text-primary">palette</span>
                                                 Perfil de Color
                                             </h3>
-                                            
+
                                             <div className="grid md:grid-cols-2 gap-6 mb-6">
                                                 <motion.div whileHover={{ scale: 1.02 }} className="bg-gradient-to-br from-primary/10 to-purple-600/10 rounded-2xl p-4">
                                                     <p className="text-sm font-medium mb-2 dark:text-gray-200">
@@ -756,7 +751,7 @@ const StyleDNAProfileView = ({ closet, onClose }: StyleDNAProfileViewProps) => {
                                                 <p className="text-sm font-bold mb-3 dark:text-gray-200">Colores Dominantes:</p>
                                                 <div className="flex flex-wrap gap-3">
                                                     {dnaProfile.color_profile.dominant_colors.map((color, idx) => (
-                                                        <motion.div 
+                                                        <motion.div
                                                             key={idx}
                                                             initial={{ opacity: 0, scale: 0 }}
                                                             animate={{ opacity: 1, scale: 1 }}
@@ -780,7 +775,7 @@ const StyleDNAProfileView = ({ closet, onClose }: StyleDNAProfileViewProps) => {
                                                     <p className="text-sm font-bold mb-3 dark:text-gray-200">Neutrals Favoritos:</p>
                                                     <div className="flex flex-wrap gap-2">
                                                         {dnaProfile.color_profile.favorite_neutrals.map((color, idx) => (
-                                                            <motion.span 
+                                                            <motion.span
                                                                 key={idx}
                                                                 initial={{ opacity: 0, y: 10 }}
                                                                 animate={{ opacity: 1, y: 0 }}
@@ -797,7 +792,7 @@ const StyleDNAProfileView = ({ closet, onClose }: StyleDNAProfileViewProps) => {
                                                     <p className="text-sm font-bold mb-3 dark:text-gray-200">Accent Colors:</p>
                                                     <div className="flex flex-wrap gap-2">
                                                         {dnaProfile.color_profile.accent_colors.map((color, idx) => (
-                                                            <motion.span 
+                                                            <motion.span
                                                                 key={idx}
                                                                 initial={{ opacity: 0, y: 10 }}
                                                                 animate={{ opacity: 1, y: 0 }}
@@ -824,7 +819,7 @@ const StyleDNAProfileView = ({ closet, onClose }: StyleDNAProfileViewProps) => {
                                                     .sort((a, b) => b.percentage - a.percentage)
                                                     .filter(s => s.percentage > 0)
                                                     .map((silhouette, idx) => (
-                                                        <motion.div 
+                                                        <motion.div
                                                             key={silhouette.type}
                                                             initial={{ opacity: 0, x: -20 }}
                                                             animate={{ opacity: 1, x: 0 }}
@@ -886,7 +881,7 @@ const StyleDNAProfileView = ({ closet, onClose }: StyleDNAProfileViewProps) => {
                                             </h3>
                                             <div className="space-y-4">
                                                 {dnaProfile.personality_traits.map((trait, idx) => (
-                                                    <motion.div 
+                                                    <motion.div
                                                         key={idx}
                                                         initial={{ opacity: 0, y: 20 }}
                                                         animate={{ opacity: 1, y: 0 }}
@@ -903,11 +898,10 @@ const StyleDNAProfileView = ({ closet, onClose }: StyleDNAProfileViewProps) => {
                                                                         initial={{ scale: 0 }}
                                                                         animate={{ scale: 1 }}
                                                                         transition={{ delay: idx * 0.1 + i * 0.05 }}
-                                                                        className={`w-3 h-3 rounded-full ${
-                                                                            i < trait.score
+                                                                        className={`w-3 h-3 rounded-full ${i < trait.score
                                                                                 ? 'bg-primary'
                                                                                 : 'bg-gray-200 dark:bg-gray-700'
-                                                                        }`}
+                                                                            }`}
                                                                     />
                                                                 ))}
                                                             </div>
@@ -935,7 +929,7 @@ const StyleDNAProfileView = ({ closet, onClose }: StyleDNAProfileViewProps) => {
                                             </h3>
                                             <div className="space-y-4">
                                                 {dnaProfile.celebrity_matches.map((celeb, idx) => (
-                                                    <motion.div 
+                                                    <motion.div
                                                         key={idx}
                                                         initial={{ opacity: 0, scale: 0.9 }}
                                                         animate={{ opacity: 1, scale: 1 }}
@@ -944,10 +938,10 @@ const StyleDNAProfileView = ({ closet, onClose }: StyleDNAProfileViewProps) => {
                                                         className="border border-gray-200 dark:border-gray-700 rounded-2xl p-6 bg-gradient-to-br from-white to-gray-50 dark:from-gray-800 dark:to-gray-900 relative overflow-hidden"
                                                     >
                                                         <motion.div
-                                                            animate={{ 
+                                                            animate={{
                                                                 rotate: [0, 360],
                                                             }}
-                                                            transition={{ 
+                                                            transition={{
                                                                 duration: 20,
                                                                 repeat: Infinity,
                                                                 ease: "linear"
@@ -966,7 +960,7 @@ const StyleDNAProfileView = ({ closet, onClose }: StyleDNAProfileViewProps) => {
                                                         <p className="text-sm text-text-secondary dark:text-gray-400 mb-3">{celeb.reasoning}</p>
                                                         <div className="flex flex-wrap gap-2">
                                                             {celeb.shared_characteristics.map((char, charIdx) => (
-                                                                <motion.span 
+                                                                <motion.span
                                                                     key={charIdx}
                                                                     initial={{ opacity: 0, scale: 0 }}
                                                                     animate={{ opacity: 1, scale: 1 }}
@@ -988,7 +982,7 @@ const StyleDNAProfileView = ({ closet, onClose }: StyleDNAProfileViewProps) => {
                         </motion.div>
                     </div>
 
-                    <motion.div 
+                    <motion.div
                         initial={{ y: 100 }}
                         animate={{ y: 0 }}
                         className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-white/90 to-transparent dark:from-background-dark/90"

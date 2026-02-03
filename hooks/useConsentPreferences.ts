@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getConsentPreferences, subscribeConsent, type ConsentPreferences } from '../services/consentService';
+import { getConsentPreferences, subscribeConsent, type ConsentPreferences } from '../src/services/consentService';
 
 export function useConsentPreferences(): ConsentPreferences | null {
   const [prefs, setPrefs] = useState<ConsentPreferences | null>(() => getConsentPreferences());

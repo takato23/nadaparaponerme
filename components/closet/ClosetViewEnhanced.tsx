@@ -29,7 +29,7 @@ import { CoverFlowCarousel } from './CoverFlowCarousel';
 import LoadDemoDataButton from './LoadDemoDataButton';
 import { useCloset } from '../../contexts/ClosetContext';
 import { getUniqueColors, getUniqueTags, getUniqueSeasons } from '../../utils/closetUtils';
-import { findSimilarByImage } from '../../services/geminiService';
+import { findSimilarByImage } from '../../src/services/geminiService';
 import type { ClothingItem } from '../../types';
 import { useNavigateTransition } from '../../hooks/useNavigateTransition';
 import { ROUTES } from '../../src/routes';

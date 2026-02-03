@@ -4,7 +4,7 @@ import type { ClothingItem, ColorPaletteAnalysis } from '../types';
 import { analyzeColorPalette } from '../src/services/aiService';
 import Loader from './Loader';
 import { Card } from './ui/Card';
-import { getCreditStatus } from '../services/usageTrackingService';
+import { getCreditStatus } from '../src/services/usageTrackingService';
 
 interface ColorPaletteViewProps {
   closet: ClothingItem[];
@@ -72,15 +72,13 @@ const ColorPaletteView = ({ closet, onClose }: ColorPaletteViewProps) => {
           </div>
           <div className="flex items-center gap-3">
             {/* Credits Indicator */}
-            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg ${
-              credits.remaining <= 3
+            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg ${credits.remaining <= 3
                 ? 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
                 : 'bg-gray-100 dark:bg-gray-800'
-            }`}>
-              <span className="material-symbols-rounded text-gray-500 text-sm">toll</span>
-              <span className={`text-xs font-medium ${
-                credits.remaining <= 3 ? 'text-red-600 dark:text-red-400' : 'text-gray-600 dark:text-gray-300'
               }`}>
+              <span className="material-symbols-rounded text-gray-500 text-sm">toll</span>
+              <span className={`text-xs font-medium ${credits.remaining <= 3 ? 'text-red-600 dark:text-red-400' : 'text-gray-600 dark:text-gray-300'
+                }`}>
                 {credits.limit === -1 ? '∞' : credits.remaining}
               </span>
             </div>

@@ -25,7 +25,7 @@ import {
   type BorrowRequest,
   type BorrowRequestSent
 } from '../src/services/borrowedItemsService';
-import { formatRelativeTime } from '../services/activityFeedService';
+import { formatRelativeTime } from '../src/services/activityFeedService';
 
 interface BorrowedItemsViewProps {
   onClose: () => void;
@@ -175,21 +175,19 @@ export default function BorrowedItemsView({ onClose, onShowToast }: BorrowedItem
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex-1 min-w-[80px] px-3 py-3 text-sm font-medium transition-colors relative ${
-                activeTab === tab.id
+              className={`flex-1 min-w-[80px] px-3 py-3 text-sm font-medium transition-colors relative ${activeTab === tab.id
                   ? 'text-teal-600 dark:text-teal-400'
                   : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
-              }`}
+                }`}
             >
               <div className="flex items-center justify-center gap-1.5">
                 <span className="material-symbols-rounded text-lg">{tab.icon}</span>
                 <span className="hidden sm:inline">{tab.label}</span>
                 {tab.count > 0 && (
-                  <span className={`ml-1 px-1.5 py-0.5 text-xs rounded-full ${
-                    activeTab === tab.id
+                  <span className={`ml-1 px-1.5 py-0.5 text-xs rounded-full ${activeTab === tab.id
                       ? 'bg-teal-100 text-teal-700 dark:bg-teal-900 dark:text-teal-300'
                       : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'
-                  }`}>
+                    }`}>
                     {tab.count}
                   </span>
                 )}

@@ -9,7 +9,7 @@
 
 import React, { useState, useMemo, useEffect, Suspense, lazy } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { getCreditStatus } from '../services/usageTrackingService';
+import { getCreditStatus } from '../src/services/usageTrackingService';
 
 // Lazy load Eye3D para mejor performance
 const Eye3D = lazy(() => import('./Eye3D'));
@@ -222,17 +222,14 @@ const GenerateFitViewImproved: React.FC<GenerateFitViewImprovedProps> = ({
             </div>
 
             {/* Credits */}
-            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl ${
-              creditsStatus.remaining <= 2
+            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl ${creditsStatus.remaining <= 2
                 ? 'bg-red-500/20 border border-red-500/30'
                 : 'bg-white/10'
-            }`}>
-              <span className={`material-symbols-rounded text-lg ${
-                creditsStatus.remaining <= 2 ? 'text-red-400' : 'text-white/60'
-              }`}>toll</span>
-              <span className={`text-sm font-semibold ${
-                creditsStatus.remaining <= 2 ? 'text-red-400' : 'text-white/80'
               }`}>
+              <span className={`material-symbols-rounded text-lg ${creditsStatus.remaining <= 2 ? 'text-red-400' : 'text-white/60'
+                }`}>toll</span>
+              <span className={`text-sm font-semibold ${creditsStatus.remaining <= 2 ? 'text-red-400' : 'text-white/80'
+                }`}>
                 {creditsStatus.limit === -1 ? '∞' : creditsStatus.remaining}
               </span>
             </div>
@@ -269,15 +266,13 @@ const GenerateFitViewImproved: React.FC<GenerateFitViewImprovedProps> = ({
               <button
                 key={occasion.id}
                 onClick={() => setSelectedOccasion(selectedOccasion === occasion.id ? null : occasion.id)}
-                className={`p-3 rounded-xl border transition-all flex flex-col items-center gap-2 ${
-                  selectedOccasion === occasion.id
+                className={`p-3 rounded-xl border transition-all flex flex-col items-center gap-2 ${selectedOccasion === occasion.id
                     ? 'bg-purple-500/20 border-purple-500/50 text-purple-300'
                     : 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20 text-white/70'
-                }`}
+                  }`}
               >
-                <span className={`material-symbols-rounded text-2xl ${
-                  selectedOccasion === occasion.id ? 'text-purple-400' : 'text-white/50'
-                }`}>
+                <span className={`material-symbols-rounded text-2xl ${selectedOccasion === occasion.id ? 'text-purple-400' : 'text-white/50'
+                  }`}>
                   {occasion.icon}
                 </span>
                 <span className="text-xs font-medium">
@@ -304,11 +299,10 @@ const GenerateFitViewImproved: React.FC<GenerateFitViewImprovedProps> = ({
                     <button
                       key={ref.id}
                       onClick={() => setSelectedRefinement(selectedRefinement === ref.id ? null : ref.id)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${
-                        selectedRefinement === ref.id
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${selectedRefinement === ref.id
                           ? 'bg-white text-gray-900'
                           : 'bg-white/10 text-white/70 hover:bg-white/20'
-                      }`}
+                        }`}
                     >
                       <span className="material-symbols-rounded text-sm">{ref.icon}</span>
                       {ref.label}
@@ -391,11 +385,10 @@ const GenerateFitViewImproved: React.FC<GenerateFitViewImprovedProps> = ({
           <button
             onClick={handleGenerate}
             disabled={!canGenerate}
-            className={`w-full py-3.5 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 ${
-              canGenerate
+            className={`w-full py-3.5 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 ${canGenerate
                 ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40'
                 : 'bg-white/10 text-white/40 cursor-not-allowed'
-            }`}
+              }`}
           >
             {isGenerating ? (
               <>

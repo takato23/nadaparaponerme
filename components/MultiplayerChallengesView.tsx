@@ -28,7 +28,7 @@ import {
   canVote as canVoteMock,
   formatRank,
   getChallengeTypeIcon
-} from '../services/multiplayerChallengesService';
+} from '../src/services/multiplayerChallengesService';
 import * as challengesService from '../src/services/challengesService';
 import { supabase } from '../src/lib/supabase';
 import Loader from './Loader';
@@ -158,10 +158,10 @@ const MultiplayerChallengesView = ({ closet, onClose }: MultiplayerChallengesVie
       const updated = challenges.map((c) =>
         c.id === challenge.id
           ? {
-              ...c,
-              participant_ids: [...c.participant_ids, currentUserId],
-              participant_count: c.participant_count + 1
-            }
+            ...c,
+            participant_ids: [...c.participant_ids, currentUserId],
+            participant_count: c.participant_count + 1
+          }
           : c
       );
       setChallenges(updated);
@@ -223,7 +223,7 @@ const MultiplayerChallengesView = ({ closet, onClose }: MultiplayerChallengesVie
         submission.id
       );
       if (!canVoteResult) {
-        toast.warning(reason);
+        toast(reason, { icon: '⚠️' });
         return;
       }
 
@@ -241,18 +241,18 @@ const MultiplayerChallengesView = ({ closet, onClose }: MultiplayerChallengesVie
       // Mock vote
       const { canVote: canVoteResult, reason } = canVoteMock(selectedChallenge, submission, currentUserId);
       if (!canVoteResult) {
-        toast.warning(reason);
+        toast(reason, { icon: '⚠️' });
         return;
       }
 
       const updated = submissions.map((s) =>
         s.id === submission.id
           ? {
-              ...s,
-              votes_count: s.votes_count + 1,
-              voters: [...s.voters, currentUserId],
-              score: (s.votes_count + 1) * 10
-            }
+            ...s,
+            votes_count: s.votes_count + 1,
+            voters: [...s.voters, currentUserId],
+            score: (s.votes_count + 1) * 10
+          }
           : s
       );
       setSubmissions(updated);
@@ -283,11 +283,10 @@ const MultiplayerChallengesView = ({ closet, onClose }: MultiplayerChallengesVie
           <button
             key={tab.id}
             onClick={() => setCurrentTab(tab.id as TabType)}
-            className={`flex items-center gap-2 px-4 py-3 border-b-2 transition-colors whitespace-nowrap ${
-              currentTab === tab.id
-                ? 'border-primary text-primary font-semibold'
-                : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-            }`}
+            className={`flex items-center gap-2 px-4 py-3 border-b-2 transition-colors whitespace-nowrap ${currentTab === tab.id
+              ? 'border-primary text-primary font-semibold'
+              : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+              }`}
           >
             <span className="material-symbols-outlined text-lg">{tab.icon}</span>
             <span className="text-sm">{tab.label}</span>
@@ -317,11 +316,10 @@ const MultiplayerChallengesView = ({ closet, onClose }: MultiplayerChallengesVie
                     <button
                       key={filter.value}
                       onClick={() => setStatusFilter(filter.value as ChallengeStatus | 'all')}
-                      className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
-                        statusFilter === filter.value
-                          ? 'bg-primary text-white'
-                          : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
-                      }`}
+                      className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${statusFilter === filter.value
+                        ? 'bg-primary text-white'
+                        : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+                        }`}
                     >
                       {filter.label}
                     </button>
@@ -457,7 +455,7 @@ const ChallengeCard = ({ challenge, currentUserId, onClick, onJoin, isParticipat
   const difficultyBadge = getDifficultyBadge(challenge.difficulty);
   const timeRemaining = formatTimeRemaining(challenge.end_time);
   const isParticipant = challenge.participant_ids.includes(currentUserId);
-  const { canJoin } = canJoinChallenge(challenge, currentUserId);
+  const { canJoin } = canJoinChallengeMock(challenge, currentUserId);
 
   return (
     <div
@@ -590,9 +588,8 @@ const AchievementCard = ({ achievement, currentProgress }: AchievementCardProps)
 
   return (
     <div
-      className={`liquid-glass rounded-2xl p-4 ${
-        isUnlocked ? 'border-2 border-primary' : 'opacity-75'
-      }`}
+      className={`liquid-glass rounded-2xl p-4 ${isUnlocked ? 'border-2 border-primary' : 'opacity-75'
+        }`}
     >
       <div className="flex items-start gap-4">
         {/* Icon */}
@@ -707,7 +704,7 @@ const ChallengeDetailModal = ({
           ) : (
             <div className="space-y-4">
               {submissions.map((submission) => {
-                const canVoteResult = canVote(challenge, submission, currentUserId).canVote;
+                const canVoteResult = canVoteMock(challenge, submission, currentUserId).canVote;
 
                 return (
                   <div

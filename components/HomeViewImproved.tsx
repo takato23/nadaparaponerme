@@ -12,7 +12,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import type { User } from '@supabase/supabase-js';
 import type { ClothingItem, WeatherData, GeneratedLook } from '../types';
 import type { UseSubscriptionReturn } from '../hooks/useSubscription';
-import { getCurrentWeather, getUserCity } from '../services/weatherService';
+import { getCurrentWeather, getUserCity } from '../src/services/weatherService';
 import { getGeneratedLooks } from '../src/services/generatedLooksService';
 import { useThemeContext } from '../contexts/ThemeContext';
 import { ADSENSE_ENABLED, ADSENSE_HOME_SLOT } from '../src/config/runtime';

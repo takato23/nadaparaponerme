@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import type { User } from '@supabase/supabase-js';
-import { supabase } from '../lib/supabase';
-import { signIn as supabaseSignIn, signUp as supabaseSignUp, signOut as supabaseSignOut } from '../services/authService';
+import { supabase } from '../src/lib/supabase';
+import { signIn as supabaseSignIn, signUp as supabaseSignUp, signOut as supabaseSignOut } from '../src/services/authService';
 import { useFeatureFlag } from './useFeatureFlag';
 
 interface AuthState {

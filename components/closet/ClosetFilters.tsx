@@ -168,7 +168,7 @@ export default function ClosetFilters({
                   Categorías
                 </h3>
                 <div className="grid grid-cols-3 gap-3">
-                  {CATEGORIES.map((category) => {
+                  {CATEGORY_FILTERS.map((category) => {
                     const isSelected = localFilters.categories?.includes(category.value);
 
                     return (

@@ -13,7 +13,7 @@ import {
   getActivityDescription,
   formatRelativeTime,
   formatEngagementCount
-} from '../services/activityFeedService';
+} from '../src/services/activityFeedService';
 
 interface ActivityCardProps {
   activity: ActivityFeedItem;
@@ -199,11 +199,10 @@ const ActivityCard = ({
                 {[...Array(5)].map((_, i) => (
                   <span
                     key={i}
-                    className={`material-symbols-outlined text-xl ${
-                      i < activity.outfit_rating!.overall_rating
+                    className={`material-symbols-outlined text-xl ${i < activity.outfit_rating!.overall_rating
                         ? 'text-yellow-500'
                         : 'text-gray-300 dark:text-gray-700'
-                    }`}
+                      }`}
                     style={{ fontVariationSettings: i < activity.outfit_rating!.overall_rating ? '"FILL" 1' : '"FILL" 0' }}
                   >
                     star
@@ -392,11 +391,10 @@ const ActivityCard = ({
           {/* Like button */}
           <button
             onClick={() => onLike(activity.id)}
-            className={`p-2 rounded-full transition-all ${
-              activity.is_liked
+            className={`p-2 rounded-full transition-all ${activity.is_liked
                 ? 'text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20'
                 : 'text-text-secondary hover:bg-gray-100 dark:hover:bg-gray-800'
-            }`}
+              }`}
             aria-label={activity.is_liked ? 'Quitar like' : 'Dar like'}
           >
             <span
@@ -421,11 +419,10 @@ const ActivityCard = ({
           {/* Share button */}
           <button
             onClick={() => onShare(activity.id)}
-            className={`p-2 rounded-full transition-all ${
-              activity.is_shared
+            className={`p-2 rounded-full transition-all ${activity.is_shared
                 ? 'text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20'
                 : 'text-text-secondary hover:bg-gray-100 dark:hover:bg-gray-800'
-            }`}
+              }`}
             aria-label={activity.is_shared ? 'Dejar de compartir' : 'Compartir'}
           >
             <span

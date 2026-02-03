@@ -3,7 +3,7 @@ import './src/index.css';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import { ThemeProvider } from './contexts/ThemeContext';
-import { ErrorBoundary } from './components/ErrorBoundary';
+import ErrorBoundary from './components/ErrorBoundary';
 
 // ⛔ SECURITY: Gemini API initialization removed - all AI calls go through Edge Functions
 

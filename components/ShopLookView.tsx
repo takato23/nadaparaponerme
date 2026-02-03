@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import type { GroundingChunk } from '../types';
-import { searchProductsFromImage, searchProductsForItem } from '../services/geminiService';
+import { searchProductsFromImage, searchProductsForItem } from '../src/services/geminiService';
 import { getShoppingLinks, getSponsoredPlacements, ShoppingLink } from '../src/services/monetizationService';
 import Loader from './Loader';
 import { Card } from './ui/Card';

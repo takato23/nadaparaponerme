@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getUserUsageMetrics, getUserSubscription, formatUsage, getUsagePercentage, type UsageMetrics, type Subscription } from '../services/subscriptionService';
+import { getUserUsageMetrics, getUserSubscription, formatUsage, getUsagePercentage, type UsageMetrics, type Subscription } from '../src/services/subscriptionService';
 
 interface SubscriptionBadgeProps {
   className?: string;
@@ -42,8 +42,8 @@ export function SubscriptionBadge({ className = '', showDetails = false }: Subsc
   const colorClass = isAtLimit
     ? 'bg-red-500/10 text-red-600 dark:text-red-400'
     : isNearLimit
-    ? 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400'
-    : 'bg-green-500/10 text-green-600 dark:text-green-400';
+      ? 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400'
+      : 'bg-green-500/10 text-green-600 dark:text-green-400';
 
   return (
     <div className={`${className}`}>
@@ -78,13 +78,12 @@ export function SubscriptionBadge({ className = '', showDetails = false }: Subsc
             {usage.ai_generations_limit !== -1 && (
               <div className="w-full bg-black/10 dark:bg-white/10 rounded-full h-2 overflow-hidden">
                 <div
-                  className={`h-full transition-all duration-300 ${
-                    isAtLimit
+                  className={`h-full transition-all duration-300 ${isAtLimit
                       ? 'bg-red-500'
                       : isNearLimit
-                      ? 'bg-yellow-500'
-                      : 'bg-green-500'
-                  }`}
+                        ? 'bg-yellow-500'
+                        : 'bg-green-500'
+                    }`}
                   style={{ width: `${Math.min(100, usagePercentage)}%` }}
                 />
               </div>

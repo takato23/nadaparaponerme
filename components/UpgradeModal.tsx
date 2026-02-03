@@ -7,7 +7,7 @@
 
 import React from 'react';
 import { useUserCredits } from '../hooks/useUserCredits';
-import { getFeatureDisplayName, type FeatureType } from '../services/usageTrackingService';
+import { getFeatureDisplayName, type FeatureType } from '../src/services/usageTrackingService';
 
 interface UpgradeModalProps {
   isOpen: boolean;

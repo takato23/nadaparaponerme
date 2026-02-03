@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { useThemeContext } from '../contexts/ThemeContext';
 import { Card } from './ui/Card';
-import { clearToneCache } from '../services/aiToneHelper';
+import { clearToneCache } from '../src/services/aiToneHelper';
 import { FaceReferenceUploader } from './FaceReferenceUploader';
 import { getPendingRequestsCount, getActiveBorrowsCount } from '../src/services/borrowedItemsService';
 import { getProfileVisibility, updateProfileVisibility } from '../src/services/profileService';
@@ -230,16 +230,14 @@ const ProfileView = ({
                     <button
                         onClick={handleTogglePublicProfile}
                         disabled={isPublicProfile === null || isUpdatingVisibility}
-                        className={`relative w-14 h-8 rounded-full transition-colors ${
-                            isPublicProfile ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-700'
-                        } ${isUpdatingVisibility ? 'opacity-60 cursor-not-allowed' : ''}`}
+                        className={`relative w-14 h-8 rounded-full transition-colors ${isPublicProfile ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-700'
+                            } ${isUpdatingVisibility ? 'opacity-60 cursor-not-allowed' : ''}`}
                         aria-pressed={Boolean(isPublicProfile)}
                         aria-label="Alternar perfil público"
                     >
                         <span
-                            className={`absolute top-1 left-1 w-6 h-6 rounded-full bg-white shadow transition-transform ${
-                                isPublicProfile ? 'translate-x-6' : 'translate-x-0'
-                            }`}
+                            className={`absolute top-1 left-1 w-6 h-6 rounded-full bg-white shadow transition-transform ${isPublicProfile ? 'translate-x-6' : 'translate-x-0'
+                                }`}
                         />
                     </button>
                 </Card>

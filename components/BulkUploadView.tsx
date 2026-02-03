@@ -332,7 +332,7 @@ export default function BulkUploadView({ onClose, onAddItemsLocal, onClosetSync,
     const successItems = uploadItems.filter(item => item.status === 'success' && item.metadata);
 
     if (successItems.length === 0) {
-      toast.warning('No hay items procesados exitosamente');
+      toast('No hay items procesados exitosamente', { icon: '⚠️' });
       return;
     }
 
@@ -438,11 +438,10 @@ export default function BulkUploadView({ onClose, onAddItemsLocal, onClosetSync,
         <div className="flex-1 overflow-y-auto p-6">
           {uploadItems.length === 0 ? (
             <div
-              className={`text-center py-12 border-2 border-dashed rounded-3xl transition-colors ${
-                isDragging
+              className={`text-center py-12 border-2 border-dashed rounded-3xl transition-colors ${isDragging
                   ? 'border-primary bg-primary/5'
                   : 'border-gray-300 dark:border-gray-700'
-              }`}
+                }`}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
@@ -478,9 +477,8 @@ export default function BulkUploadView({ onClose, onAddItemsLocal, onClosetSync,
                 return (
                   <div
                     key={item.id}
-                    className={`relative aspect-square rounded-2xl overflow-hidden bg-gray-100 dark:bg-gray-800 ${
-                      isClickable ? 'cursor-pointer hover:ring-2 hover:ring-primary transition-all' : ''
-                    }`}
+                    className={`relative aspect-square rounded-2xl overflow-hidden bg-gray-100 dark:bg-gray-800 ${isClickable ? 'cursor-pointer hover:ring-2 hover:ring-primary transition-all' : ''
+                      }`}
                     onClick={() => isClickable && handleEditItem(item)}
                   >
                     {item.imageDataUrl ? (
@@ -500,73 +498,73 @@ export default function BulkUploadView({ onClose, onAddItemsLocal, onClosetSync,
                       </div>
                     )}
 
-                  {/* Status Overlay - solo visible cuando hay estado activo */}
-                  {item.status !== 'success' && (
-                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                      {item.status === 'pending' && (
-                        <div className="bg-white/20 backdrop-blur-sm px-3 py-1 rounded-full">
-                          <span className="text-white text-xs font-medium">Pendiente</span>
-                        </div>
-                      )}
-                      {item.status === 'analyzing' && (
-                        <div className="text-center">
-                          <Loader size="small" />
-                          <p className="text-white text-xs mt-2 font-bold">{item.progress}%</p>
-                        </div>
-                      )}
-                      {item.status === 'error' && (
-                        <div className="bg-red-500 rounded-full p-2">
-                          <span className="material-symbols-outlined text-white">error</span>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Success Badge - esquina superior izquierda */}
-                  {item.status === 'success' && (
-                    <div className="absolute top-2 left-2 bg-green-500 rounded-full p-1.5 flex items-center gap-1">
-                      <span className="material-symbols-outlined text-white text-sm">check</span>
-                    </div>
-                  )}
-
-                  {/* Edit indicator - centro cuando hover */}
-                  {item.status === 'success' && (
-                    <div className="absolute inset-0 bg-black/0 hover:bg-black/40 transition-colors flex items-center justify-center opacity-0 hover:opacity-100">
-                      <div className="bg-white/90 dark:bg-black/90 rounded-full px-4 py-2 flex items-center gap-2">
-                        <span className="material-symbols-outlined text-primary">edit</span>
-                        <span className="text-sm font-semibold">Editar</span>
+                    {/* Status Overlay - solo visible cuando hay estado activo */}
+                    {item.status !== 'success' && (
+                      <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                        {item.status === 'pending' && (
+                          <div className="bg-white/20 backdrop-blur-sm px-3 py-1 rounded-full">
+                            <span className="text-white text-xs font-medium">Pendiente</span>
+                          </div>
+                        )}
+                        {item.status === 'analyzing' && (
+                          <div className="text-center">
+                            <Loader size="small" />
+                            <p className="text-white text-xs mt-2 font-bold">{item.progress}%</p>
+                          </div>
+                        )}
+                        {item.status === 'error' && (
+                          <div className="bg-red-500 rounded-full p-2">
+                            <span className="material-symbols-outlined text-white">error</span>
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  )}
+                    )}
 
-                  {/* Remove Button */}
-                  {!isProcessing && (
-                    <button
-                      onClick={() => removeItem(item.id)}
-                      className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 hover:scale-110 transition-transform"
-                    >
-                      <span className="material-symbols-outlined text-sm">close</span>
-                    </button>
-                  )}
+                    {/* Success Badge - esquina superior izquierda */}
+                    {item.status === 'success' && (
+                      <div className="absolute top-2 left-2 bg-green-500 rounded-full p-1.5 flex items-center gap-1">
+                        <span className="material-symbols-outlined text-white text-sm">check</span>
+                      </div>
+                    )}
 
-                  {/* Metadata Preview */}
-                  {item.status === 'success' && item.metadata && (
-                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2">
-                      <p className="text-white text-xs font-medium truncate">
-                        {item.metadata.subcategory}
-                      </p>
-                      <p className="text-white/70 text-xs truncate">
-                        {item.metadata.color_primary}
-                      </p>
-                      {item.compressionMetrics && (
-                        <p className="text-green-400 text-xs mt-1 flex items-center gap-1">
-                          <span className="material-symbols-outlined text-xs">compress</span>
-                          {item.compressionMetrics.compressionRatio}% • {item.compressionMetrics.dimensions.width}×{item.compressionMetrics.dimensions.height}
+                    {/* Edit indicator - centro cuando hover */}
+                    {item.status === 'success' && (
+                      <div className="absolute inset-0 bg-black/0 hover:bg-black/40 transition-colors flex items-center justify-center opacity-0 hover:opacity-100">
+                        <div className="bg-white/90 dark:bg-black/90 rounded-full px-4 py-2 flex items-center gap-2">
+                          <span className="material-symbols-outlined text-primary">edit</span>
+                          <span className="text-sm font-semibold">Editar</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Remove Button */}
+                    {!isProcessing && (
+                      <button
+                        onClick={() => removeItem(item.id)}
+                        className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 hover:scale-110 transition-transform"
+                      >
+                        <span className="material-symbols-outlined text-sm">close</span>
+                      </button>
+                    )}
+
+                    {/* Metadata Preview */}
+                    {item.status === 'success' && item.metadata && (
+                      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2">
+                        <p className="text-white text-xs font-medium truncate">
+                          {item.metadata.subcategory}
                         </p>
-                      )}
-                    </div>
-                  )}
-                </div>
+                        <p className="text-white/70 text-xs truncate">
+                          {item.metadata.color_primary}
+                        </p>
+                        {item.compressionMetrics && (
+                          <p className="text-green-400 text-xs mt-1 flex items-center gap-1">
+                            <span className="material-symbols-outlined text-xs">compress</span>
+                            {item.compressionMetrics.compressionRatio}% • {item.compressionMetrics.dimensions.width}×{item.compressionMetrics.dimensions.height}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 );
               })}
 
