@@ -1,0 +1,44 @@
+<svg width="900" height="1200" viewBox="0 0 900 1200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0a0f1f" />
+      <stop offset="55%" stop-color="#111827" />
+      <stop offset="100%" stop-color="#1f2937" />
+    </linearGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(220 240) rotate(35) scale(560)">
+      <stop stop-color="#60a5fa" stop-opacity="0.25" />
+      <stop offset="1" stop-color="#60a5fa" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="top" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f472b6" />
+      <stop offset="100%" stop-color="#fb7185" />
+    </linearGradient>
+    <linearGradient id="pants" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#60a5fa" />
+      <stop offset="100%" stop-color="#38bdf8" />
+    </linearGradient>
+  </defs>
+
+  <rect width="900" height="1200" rx="48" fill="url(#bg)" />
+  <rect width="900" height="1200" rx="48" fill="url(#glow)" />
+
+  <circle cx="450" cy="220" r="90" fill="#1f2433" />
+
+  <rect x="325" y="310" width="250" height="320" rx="120" fill="#1f2433" />
+  <rect x="295" y="590" width="310" height="260" rx="120" fill="#1f2433" />
+
+  <rect x="265" y="380" width="70" height="260" rx="35" fill="#1f2433" />
+  <rect x="565" y="380" width="70" height="260" rx="35" fill="#1f2433" />
+
+  <rect x="320" y="820" width="110" height="260" rx="55" fill="#1f2433" />
+  <rect x="470" y="820" width="110" height="260" rx="55" fill="#1f2433" />
+
+  <rect x="310" y="340" width="280" height="300" rx="120" fill="url(#top)" />
+  <rect x="320" y="540" width="260" height="110" rx="55" fill="#111827" opacity="0.2" />
+
+  <rect x="300" y="610" width="300" height="240" rx="120" fill="url(#pants)" />
+  <rect x="325" y="820" width="110" height="260" rx="55" fill="url(#pants)" />
+  <rect x="465" y="820" width="110" height="260" rx="55" fill="url(#pants)" />
+
+  <rect x="250" y="960" width="400" height="140" rx="70" fill="#111827" opacity="0.55" />
+</svg>

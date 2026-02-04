@@ -17,77 +17,97 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 -- =====================================================
--- RLS POLICY FIXES
+-- RLS POLICY FIXES (CONDITIONAL - only if tables exist)
 -- =====================================================
 
 -- Communities: restrict private visibility to members/creator
-DROP POLICY IF EXISTS "Communities are viewable by everyone" ON communities;
-CREATE POLICY "Communities are viewable by members or public"
-  ON communities FOR SELECT
-  USING (
-    is_private = false
-    OR created_by = auth.uid()
-    OR EXISTS (
-      SELECT 1
-      FROM community_members cm
-      WHERE cm.community_id = communities.id
-        AND cm.user_id = auth.uid()
-    )
-  );
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'communities') THEN
+    DROP POLICY IF EXISTS "Communities are viewable by everyone" ON communities;
+    CREATE POLICY "Communities are viewable by members or public"
+      ON communities FOR SELECT
+      USING (
+        is_private = false
+        OR created_by = auth.uid()
+        OR EXISTS (
+          SELECT 1
+          FROM community_members cm
+          WHERE cm.community_id = communities.id
+            AND cm.user_id = auth.uid()
+        )
+      );
+  END IF;
+END $$;
 
 -- Community members: hide private memberships from non-members
-DROP POLICY IF EXISTS "Memberships are viewable by everyone" ON community_members;
-CREATE POLICY "Memberships are viewable by community members"
-  ON community_members FOR SELECT
-  USING (
-    EXISTS (
-      SELECT 1
-      FROM communities c
-      WHERE c.id = community_members.community_id
-        AND (
-          c.is_private = false
-          OR c.created_by = auth.uid()
-          OR EXISTS (
-            SELECT 1
-            FROM community_members cm
-            WHERE cm.community_id = community_members.community_id
-              AND cm.user_id = auth.uid()
-          )
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'community_members') THEN
+    DROP POLICY IF EXISTS "Memberships are viewable by everyone" ON community_members;
+    CREATE POLICY "Memberships are viewable by community members"
+      ON community_members FOR SELECT
+      USING (
+        EXISTS (
+          SELECT 1
+          FROM communities c
+          WHERE c.id = community_members.community_id
+            AND (
+              c.is_private = false
+              OR c.created_by = auth.uid()
+              OR EXISTS (
+                SELECT 1
+                FROM community_members cm
+                WHERE cm.community_id = community_members.community_id
+                  AND cm.user_id = auth.uid()
+              )
+            )
         )
-    )
-  );
+      );
+  END IF;
+END $$;
 
 -- Event participants: only allow public joins or creator-managed adds
-DROP POLICY IF EXISTS "Users can join public events or if invited" ON event_participants;
-CREATE POLICY "Users can join public events or creators can add"
-  ON event_participants FOR INSERT
-  WITH CHECK (
-    (
-      auth.uid() = user_id
-      AND EXISTS (
-        SELECT 1
-        FROM events
-        WHERE events.id = event_participants.event_id
-          AND (events.is_private = false OR events.created_by = auth.uid())
-      )
-    )
-    OR EXISTS (
-      SELECT 1
-      FROM events
-      WHERE events.id = event_participants.event_id
-        AND events.created_by = auth.uid()
-    )
-  );
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'event_participants') THEN
+    DROP POLICY IF EXISTS "Users can join public events or if invited" ON event_participants;
+    CREATE POLICY "Users can join public events or creators can add"
+      ON event_participants FOR INSERT
+      WITH CHECK (
+        (
+          auth.uid() = user_id
+          AND EXISTS (
+            SELECT 1
+            FROM events
+            WHERE events.id = event_participants.event_id
+              AND (events.is_private = false OR events.created_by = auth.uid())
+          )
+        )
+        OR EXISTS (
+          SELECT 1
+          FROM events
+          WHERE events.id = event_participants.event_id
+            AND events.created_by = auth.uid()
+        )
+      );
+  END IF;
+END $$;
 
 -- Challenge stats: prevent user tampering
-DROP POLICY IF EXISTS "Stats auto-created and updated by triggers" ON user_challenge_stats;
-DROP POLICY IF EXISTS "Stats can be updated" ON user_challenge_stats;
-CREATE POLICY "Stats can be inserted by service role"
-  ON user_challenge_stats FOR INSERT
-  WITH CHECK (COALESCE(auth.jwt()->>'role', '') = 'service_role');
-CREATE POLICY "Stats can be updated by service role"
-  ON user_challenge_stats FOR UPDATE
-  USING (COALESCE(auth.jwt()->>'role', '') = 'service_role');
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'user_challenge_stats') THEN
+    DROP POLICY IF EXISTS "Stats auto-created and updated by triggers" ON user_challenge_stats;
+    DROP POLICY IF EXISTS "Stats can be updated" ON user_challenge_stats;
+    CREATE POLICY "Stats can be inserted by service role"
+      ON user_challenge_stats FOR INSERT
+      WITH CHECK (COALESCE(auth.jwt()->>'role', '') = 'service_role');
+    CREATE POLICY "Stats can be updated by service role"
+      ON user_challenge_stats FOR UPDATE
+      USING (COALESCE(auth.jwt()->>'role', '') = 'service_role');
+  END IF;
+END $$;
 
 -- =====================================================
 -- FUNCTION HARDENING (AUTH + SEARCH_PATH)
@@ -986,14 +1006,68 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 -- =====================================================
 -- SEARCH_PATH HARDENING FOR OTHER DEFINER FUNCTIONS
+-- (CONDITIONAL - only if functions exist)
 -- =====================================================
 
-ALTER FUNCTION public.handle_new_user() SET search_path = public;
-ALTER FUNCTION public.is_close_friend(UUID) SET search_path = public;
-ALTER FUNCTION public.update_community_members_count() SET search_path = public;
-ALTER FUNCTION public.complete_challenge(UUID) SET search_path = public;
-ALTER FUNCTION public.update_challenge_statuses() SET search_path = public;
-ALTER FUNCTION public.cleanup_old_ai_data() SET search_path = public;
-ALTER FUNCTION public.cleanup_old_quotas() SET search_path = public;
-ALTER FUNCTION public.cleanup_old_generated_looks() SET search_path = public;
-ALTER FUNCTION public.reset_expired_subscription_periods() SET search_path = public;
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'handle_new_user' AND pronamespace = 'public'::regnamespace) THEN
+    ALTER FUNCTION public.handle_new_user() SET search_path = public;
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'is_close_friend' AND pronamespace = 'public'::regnamespace) THEN
+    ALTER FUNCTION public.is_close_friend(UUID) SET search_path = public;
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'update_community_members_count' AND pronamespace = 'public'::regnamespace) THEN
+    ALTER FUNCTION public.update_community_members_count() SET search_path = public;
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'complete_challenge' AND pronamespace = 'public'::regnamespace) THEN
+    ALTER FUNCTION public.complete_challenge(UUID) SET search_path = public;
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'update_challenge_statuses' AND pronamespace = 'public'::regnamespace) THEN
+    ALTER FUNCTION public.update_challenge_statuses() SET search_path = public;
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'cleanup_old_ai_data' AND pronamespace = 'public'::regnamespace) THEN
+    ALTER FUNCTION public.cleanup_old_ai_data() SET search_path = public;
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'cleanup_old_quotas' AND pronamespace = 'public'::regnamespace) THEN
+    ALTER FUNCTION public.cleanup_old_quotas() SET search_path = public;
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'cleanup_old_generated_looks' AND pronamespace = 'public'::regnamespace) THEN
+    ALTER FUNCTION public.cleanup_old_generated_looks() SET search_path = public;
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'reset_expired_subscription_periods' AND pronamespace = 'public'::regnamespace) THEN
+    ALTER FUNCTION public.reset_expired_subscription_periods() SET search_path = public;
+  END IF;
+END $$;

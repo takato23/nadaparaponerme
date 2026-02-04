@@ -236,7 +236,7 @@ interface AppModalsProps {
     onGenerateOutfitsForItem: (item: ClothingItem) => void;
     onShareItem: (item: ClothingItem) => void;
     onConfirmShareItem: (friendIds: string[]) => void;
-    onAddToClosetFromCamera: (imageDataUrl: string, metadata: ClothingItemMetadata) => Promise<void>;
+    onAddToClosetFromCamera: (imageDataUrl: string, metadata: ClothingItemMetadata, backImageDataUrl?: string) => Promise<void>;
     onAddBorrowedItems: (items: ClothingItem[]) => void;
     onTryBorrowedItems: (items: ClothingItem[]) => void;
 

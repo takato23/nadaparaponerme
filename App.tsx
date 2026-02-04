@@ -1492,19 +1492,23 @@ const AppContent = () => {
                         <Suspense fallback={<LazyLoader type="modal" />}>
                             <PremiumCameraView
                                 onClose={() => modals.setShowQuickCamera(false)}
-                                onAddToCloset={async (imageDataUrl: string, metadata: ClothingItemMetadata) => {
+                                onAddToCloset={async (imageDataUrl: string, metadata: ClothingItemMetadata, backImageDataUrl?: string) => {
                                     // Add to closet with already analyzed metadata
                                     try {
                                         const newItem: ClothingItem = {
                                             id: `item_${Date.now()}`,
                                             imageDataUrl,
+                                            backImageDataUrl,
                                             metadata
                                         };
 
                                         if (useSupabaseCloset && user) {
                                             // Upload to Supabase
                                             const file = dataUrlToFile(imageDataUrl, `${newItem.id}.jpg`);
-                                            await closetService.addClothingItem(file, metadata);
+                                            const backFile = backImageDataUrl
+                                                ? dataUrlToFile(backImageDataUrl, `${newItem.id}_back.jpg`)
+                                                : undefined;
+                                            await closetService.addClothingItem(file, metadata, backFile);
                                             await loadClosetFromSupabase();
                                         } else {
                                             // Add to local storage

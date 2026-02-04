@@ -5,10 +5,10 @@ import * as aiService from '../src/services/aiService';
 
 interface PremiumCameraViewProps {
     onClose: () => void;
-    onAddToCloset: (imageDataUrl: string, metadata: ClothingItemMetadata) => void;
+    onAddToCloset: (imageDataUrl: string, metadata: ClothingItemMetadata, backImageDataUrl?: string) => void;
 }
 
-type ViewStep = 'camera' | 'preview' | 'scanning' | 'analyzing' | 'results' | 'error';
+type ViewStep = 'camera' | 'preview' | 'scanning' | 'analyzing' | 'results' | 'error' | 'back_camera' | 'back_preview';
 type CameraFacing = 'environment' | 'user';
 
 // Constants
@@ -29,6 +29,8 @@ const PremiumCameraView: React.FC<PremiumCameraViewProps> = ({ onClose, onAddToC
     const [currentStep, setCurrentStep] = useState<ViewStep>('camera');
     const [capturedImage, setCapturedImage] = useState<string | null>(null);
     const [compressedImage, setCompressedImage] = useState<string | null>(null);
+    const [backImage, setBackImage] = useState<string | null>(null);
+    const [compressedBackImage, setCompressedBackImage] = useState<string | null>(null);
     const [isCameraActive, setIsCameraActive] = useState(false);
     const [analysisResult, setAnalysisResult] = useState<ClothingItemMetadata | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -40,6 +42,7 @@ const PremiumCameraView: React.FC<PremiumCameraViewProps> = ({ onClose, onAddToC
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const backFileInputRef = useRef<HTMLInputElement>(null);
     const analysisAbortRef = useRef<AbortController | null>(null);
 
     // Check if user has seen guidance before
@@ -50,9 +53,19 @@ const PremiumCameraView: React.FC<PremiumCameraViewProps> = ({ onClose, onAddToC
         }
     }, []);
 
-    // Start camera when component mounts
+    // Start camera when component mounts or when switching to camera views
     useEffect(() => {
-        startCamera();
+        if (currentStep === 'camera' || currentStep === 'back_camera') {
+            // Small delay to ensure video element is mounted
+            const timer = setTimeout(() => {
+                startCamera();
+            }, 100);
+            return () => clearTimeout(timer);
+        }
+    }, [currentStep, cameraFacing]);
+
+    // Cleanup on unmount
+    useEffect(() => {
         return () => {
             stopCamera();
             // Cancel any pending analysis
@@ -60,7 +73,7 @@ const PremiumCameraView: React.FC<PremiumCameraViewProps> = ({ onClose, onAddToC
                 analysisAbortRef.current.abort();
             }
         };
-    }, [cameraFacing]);
+    }, []);
 
     const startCamera = async () => {
         try {
@@ -289,6 +302,8 @@ const PremiumCameraView: React.FC<PremiumCameraViewProps> = ({ onClose, onAddToC
     const retake = () => {
         setCapturedImage(null);
         setCompressedImage(null);
+        setBackImage(null);
+        setCompressedBackImage(null);
         setAnalysisResult(null);
         setError(null);
         setRetryCount(0);
@@ -296,10 +311,105 @@ const PremiumCameraView: React.FC<PremiumCameraViewProps> = ({ onClose, onAddToC
         startCamera();
     };
 
+    // Start capturing back photo
+    const startBackPhotoCapture = () => {
+        setCurrentStep('back_camera');
+        // Camera will be started by useEffect when step changes
+    };
+
+    // Capture back photo
+    const captureBackPhoto = async () => {
+        if (videoRef.current && canvasRef.current) {
+            const video = videoRef.current;
+            const canvas = canvasRef.current;
+
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+                if (cameraFacing === 'user') {
+                    ctx.translate(canvas.width, 0);
+                    ctx.scale(-1, 1);
+                }
+                ctx.drawImage(video, 0, 0);
+
+                const imageDataUrl = canvas.toDataURL('image/jpeg', 0.95);
+                setBackImage(imageDataUrl);
+                setCurrentStep('back_preview');
+                stopCamera();
+            }
+        }
+    };
+
+    // Handle file upload for back image
+    const handleBackFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (file) {
+            if (!file.type.startsWith('image/')) {
+                setError('Por favor seleccioná una imagen válida');
+                return;
+            }
+
+            if (file.size > 10 * 1024 * 1024) {
+                setError('La imagen es muy grande. Máximo 10MB.');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const imageDataUrl = e.target?.result as string;
+                setBackImage(imageDataUrl);
+                setCurrentStep('back_preview');
+                stopCamera();
+            };
+            reader.onerror = () => {
+                setError('Error al leer el archivo');
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
+    // Confirm back photo and compress
+    const confirmBackPhoto = async () => {
+        if (!backImage) return;
+
+        try {
+            const compressed = await compressImage(backImage);
+            setCompressedBackImage(compressed);
+            setCurrentStep('results');
+        } catch (err) {
+            console.error('Error compressing back image:', err);
+            setCompressedBackImage(backImage);
+            setCurrentStep('results');
+        }
+    };
+
+    // Retake just the back photo
+    const retakeBackPhoto = () => {
+        setBackImage(null);
+        setCompressedBackImage(null);
+        setCurrentStep('back_camera');
+        startCamera();
+    };
+
+    // Skip back photo and go directly to add
+    const skipBackPhoto = () => {
+        setCurrentStep('results');
+    };
+
+    // Remove back photo
+    const removeBackPhoto = () => {
+        setBackImage(null);
+        setCompressedBackImage(null);
+    };
+
     const confirmAddToCloset = () => {
         if (capturedImage && analysisResult) {
-            // Use compressed image if available, otherwise original
-            onAddToCloset(compressedImage || capturedImage, analysisResult);
+            // Use compressed images if available
+            const mainImage = compressedImage || capturedImage;
+            const backImg = compressedBackImage || backImage || undefined;
+            onAddToCloset(mainImage, analysisResult, backImg);
             onClose();
         }
     };
@@ -731,6 +841,49 @@ const PremiumCameraView: React.FC<PremiumCameraViewProps> = ({ onClose, onAddToC
                                             </div>
                                         </div>
                                     )}
+                                    {/* Back Photo Preview Section */}
+                                    <div className="p-4 rounded-2xl bg-white/5 border border-white/10">
+                                        <div className="flex items-center justify-between mb-3">
+                                            <h3 className="text-sm font-bold text-white/60 uppercase tracking-wider flex items-center gap-2">
+                                                <span className="material-symbols-outlined text-lg">360</span>
+                                                Foto del Dorso
+                                            </h3>
+                                            {backImage && (
+                                                <button
+                                                    onClick={removeBackPhoto}
+                                                    className="text-red-400 text-xs hover:text-red-300 transition-colors"
+                                                >
+                                                    Eliminar
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        {backImage ? (
+                                            <div className="relative aspect-[3/4] w-24 rounded-xl overflow-hidden border-2 border-primary/50">
+                                                <img
+                                                    src={compressedBackImage || backImage}
+                                                    alt="Dorso de la prenda"
+                                                    className="w-full h-full object-cover"
+                                                />
+                                                <div className="absolute bottom-1 right-1 bg-primary/90 rounded-full p-0.5">
+                                                    <span className="material-symbols-outlined text-white text-xs">check</span>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <button
+                                                onClick={startBackPhotoCapture}
+                                                className="flex items-center gap-3 p-3 rounded-xl bg-white/5 border border-dashed border-white/20 w-full hover:bg-white/10 hover:border-white/30 transition-all group"
+                                            >
+                                                <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center group-hover:bg-white/20 transition-colors">
+                                                    <span className="material-symbols-outlined text-primary text-2xl">add_a_photo</span>
+                                                </div>
+                                                <div className="text-left">
+                                                    <p className="text-white/90 font-medium text-sm">Agregar foto del dorso</p>
+                                                    <p className="text-white/50 text-xs">Para vista 360° de la prenda</p>
+                                                </div>
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -751,6 +904,192 @@ const PremiumCameraView: React.FC<PremiumCameraViewProps> = ({ onClose, onAddToC
                                     <span className="absolute bottom-0 right-1/4 w-6 h-6 bg-white rounded-full animate-[ping_2.5s_ease-in-out_infinite_0.5s]"></span>
                                 </div>
                             </div>
+                        </div>
+                    </motion.div>
+                )}
+
+                {/* BACK CAMERA VIEW */}
+                {currentStep === 'back_camera' && (
+                    <motion.div
+                        key="back_camera"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="relative flex-grow flex flex-col h-full"
+                    >
+                        {/* Camera Feed */}
+                        <div className="relative flex-grow bg-black overflow-hidden">
+                            <video
+                                ref={videoRef}
+                                autoPlay
+                                playsInline
+                                muted
+                                className={`w-full h-full object-cover ${cameraFacing === 'user' ? 'scale-x-[-1]' : ''}`}
+                            />
+                            <canvas ref={canvasRef} className="hidden" />
+
+                            {/* Overlay */}
+                            <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-black/40 via-transparent to-black/60" />
+
+                            {/* Header */}
+                            <div className="absolute top-0 inset-x-0 p-6 flex justify-between items-center z-20">
+                                <button
+                                    onClick={skipBackPhoto}
+                                    className="p-2 rounded-full bg-white/10 backdrop-blur-md text-white hover:bg-white/20 transition-colors"
+                                >
+                                    <span className="material-symbols-outlined">arrow_back</span>
+                                </button>
+                                <div className="px-4 py-1 rounded-full bg-primary/30 backdrop-blur-md border border-primary/30 text-xs font-bold text-white tracking-wider uppercase">
+                                    📸 Foto del Dorso
+                                </div>
+                                <button
+                                    onClick={() => setShowGuidance(true)}
+                                    className="p-2 rounded-full bg-white/10 backdrop-blur-md text-white hover:bg-white/20 transition-colors"
+                                >
+                                    <span className="material-symbols-outlined">help</span>
+                                </button>
+                            </div>
+
+                            {/* Guide Frame */}
+                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                <div className="w-[70%] aspect-[3/4] border-2 border-dashed border-primary/50 rounded-3xl relative">
+                                    <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-primary rounded-tl-xl" />
+                                    <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-primary rounded-tr-xl" />
+                                    <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-primary rounded-bl-xl" />
+                                    <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-primary rounded-br-xl" />
+
+                                    {/* Center hint */}
+                                    <div className="absolute inset-0 flex items-center justify-center">
+                                        <p className="text-primary/80 text-sm font-medium px-4 py-2 rounded-full bg-black/50 backdrop-blur-sm">
+                                            Mostrá el dorso de la prenda
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Front image preview thumbnail */}
+                            {capturedImage && (
+                                <div className="absolute bottom-24 left-6 z-20">
+                                    <div className="relative">
+                                        <img
+                                            src={compressedImage || capturedImage}
+                                            alt="Frente"
+                                            className="w-16 h-20 object-cover rounded-xl border-2 border-white/30"
+                                        />
+                                        <div className="absolute -top-2 -right-2 bg-white text-black text-xs px-1.5 py-0.5 rounded-full font-bold">
+                                            Frente
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Controls */}
+                        <div className="h-36 bg-black flex items-center justify-center gap-6 px-6 pb-8">
+                            {/* Gallery button */}
+                            <button
+                                onClick={() => backFileInputRef.current?.click()}
+                                className="w-14 h-14 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-colors"
+                            >
+                                <span className="material-symbols-outlined text-2xl">photo_library</span>
+                            </button>
+
+                            {/* Capture button */}
+                            <button
+                                onClick={captureBackPhoto}
+                                disabled={!isCameraActive}
+                                className="w-20 h-20 rounded-full border-4 border-primary/50 p-1 hover:scale-105 active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                <div className="w-full h-full rounded-full bg-primary" />
+                            </button>
+
+                            {/* Skip button */}
+                            <button
+                                onClick={skipBackPhoto}
+                                className="w-14 h-14 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-colors"
+                            >
+                                <span className="material-symbols-outlined text-2xl">skip_next</span>
+                            </button>
+
+                            <input
+                                ref={backFileInputRef}
+                                type="file"
+                                accept="image/*"
+                                onChange={handleBackFileUpload}
+                                className="hidden"
+                            />
+                        </div>
+                    </motion.div>
+                )}
+
+                {/* BACK PREVIEW VIEW */}
+                {currentStep === 'back_preview' && backImage && (
+                    <motion.div
+                        key="back_preview"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="relative flex-grow flex flex-col h-full"
+                    >
+                        {/* Preview Images - Side by side */}
+                        <div className="relative flex-grow bg-black overflow-hidden flex items-center justify-center gap-2 p-4">
+                            {/* Front image */}
+                            {capturedImage && (
+                                <div className="relative flex-1 max-w-[45%]">
+                                    <img
+                                        src={compressedImage || capturedImage}
+                                        alt="Frente"
+                                        className="w-full h-auto max-h-[60vh] object-contain rounded-2xl border border-white/20"
+                                    />
+                                    <div className="absolute bottom-2 left-2 bg-black/70 backdrop-blur-sm px-2 py-1 rounded-lg text-xs text-white font-medium">
+                                        Frente
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Back image */}
+                            <div className="relative flex-1 max-w-[45%]">
+                                <img
+                                    src={backImage}
+                                    alt="Dorso"
+                                    className="w-full h-auto max-h-[60vh] object-contain rounded-2xl border-2 border-primary/50"
+                                />
+                                <div className="absolute bottom-2 left-2 bg-primary/80 backdrop-blur-sm px-2 py-1 rounded-lg text-xs text-white font-medium">
+                                    Dorso
+                                </div>
+                            </div>
+
+                            {/* Overlay gradient */}
+                            <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-black/40 via-transparent to-black/60" />
+
+                            {/* Header */}
+                            <div className="absolute top-0 inset-x-0 p-6 flex justify-between items-center z-20">
+                                <button onClick={retakeBackPhoto} className="p-2 rounded-full bg-white/10 backdrop-blur-md text-white hover:bg-white/20 transition-colors">
+                                    <span className="material-symbols-outlined">arrow_back</span>
+                                </button>
+                                <div className="px-4 py-1 rounded-full bg-primary/30 backdrop-blur-md border border-primary/30 text-xs font-bold text-white tracking-wider uppercase">
+                                    Vista 360° ✨
+                                </div>
+                                <div className="w-10" />
+                            </div>
+                        </div>
+
+                        {/* Preview Actions */}
+                        <div className="p-6 bg-black space-y-3">
+                            <button
+                                onClick={confirmBackPhoto}
+                                className="w-full py-4 rounded-2xl bg-white text-black font-bold text-lg hover:bg-white/90 transition-colors flex items-center justify-center gap-2"
+                            >
+                                <span className="material-symbols-outlined">check</span>
+                                Confirmar foto del dorso
+                            </button>
+                            <button
+                                onClick={retakeBackPhoto}
+                                className="w-full py-3 rounded-2xl bg-white/10 text-white font-medium hover:bg-white/20 transition-colors flex items-center justify-center gap-2"
+                            >
+                                <span className="material-symbols-outlined">refresh</span>
+                                Tomar otra foto
+                            </button>
                         </div>
                     </motion.div>
                 )}
