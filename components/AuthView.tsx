@@ -175,7 +175,6 @@ const AuthView = ({ onLogin, initialMode = 'login', variant = 'default' }: AuthV
                     mask: 'url(#fluid-portal-mask)',
                     WebkitMask: 'url(#fluid-portal-mask)',
                     maskMode: 'alpha',
-                    WebkitMaskMode: 'alpha',
                     maskRepeat: 'no-repeat',
                     WebkitMaskRepeat: 'no-repeat',
                     maskPosition: 'center',
@@ -293,6 +292,7 @@ const AuthView = ({ onLogin, initialMode = 'login', variant = 'default' }: AuthV
                                     placeholder="Nombre completo"
                                     value={name}
                                     onChange={(e) => setName(e.target.value)}
+                                    autoComplete="name"
                                     className={inputClassName}
                                 />
                                 <input
@@ -300,6 +300,7 @@ const AuthView = ({ onLogin, initialMode = 'login', variant = 'default' }: AuthV
                                     placeholder="Usuario (opcional)"
                                     value={username}
                                     onChange={(e) => setUsername(e.target.value)}
+                                    autoComplete="username"
                                     className={inputClassName}
                                 />
                             </>
@@ -310,6 +311,7 @@ const AuthView = ({ onLogin, initialMode = 'login', variant = 'default' }: AuthV
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
                             required
+                            autoComplete="email"
                             className={inputClassName}
                         />
                         <input
@@ -319,6 +321,7 @@ const AuthView = ({ onLogin, initialMode = 'login', variant = 'default' }: AuthV
                             onChange={(e) => setPassword(e.target.value)}
                             required
                             minLength={6}
+                            autoComplete={isLoginView ? 'current-password' : 'new-password'}
                             className={inputClassName}
                         />
 

@@ -33,8 +33,25 @@ const ClosetGapAnalysisView = ({ closet, onClose }: ClosetGapAnalysisViewProps) 
 
       // Call AI service
       const result = await geminiService.analyzeClosetGaps(closet);
+      const normalizedResult: ClosetGapAnalysisResult = Array.isArray(result)
+        ? {
+            missing_essentials: result as GapAnalysisItem[],
+            nice_to_have: [],
+            versatility_analysis: {
+              current_score: 0,
+              potential_score: 0,
+              bottleneck_categories: [],
+            },
+            strengths: [],
+            weaknesses: [],
+            style_summary: '',
+            shopping_budget_estimate: '',
+            analyzed_items_count: closet.length,
+            confidence_level: 'low',
+          }
+        : result;
 
-      setAnalysisResult(result);
+      setAnalysisResult(normalizedResult);
       setCurrentStep('results');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al generar análisis');

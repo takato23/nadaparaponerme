@@ -1,189 +1,60 @@
-# Configuración de Seguridad de API Keys
+# Configuración de seguridad (API keys)
 
-## 🔒 Cambios de Seguridad Implementados
+Este proyecto es **Vite**: todo lo que empiece con `VITE_` termina en el bundle del navegador. Por eso, las credenciales sensibles deben ir en **Supabase Secrets** (Edge Functions) y no en Vercel.
 
-La API key de Gemini ya NO está expuesta en el código cliente. Todos los cambios se han completado exitosamente.
+## Principios
 
----
+- Nunca expongas `SUPABASE_SERVICE_ROLE_KEY` ni `MERCADOPAGO_ACCESS_TOKEN` en el frontend.
+- En producción, esta app **bloquea** el uso de `VITE_GEMINI_API_KEY` (si está presente, el build arranca y la app falla a propósito).
 
-## 🚀 Configuración Rápida para Desarrollo Local
+## Desarrollo local
 
-### Paso 1: Agregar tu API Key a `.env.local`
+### Opción A (recomendada): Edge Functions
 
-Abre el archivo `.env.local` y reemplaza `your_api_key_here` con tu API key real de Gemini:
+1. Configurá `.env.local` con `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`.
+2. Corré `npm run verify-setup`.
+3. Asegurate de tener las Edge Functions desplegadas y `GEMINI_API_KEY` cargada como secreto en Supabase.
 
-```bash
-VITE_GEMINI_API_KEY=AIzaSy... # Tu API key aquí
-```
+### Opción B: Gemini directo (solo dev)
 
-⚠️ **IMPORTANTE**: Este archivo está en `.gitignore` y NUNCA se commitea. Es solo para desarrollo local.
-
-### Paso 2: Reiniciar el servidor de desarrollo
-
-```bash
-npm run dev
-```
-
-Deberías ver este mensaje en la consola:
-
-```
-⚠️ DEVELOPMENT MODE: Using Gemini API key from environment.
-This should NEVER happen in production!
-```
-
-Esto confirma que la API key se cargó correctamente para desarrollo.
-
----
-
-## 🏭 Configuración para Producción
-
-Para producción, **NUNCA uses `VITE_GEMINI_API_KEY`**. En su lugar:
-
-### Opción 1: Supabase CLI (Recomendado)
+Si querés probar sin Edge Functions, podés configurar una key **solo en local**:
 
 ```bash
-# 1. Linkear tu proyecto
-supabase link --project-ref qpoojigxxswkpkfbrfiy
-
-# 2. Configurar el secreto
-supabase secrets set GEMINI_API_KEY=tu_api_key_aqui
-
-# 3. Desplegar Edge Functions
-supabase functions deploy analyze-clothing
-supabase functions deploy generate-outfit
-supabase functions deploy generate-packing-list
+VITE_GEMINI_API_KEY=your_gemini_api_key_here
 ```
 
-### Opción 2: Supabase Dashboard (Más fácil)
+Notas:
+- Esto es aceptable únicamente en local. No lo uses en Vercel.
+- Para forzar el camino “directo”, desactivá `useSupabaseAI` (feature flag) en tu navegador si estás probando sin Supabase.
 
-1. Ve a https://supabase.com/dashboard/project/qpoojigxxswkpkfbrfiy/settings/vault/secrets
-2. Crea un nuevo secreto:
-   - Name: `GEMINI_API_KEY`
-   - Value: Tu API key de Gemini
-3. Las Edge Functions ya desplegadas usarán automáticamente este secreto
+## Producción (Vercel + Supabase)
 
----
+### Vercel (frontend)
 
-## 🔄 Cómo Funciona el Sistema de Seguridad
+- `VITE_GEMINI_API_KEY`: **NO** configurar.
+- Solo variables públicas necesarias para la app (p.ej. `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`).
 
-### En Desarrollo Local (`npm run dev`)
-```
-Usuario → App → aiService.ts → geminiService.ts (con API key de VITE_GEMINI_API_KEY)
-```
-- ✅ Usa la API key de `.env.local`
-- ✅ Rápido y sin necesidad de Edge Functions
-- ⚠️ La key está en el bundle de dev (SOLO en dev)
+### Supabase (backend)
 
-### En Producción (`npm run build`)
-```
-Usuario → App → aiService.ts → Edge Function (Supabase) → Gemini AI
-```
-- ✅ La API key está SOLO en Supabase Secrets
-- ✅ NUNCA está en el código cliente
-- ✅ 100% seguro
+Configurar en **Supabase Secrets** (Vault):
+- `GEMINI_API_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY` (o `SERVICE_ROLE_KEY`)
+- `MERCADOPAGO_ACCESS_TOKEN` (si usás pagos)
+- `MERCADOPAGO_WEBHOOK_SECRET` (firma HMAC de MercadoPago, opcional pero recomendado)
+- `MERCADOPAGO_WEBHOOK_TOKEN` (token en URL para webhook, recomendado)
+- `APP_URL` / `APP_URL_ALLOWLIST` (para callbacks de pagos)
+- Paddle secrets si aplica (`PADDLE_API_KEY`, `PADDLE_WEBHOOK_SECRET_KEY`, etc.)
 
----
+Luego desplegar Edge Functions (ejemplo):
 
-## 📝 Archivos Modificados
-
-### Archivos de Seguridad
-- ✏️ **`services/geminiService.ts`**: API key eliminada, requiere configuración explícita
-- ✏️ **`.env.local`**: API key removida (usar `VITE_*` prefix solo para dev)
-- ✏️ **`src/lib/gemini-dev-init.ts`**: Inicialización para desarrollo (NEW)
-- ✏️ **`index.tsx`**: Llama a `initGeminiForDevelopment()` al inicio
-- ✏️ **`src/config/features.ts`**: Auto-detecta si usar Edge Functions o API directa
-
-### Edge Functions (ya existentes, funcionan correctamente)
-- ✅ `supabase/functions/analyze-clothing/index.ts`
-- ✅ `supabase/functions/generate-outfit/index.ts`
-- ✅ `supabase/functions/generate-packing-list/index.ts`
-
----
-
-## 🔐 Seguridad Verificada
-
-✅ **API key NO está en el bundle de producción**
-✅ **`process.env.API_KEY` eliminado del código**
-✅ **`.env.local` en `.gitignore`**
-✅ **Edge Functions usan Supabase Secrets**
-✅ **Build compila sin errores**
-
----
-
-## ❓ Solución de Problemas
-
-### Error: "Gemini API not configured"
-
-**Causa**: La API key no está configurada en `.env.local`
-
-**Solución**:
 ```bash
-# Asegúrate de que .env.local tenga:
-VITE_GEMINI_API_KEY=tu_api_key_aqui
-
-# Reinicia el servidor
-npm run dev
+supabase functions deploy mercadopago-webhook --no-verify-jwt
+supabase functions deploy create-payment-preference
+supabase functions deploy create-mp-preapproval
+supabase functions deploy process-mp-preapproval
+supabase functions deploy process-payment
 ```
 
-### Error: CORS al llamar Edge Function
+## Rotación de credenciales
 
-**Causa**: La Edge Function no está desplegada o Supabase Secrets no está configurado
-
-**Solución temporal** (desarrollo local):
-1. Agrega tu API key en `.env.local` con el prefijo `VITE_`
-2. El sistema automáticamente usará la API directa en lugar de Edge Functions
-
-**Solución definitiva** (producción):
-1. Configura `GEMINI_API_KEY` en Supabase Secrets
-2. Despliega las Edge Functions con `supabase functions deploy`
-
-### Edge Functions fallan pero quiero usar API directa en localhost
-
-El sistema ya hace esto automáticamente:
-- Si `VITE_GEMINI_API_KEY` existe → Usa API directa
-- Si no existe → Intenta usar Edge Functions
-
----
-
-## 🎯 Próximos Pasos Recomendados
-
-1. **[URGENTE] Regenerar API Key de Gemini**: La key anterior (`AIzaSyAMoDyf6VEheTssDJp5JrWhgLeFOAqG_8o`) fue expuesta. Crea una nueva en https://makersuite.google.com/app/apikey
-
-2. **[RECOMENDADO] Linkear proyecto con Supabase CLI**:
-   ```bash
-   supabase link --project-ref qpoojigxxswkpkfbrfiy
-   ```
-
-3. **[OPCIONAL] Crear Edge Functions para funciones restantes**: Actualmente solo 3 operaciones usan Edge Functions. Las otras 18 funcionan con fallback local.
-
----
-
-## 📊 Estado de Edge Functions
-
-| Función | Edge Function | Fallback Local |
-|---------|--------------|----------------|
-| `analyzeClothingItem` | ✅ Implementada | ✅ Funciona |
-| `generateOutfit` | ✅ Implementada | ✅ Funciona |
-| `generatePackingList` | ✅ Implementada | ✅ Funciona |
-| `generateVirtualTryOn` | ❌ No implementada | ✅ Funciona |
-| `chatWithFashionAssistant` | ❌ No implementada | ✅ Funciona |
-| `generateWeatherOutfit` | ❌ No implementada | ✅ Funciona |
-| Otras 15 funciones | ❌ No implementadas | ✅ Funcionan |
-
-**En producción**: Se recomienda crear Edge Functions para todas las operaciones.
-**En desarrollo**: El fallback local funciona perfectamente.
-
----
-
-## 🆘 Soporte
-
-Si encuentras problemas:
-1. Verifica que `.env.local` tiene `VITE_GEMINI_API_KEY` configurado
-2. Reinicia el servidor de desarrollo (`npm run dev`)
-3. Revisa la consola del navegador para mensajes de inicialización
-4. Si persisten los errores, verifica que la API key sea válida en https://makersuite.google.com
-
----
-
-**Última actualización**: 2025-01-12
-**Versión de seguridad**: v2.0 (API key protegida)
+Si una key se compartió por chat, quedó en docs o sospechás que pudo filtrarse, **rotala** en el proveedor (Gemini, Supabase, MercadoPago) y actualizá Secrets.

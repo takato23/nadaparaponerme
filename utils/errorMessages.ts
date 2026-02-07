@@ -170,15 +170,6 @@ function getErrorConfig(category: ErrorCategory, errorMessage: string): Omit<Err
         severity: 'info',
       };
 
-    case 'insufficient_funds': {
-      const details = (originalError as any).details;
-      return {
-        title: 'Fondos Insuficientes',
-        message: `No tenés suficiente saldo para completar la transacción. ${details ? `Saldo disponible: ${details.available_balance}.` : ''} Por favor, recargá tu cuenta.`,
-        severity: 'error',
-      };
-    }
-
     case 'ai_no_items_found':
       return {
         title: 'No Hay Prendas Disponibles',

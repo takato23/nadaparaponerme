@@ -1,4 +1,6 @@
 import { supabase } from '../lib/supabase';
+import { getFeatureFlag } from '../config/features';
+import { addGeneratedClothingItem } from './closetService';
 import type {
   GenerateImageRequest,
   GenerateImageResponse,
@@ -45,7 +47,7 @@ export const aiImageService = {
       }
 
       // Call Edge Function with auth header
-      const { data, error } = await supabase.functions.invoke<GenerateImageResponse>(
+      const { data, error } = await supabase.functions.invoke(
         'generate-fashion-image',
         {
           headers: {
@@ -67,9 +69,11 @@ export const aiImageService = {
         throw new Error('No se recibió respuesta del servidor');
       }
 
-      if (!data.success) {
+      const typedData = data as GenerateImageResponse;
+
+      if (!typedData.success) {
         // Handle specific error codes
-        switch (data.error_code) {
+        switch (typedData.error_code) {
           case 'QUOTA_EXCEEDED':
             throw new Error('Has alcanzado tu límite diario de créditos');
           case 'INVALID_PROMPT':
@@ -79,11 +83,11 @@ export const aiImageService = {
           case 'NETWORK_ERROR':
             throw new Error('Error de conexión. Verifica tu internet.');
           default:
-            throw new Error(data.error || 'Error desconocido al generar imagen');
+            throw new Error(typedData.error || 'Error desconocido al generar imagen');
         }
       }
 
-      return data;
+      return typedData;
     } catch (error) {
       console.error('Generate image error:', error);
       if (error instanceof Error) {
@@ -196,37 +200,47 @@ export const aiImageService = {
   /**
    * Save generated image to closet (localStorage)
    */
-  async saveToCloset(imageUrl: string, prompt: string): Promise<void> {
+  async saveToCloset(
+    imageUrl: string,
+    prompt: string,
+    metadata?: GenerateImageRequest['style_preferences']
+  ): Promise<void> {
     try {
-      // Get current closet from localStorage
-      const closetJson = localStorage.getItem('ojodeloca-closet');
-      const closet = closetJson ? JSON.parse(closetJson) : [];
-
-      // Create new clothing item
-      const newItem = {
-        id: `ai-${Date.now()}`,
-        imageDataUrl: imageUrl,
-        metadata: {
-          category: 'top', // Default, should be detected from metadata
-          subcategory: 'AI Generated Item',
-          color_primary: '#000000', // Default, should come from analysis
-          vibe_tags: ['ai-generated'],
-          seasons: ['spring', 'summer', 'fall', 'winter'],
-        },
-        isAIGenerated: true,
-        aiGenerationPrompt: prompt,
-      };
-
-      // Add to closet
-      closet.push(newItem);
-
-      // Save back to localStorage
-      localStorage.setItem('ojodeloca-closet', JSON.stringify(closet));
-
-      // Mark as added in database (if table exists)
       const {
         data: { user },
       } = await supabase.auth.getUser();
+
+      const itemMetadata = {
+        category: metadata?.category || 'top',
+        subcategory: 'AI Generated Item',
+        color_primary: '#000000',
+        vibe_tags: ['ai-generated'],
+        seasons: metadata?.season
+          ? [metadata.season]
+          : ['spring', 'summer', 'fall', 'winter'],
+        description: prompt,
+      };
+
+      const useSupabaseCloset = getFeatureFlag('useSupabaseCloset');
+
+      if (useSupabaseCloset && user) {
+        await addGeneratedClothingItem(imageUrl, itemMetadata, 'owned');
+      } else {
+        // Fallback legacy mode
+        const closetJson = localStorage.getItem('ojodeloca-closet');
+        const closet = closetJson ? JSON.parse(closetJson) : [];
+
+        const newItem = {
+          id: `ai-${Date.now()}`,
+          imageDataUrl: imageUrl,
+          metadata: itemMetadata,
+          isAIGenerated: true,
+          aiGenerationPrompt: prompt,
+        };
+
+        closet.push(newItem);
+        localStorage.setItem('ojodeloca-closet', JSON.stringify(closet));
+      }
 
       if (user) {
         // Find the generation record by image_url

@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import type { Variants } from 'framer-motion';
 import { RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, ResponsiveContainer, PieChart, Pie, Cell, Legend, Tooltip } from 'recharts';
 import type { ClothingItem, StyleDNAProfile } from '../types';
 import { analyzeStyleDNA } from '../src/services/aiService';
@@ -97,7 +98,7 @@ const StyleDNAProfileView = ({ closet, onClose }: StyleDNAProfileViewProps) => {
     };
 
     // Animation variants
-    const containerVariants = {
+    const containerVariants: Variants = {
         hidden: { opacity: 0 },
         visible: {
             opacity: 1,
@@ -107,13 +108,13 @@ const StyleDNAProfileView = ({ closet, onClose }: StyleDNAProfileViewProps) => {
         }
     };
 
-    const itemVariants = {
+    const itemVariants: Variants = {
         hidden: { opacity: 0, y: 20 },
         visible: {
             opacity: 1,
             y: 0,
             transition: {
-                type: 'spring',
+                type: 'spring' as const,
                 stiffness: 100
             }
         }

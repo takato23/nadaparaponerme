@@ -1,7 +1,10 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { Suspense, lazy, useState, useRef, useEffect } from 'react';
 import { motion, useMotionValue, useTransform, useSpring, AnimatePresence } from 'framer-motion';
 import { useTheme } from '../contexts/ThemeContext';
-import { Eye3DPrototype } from './Eye3D';
+
+const Eye3DPrototype = lazy(() =>
+    import('./Eye3D').then((module) => ({ default: module.Eye3DPrototype }))
+);
 
 interface AestheticPlaygroundProps {
     onClose: () => void;
@@ -95,7 +98,11 @@ export default function AestheticPlayground({ onClose }: AestheticPlaygroundProp
                     <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: 'radial-gradient(circle, currentColor 1px, transparent 1px)', backgroundSize: '24px 24px' }}></div>
 
                     {/* Featured - Eye3D */}
-                    {activeTab === 'eye' && <Eye3DPrototype />}
+                    {activeTab === 'eye' && (
+                        <Suspense fallback={null}>
+                            <Eye3DPrototype />
+                        </Suspense>
+                    )}
 
                     {/* Closet-Specific Prototypes */}
                     {activeTab === 'closet-3d' && <Closet3DGridPrototype />}
@@ -136,7 +143,8 @@ export default function AestheticPlayground({ onClose }: AestheticPlaygroundProp
 // --- 21. Liquid Scroll Prototype ---
 import { Canvas, useFrame } from '@react-three/fiber';
 import { MeshTransmissionMaterial, Environment, Float } from '@react-three/drei';
-import * as THREE from 'three';
+import { Color, MathUtils } from 'three';
+import type { Mesh } from 'three';
 
 function LiquidScrollPrototype() {
     const scrollRef = useRef<HTMLDivElement>(null);
@@ -219,7 +227,7 @@ function LiquidScrollPrototype() {
 }
 
 function LiquidScrollScene({ scrollProgress }: { scrollProgress: number }) {
-    const meshRef = useRef<THREE.Mesh>(null);
+    const meshRef = useRef<Mesh | null>(null);
 
     useFrame((state) => {
         if (meshRef.current) {
@@ -227,8 +235,8 @@ function LiquidScrollScene({ scrollProgress }: { scrollProgress: number }) {
             const targetRotationY = scrollProgress * Math.PI * 4; // 2 full rotations
             const targetRotationX = scrollProgress * Math.PI; // 1 full rotation
 
-            meshRef.current.rotation.y = THREE.MathUtils.lerp(meshRef.current.rotation.y, targetRotationY, 0.1);
-            meshRef.current.rotation.x = THREE.MathUtils.lerp(meshRef.current.rotation.x, targetRotationX, 0.1);
+            meshRef.current.rotation.y = MathUtils.lerp(meshRef.current.rotation.y, targetRotationY, 0.1);
+            meshRef.current.rotation.x = MathUtils.lerp(meshRef.current.rotation.x, targetRotationX, 0.1);
 
             // Floating animation
             meshRef.current.position.y = Math.sin(state.clock.elapsedTime) * 0.1;
@@ -252,7 +260,7 @@ function LiquidScrollScene({ scrollProgress }: { scrollProgress: number }) {
                     distortionScale={0.5}
                     temporalDistortion={0.1}
                     color="#ffffff"
-                    background={new THREE.Color('#f0f0f0')}
+                    background={new Color('#f0f0f0')}
                 />
             </mesh>
         </Float>

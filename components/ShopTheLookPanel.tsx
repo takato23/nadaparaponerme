@@ -6,6 +6,7 @@ import {
   buildSearchTermFromItem,
   getShoppingLinks,
   getSponsoredPlacements,
+  trackSponsorClick,
   MONETIZATION_FLAGS,
   getFeatureFlag,
 } from '../src/services/monetizationService';
@@ -139,6 +140,7 @@ const ShopTheLookPanel = ({
                     href={placement.url}
                     target="_blank"
                     rel="noopener noreferrer"
+                    onClick={() => trackSponsorClick(placement.id, 'shop_the_look', { searchTerm: lookSearchTerm })}
                     className="p-3 rounded-xl bg-white/60 dark:bg-white/10 border border-white/20 hover:border-emerald-400/50 hover:bg-emerald-50/60 dark:hover:bg-emerald-900/20 transition-all"
                   >
                     <div className="flex items-center gap-2">
@@ -253,6 +255,7 @@ const ShopTheLookPanel = ({
                               href={placement.url}
                               target="_blank"
                               rel="noopener noreferrer"
+                              onClick={() => trackSponsorClick(placement.id, 'shop_the_look', { itemCategory: entry.item.metadata.category, searchTerm })}
                               className="p-3 rounded-xl bg-white/60 dark:bg-white/10 border border-white/20 hover:border-emerald-400/50 hover:bg-emerald-50/60 dark:hover:bg-emerald-900/20 transition-all"
                             >
                               <div className="flex items-center gap-2">

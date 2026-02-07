@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import type { Variants } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import type { GeneratedLook, ClothingItem } from '../types';
@@ -32,8 +33,9 @@ const studioTheme = {
   '--studio-mint': '#9ad4c0',
   '--studio-gold': '#f6c681',
 } as React.CSSProperties;
+const EASE_STANDARD: [number, number, number, number] = [0.22, 1, 0.36, 1];
 
-const containerVariants = {
+const containerVariants: Variants = {
   hidden: { opacity: 0 },
   show: {
     opacity: 1,
@@ -41,9 +43,9 @@ const containerVariants = {
   }
 };
 
-const itemVariants = {
+const itemVariants: Variants = {
   hidden: { opacity: 0, y: 12 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.3, ease: 'easeOut' } }
+  show: { opacity: 1, y: 0, transition: { duration: 0.3, ease: EASE_STANDARD } }
 };
 
 export default function SavedLooksView({ closet }: SavedLooksViewProps) {

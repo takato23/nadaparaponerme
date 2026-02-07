@@ -1,7 +1,8 @@
 import React, { useRef, useMemo } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { MeshTransmissionMaterial } from '@react-three/drei';
-import * as THREE from 'three';
+import { Color, MathUtils, Vector3 } from 'three';
+import type { IcosahedronGeometry, Mesh } from 'three';
 import { easing } from 'maath';
 import { useScrollProgress } from '../../hooks/useScrollProgress';
 
@@ -10,7 +11,7 @@ interface LiquidMeshProps {
 }
 
 export const LiquidMesh: React.FC<LiquidMeshProps> = ({ section }) => {
-    const mesh = useRef<THREE.Mesh>(null);
+    const mesh = useRef<Mesh | null>(null);
     const material = useRef<any>(null);
     const { viewport, pointer } = useThree();
     const { progress } = useScrollProgress(); // Track global scroll
@@ -71,10 +72,10 @@ export const LiquidMesh: React.FC<LiquidMeshProps> = ({ section }) => {
 
     // Store original positions for deformation
     const originalPositions = useRef<Float32Array | null>(null);
-    const geometryRef = useRef<THREE.BufferGeometry>(null);
+    const geometryRef = useRef<IcosahedronGeometry | null>(null);
 
     // Reusable objects to avoid GC in useFrame
-    const mouseVec = useMemo(() => new THREE.Vector3(), []);
+    const mouseVec = useMemo(() => new Vector3(), []);
 
     useFrame((state, delta) => {
         if (!mesh.current || !material.current) return;
@@ -88,11 +89,11 @@ export const LiquidMesh: React.FC<LiquidMeshProps> = ({ section }) => {
 
         // SCROLLYTELLING LOGIC FOR HOME
         if (section === 'home') {
-            const scrollColor = new THREE.Color().set('#2DD4BF');
+            const scrollColor = new Color().set('#2DD4BF');
             if (progress < 0.5) {
-                scrollColor.lerp(new THREE.Color('#3B82F6'), progress * 2);
+                scrollColor.lerp(new Color('#3B82F6'), progress * 2);
             } else {
-                scrollColor.set('#3B82F6').lerp(new THREE.Color('#8B5CF6'), (progress - 0.5) * 2);
+                scrollColor.set('#3B82F6').lerp(new Color('#8B5CF6'), (progress - 0.5) * 2);
             }
 
             const scrollDistortion = 0.5 + progress * 1.0;
@@ -109,7 +110,7 @@ export const LiquidMesh: React.FC<LiquidMeshProps> = ({ section }) => {
         } else if (section === 'landing') {
             const scroll = progress;
             let targetDistortion = 0.3;
-            const targetColor = new THREE.Color('#FF9A9E');
+            const targetColor = new Color('#FF9A9E');
             let targetRoughness = 0.2;
 
             if (scroll < 0.25) {
@@ -118,17 +119,17 @@ export const LiquidMesh: React.FC<LiquidMeshProps> = ({ section }) => {
                 targetRoughness = 0.2;
             } else if (scroll < 0.5) {
                 const t = (scroll - 0.25) / 0.25;
-                targetDistortion = THREE.MathUtils.lerp(0.3, 2.0, t);
+                targetDistortion = MathUtils.lerp(0.3, 2.0, t);
                 targetColor.set('#FF3B30');
                 targetRoughness = 0.3;
             } else if (scroll < 0.75) {
                 const t = (scroll - 0.5) / 0.25;
-                targetDistortion = THREE.MathUtils.lerp(2.0, 0.1, t);
+                targetDistortion = MathUtils.lerp(2.0, 0.1, t);
                 targetColor.set('#A0A0A0');
                 targetRoughness = 0.05;
             } else {
                 const t = (scroll - 0.75) / 0.25;
-                targetDistortion = THREE.MathUtils.lerp(0.1, 0.8, t);
+                targetDistortion = MathUtils.lerp(0.1, 0.8, t);
                 targetColor.set('#8B5CF6');
                 targetRoughness = 0.1;
             }
@@ -153,13 +154,13 @@ export const LiquidMesh: React.FC<LiquidMeshProps> = ({ section }) => {
                 distortion: 0.8,
                 roughness: 0.0,
             };
-            easing.dampC(material.current.color, new THREE.Color(target.color), 0.15, delta);
+            easing.dampC(material.current.color, new Color(target.color), 0.15, delta);
         } else {
             easing.dampC(material.current.color, target.color, 0.5, delta);
         }
 
         // Animate Position & Scale
-        easing.damp3(mesh.current.position, new THREE.Vector3(...target.position as [number, number, number]), 0.5, delta);
+        easing.damp3(mesh.current.position, new Vector3(...target.position as [number, number, number]), 0.5, delta);
         easing.damp(mesh.current.scale, 'x', target.scale, 0.5, delta);
         easing.damp(mesh.current.scale, 'y', target.scale, 0.5, delta);
         easing.damp(mesh.current.scale, 'z', target.scale, 0.5, delta);
@@ -174,13 +175,13 @@ export const LiquidMesh: React.FC<LiquidMeshProps> = ({ section }) => {
 
         // Rotate
         const rotationSpeed = section === 'auth' ? 2.0 : 0.1;
-        mesh.current.rotation.x = THREE.MathUtils.lerp(mesh.current.rotation.x, mouseY * 0.1 + state.clock.getElapsedTime() * rotationSpeed, 0.1);
-        mesh.current.rotation.y = THREE.MathUtils.lerp(mesh.current.rotation.y, mouseX * 0.1 + state.clock.getElapsedTime() * (rotationSpeed * 1.5), 0.1);
+        mesh.current.rotation.x = MathUtils.lerp(mesh.current.rotation.x, mouseY * 0.1 + state.clock.getElapsedTime() * rotationSpeed, 0.1);
+        mesh.current.rotation.y = MathUtils.lerp(mesh.current.rotation.y, mouseX * 0.1 + state.clock.getElapsedTime() * (rotationSpeed * 1.5), 0.1);
 
         // Move
         const moveIntensity = 0.25;
-        mesh.current.position.x = THREE.MathUtils.lerp(mesh.current.position.x, target.position[0] + (pointer.x * moveIntensity), 0.08);
-        mesh.current.position.y = THREE.MathUtils.lerp(mesh.current.position.y, target.position[1] + (pointer.y * moveIntensity), 0.08);
+        mesh.current.position.x = MathUtils.lerp(mesh.current.position.x, target.position[0] + (pointer.x * moveIntensity), 0.08);
+        mesh.current.position.y = MathUtils.lerp(mesh.current.position.y, target.position[1] + (pointer.y * moveIntensity), 0.08);
 
         // VERTEX DISPLACEMENT (Refined "Viscous Water" Effect)
         if (geometryRef.current && originalPositions.current) {
@@ -288,10 +289,10 @@ export const LiquidMesh: React.FC<LiquidMeshProps> = ({ section }) => {
             const hoverDistortionScale = 0.4;
             const hoverChromaticAberration = 0.08;
 
-            const finalDistortion = THREE.MathUtils.lerp(baseDistortion, hoverDistortion, hoverIntensity);
-            const finalTemporalDistortion = THREE.MathUtils.lerp(baseTemporalDistortion, hoverTemporalDistortion, hoverIntensity);
-            const finalDistortionScale = THREE.MathUtils.lerp(baseDistortionScale, hoverDistortionScale, hoverIntensity);
-            const finalChromaticAberration = THREE.MathUtils.lerp(baseChromaticAberration, hoverChromaticAberration, hoverIntensity);
+            const finalDistortion = MathUtils.lerp(baseDistortion, hoverDistortion, hoverIntensity);
+            const finalTemporalDistortion = MathUtils.lerp(baseTemporalDistortion, hoverTemporalDistortion, hoverIntensity);
+            const finalDistortionScale = MathUtils.lerp(baseDistortionScale, hoverDistortionScale, hoverIntensity);
+            const finalChromaticAberration = MathUtils.lerp(baseChromaticAberration, hoverChromaticAberration, hoverIntensity);
 
             easing.damp(material.current, 'distortion', finalDistortion, 0.25, delta);
             easing.damp(material.current, 'temporalDistortion', finalTemporalDistortion, 0.25, delta);
@@ -329,7 +330,7 @@ export const LiquidMesh: React.FC<LiquidMeshProps> = ({ section }) => {
                 attenuationDistance={0.5}
                 attenuationColor="#ffffff"
                 color="#ffffff"
-                background={new THREE.Color('#ffffff')}
+                background={new Color('#ffffff')}
             />
         </mesh>
     );

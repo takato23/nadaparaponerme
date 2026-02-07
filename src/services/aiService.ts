@@ -547,7 +547,33 @@ export async function recognizeBrandAndPrice(...args: Parameters<typeof geminiSe
 
 // Dupe Finder
 export async function findDupeAlternatives(...args: Parameters<typeof geminiServiceFull.findDupeAlternatives>) {
-  if (V1_SAFE_MODE) return [];
+  if (V1_SAFE_MODE) {
+    const item = args[0];
+    return {
+      original_item: {
+        id: item.id,
+        category: item.metadata?.category || 'unknown',
+        subcategory: item.metadata?.subcategory || 'unknown',
+      },
+      dupes: [],
+      visual_comparison: {
+        similarities: ['Safe Mode activo'],
+        differences: ['Búsqueda de alternativas desactivada temporalmente'],
+        overall_match: 0,
+      },
+      savings: {
+        original_price: 0,
+        cheapest_dupe_price: 0,
+        max_savings: 0,
+        average_dupe_price: 0,
+        average_savings: 0,
+        currency: 'USD',
+      },
+      search_strategy: 'Safe Mode',
+      confidence_level: 'low' as const,
+      analyzed_at: new Date().toISOString(),
+    };
+  }
   // if (getFeatureFlag('useSupabaseAI')) return assertFeatureAvailable('Dupe finder');
   return await geminiServiceFull.findDupeAlternatives(...args);
 }
@@ -566,13 +592,14 @@ export async function generateCapsuleWardrobe(
   if (V1_SAFE_MODE) {
     // Mock response
     return {
+      id: `capsule-safe-${Date.now()}`,
       name: 'Cápsula Safe Mode',
       strategy_explanation: 'Generada para testing',
       items: [],
       // outfits: [], // Removed as not in CapsuleWardrobe type
       compatibility_matrix: [],
       suggested_outfits: [],
-      colorPalette: [],
+      color_palette: [],
       total_combinations: 0,
       size: targetSize,
       theme: theme,

@@ -27,7 +27,7 @@ interface ClosetFiltersProps {
   filteredCount: number;
 }
 
-export const CATEGORY_FILTERS = [
+export const CATEGORY_FILTERS: Array<{ value: CategoryFilter; label: string; icon: string }> = [
   { value: 'all', label: 'Todo', icon: 'grid_view' },
   { value: 'top', label: 'Partes de Arriba', icon: 'checkroom' },
   { value: 'bottom', label: 'Partes de Abajo', icon: 'styler' },

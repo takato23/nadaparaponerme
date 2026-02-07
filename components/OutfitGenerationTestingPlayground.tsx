@@ -19,7 +19,7 @@ import {
   type EnhancedFitResult,
   type MultiStageFitResult
 } from '../src/services/generateOutfit-enhanced';
-import { generateOutfit } from '../src/services/geminiService';
+import { generateOutfit, getAIClient, retryWithBackoff } from '../src/services/geminiService';
 import { sampleData } from '../data/sampleData';
 
 interface TestResult {

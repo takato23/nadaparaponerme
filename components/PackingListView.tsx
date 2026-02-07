@@ -4,6 +4,7 @@ import type { PackingListResult, ClothingItem } from '../types';
 import ClosetGrid from './ClosetGrid';
 import { useToast } from '../hooks/useToast';
 import Toast from './Toast';
+import { sanitizeHtmlContent } from '../utils/sanitize';
 
 interface PackingListViewProps {
   result: PackingListResult;
@@ -25,6 +26,9 @@ const PackingListView = ({ result, inventory, onBack }: PackingListViewProps) =>
     'Calzado': packedItems.filter(i => i.metadata.category === 'shoes'),
     'Otros': packedItems.filter(i => !['top', 'bottom', 'shoes'].includes(i.metadata.category))
   };
+  const safeOutfitSuggestions = sanitizeHtmlContent(
+    result.outfit_suggestions.replace(/\n/g, '<br />')
+  );
 
   const handleSaveTrip = () => {
     // TODO: Implement actual trip saving logic
@@ -119,7 +123,7 @@ const PackingListView = ({ result, inventory, onBack }: PackingListViewProps) =>
                                 prose-headings:font-bold prose-headings:text-primary
                                 prose-strong:text-text-primary dark:prose-strong:text-white
                                 prose-li:marker:text-primary"
-                  dangerouslySetInnerHTML={{ __html: result.outfit_suggestions.replace(/\n/g, '<br />') }}
+                  dangerouslySetInnerHTML={{ __html: safeOutfitSuggestions }}
                 />
               </div>
 

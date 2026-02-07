@@ -46,7 +46,7 @@ export const PrivacyView: React.FC = () => {
         {
           title: '5. Pagos',
           paragraphs: [
-            'Los pagos son procesados por terceros (por ejemplo, MercadoPago en Argentina). No almacenamos los datos completos de tu tarjeta.'
+            'Los pagos son procesados por terceros (por ejemplo, MercadoPago en Argentina y Paddle para pagos internacionales). No almacenamos los datos completos de tu tarjeta.'
           ]
         },
         {

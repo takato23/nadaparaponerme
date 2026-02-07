@@ -8,14 +8,18 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../src/lib/supabase';
 import { PAYMENTS_ENABLED, V1_SAFE_MODE } from '../src/config/runtime';
-import type { SubscriptionTier, SubscriptionPlan } from '../types-payment';
 import {
-  getMonthlyUsage,
+  SUBSCRIPTION_PLANS,
+  type SubscriptionTier,
+  type SubscriptionPlan,
+} from '../types-payment';
+import {
   recordUsage as recordLocalUsage,
   canUseFeature as canUseLocalFeature,
-  getUserTier as getLocalTier,
+  setUserTier,
   type FeatureType,
 } from '../src/services/usageTrackingService';
+import { isAdminUser } from '../src/services/accessControlService';
 
 // ============================================================================
 // TYPES
@@ -65,97 +69,8 @@ export type FeatureName =
 // CONSTANTS
 // ============================================================================
 
-const PLANS: SubscriptionPlan[] = [
-  {
-    id: 'free',
-    name: 'Free',
-    description: 'Para empezar a organizar tu armario',
-    price_monthly_ars: 0,
-    price_monthly_usd: 0,
-    features: [
-      'Hasta 50 prendas en tu armario',
-      '200 créditos IA por mes',
-      'Probador Virtual (Try-On)',
-      'AI Fashion Designer',
-      'Análisis básico de color',
-      'Outfits guardados ilimitados',
-      'Compartir en comunidad',
-    ],
-    limits: {
-      ai_generations_per_month: 200,
-      max_closet_items: 50,
-      max_saved_outfits: -1,
-      can_use_virtual_tryon: true,  // Enabled for all tiers during testing phase
-      can_use_ai_designer: true,  // Enabled for all tiers, limited by credits
-      can_use_lookbook: false,
-      can_use_style_dna: false,
-      can_export_lookbooks: false,
-    },
-  },
-  {
-    id: 'pro',
-    name: 'Pro',
-    description: 'Para fashionistas serios',
-    price_monthly_ars: 2999,
-    price_monthly_usd: 9.99,
-    features: [
-      'Todo lo de Free +',
-      'Prendas ilimitadas',
-      '300 créditos IA por mes',
-      'Probador virtual Rápido',
-      'Ultra habilitado',
-      'AI Fashion Designer',
-      'Lookbook Creator',
-      'Exportar lookbooks en HD',
-      'Análisis avanzado de gaps',
-      'Sin anuncios',
-    ],
-    limits: {
-      ai_generations_per_month: 300,
-      max_closet_items: -1,
-      max_saved_outfits: -1,
-      can_use_virtual_tryon: true,
-      can_use_ai_designer: true,
-      can_use_lookbook: true,
-      can_use_style_dna: false,
-      can_export_lookbooks: true,
-    },
-    popular: true,
-  },
-  {
-    id: 'premium',
-    name: 'Premium',
-    description: 'Experiencia completa con IA avanzada',
-    price_monthly_ars: 4999,
-    price_monthly_usd: 16.99,
-    features: [
-      'Todo lo de Pro +',
-      '400 créditos IA por mes',
-      'Probador virtual Ultra',
-      'Style DNA Profile completo',
-      'Análisis de evolución de estilo',
-      'Recomendaciones personalizadas diarias',
-      'Acceso anticipado a features',
-      'Soporte prioritario',
-    ],
-    limits: {
-      ai_generations_per_month: 400,
-      max_closet_items: -1,
-      max_saved_outfits: -1,
-      can_use_virtual_tryon: true,
-      can_use_ai_designer: true,
-      can_use_lookbook: true,
-      can_use_style_dna: true,
-      can_export_lookbooks: true,
-    },
-  },
-];
-
-// Admin emails with full access (bypass paywall)
-const ADMIN_EMAILS = [
-  'admin@admin.com',
-  'santiagobalosky@gmail.com',
-];
+const PLANS: SubscriptionPlan[] = SUBSCRIPTION_PLANS;
+const FREE_PLAN = PLANS.find((plan) => plan.id === 'free') || PLANS[0];
 
 // ============================================================================
 // HOOK
@@ -166,7 +81,7 @@ export function useSubscription(): UseSubscriptionReturn {
     tier: 'free',
     status: 'active',
     aiGenerationsUsed: 0,
-    aiGenerationsLimit: 50,
+    aiGenerationsLimit: FREE_PLAN.limits.ai_generations_per_month,
     currentPeriodEnd: null,
     isLoading: true,
     error: null,
@@ -182,11 +97,13 @@ export function useSubscription(): UseSubscriptionReturn {
       const { data: { user } } = await supabase.auth.getUser();
 
       if (!user) {
+        setUserTier('free');
+        setIsAdmin(false);
         setState({
           tier: 'free',
           status: 'active',
           aiGenerationsUsed: 0,
-          aiGenerationsLimit: 50,
+          aiGenerationsLimit: FREE_PLAN.limits.ai_generations_per_month,
           currentPeriodEnd: null,
           isLoading: false,
           error: null,
@@ -195,7 +112,7 @@ export function useSubscription(): UseSubscriptionReturn {
       }
 
       // Check if admin
-      const userIsAdmin = ADMIN_EMAILS.includes(user.email?.toLowerCase() || '');
+      const userIsAdmin = isAdminUser(user);
       setIsAdmin(userIsAdmin);
 
       // Fetch subscription
@@ -211,11 +128,12 @@ export function useSubscription(): UseSubscriptionReturn {
 
       // If no subscription, use defaults
       if (!subscription) {
+        setUserTier('free');
         setState({
           tier: 'free',
           status: 'active',
           aiGenerationsUsed: 0,
-          aiGenerationsLimit: 50,
+          aiGenerationsLimit: FREE_PLAN.limits.ai_generations_per_month,
           currentPeriodEnd: null,
           isLoading: false,
           error: null,
@@ -224,10 +142,13 @@ export function useSubscription(): UseSubscriptionReturn {
       }
 
       // Get plan limits
-      const plan = PLANS.find(p => p.id === subscription.tier) || PLANS[0];
+      const isPaidActive = subscription.status === 'active' || subscription.status === 'trialing';
+      const effectiveTier = (isPaidActive ? subscription.tier : 'free') as SubscriptionTier;
+      const plan = PLANS.find(p => p.id === effectiveTier) || PLANS[0];
+      setUserTier(effectiveTier);
 
       setState({
-        tier: subscription.tier as SubscriptionTier,
+        tier: effectiveTier,
         status: subscription.status,
         aiGenerationsUsed: subscription.ai_generations_used || 0,
         aiGenerationsLimit: plan.limits.ai_generations_per_month,
@@ -332,7 +253,48 @@ export function useSubscription(): UseSubscriptionReturn {
   const incrementUsage = useCallback(async (feature: FeatureType = 'outfit_generation'): Promise<boolean> => {
     if (isAdmin) return true;
 
-    // Always record locally first (works offline)
+    let userId: string | null = null;
+    let serverIncremented = false;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      userId = user?.id ?? null;
+    } catch {
+      userId = null;
+    }
+
+    // If authenticated, use server guard as source of truth.
+    if (userId) {
+      try {
+        const { data, error } = await supabase.rpc('increment_ai_generation_usage', {
+          p_user_id: userId,
+          p_amount: 1,
+        });
+
+        if (error) {
+          throw error;
+        }
+
+        if (data === false) {
+          return false;
+        }
+
+        serverIncremented = true;
+      } catch (error) {
+        console.warn('Failed to sync usage to Supabase, using local fallback:', error);
+      }
+    }
+
+    // When server already accepted the increment, keep local store/state in sync.
+    if (serverIncremented) {
+      recordLocalUsage(feature);
+      setState(prev => ({
+        ...prev,
+        aiGenerationsUsed: prev.aiGenerationsUsed + 1,
+      }));
+      return true;
+    }
+
+    // Offline/local fallback.
     const localStatus = canUseLocalFeature(feature);
     if (!localStatus.canUse) {
       return false;
@@ -345,38 +307,24 @@ export function useSubscription(): UseSubscriptionReturn {
       aiGenerationsUsed: prev.aiGenerationsUsed + 1,
     }));
 
-    // Try to sync with Supabase (non-blocking)
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        await supabase.rpc('increment_ai_generation_usage', { p_user_id: user.id, p_amount: 1 });
-      }
-    } catch (error) {
-      // Supabase sync failed, but local tracking succeeded
-      console.warn('Failed to sync usage to Supabase:', error);
-    }
-
     return true;
   }, [isAdmin]);
 
   /**
    * Check if specific AI feature can be used (with local fallback)
    */
-  const canUseAIFeature = useCallback((feature: FeatureType): { canUse: boolean; reason?: string } => {
+  const canUseAIFeature = useCallback((_feature: FeatureType): { canUse: boolean; reason?: string } => {
     if (isAdmin) return { canUse: true };
 
-    const localStatus = canUseLocalFeature(feature);
-    if (!localStatus.canUse) {
+    if (state.aiGenerationsLimit !== -1 && state.aiGenerationsUsed >= state.aiGenerationsLimit) {
       return {
         canUse: false,
-        reason: localStatus.isPremiumLocked
-          ? 'Esta función requiere un plan Pro o Premium'
-          : `Límite alcanzado (${localStatus.used}/${localStatus.limit})`,
+        reason: `Límite alcanzado (${state.aiGenerationsUsed}/${state.aiGenerationsLimit})`,
       };
     }
 
     return { canUse: true };
-  }, [isAdmin]);
+  }, [isAdmin, state.aiGenerationsLimit, state.aiGenerationsUsed]);
 
   return {
     // State

@@ -6,7 +6,7 @@ import {
   setUserTier,
   useCredit,
   useCredits,
-} from '../services/usageTrackingService';
+} from '../src/services/usageTrackingService';
 
 const createMockStorage = (): Storage => {
   const store = new Map<string, string>();
@@ -81,16 +81,16 @@ describe('usageTrackingService', () => {
     expect(getCreditStatus().remaining).toBe(CREDIT_LIMITS.free - 5);
   });
 
-  it('treats premium tier as unlimited', () => {
+  it('uses premium tier limits correctly', () => {
     setUserTier('premium');
     resetCredits();
 
     const status = getCreditStatus();
-    expect(status.limit).toBe(-1);
-    expect(status.remaining).toBe(-1);
+    expect(status.limit).toBe(CREDIT_LIMITS.premium);
+    expect(status.remaining).toBe(CREDIT_LIMITS.premium);
     expect(status.canUse).toBe(true);
 
     expect(useCredit()).toBe(true);
-    expect(getCreditStatus().remaining).toBe(-1);
+    expect(getCreditStatus().remaining).toBe(CREDIT_LIMITS.premium - 1);
   });
 });

@@ -84,6 +84,9 @@ export interface Database {
         Update: CommunityMemberUpdate;
       };
     };
+    Views: {
+      [_ in never]: never;
+    };
     Functions: {
       get_user_feed: {
         Args: {
@@ -121,15 +124,12 @@ export interface Database {
           common_preferences: string[];
         }[];
       };
-      Views: {
-        [_ in never]: never;
-      };
-      Enums: {
-        [_ in never]: never;
-      };
-      CompositeTypes: {
-        [_ in never]: never;
-      };
+    };
+    Enums: {
+      [_ in never]: never;
+    };
+    CompositeTypes: {
+      [_ in never]: never;
     };
   };
 }
@@ -754,6 +754,12 @@ export interface AIGeneratedImage {
   image_url: string;
   model_used: 'flash' | 'pro';
   generation_time_ms: number;
+  metadata?: {
+    category?: string;
+    color_primary?: string;
+    style_tags?: string[];
+  };
+  added_to_closet?: boolean;
   created_at: string;
 }
 
@@ -774,7 +780,8 @@ export interface GenerateImageRequest {
     color_palette?: string[];
     vibe_tags?: string[];
     season?: string;
-    category?: 'top' | 'bottom' | 'shoes' | 'accessory';
+    category?: 'top' | 'bottom' | 'shoes' | 'accessory' | 'outerwear' | 'dress' | string;
+    occasion?: string;
   };
 }
 

@@ -22,7 +22,7 @@
 ```bash
 File: .env.local
 Variable: VITE_GEMINI_API_KEY
-Value: AIzaSyCd7P01moiQLSu425iB2g5b68OKIw60oIk
+Value: <REDACTED>
 Status: ✅ CONFIGURED
 ```
 
@@ -41,7 +41,7 @@ Status: ✅ CONFIGURED
 
 **Command used**:
 ```bash
-supabase secrets set GEMINI_API_KEY=AIzaSyCd7P01moiQLSu425iB2g5b68OKIw60oIk --project-ref qpoojigxxswkpkfbrfiy
+supabase secrets set GEMINI_API_KEY=<YOUR_GEMINI_API_KEY> --project-ref qpoojigxxswkpkfbrfiy
 ```
 
 ---

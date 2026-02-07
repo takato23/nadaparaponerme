@@ -28,6 +28,8 @@
     "noEmit": true
   },
   "exclude": [
-    "supabase/functions/**/*"
+    "supabase/functions/**/*",
+    "dist/**/*",
+    "output/**/*"
   ]
 }

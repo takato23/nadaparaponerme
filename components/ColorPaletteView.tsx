@@ -30,7 +30,20 @@ const ColorPaletteView = ({ closet, onClose }: ColorPaletteViewProps) => {
 
     try {
       const result = await analyzeColorPalette(closet);
-      setAnalysis(result);
+      const normalized: ColorPaletteAnalysis = 'dominant_colors' in result
+        ? result
+        : {
+            dominant_colors: (result.palette || []).map((entry: any, idx: number) => ({
+              name: entry.name || `Color ${idx + 1}`,
+              hex: entry.hex || '#000000',
+              percentage: entry.percentage ?? 0,
+            })),
+            color_scheme: result.harmony || 'diverse',
+            missing_colors: [],
+            versatility_score: 0,
+            recommendations: result.advice || '',
+          };
+      setAnalysis(normalized);
     } catch (err) {
       console.error('Error analyzing color palette:', err);
       setError(err instanceof Error ? err.message : 'Error al analizar la paleta de colores');

@@ -7,6 +7,17 @@ const corsHeaders = {
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-application-name',
 };
 
+const PLANS: Record<'pro' | 'premium', { amount_ars: number; amount_usd: number }> = {
+    pro: { amount_ars: 2999, amount_usd: 9.99 },
+    premium: { amount_ars: 4999, amount_usd: 16.99 },
+};
+
+const LIMITS_BY_TIER: Record<'free' | 'pro' | 'premium', number> = {
+    free: 200,
+    pro: 300,
+    premium: 400,
+};
+
 serve(async (req) => {
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders });
@@ -20,14 +31,44 @@ serve(async (req) => {
             throw new Error('Missing Supabase credentials');
         }
 
-        const supabase = createClient(supabaseUrl, supabaseServiceKey);
+        const authHeader = req.headers.get('Authorization');
+        if (!authHeader) {
+            return new Response(
+                JSON.stringify({ error: 'Missing authorization header' }),
+                { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+        }
 
-        const { payment_id, user_id, subscription_tier } = await req.json();
+        // Service role + user JWT header lets us validate caller identity.
+        const supabaseAuth = createClient(supabaseUrl, supabaseServiceKey, {
+            global: { headers: { Authorization: authHeader } },
+        });
 
-        if (!payment_id || !user_id || !subscription_tier) {
+        const { data: { user }, error: userError } = await supabaseAuth.auth.getUser();
+        if (userError || !user) {
+            return new Response(
+                JSON.stringify({ error: 'Unauthorized' }),
+                { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+        }
+
+        // Admin client for DB writes (bypass RLS).
+        const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+
+        const { payment_id, user_id } = await req.json();
+
+        if (!payment_id || !user_id) {
             return new Response(
                 JSON.stringify({ error: 'Missing required parameters' }),
                 { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+        }
+
+        // Caller must be the same user. (Admins/service-role calls are not supported here.)
+        if (user.id !== user_id) {
+            return new Response(
+                JSON.stringify({ error: 'Forbidden' }),
+                { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             );
         }
 
@@ -76,12 +117,41 @@ serve(async (req) => {
         }
 
         // Verify metadata matches request (security check)
-        const metadataUserId = paymentData.metadata?.user_id || paymentData.external_reference?.split('_')[0];
+        const externalRef: string = paymentData.external_reference || '';
+        const externalParts = externalRef.split('_');
+        const externalUserId = externalParts[0] || null;
+        const externalTier = externalParts[1] as 'pro' | 'premium' | 'free' | undefined;
+
+        const metadataUserId = paymentData.metadata?.user_id || externalUserId;
         if (metadataUserId && metadataUserId !== user_id) {
             console.error('User ID mismatch:', { request: user_id, payment: metadataUserId });
             return new Response(
                 JSON.stringify({ error: 'Error de seguridad: usuario no coincide' }),
                 { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+        }
+
+        const paymentTier = paymentData.metadata?.subscription_tier || (externalTier === 'pro' || externalTier === 'premium' ? externalTier : null);
+        if (!paymentTier) {
+            return new Response(
+                JSON.stringify({ error: 'Missing subscription tier in payment metadata' }),
+                { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+        }
+
+        const paymentCurrency = String(paymentData.metadata?.currency || paymentData.currency_id || 'ARS');
+        const expectedAmount = paymentCurrency === 'USD' ? PLANS[paymentTier].amount_usd : PLANS[paymentTier].amount_ars;
+        if (Number(paymentData.transaction_amount) !== Number(expectedAmount)) {
+            console.error('Amount mismatch:', {
+                expected: expectedAmount,
+                got: paymentData.transaction_amount,
+                paymentTier,
+                paymentCurrency,
+                externalRef,
+            });
+            return new Response(
+                JSON.stringify({ error: 'Amount mismatch' }),
+                { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             );
         }
 
@@ -91,52 +161,57 @@ serve(async (req) => {
         oneMonthLater.setMonth(oneMonthLater.getMonth() + 1);
 
         // Update user subscription
-        const { error } = await supabase
+        const { error } = await supabaseAdmin
             .from('subscriptions')
             .upsert({
                 user_id,
-                tier: subscription_tier,
+                tier: paymentTier,
                 status: 'active',
                 current_period_start: now.toISOString(),
                 current_period_end: oneMonthLater.toISOString(),
                 updated_at: now.toISOString(),
+                payment_method: 'mercadopago_credit_card',
             });
 
         if (error) throw error;
 
-        // Reset usage metrics for the new period
-        // Get plan limits (simplified for this function, ideally fetch from DB or config)
-        const limits = { ai_generations_per_month: 10 }; // Default Free
-        if (subscription_tier === 'pro') limits.ai_generations_per_month = 150;
-        if (subscription_tier === 'premium') limits.ai_generations_per_month = 400;
+        // Reset usage metrics for the current month (one record per user per period).
+        const periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        const periodEndMetrics = new Date(now.getFullYear(), now.getMonth() + 1, 0);
 
-        const { error: metricsError } = await supabase
+        const { error: metricsError } = await supabaseAdmin
             .from('usage_metrics')
             .upsert({
                 user_id,
-                subscription_tier,
+                subscription_tier: paymentTier,
                 ai_generations_used: 0,
-                ai_generations_limit: limits.ai_generations_per_month,
-                period_start: now.toISOString(),
-                period_end: oneMonthLater.toISOString(),
+                ai_generations_limit: LIMITS_BY_TIER[paymentTier],
+                period_start: periodStart.toISOString(),
+                period_end: periodEndMetrics.toISOString(),
                 last_reset: now.toISOString(),
+            }, {
+                onConflict: 'user_id,period_start',
             });
 
         if (metricsError) throw metricsError;
 
         // Update payment transaction status
-        const { error: txError } = await supabase
+        const { error: txError } = await supabaseAdmin
             .from('payment_transactions')
             .update({
                 status: 'approved',
+                provider_payment_method_id: paymentData.payment_method_id || null,
                 metadata: {
                     status_detail: paymentData.status_detail,
                     date_approved: paymentData.date_approved,
                     payment_method_id: paymentData.payment_method_id,
                     processed_via: 'process-payment',
+                    mp_payment_id: paymentData.id,
+                    external_reference: externalRef,
                 },
             })
-            .eq('provider_transaction_id', String(payment_id));
+            .eq('provider', 'mercadopago')
+            .eq('provider_transaction_id', String(externalRef));
 
         if (txError) {
             console.error('Error updating transaction (non-blocking):', txError);

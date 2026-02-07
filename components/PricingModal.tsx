@@ -6,9 +6,13 @@
  */
 
 import React, { useState } from 'react';
-import { createPaymentPreference } from '../src/services/paymentService';
-import type { SubscriptionTier, SubscriptionPlan } from '../types-payment';
-import { PAYMENTS_ENABLED, USD_ENABLED, V1_SAFE_MODE } from '../src/config/runtime';
+import * as paymentService from '../src/services/paymentService';
+import {
+  SUBSCRIPTION_PLANS,
+  type SubscriptionTier,
+  type SubscriptionPlan
+} from '../types-payment';
+import { PAYMENTS_ENABLED, USD_ENABLED } from '../src/config/runtime';
 import * as analytics from '../src/services/analyticsService';
 
 // ============================================================================
@@ -28,84 +32,7 @@ interface PricingModalProps {
 // CONSTANTS
 // ============================================================================
 
-const PLANS: SubscriptionPlan[] = [
-  {
-    id: 'free',
-    name: 'Free',
-    description: 'Para empezar a organizar tu armario',
-    price_monthly_ars: 0,
-    price_monthly_usd: 0,
-    features: [
-      'Hasta 50 prendas',
-      '200 créditos IA/mes (Rápido)',
-      'Análisis básico de color',
-      'Outfits guardados ilimitados',
-    ],
-    limits: {
-      ai_generations_per_month: 200,
-      max_closet_items: 50,
-      max_saved_outfits: -1,
-      can_use_virtual_tryon: true,
-      can_use_ai_designer: true,
-      can_use_lookbook: false,
-      can_use_style_dna: false,
-      can_export_lookbooks: false,
-    },
-  },
-  {
-    id: 'pro',
-    name: 'Pro',
-    description: 'Para fashionistas serios',
-    price_monthly_ars: 2999,
-    price_monthly_usd: 9.99,
-    features: [
-      'Prendas ilimitadas',
-      '300 créditos IA/mes',
-      'Probador virtual Rápido',
-      'Ultra habilitado',
-      'AI Fashion Designer',
-      'Lookbook Creator',
-      'Sin anuncios',
-    ],
-    limits: {
-      ai_generations_per_month: 300,
-      max_closet_items: -1,
-      max_saved_outfits: -1,
-      can_use_virtual_tryon: true,
-      can_use_ai_designer: true,
-      can_use_lookbook: true,
-      can_use_style_dna: false,
-      can_export_lookbooks: true,
-    },
-    popular: true,
-  },
-  {
-    id: 'premium',
-    name: 'Premium',
-    description: 'Experiencia completa',
-    price_monthly_ars: 4999,
-    price_monthly_usd: 16.99,
-    features: [
-      'Todo lo de Pro +',
-      '400 créditos IA/mes',
-      'Probador virtual Ultra',
-      'Style DNA Profile',
-      'Evolución de estilo',
-      'Acceso anticipado',
-      'Soporte prioritario',
-    ],
-    limits: {
-      ai_generations_per_month: 400,
-      max_closet_items: -1,
-      max_saved_outfits: -1,
-      can_use_virtual_tryon: true,
-      can_use_ai_designer: true,
-      can_use_lookbook: true,
-      can_use_style_dna: true,
-      can_export_lookbooks: true,
-    },
-  },
-];
+const PLANS: SubscriptionPlan[] = SUBSCRIPTION_PLANS;
 
 // ============================================================================
 // COMPONENT
@@ -120,6 +47,7 @@ export function PricingModal({
 }: PricingModalProps) {
   const [isLoading, setIsLoading] = useState<SubscriptionTier | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [currency, setCurrency] = useState<'ARS' | 'USD'>('ARS');
 
   if (!isOpen) return null;
 
@@ -127,19 +55,16 @@ export function PricingModal({
     if (tier === 'free' || tier === currentTier) return;
 
     try {
-      analytics.trackCheckoutStart(tier, 'ARS');
-      if (V1_SAFE_MODE && !PAYMENTS_ENABLED) {
-        setError('Pagos desactivados durante la V1 (beta). Próximamente vas a poder hacer upgrade.');
+      analytics.trackCheckoutStart(tier, currency);
+      if (!PAYMENTS_ENABLED) {
+        setError('Pagos desactivados. Próximamente vas a poder hacer upgrade.');
         return;
       }
 
       setIsLoading(tier);
       setError(null);
 
-      const preference = await createPaymentPreference(tier, 'ARS');
-
-      // Redirect to MercadoPago checkout
-      window.location.href = preference.init_point;
+      await paymentService.startCheckout(tier, currency);
     } catch (err) {
       console.error('Error creating payment:', err);
       setError(err instanceof Error ? err.message : 'Error al procesar el pago');
@@ -161,7 +86,7 @@ export function PricingModal({
   const isButtonDisabled = (plan: SubscriptionPlan) => {
     if (plan.id === currentTier) return true;
     if (plan.id === 'free') return true;
-    if (V1_SAFE_MODE && !PAYMENTS_ENABLED) return true;
+    if (!PAYMENTS_ENABLED) return true;
     if (isLoading !== null) return true;
     return false;
   };
@@ -196,8 +121,20 @@ export function PricingModal({
         <div className="px-6 pt-4">
           {USD_ENABLED ? (
             <div className="inline-flex items-center gap-2 rounded-full border border-gray-200 dark:border-gray-700 p-1 text-xs">
-              <span className="px-3 py-1 rounded-full bg-gray-900 text-white">ARS</span>
-              <span className="px-3 py-1 rounded-full text-gray-400">USD</span>
+              <button
+                type="button"
+                onClick={() => setCurrency('ARS')}
+                className={`px-3 py-1 rounded-full ${currency === 'ARS' ? 'bg-gray-900 text-white' : 'text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
+              >
+                ARS
+              </button>
+              <button
+                type="button"
+                onClick={() => setCurrency('USD')}
+                className={`px-3 py-1 rounded-full ${currency === 'USD' ? 'bg-gray-900 text-white' : 'text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
+              >
+                USD
+              </button>
             </div>
           ) : (
             <span className="text-xs text-gray-400">Precios en ARS</span>
@@ -240,10 +177,10 @@ export function PricingModal({
             <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
           </div>
         )}
-        {V1_SAFE_MODE && !PAYMENTS_ENABLED && !error && (
+        {!PAYMENTS_ENABLED && !error && (
           <div className="mx-6 mt-4 p-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
             <p className="text-sm text-amber-700 dark:text-amber-300">
-              Beta: los pagos están desactivados por seguridad. Podés usar la app en modo Free mientras validamos el checkout.
+              Por ahora, los pagos están desactivados. Podés usar la app en modo Free mientras terminamos de validar el checkout.
             </p>
           </div>
         )}
@@ -290,15 +227,17 @@ export function PricingModal({
                 <div className="mt-4 mb-6">
                   <div className="flex items-baseline gap-1">
                     <span className="text-3xl font-bold text-gray-900 dark:text-white">
-                      {plan.price_monthly_ars === 0
+                      {(currency === 'ARS' ? plan.price_monthly_ars : plan.price_monthly_usd) === 0
                         ? 'Gratis'
-                        : `$${plan.price_monthly_ars.toLocaleString('es-AR')}`}
+                        : currency === 'ARS'
+                          ? `$${plan.price_monthly_ars.toLocaleString('es-AR')}`
+                          : `US$ ${plan.price_monthly_usd.toLocaleString('en-US')}`}
                     </span>
-                    {plan.price_monthly_ars > 0 && (
+                    {(currency === 'ARS' ? plan.price_monthly_ars : plan.price_monthly_usd) > 0 && (
                       <span className="text-sm text-gray-500 dark:text-gray-400">/mes</span>
                     )}
                   </div>
-                  {plan.price_monthly_usd > 0 && (
+                  {currency === 'ARS' && plan.price_monthly_usd > 0 && (
                     <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
                       ~USD ${plan.price_monthly_usd}
                     </p>

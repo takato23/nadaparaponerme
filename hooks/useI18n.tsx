@@ -14,7 +14,7 @@ import {
     isI18nReady,
     getSupportedLocales,
     type Locale
-} from '../services/i18nService';
+} from '../src/services/i18nService';
 
 interface UseI18nReturn {
     t: (key: string, params?: Record<string, string | number>) => string;

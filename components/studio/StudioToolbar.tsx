@@ -133,6 +133,19 @@ export const StudioToolbar: React.FC<StudioToolbarProps> = ({
         }
     };
 
+    const handleSelectQuality = (quality: 'flash' | 'pro') => {
+        if (!setGenerationQuality) return;
+
+        if (quality === 'pro' && !isPremium) {
+            toast.error('Ultra es Premium. Upgradea para desbloquearlo.');
+            navigate('/pricing');
+            return;
+        }
+
+        if (navigator.vibrate) navigator.vibrate(5);
+        setGenerationQuality(quality);
+    };
+
     return (
         <motion.section variants={itemVariants} className="mb-3">
             <div className="flex items-start gap-2 p-2 rounded-xl bg-white/60 backdrop-blur-sm border border-white/70 w-full relative">
@@ -212,7 +225,7 @@ export const StudioToolbar: React.FC<StudioToolbarProps> = ({
                                     <span className="text-[8px] text-[color:var(--studio-ink-muted)] font-bold uppercase tracking-tight hidden sm:inline">Cal:</span>
                                     <div className="flex bg-gray-100 p-0.5 rounded-lg">
                                         <button
-                                            onClick={() => { if (navigator.vibrate) navigator.vibrate(5); setGenerationQuality('flash'); }}
+                                            onClick={() => handleSelectQuality('flash')}
                                             className={`px-1.5 py-0.5 rounded text-xs font-bold transition flex items-center gap-0.5 ${generationQuality === 'flash'
                                                 ? 'bg-white shadow-sm text-[color:var(--studio-ink)]'
                                                 : 'text-gray-400 hover:text-gray-600'
@@ -222,12 +235,15 @@ export const StudioToolbar: React.FC<StudioToolbarProps> = ({
                                             Rápido <span className="text-[7px] opacity-60">1⚡</span>
                                         </button>
                                         <button
-                                            onClick={() => { if (navigator.vibrate) navigator.vibrate(5); setGenerationQuality('pro'); }}
+                                            onClick={() => handleSelectQuality('pro')}
+                                            disabled={!isPremium}
                                             className={`px-1.5 py-0.5 rounded text-xs font-bold transition flex items-center gap-0.5 ${generationQuality === 'pro'
                                                 ? 'bg-gradient-to-r from-purple-500 to-pink-500 shadow-sm text-white'
-                                                : 'text-gray-400 hover:text-gray-600'
+                                                : !isPremium
+                                                    ? 'text-gray-300 cursor-not-allowed'
+                                                    : 'text-gray-400 hover:text-gray-600'
                                                 }`}
-                                            title="Ultra: calidad pro"
+                                            title={isPremium ? 'Ultra: calidad pro' : 'Ultra: requiere Premium'}
                                         >
                                             Ultra <span className="text-[7px] opacity-90">4⚡</span>
                                         </button>

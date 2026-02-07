@@ -2464,29 +2464,61 @@ Selecciona 3-5 dupes que sean visualmente similares y significativamente más ba
 
         const parsedJson = JSON.parse(analysisResponse.text);
 
-        // Validate required fields
-        if (!parsedJson.dupes ||
-            !Array.isArray(parsedJson.dupes) ||
-            parsedJson.dupes.length === 0 ||
-            !parsedJson.visual_comparison ||
-            !parsedJson.search_strategy ||
-            !parsedJson.confidence_level) {
-            throw new Error('El AI no generó un análisis válido de dupes');
+        // Validate required fields - handle gracefully if missing
+        const hasDupes = parsedJson.dupes && Array.isArray(parsedJson.dupes) && parsedJson.dupes.length > 0;
+        const hasVisualComparison = parsedJson.visual_comparison &&
+            Array.isArray(parsedJson.visual_comparison.similarities) &&
+            Array.isArray(parsedJson.visual_comparison.differences);
+
+        // If no valid dupes found, return a graceful "no results" response
+        if (!hasDupes) {
+            const noResultsResponse: import('../types').DupeFinderResult = {
+                original_item: {
+                    id: item.id,
+                    brand: brand !== 'unknown' ? brand : undefined,
+                    estimated_price: estimatedPrice > 0 ? estimatedPrice : undefined,
+                    category,
+                    subcategory
+                },
+                dupes: [],
+                visual_comparison: {
+                    similarities: ['No se encontraron productos similares en este momento'],
+                    differences: ['Probá con otra prenda o intentá más tarde'],
+                    overall_match: 0
+                },
+                savings: {
+                    original_price: estimatedPrice || 0,
+                    cheapest_dupe_price: 0,
+                    max_savings: 0,
+                    average_dupe_price: 0,
+                    average_savings: 0,
+                    currency: 'USD'
+                },
+                search_strategy: 'No se encontraron resultados de búsqueda para esta prenda.',
+                confidence_level: 'low',
+                analyzed_at: new Date().toISOString()
+            };
+            return noResultsResponse;
         }
 
-        // Calculate savings (if original price is known)
-        const dupesPricesUSD = parsedJson.dupes.map((d: any) => {
-            // Simple currency conversion (you could add a real API here)
-            const priceUSD = d.currency === 'USD' ? d.price :
-                d.currency === 'ARS' ? d.price / 1000 : // approximate
-                    d.currency === 'EUR' ? d.price * 1.1 :
-                        d.price; // default assume USD
-            return priceUSD;
-        });
+        // Calculate savings (if original price is known) - with safety checks
+        const dupesPricesUSD = parsedJson.dupes
+            .filter((d: any) => typeof d.price === 'number' && d.price > 0)
+            .map((d: any) => {
+                // Simple currency conversion (you could add a real API here)
+                const priceUSD = d.currency === 'USD' ? d.price :
+                    d.currency === 'ARS' ? d.price / 1000 : // approximate
+                        d.currency === 'EUR' ? d.price * 1.1 :
+                            d.price; // default assume USD
+                return priceUSD;
+            });
 
-        const cheapestDupe = Math.min(...dupesPricesUSD);
-        const averageDupe = dupesPricesUSD.reduce((a, b) => a + b, 0) / dupesPricesUSD.length;
-        const originalPriceUSD = estimatedPrice > 0 ? estimatedPrice : averageDupe * 2.5; // estimate if unknown
+        // Safety: ensure we have valid prices before calculations
+        const cheapestDupe = dupesPricesUSD.length > 0 ? Math.min(...dupesPricesUSD) : 0;
+        const averageDupe = dupesPricesUSD.length > 0
+            ? dupesPricesUSD.reduce((a: number, b: number) => a + b, 0) / dupesPricesUSD.length
+            : 0;
+        const originalPriceUSD = estimatedPrice > 0 ? estimatedPrice : (averageDupe > 0 ? averageDupe * 2.5 : 50);
 
         const savings: import('../types').SavingsCalculation = {
             original_price: originalPriceUSD,
@@ -2497,7 +2529,7 @@ Selecciona 3-5 dupes que sean visualmente similares y significativamente más ba
             currency: 'USD'
         };
 
-        // Build final result
+        // Build final result with fallback for visual_comparison
         const result: import('../types').DupeFinderResult = {
             original_item: {
                 id: item.id,
@@ -2507,10 +2539,14 @@ Selecciona 3-5 dupes que sean visualmente similares y significativamente más ba
                 subcategory
             },
             dupes: parsedJson.dupes,
-            visual_comparison: parsedJson.visual_comparison,
+            visual_comparison: hasVisualComparison ? parsedJson.visual_comparison : {
+                similarities: ['Similitud general en estilo y categoría'],
+                differences: ['Diferencias en marca y calidad'],
+                overall_match: 60
+            },
             savings,
-            search_strategy: parsedJson.search_strategy,
-            confidence_level: parsedJson.confidence_level,
+            search_strategy: parsedJson.search_strategy || 'Búsqueda en tiendas online locales e internacionales.',
+            confidence_level: parsedJson.confidence_level || 'medium',
             analyzed_at: new Date().toISOString()
         };
 
@@ -2518,7 +2554,39 @@ Selecciona 3-5 dupes que sean visualmente similares y significativamente más ba
 
     } catch (error) {
         console.error("Error finding dupe alternatives:", error);
-        throw new Error("No se pudieron encontrar dupes. Intentá con otra prenda más común.");
+
+        // Return graceful error response instead of throwing
+        const errorResponse: import('../types').DupeFinderResult = {
+            original_item: {
+                id: item.id,
+                category,
+                subcategory
+            },
+            dupes: [],
+            visual_comparison: {
+                similarities: [],
+                differences: [],
+                overall_match: 0
+            },
+            savings: {
+                original_price: 0,
+                cheapest_dupe_price: 0,
+                max_savings: 0,
+                average_dupe_price: 0,
+                average_savings: 0,
+                currency: 'USD'
+            },
+            search_strategy: 'No se pudo completar la búsqueda.',
+            confidence_level: 'low',
+            analyzed_at: new Date().toISOString()
+        };
+
+        // Only throw for truly unrecoverable errors
+        if (error instanceof Error && error.message.includes('imagen')) {
+            throw error;
+        }
+
+        return errorResponse;
     }
 }
 
@@ -3339,18 +3407,16 @@ Structured JSON con todos los campos requeridos del schema StyleEvolutionTimelin
     };
 
     try {
-        const model = getAIClient().models.generate({
+        const result = await getAIClient().models.generateContent({
             model: 'gemini-2.5-flash',
+            contents: [{ role: 'user', parts: [{ text: systemPrompt }] }],
             config: {
                 temperature: 0.6, // Balance between creativity and consistency
                 responseMimeType: 'application/json',
                 responseSchema: styleEvolutionSchema
             }
-
         });
-
-        const result = await model.generateContent(systemPrompt);
-        const responseText = result.response.text();
+        const responseText = result.text || '';
         const analysis = JSON.parse(responseText);
 
         const timeline: import('../types').StyleEvolutionTimeline = {
@@ -3488,19 +3554,17 @@ Retorna un análisis de gaps priorizados.`;
     };
 
     try {
-        const model = getAIClient().models.generate({
+        const result = await getAIClient().models.generateContent({
             model: 'gemini-2.5-flash',
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
             config: {
                 temperature: 0.5,
                 responseMimeType: 'application/json',
                 responseSchema: gapSchema,
                 systemInstruction
             }
-
         });
-
-        const result = await model.generateContent(prompt);
-        const responseText = result.response.text();
+        const responseText = result.text || '';
         const analysis = JSON.parse(responseText);
 
         const gaps: import('../types').ShoppingGap[] = (analysis.gaps || []).map((gap: any, index: number) => ({
@@ -3602,19 +3666,17 @@ Sugiere 2-4 productos específicos por gap prioritario. Sé realista con precios
     };
 
     try {
-        const model = getAIClient().models.generate({
+        const result = await getAIClient().models.generateContent({
             model: 'gemini-2.5-flash',
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
             config: {
                 temperature: 0.6,
                 responseMimeType: 'application/json',
                 responseSchema: recommendationSchema,
                 systemInstruction
             }
-
         });
-
-        const result = await model.generateContent(prompt);
-        const responseText = result.response.text();
+        const responseText = result.text || '';
         const analysis = JSON.parse(responseText);
 
         const recommendations: import('../types').ShoppingRecommendation[] = (analysis.recommendations || []).map((rec: any) => {

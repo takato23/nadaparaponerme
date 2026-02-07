@@ -15,6 +15,7 @@ import type {
   ProfessionalProfile
 } from '../types';
 import { useInventoryMap } from '../hooks/useInventoryMap';
+import type { AppModalsState } from '../hooks/useAppModals';
 
 // Lazy load all modal components
 const AddItemView = lazy(() => import('./AddItemView'));
@@ -67,58 +68,6 @@ const AestheticPlayground = lazy(() => import('./AestheticPlayground'));
 const LiquidMorphDemo = lazy(() => import('./LiquidMorphDemo'));
 const DigitalTwinSetup = lazy(() => import('./digital-twin/DigitalTwinSetup'));
 
-// Types for modal state
-interface ModalState {
-  showAddItem: boolean;
-  showBulkUpload: boolean;
-  showQuickCamera: boolean;
-  showStylist: boolean;
-  showVirtualTryOn: boolean;
-  showSmartPacker: boolean;
-  showSortOptions: boolean;
-  showAnalytics: boolean;
-  showColorPalette: boolean;
-  showTopVersatile: boolean;
-  showChat: boolean;
-  showWeatherOutfit: boolean;
-  showWeeklyPlanner: boolean;
-  showLookbookCreator: boolean;
-  showStyleChallenges: boolean;
-  showRatingView: boolean;
-  showFeedbackAnalysis: boolean;
-  showGapAnalysis: boolean;
-  showBrandRecognition: boolean;
-  showDupeFinder: boolean;
-  showCapsuleBuilder: boolean;
-  showStyleDNA: boolean;
-  showAIDesigner: boolean;
-  showGenerationHistory: boolean;
-  showStyleEvolution: boolean;
-  showCalendarSync: boolean;
-  showActivityFeed: boolean;
-  showVirtualShopping: boolean;
-  showMultiplayerChallenges: boolean;
-  showPaywall: boolean;
-  showFeatureLocked: boolean;
-  showProfessionalWizard: boolean;
-  showMigrationModal: boolean;
-  showDigitalTwinSetup: boolean;
-  selectedItemId: string | null;
-  selectedOutfitId: string | null;
-  selectedItemForBrandRecognition: ClothingItem | null;
-  selectedItemForDupeFinder: ClothingItem | null;
-  lockedFeature: {
-    name: string;
-    icon: string;
-    description: string;
-    requiredTier: 'Pro' | 'Premium';
-  } | null;
-  viewingFriend: CommunityUser | null;
-  borrowedItems: ClothingItem[];
-  currentEventSuggestion: OutfitSuggestionForEvent | null;
-  brandRecognitionResultForDupe: any;
-}
-
 interface AppModalsProps {
   // Core data
   closet: ClothingItem[];
@@ -126,51 +75,7 @@ interface AppModalsProps {
   communityData: CommunityUser[];
 
   // Modal state from useAppModals
-  modals: ModalState & {
-    setShowAddItem: (v: boolean) => void;
-    setShowBulkUpload: (v: boolean) => void;
-    setShowQuickCamera: (v: boolean) => void;
-    setShowStylist: (v: boolean) => void;
-    setShowVirtualTryOn: (v: boolean) => void;
-    setShowSmartPacker: (v: boolean) => void;
-    setShowSortOptions: (v: boolean) => void;
-    setShowAnalytics: (v: boolean) => void;
-    setShowColorPalette: (v: boolean) => void;
-    setShowTopVersatile: (v: boolean) => void;
-    setShowChat: (v: boolean) => void;
-    setShowWeatherOutfit: (v: boolean) => void;
-    setShowWeeklyPlanner: (v: boolean) => void;
-    setShowLookbookCreator: (v: boolean) => void;
-    setShowStyleChallenges: (v: boolean) => void;
-    setShowRatingView: (v: boolean) => void;
-    setShowFeedbackAnalysis: (v: boolean) => void;
-    setShowGapAnalysis: (v: boolean) => void;
-    setShowBrandRecognition: (v: boolean) => void;
-    setShowDupeFinder: (v: boolean) => void;
-    setShowCapsuleBuilder: (v: boolean) => void;
-    setShowStyleDNA: (v: boolean) => void;
-    setShowAIDesigner: (v: boolean) => void;
-    setShowGenerationHistory: (v: boolean) => void;
-    setShowStyleEvolution: (v: boolean) => void;
-    setShowCalendarSync: (v: boolean) => void;
-    setShowActivityFeed: (v: boolean) => void;
-    setShowVirtualShopping: (v: boolean) => void;
-    setShowMultiplayerChallenges: (v: boolean) => void;
-    setShowPaywall: (v: boolean) => void;
-    setShowFeatureLocked: (v: boolean) => void;
-    setShowProfessionalWizard: (v: boolean) => void;
-    setShowMigrationModal: (v: boolean) => void;
-    setShowDigitalTwinSetup: (v: boolean) => void;
-    setSelectedItemId: (v: string | null) => void;
-    setSelectedOutfitId: (v: string | null) => void;
-    setSelectedItemForBrandRecognition: (v: ClothingItem | null) => void;
-    setSelectedItemForDupeFinder: (v: ClothingItem | null) => void;
-    setLockedFeature: (v: any) => void;
-    setViewingFriend: (v: CommunityUser | null) => void;
-    setBorrowedItems: (v: ClothingItem[]) => void;
-    setCurrentEventSuggestion: (v: OutfitSuggestionForEvent | null) => void;
-    setBrandRecognitionResultForDupe: (v: any) => void;
-  };
+  modals: AppModalsState;
 
   // Stylist state
   stylistView: 'generate' | 'result';
@@ -252,7 +157,7 @@ interface AppModalsProps {
     onResetStylist: () => void;
 
     // Packer
-    onGeneratePackingList: (prompt: string) => void;
+    onGeneratePackingList: (prompt: string) => Promise<void>;
     onResetPacker: () => void;
 
     // Chat
@@ -264,9 +169,9 @@ interface AppModalsProps {
     onViewOutfitFromChat: (topId: string, bottomId: string, shoesId: string) => void;
 
     // Shopping
-    onAnalyzeShoppingGaps: () => void;
-    onGenerateShoppingRecommendations: () => void;
-    onSendShoppingMessage: (message: string) => void;
+    onAnalyzeShoppingGaps: () => Promise<void>;
+    onGenerateShoppingRecommendations: () => Promise<void>;
+    onSendShoppingMessage: (message: string) => Promise<void>;
 
     // Sort
     onSortChange: (option: SortOption) => void;
@@ -474,7 +379,7 @@ export const AppModals: React.FC<AppModalsProps> = ({
         <Suspense fallback={<LazyLoader type="modal" />}>
           <FitResultViewImproved
             result={fitResult}
-            inventory={inventory}
+            inventory={closet}
             savedOutfits={savedOutfits}
             onSaveOutfit={handlers.onSaveOutfit}
             onVirtualTryOn={handlers.onStartVirtualTryOn}

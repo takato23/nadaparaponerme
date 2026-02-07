@@ -250,13 +250,14 @@ export async function fetchActivityComments(activityId: string): Promise<Activit
  */
 export function filterActivitiesByType(
   activities: ActivityFeedItem[],
-  filterTypes: ActivityType[] | ['all']
+  filterTypes: Array<ActivityType | 'all'>
 ): ActivityFeedItem[] {
-  if (filterTypes.includes('all' as ActivityType)) {
+  if (filterTypes.includes('all')) {
     return activities;
   }
 
+  const selectedTypes = filterTypes as ActivityType[];
   return activities.filter(activity =>
-    filterTypes.includes(activity.activity_type)
+    selectedTypes.includes(activity.activity_type)
   );
 }

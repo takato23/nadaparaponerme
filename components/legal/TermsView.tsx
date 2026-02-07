@@ -59,7 +59,7 @@ export const TermsView: React.FC = () => {
         {
           title: '7. Pagos y facturación',
           paragraphs: [
-            'En Argentina, los pagos se procesan mediante MercadoPago. En otros países podemos usar otros procesadores.',
+            'En Argentina, los pagos se procesan mediante MercadoPago. Para pagos internacionales podemos usar Paddle u otros procesadores.',
             'Los impuestos, cargos bancarios o de conversión pueden aplicarse según tu país o entidad emisora.'
           ]
         },

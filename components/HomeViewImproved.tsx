@@ -569,7 +569,7 @@ const HomeViewImproved: React.FC<HomeViewImprovedProps> = (props) => {
                             : 'bg-white/80 border-gray-200/50 hover:bg-white'
                             }`}
                         >
-                          {tool.isPro && (
+                          {'isPro' in tool && tool.isPro && (
                             <span className="absolute top-2 right-2 text-xs font-bold text-amber-500 bg-amber-500/20 px-1.5 py-0.5 rounded">
                               PRO
                             </span>

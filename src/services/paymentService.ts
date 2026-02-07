@@ -8,12 +8,13 @@
 
 import { supabase } from '../lib/supabase';
 import { logger } from '../utils/logger';
-import type {
-  Subscription,
-  SubscriptionTier,
-  SubscriptionPlan,
-  MercadoPagoPreference,
-  UsageMetrics,
+import {
+  SUBSCRIPTION_PLANS,
+  type Subscription,
+  type SubscriptionTier,
+  type SubscriptionPlan,
+  type MercadoPagoPreference,
+  type UsageMetrics,
 } from '../../types-payment';
 import {
   shouldUseRevenueCat,
@@ -24,6 +25,8 @@ import {
   getCurrentTier as getRCCurrentTier,
   isRevenueCatAvailable,
 } from './revenueCatService';
+import { isAdminUser } from './accessControlService';
+import { PAYMENTS_ENABLED } from '../config/runtime';
 
 // ============================================================================
 // CONSTANTS
@@ -36,6 +39,8 @@ const MERCADOPAGO_PUBLIC_KEY =
   ((import.meta.env as any).VITE_MP_PUBLIC_KEY as string) ||
   '';
 const APP_URL = import.meta.env.VITE_APP_URL || window.location.origin;
+
+type CheckoutCurrency = 'ARS' | 'USD';
 
 // ============================================================================
 // IDEMPOTENCY KEY GENERATION
@@ -55,91 +60,7 @@ function generateIdempotencyKey(userId: string, tier: string): string {
 // Track in-flight payment requests to prevent double-tap
 const inFlightPayments = new Map<string, Promise<MercadoPagoPreference>>();
 
-// Import subscription plans
-const PLANS: SubscriptionPlan[] = [
-  {
-    id: 'free',
-    name: 'Free',
-    description: 'Para empezar a organizar tu armario',
-    price_monthly_ars: 0,
-    price_monthly_usd: 0,
-    features: [
-      'Hasta 200 prendas en tu armario',
-      '200 créditos IA por mes',
-      'Probador virtual habilitado',
-      'Análisis avanzado de color',
-      'Outfits guardados ilimitados',
-      'Compartir en comunidad',
-    ],
-    limits: {
-      ai_generations_per_month: 200,
-      max_closet_items: 200,
-      max_saved_outfits: -1,
-      can_use_virtual_tryon: true,
-      can_use_ai_designer: true,  // Enabled for all tiers, limited by credits
-      can_use_lookbook: false,
-      can_use_style_dna: false,
-      can_export_lookbooks: false,
-    },
-  },
-  {
-    id: 'pro',
-    name: 'Pro',
-    description: 'Para fashionistas serios',
-    price_monthly_ars: 2999,
-    price_monthly_usd: 9.99,
-    features: [
-      'Todo lo de Free +',
-      'Prendas ilimitadas',
-      '300 créditos IA por mes',
-      'Probador virtual Rápido',
-      'Ultra habilitado',
-      'AI Fashion Designer',
-      'Lookbook Creator',
-      'Exportar lookbooks en HD',
-      'Análisis avanzado de gaps',
-      'Sin anuncios',
-    ],
-    limits: {
-      ai_generations_per_month: 300,
-      max_closet_items: -1,
-      max_saved_outfits: -1,
-      can_use_virtual_tryon: true,
-      can_use_ai_designer: true,
-      can_use_lookbook: true,
-      can_use_style_dna: false,
-      can_export_lookbooks: true,
-    },
-    popular: true,
-  },
-  {
-    id: 'premium',
-    name: 'Premium',
-    description: 'Experiencia completa con IA avanzada',
-    price_monthly_ars: 4999,
-    price_monthly_usd: 16.99,
-    features: [
-      'Todo lo de Pro +',
-      '400 créditos IA por mes',
-      'Probador virtual Ultra',
-      'Style DNA Profile completo',
-      'Análisis de evolución de estilo',
-      'Recomendaciones personalizadas diarias',
-      'Acceso anticipado a features',
-      'Soporte prioritario',
-    ],
-    limits: {
-      ai_generations_per_month: 400,
-      max_closet_items: -1,
-      max_saved_outfits: -1,
-      can_use_virtual_tryon: true,
-      can_use_ai_designer: true,
-      can_use_lookbook: true,
-      can_use_style_dna: true,
-      can_export_lookbooks: true,
-    },
-  },
-];
+const PLANS: SubscriptionPlan[] = SUBSCRIPTION_PLANS;
 
 // ============================================================================
 // SUBSCRIPTION MANAGEMENT
@@ -230,7 +151,7 @@ export function getSubscriptionPlan(tier: SubscriptionTier): SubscriptionPlan | 
  */
 export async function createPaymentPreference(
   tier: SubscriptionTier,
-  currency: 'ARS' | 'USD' = 'ARS'
+  currency: CheckoutCurrency = 'ARS'
 ): Promise<MercadoPagoPreference> {
   try {
     const { data: { user } } = await supabase.auth.getUser();
@@ -306,6 +227,107 @@ export async function createPaymentPreference(
 }
 
 /**
+ * Create a MercadoPago recurring subscription (Argentina) and return the init_point.
+ * This uses MercadoPago "preapproval" (Suscripciones).
+ */
+export async function createMercadoPagoSubscription(
+  tier: SubscriptionTier
+): Promise<{ id: string; init_point: string }> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Usuario no autenticado');
+
+  if (tier !== 'pro' && tier !== 'premium') {
+    throw new Error('Plan inválido');
+  }
+
+  const { data, error } = await supabase.functions.invoke('create-mp-preapproval', {
+    body: {
+      tier,
+      user_id: user.id,
+      user_email: user.email,
+    },
+  });
+
+  if (error) throw error;
+  return data as { id: string; init_point: string };
+}
+
+/**
+ * Create a Paddle transaction (international) and return checkout URL.
+ */
+export async function createPaddleTransaction(
+  tier: SubscriptionTier
+): Promise<{ transaction_id: string; checkout_url: string }> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Usuario no autenticado');
+
+  if (tier !== 'pro' && tier !== 'premium') {
+    throw new Error('Plan inválido');
+  }
+
+  const { data, error } = await supabase.functions.invoke('create-paddle-transaction', {
+    body: {
+      tier,
+      user_id: user.id,
+    },
+  });
+
+  if (error) throw error;
+  return data as { transaction_id: string; checkout_url: string };
+}
+
+/**
+ * Unified checkout entrypoint.
+ * - ARS: MercadoPago subscriptions (Argentina)
+ * - USD: Paddle checkout (international)
+ */
+export async function startCheckout(
+  tier: SubscriptionTier,
+  currency: CheckoutCurrency
+): Promise<void> {
+  if (!PAYMENTS_ENABLED) {
+    throw new Error('Pagos desactivados. Próximamente vas a poder hacer upgrade.');
+  }
+
+  if (tier === 'free') return;
+
+  if (currency === 'USD') {
+    const { checkout_url } = await createPaddleTransaction(tier);
+    window.location.href = checkout_url;
+    return;
+  }
+
+  // Default: Argentina (ARS) recurring subscription.
+  try {
+    const { init_point } = await createMercadoPagoSubscription(tier);
+    window.location.href = init_point;
+    return;
+  } catch (error: any) {
+    // If recurring flow isn't deployed or fails, fall back to one-time checkout preference.
+    const status = error?.context?.status;
+    const message = String(error?.message || '');
+    const looksLikeNotFound =
+      status === 404 ||
+      message.toLowerCase().includes('requested function was not found') ||
+      message.toLowerCase().includes('not_found') ||
+      message.toLowerCase().includes('not found');
+
+    if (!looksLikeNotFound) {
+      throw error;
+    }
+
+    logger.warn('MercadoPago subscription flow unavailable; falling back to one-time preference', error);
+
+    const preference = await createPaymentPreference(tier, 'ARS');
+    const url = preference.sandbox_init_point || preference.init_point;
+    if (!url) {
+      throw new Error('No se pudo iniciar el checkout. Intentá de nuevo.');
+    }
+    window.location.href = url;
+  }
+}
+
+/**
  * Handle successful payment callback
  */
 export async function handlePaymentSuccess(
@@ -332,15 +354,36 @@ export async function handlePaymentSuccess(
   }
 }
 
+/**
+ * Handle MercadoPago recurring subscription callback (preapproval flow).
+ *
+ * Normally activation happens via webhook, but this provides a reliable fallback
+ * when the user returns to the app (reduces "I paid but didn't get Pro" cases).
+ */
+export async function handleMercadoPagoSubscriptionSuccess(
+  externalReference: string
+): Promise<void> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Usuario no autenticado');
+
+    const { error } = await supabase.functions.invoke('process-mp-preapproval', {
+      body: {
+        external_reference: externalReference,
+      },
+    });
+
+    if (error) throw error;
+  } catch (error) {
+    logger.error('Error handling MercadoPago subscription success:', error);
+    // Non-fatal: webhook can still activate asynchronously.
+    throw new Error('Error al procesar la suscripción. Si el cobro se realizó, tu plan se activará automáticamente en unos minutos.');
+  }
+}
+
 // ============================================================================
 // FEATURE ACCESS CONTROL
 // ============================================================================
-
-// Admin emails with full access (bypass paywall)
-const ADMIN_EMAILS = [
-  'admin@admin.com',
-  'santiagobalosky@gmail.com', // Backup admin
-];
 
 /**
  * Check if user is admin
@@ -348,8 +391,7 @@ const ADMIN_EMAILS = [
 async function isAdmin(): Promise<boolean> {
   try {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user?.email) return false;
-    return ADMIN_EMAILS.includes(user.email.toLowerCase());
+    return isAdminUser(user);
   } catch {
     return false;
   }
@@ -369,7 +411,9 @@ export async function hasFeatureAccess(featureName: string): Promise<boolean> {
     const subscription = await getCurrentSubscription();
     if (!subscription) return false;
 
-    const plan = getSubscriptionPlan(subscription.tier);
+    const isPaidActive = subscription.status === 'active' || subscription.status === 'trialing';
+    const effectiveTier: SubscriptionTier = isPaidActive ? subscription.tier : 'free';
+    const plan = getSubscriptionPlan(effectiveTier);
     if (!plan) return false;
 
     // Check feature access based on limits
@@ -407,7 +451,9 @@ export async function canGenerateOutfit(): Promise<boolean> {
     const subscription = await getCurrentSubscription();
     if (!subscription) return false;
 
-    const plan = getSubscriptionPlan(subscription.tier);
+    const isPaidActive = subscription.status === 'active' || subscription.status === 'trialing';
+    const effectiveTier: SubscriptionTier = isPaidActive ? subscription.tier : 'free';
+    const plan = getSubscriptionPlan(effectiveTier);
     if (!plan) return false;
 
     // Premium has unlimited generations
@@ -528,7 +574,9 @@ export async function getRemainingGenerations(): Promise<number> {
     const subscription = await getCurrentSubscription();
     if (!subscription) return 0;
 
-    const plan = getSubscriptionPlan(subscription.tier);
+    const isPaidActive = subscription.status === 'active' || subscription.status === 'trialing';
+    const effectiveTier: SubscriptionTier = isPaidActive ? subscription.tier : 'free';
+    const plan = getSubscriptionPlan(effectiveTier);
     if (!plan) return 0;
 
     // Premium has unlimited
@@ -550,14 +598,8 @@ export async function getRemainingGenerations(): Promise<number> {
  */
 export async function upgradeSubscription(newTier: SubscriptionTier): Promise<void> {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Usuario no autenticado');
-
-    // Create payment preference and redirect to MercadoPago
-    const preference = await createPaymentPreference(newTier);
-
-    // Redirect to MercadoPago checkout
-    window.location.href = preference.init_point;
+    // Backwards-compatible: default ARS flow.
+    await startCheckout(newTier, 'ARS');
   } catch (error) {
     logger.error('Error upgrading subscription:', error);
     throw error;

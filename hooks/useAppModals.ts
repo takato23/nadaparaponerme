@@ -191,3 +191,5 @@ export function useAppModals() {
     setShowShopLook
   };
 }
+
+export type AppModalsState = ReturnType<typeof useAppModals>;

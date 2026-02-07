@@ -61,7 +61,7 @@ export function LoadingButton({
     >
       {isLoading ? (
         <>
-          <Loader size="sm" />
+          <Loader size="small" />
           <span>Cargando...</span>
         </>
       ) : (
@@ -119,7 +119,7 @@ export function IconButton({
       aria-label={ariaLabel}
     >
       {isLoading ? (
-        <Loader size="sm" />
+        <Loader size="small" />
       ) : (
         <span className="material-symbols-outlined">{icon}</span>
       )}

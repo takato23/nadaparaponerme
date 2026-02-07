@@ -1,7 +1,7 @@
 
 
 import React, { useState, useMemo, useEffect, lazy, Suspense, startTransition, useCallback, useRef } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useParams, matchPath } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import useLocalStorage from './hooks/useLocalStorage';
 import { useDebounce } from './hooks/useDebounce';
@@ -85,6 +85,7 @@ const ShareItemView = lazy(() => import('./components/ShareItemView'));
 const SortOptionsView = lazy(() => import('./components/SortOptionsView'));
 const TermsView = lazy(() => import('./components/legal/TermsView'));
 const PrivacyView = lazy(() => import('./components/legal/PrivacyView'));
+const RefundPolicyView = lazy(() => import('./components/legal/RefundPolicyView'));
 const MigrationModal = lazy(() => import('./components/MigrationModal'));
 const ClosetAnalyticsView = lazy(() => import('./components/ClosetAnalyticsView'));
 const ColorPaletteView = lazy(() => import('./components/ColorPaletteView'));
@@ -116,6 +117,7 @@ const AestheticPlayground = lazy(() => import('./components/AestheticPlayground'
 const LandingPage = lazy(() => import('./components/LandingPage'));
 const ProfessionalStyleWizardView = lazy(() => import('./components/ProfessionalStyleWizardView'));
 const ConfirmDeleteModal = lazy(() => import('./components/ui/ConfirmDeleteModal'));
+const PaddlePayPage = lazy(() => import('./components/PaddlePayPage'));
 const PremiumCameraView = lazy(() => import('@/components/PremiumCameraView'));
 const PhotoshootStudio = lazy(() => import('@/components/studio/PhotoshootStudio'));
 const SavedLooksView = lazy(() => import('@/components/SavedLooksView'));
@@ -220,17 +222,73 @@ const AppContent = () => {
         }
     }, [isAuthenticated, hasOnboarded, closet.length]);
 
-    // Handle MercadoPago payment callback
+    // Handle payment callbacks (MercadoPago + Paddle)
     useEffect(() => {
         const handlePaymentCallback = async () => {
             const params = new URLSearchParams(window.location.search);
             const paymentStatus = params.get('payment');
             const tier = params.get('tier') as 'pro' | 'premium' | null;
             const collectionId = params.get('collection_id'); // MercadoPago payment_id
+            const provider = params.get('provider');
+            const checkoutStatus = params.get('checkout'); // legacy generic checkout status (Paddle)
+            const mpSubStatus = params.get('mp_sub'); // legacy MercadoPago suscripciones (preapproval)
+            const subscriptionStatus = params.get('subscription'); // unified subscription callback
+            const externalReference = params.get('external_reference'); // MP preapproval external_reference
 
             // Clean URL params after reading
-            if (paymentStatus) {
+            if (paymentStatus || checkoutStatus || mpSubStatus || subscriptionStatus) {
                 window.history.replaceState({}, '', window.location.pathname);
+            }
+
+            const waitForTierActivation = async (expectedTier: 'pro' | 'premium'): Promise<boolean> => {
+                const timeoutMs = 30_000;
+                const pollEveryMs = 2_000;
+                const start = Date.now();
+
+                while (Date.now() - start < timeoutMs) {
+                    try {
+                        const sub = await paymentService.getCurrentSubscription();
+                        if (sub?.tier === expectedTier && sub?.status === 'active') return true;
+                    } catch {
+                        // ignore and keep polling
+                    }
+                    await new Promise((r) => setTimeout(r, pollEveryMs));
+                }
+                return false;
+            };
+
+            // Paddle: activates via webhook; callback is UX only.
+            if (paymentStatus === 'success' && provider === 'paddle' && tier && isAuthenticated) {
+                toast.info('Procesando tu pago...');
+                const ok = await waitForTierActivation(tier);
+                await subscription.refresh();
+                if (ok) {
+                    toast.success(`¡Bienvenido a ${tier === 'premium' ? 'Premium' : 'Pro'}! Tu suscripción está activa.`);
+                } else {
+                    toast.success('Pago recibido. Si no ves tu plan activo aún, esperá unos segundos y recargá.');
+                }
+                return;
+            }
+
+            // MercadoPago subscriptions: activates via webhook; callback is UX only.
+            if (subscriptionStatus === 'success' && provider === 'mercadopago' && tier && isAuthenticated) {
+                toast.info('Procesando tu suscripción...');
+                if (externalReference) {
+                    try {
+                        // Fallback activation when user returns (webhook can still handle renewals/cancellations).
+                        await paymentService.handleMercadoPagoSubscriptionSuccess(externalReference);
+                    } catch (error) {
+                        console.warn('Failed to process MP preapproval on callback (non-fatal):', error);
+                    }
+                }
+                const ok = await waitForTierActivation(tier);
+                await subscription.refresh();
+                if (ok) {
+                    toast.success(`¡Bienvenido a ${tier === 'premium' ? 'Premium' : 'Pro'}! Tu suscripción está activa.`);
+                } else {
+                    toast.success('Listo. Si no ves tu plan activo aún, esperá unos segundos y recargá.');
+                }
+                return;
             }
 
             if (paymentStatus === 'success' && collectionId && tier && isAuthenticated) {
@@ -248,6 +306,30 @@ const AppContent = () => {
                 toast.error('El pago no se completó. Podés intentar de nuevo cuando quieras.');
             } else if (paymentStatus === 'pending') {
                 toast.info('Tu pago está pendiente. Te notificaremos cuando se confirme.');
+            } else if (checkoutStatus === 'success' && provider === 'paddle' && isAuthenticated) {
+                // Paddle activates via webhook; we just refresh and inform.
+                try {
+                    toast.info('Procesando tu pago...');
+                    await subscription.refresh();
+                    toast.success('Pago recibido. Si no ves tu plan activo aún, esperá unos segundos y recargá.');
+                } catch (error) {
+                    console.error('Error processing paddle callback:', error);
+                    toast.error('Hubo un problema refrescando tu suscripción. Probá recargar en unos segundos.');
+                }
+            } else if (mpSubStatus === 'success' && tier && isAuthenticated) {
+                // MercadoPago subscriptions activate via webhook.
+                try {
+                    toast.info('Procesando tu suscripción...');
+                    await subscription.refresh();
+                    toast.success('Listo. Si no ves tu plan activo aún, esperá unos segundos y recargá.');
+                } catch (error) {
+                    console.error('Error processing MercadoPago subscription callback:', error);
+                    toast.error('Hubo un problema refrescando tu suscripción. Probá recargar en unos segundos.');
+                }
+            } else if (mpSubStatus === 'failure') {
+                toast.error('No se pudo completar la suscripción. Podés intentar de nuevo.');
+            } else if (subscriptionStatus === 'failure') {
+                toast.error('No se pudo completar la suscripción. Podés intentar de nuevo.');
             }
         };
 
@@ -1164,8 +1246,20 @@ const AppContent = () => {
         }
     }, [isAuthenticated, location.search]);
 
-    // Allow access to specific public routes (like Onboarding) without auth
-    const isPublicRoute = location.pathname === ROUTES.ONBOARDING_STYLIST;
+    // Public routes available without authentication
+    const PUBLIC_ROUTE_PATTERNS = [
+        ROUTES.ONBOARDING_STYLIST,
+        ROUTES.TERMS,
+        ROUTES.PRIVACY,
+        ROUTES.REFUND,
+        ROUTES.PRICING,
+        ROUTES.PLANES,
+        ROUTES.PAY,
+        ROUTES.SHARED_LOOK,
+    ];
+    const isPublicRoute = PUBLIC_ROUTE_PATTERNS.some((pattern) =>
+        Boolean(matchPath({ path: pattern, end: true }, location.pathname))
+    );
 
     if (!isAuthenticated && !isPublicRoute) {
         if (showAuthView) {
@@ -1197,8 +1291,8 @@ const AppContent = () => {
                         />
                     </Suspense>
                 </div>
-                <CookieConsentBanner />
-                <PWAInstallPrompt />
+                {!isPublicRoute && <CookieConsentBanner />}
+                {!isPublicRoute && <PWAInstallPrompt />}
             </>
         );
     }
@@ -1380,6 +1474,12 @@ const AppContent = () => {
                                         } />
                                         <Route path={ROUTES.TERMS} element={<TermsView />} />
                                         <Route path={ROUTES.PRIVACY} element={<PrivacyView />} />
+                                        <Route path={ROUTES.REFUND} element={<RefundPolicyView />} />
+                                        <Route path={ROUTES.PAY} element={
+                                            <Suspense fallback={<LazyLoader type="view" />}>
+                                                <PaddlePayPage />
+                                            </Suspense>
+                                        } />
                                         <Route path={ROUTES.PRICING} element={
                                             <Suspense fallback={<LazyLoader type="view" />}>
                                                 <PricingPage />
@@ -1411,7 +1511,7 @@ const AppContent = () => {
                 </div>
 
                 {
-                    !hasOnboarded && (
+                    isAuthenticated && !hasOnboarded && location.pathname !== ROUTES.ONBOARDING_STYLIST && (
                         <Suspense fallback={<LazyLoader type="modal" />}>
                             <OnboardingView onComplete={() => setHasOnboarded(true)} />
                         </Suspense>
@@ -1460,8 +1560,8 @@ const AppContent = () => {
                     }}
                 />
 
-                <CookieConsentBanner />
-                <PWAInstallPrompt />
+                {!isPublicRoute && <CookieConsentBanner />}
+                {!isPublicRoute && <PWAInstallPrompt />}
 
                 {
                     itemToShare && (

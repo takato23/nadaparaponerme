@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { motion } from 'framer-motion';
+import type { Variants } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { ROUTES } from '../../src/routes';
 import type { ClothingItem } from '../../types';
@@ -17,8 +18,9 @@ const palette = {
   '--studio-violet': '#a68bff',
   '--studio-rose': '#ff7dcf'
 } as React.CSSProperties;
+const EASE_STANDARD: [number, number, number, number] = [0.22, 1, 0.36, 1];
 
-const containerVariants = {
+const containerVariants: Variants = {
   hidden: { opacity: 0 },
   show: {
     opacity: 1,
@@ -26,12 +28,12 @@ const containerVariants = {
   }
 };
 
-const itemVariants = {
+const itemVariants: Variants = {
   hidden: { opacity: 0, y: 18 },
   show: {
     opacity: 1,
     y: 0,
-    transition: { duration: 0.6, ease: [0.22, 1, 0.36, 1] }
+    transition: { duration: 0.6, ease: EASE_STANDARD }
   }
 };
 
@@ -244,7 +246,7 @@ export default function StudioHubView({ closet = [] }: StudioHubViewProps) {
                     className="relative rounded-[2.5rem] border bg-white/5 backdrop-blur-2xl p-6 overflow-hidden transform-gpu"
                     style={{ borderColor: room.border, transformStyle: 'preserve-3d' }}
                     whileHover={{ y: -6, rotateX: 3, rotateY: -3 }}
-                    transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+                    transition={{ duration: 0.45, ease: EASE_STANDARD }}
                   >
                     <div className="absolute -top-10 -right-6 h-32 w-32 rounded-full opacity-70 blur-2xl" style={{ background: room.glow }} />
                     <div className="absolute right-6 top-6 h-24 w-24 rounded-full border border-white/15 bg-white/5 backdrop-blur-xl">

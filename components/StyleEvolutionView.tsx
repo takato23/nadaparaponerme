@@ -27,7 +27,29 @@ const StyleEvolutionView = ({ closet, onClose }: StyleEvolutionViewProps) => {
 
         try {
             const result = await geminiService.analyzeStyleEvolution(closet);
-            setTimeline(result);
+            const normalizedTimeline: StyleEvolutionTimeline = 'periods' in result
+                ? result
+                : {
+                    id: `timeline-${Date.now()}`,
+                    periods: [],
+                    trends: [],
+                    milestones: [],
+                    predictions: result.prediction
+                        ? [{
+                            prediction: result.prediction,
+                            confidence: 0,
+                            reasoning: '',
+                            recommendations: [],
+                            timeline: 'Próximos meses'
+                        }]
+                        : [],
+                    overall_journey_summary: '',
+                    confidence_level: 'low',
+                    analyzed_items_count: closet.length,
+                    date_range: '',
+                    created_at: new Date().toISOString()
+                };
+            setTimeline(normalizedTimeline);
             setCurrentStep('results');
         } catch (e) {
             const errorMessage = e instanceof Error ? e.message : 'Ocurrió un error desconocido';

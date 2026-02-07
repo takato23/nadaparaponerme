@@ -2,6 +2,8 @@ import React, { forwardRef } from 'react';
 import { motion, HTMLMotionProps } from 'framer-motion';
 import { cn } from '../../utils/cn';
 
+const EASE_STANDARD: [number, number, number, number] = [0.22, 1, 0.36, 1];
+
 /**
  * Button variants following the design system
  */
@@ -242,7 +244,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       : {
           whileHover: isDisabled ? {} : { scale: 1.02 },
           whileTap: isDisabled ? {} : { scale: 0.98 },
-          transition: { duration: 0.15, ease: 'easeOut' }
+          transition: { duration: 0.15, ease: EASE_STANDARD }
         };
 
     return (

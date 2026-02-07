@@ -45,7 +45,7 @@ export const LiquidMorphBackground: React.FC<LiquidMorphBackgroundProps> = ({
 }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const blobsRef = useRef<Blob[]>([]);
-    const animationFrameRef = useRef<number>();
+    const animationFrameRef = useRef<number | null>(null);
 
     // Color palettes based on the app's Tailwind config
     const colorPalettes = {

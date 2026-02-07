@@ -223,10 +223,10 @@ const DupeFinderView = ({ item, brandInfo, onClose }: DupeFinderViewProps) => {
             Alternativas Encontradas
           </h2>
           <p className="text-text-secondary dark:text-gray-400">
-            {dupes.length} alternativa{dupes.length !== 1 ? 's' : ''} más barata{dupes.length !== 1 ? 's' : ''}
+            {(dupes?.length || 0)} alternativa{(dupes?.length || 0) !== 1 ? 's' : ''} más barata{(dupes?.length || 0) !== 1 ? 's' : ''}
           </p>
           <div className="mt-3 flex justify-center">
-            {renderConfidenceBadge(confidence_level)}
+            {renderConfidenceBadge(confidence_level || 'low')}
           </div>
         </div>
 
@@ -288,7 +288,7 @@ const DupeFinderView = ({ item, brandInfo, onClose }: DupeFinderViewProps) => {
               ✓ Similitudes
             </p>
             <ul className="space-y-1">
-              {visual_comparison.similarities.map((sim, idx) => (
+              {(visual_comparison?.similarities || []).map((sim, idx) => (
                 <li key={idx} className="text-sm text-text-secondary dark:text-gray-400 flex items-start gap-2">
                   <span className="material-symbols-outlined text-green-600 dark:text-green-400 text-sm">check</span>
                   {sim}
@@ -302,7 +302,7 @@ const DupeFinderView = ({ item, brandInfo, onClose }: DupeFinderViewProps) => {
               ⚠ Diferencias
             </p>
             <ul className="space-y-1">
-              {visual_comparison.differences.map((diff, idx) => (
+              {(visual_comparison?.differences || []).map((diff, idx) => (
                 <li key={idx} className="text-sm text-text-secondary dark:text-gray-400 flex items-start gap-2">
                   <span className="material-symbols-outlined text-orange-600 dark:text-orange-400 text-sm">warning</span>
                   {diff}
@@ -313,7 +313,7 @@ const DupeFinderView = ({ item, brandInfo, onClose }: DupeFinderViewProps) => {
 
           <div>
             <p className="text-sm font-semibold mb-2">Match Global</p>
-            {renderSimilarityScore(visual_comparison.overall_match)}
+            {renderSimilarityScore(visual_comparison?.overall_match || 0)}
           </div>
         </div>
 
@@ -321,7 +321,7 @@ const DupeFinderView = ({ item, brandInfo, onClose }: DupeFinderViewProps) => {
         <div className="space-y-4">
           <h3 className="font-bold text-lg mb-3">Alternativas Encontradas</h3>
 
-          {dupes.map((dupe, idx) => (
+          {(dupes || []).map((dupe, idx) => (
             <div key={idx} className="liquid-glass rounded-2xl p-6">
               {/* Header */}
               <div className="flex items-start justify-between mb-4">
@@ -358,7 +358,7 @@ const DupeFinderView = ({ item, brandInfo, onClose }: DupeFinderViewProps) => {
               <div className="mb-4">
                 <p className="text-sm font-semibold mb-2">Diferencias Clave</p>
                 <ul className="space-y-1">
-                  {dupe.key_differences.map((diff, i) => (
+                  {(dupe.key_differences || []).map((diff, i) => (
                     <li key={i} className="text-sm text-text-secondary dark:text-gray-400 flex items-start gap-2">
                       <span className="material-symbols-outlined text-orange-600 dark:text-orange-400 text-sm mt-0.5">
                         arrow_forward

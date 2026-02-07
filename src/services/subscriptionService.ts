@@ -45,7 +45,7 @@ export interface PlanLimits {
 const PLAN_LIMITS: Record<SubscriptionTier, PlanLimits> = {
     free: {
         aiGenerations: 200,
-        closetItems: 200,
+        closetItems: 50,
         virtualTryOn: true,
         analytics: true,
         exportToSocial: false,

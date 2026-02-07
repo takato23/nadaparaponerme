@@ -1,7 +1,8 @@
-import React, { useRef } from 'react';
+import React, { Suspense, lazy, useRef } from 'react';
 import { motion, useScroll, useTransform, useSpring } from 'framer-motion';
-import Eye3D from '../Eye3D';
 import { ArrowRight, Star, Sparkles, CheckCircle2 } from 'lucide-react';
+
+const Eye3D = lazy(() => import('../Eye3D'));
 
 interface Landing3DScrollProps {
     onGetStarted: () => void;
@@ -39,7 +40,9 @@ export default function Landing3DScroll({ onGetStarted, onLogin }: Landing3DScro
                     style={{ scale: eyeScale, y: eyeY, x: eyeX }}
                     className="absolute inset-0 z-0 flex items-center justify-center"
                 >
-                    <Eye3D variant="landing" className="w-full h-full" />
+                    <Suspense fallback={null}>
+                        <Eye3D variant="landing" className="w-full h-full" />
+                    </Suspense>
                 </motion.div>
 
                 {/* Overlays/Gradients */}
@@ -53,47 +56,49 @@ export default function Landing3DScroll({ onGetStarted, onLogin }: Landing3DScro
             <div className="relative z-20">
 
                 {/* HERO SECTION */}
-                <Section className="items-center text-center">
+                <Section id="hero" className="items-center text-center">
                     <motion.div
                         initial={{ opacity: 0, y: 30 }}
                         whileInView={{ opacity: 1, y: 0 }}
                         viewport={{ once: true }}
                         className="max-w-3xl px-6"
                     >
-                        <Badge>Nuevo: Asesoría IA v2.0</Badge>
+                        <Badge>Demo viral: probalo en 30 segundos</Badge>
                         <h1 className="text-5xl md:text-7xl font-bold tracking-tighter mb-6 bg-clip-text text-transparent bg-gradient-to-r from-white via-purple-200 to-purple-400">
                             No Tengo Nada<br />Que Ponerme
                         </h1>
-                        <p className="text-xl text-gray-400 mb-8 max-w-xl mx-auto">
-                            Transforma el caos de tu armario en outfits infinitos. La única app que entiende tu estilo, tu cuerpo y tu vida.
+                        <p className="text-xl text-gray-300 mb-8 max-w-2xl mx-auto">
+                            Subí una foto, elegí prendas y mirá tu antes/después realista. Sin pagar al inicio, listo para compartir.
                         </p>
                         <button
                             onClick={onGetStarted}
                             className="bg-white text-black px-8 py-4 rounded-full font-bold text-lg hover:bg-gray-200 transition-all flex items-center gap-2 mx-auto group"
                         >
-                            Analizar mi Estilo Gratis
+                            Probar gratis ahora
                             <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                         </button>
+                        <p className="mt-4 text-sm text-gray-400">
+                            No requiere tarjeta de crédito.
+                        </p>
                     </motion.div>
                 </Section>
 
                 {/* PROBLEM SECTION */}
-                <Section className="items-center md:items-start md:pl-20">
+                <Section id="funcionalidades" className="items-center md:items-start md:pl-20">
                     <motion.div
                         initial={{ opacity: 0, x: -50 }}
                         whileInView={{ opacity: 1, x: 0 }}
                         className="max-w-xl px-6"
                     >
-                        <h2 className="text-4xl md:text-6xl font-bold mb-6">El Dilema Diario.</h2>
+                        <h2 className="text-4xl md:text-6xl font-bold mb-6">Tu ropero, ordenado en minutos.</h2>
                         <p className="text-2xl text-gray-400 leading-relaxed">
-                            Tienes el armario lleno, pero sientes que no tienes opciones.
-                            <span className="text-white font-semibold"> Ojo de Loca</span> escanea tus prendas y crea nuevas combinaciones que nunca imaginaste.
+                            Escaneá tus prendas, armá looks completos y descubrí dónde comprar alternativas similares con mejor precio.
                         </p>
                     </motion.div>
                 </Section>
 
                 {/* SOLUTION / STYLIST SECTION */}
-                <Section className="items-center md:items-end md:pr-20 text-right">
+                <Section id="ia-stylist" className="items-center md:items-end md:pr-20 text-right">
                     <motion.div
                         initial={{ opacity: 0, x: 50 }}
                         whileInView={{ opacity: 1, x: 0 }}
@@ -103,20 +108,20 @@ export default function Landing3DScroll({ onGetStarted, onLogin }: Landing3DScro
                             <Sparkles />
                             <span className="font-bold tracking-widest text-sm uppercase">Experto en Moda</span>
                         </div>
-                        <h2 className="text-4xl md:text-6xl font-bold mb-6">Tu Asesor 24/7.</h2>
+                        <h2 className="text-4xl md:text-6xl font-bold mb-6">Tu estilista IA, posta.</h2>
                         <p className="text-xl text-gray-400 mb-6">
-                            No es solo un algoritmo. Entiende colorimetría, tipos de cuerpo y tendencias.
+                            Respeta pose, textura y proporciones. Te sugiere combinaciones usables para el día a día.
                         </p>
                         <ul className="space-y-4 inline-block text-left">
-                            <FeatureItem>Análisis de 12 Estaciones</FeatureItem>
-                            <FeatureItem>Equilibrio según tipo de cuerpo</FeatureItem>
-                            <FeatureItem>Sugerencias para el clima real</FeatureItem>
+                            <FeatureItem>Antes y después realista</FeatureItem>
+                            <FeatureItem>Armario digital con tus prendas</FeatureItem>
+                            <FeatureItem>Alternativas para comprar por prenda</FeatureItem>
                         </ul>
                     </motion.div>
                 </Section>
 
                 {/* FINAL CTA SECTION */}
-                <Section className="items-center justify-center text-center">
+                <Section id="cta-final" className="items-center justify-center text-center">
                     <div className="bg-gradient-to-b from-transparent to-purple-900/20 absolute inset-0 -z-10" />
                     <motion.div
                         initial={{ scale: 0.9, opacity: 0 }}
@@ -124,17 +129,17 @@ export default function Landing3DScroll({ onGetStarted, onLogin }: Landing3DScro
                         className="max-w-2xl px-6 bg-white/5 backdrop-blur-3xl rounded-3xl p-12 border border-white/10"
                     >
                         <Star className="w-12 h-12 text-yellow-400 mx-auto mb-6 fill-yellow-400/20" />
-                        <h2 className="text-4xl md:text-5xl font-bold mb-6">Empieza tu Transformación</h2>
+                        <h2 className="text-4xl md:text-5xl font-bold mb-6">Probalo hoy y sacá tu primer look</h2>
                         <p className="text-lg text-gray-300 mb-8">
-                            Únete a miles de personas que ya recuperaron el control de su imagen.
-                            Primer análisis 100% gratuito.
+                            Entrá, probá el flujo completo y compartí el resultado.
+                            El acceso inicial sigue gratuito.
                         </p>
                         <div className="flex flex-col gap-4 sm:flex-row justify-center">
                             <button
                                 onClick={onGetStarted}
                                 className="bg-purple-600 text-white px-8 py-4 rounded-xl font-bold text-lg hover:bg-purple-700 transition-all shadow-lg shadow-purple-600/25"
                             >
-                                Descubrir mi Estilo
+                                Empezar gratis
                             </button>
                             <button
                                 onClick={onLogin}
@@ -144,7 +149,7 @@ export default function Landing3DScroll({ onGetStarted, onLogin }: Landing3DScro
                             </button>
                         </div>
                         <p className="mt-6 text-xs text-gray-500">
-                            Sin tarjeta de crédito requerida para el diagnóstico inicial.
+                            Sin tarjeta al empezar.
                         </p>
                     </motion.div>
                 </Section>
@@ -155,8 +160,8 @@ export default function Landing3DScroll({ onGetStarted, onLogin }: Landing3DScro
 }
 
 // Utility Components
-const Section = ({ children, className = "" }: { children: React.ReactNode, className?: string }) => (
-    <div className={`min-h-screen w-full flex flex-col justify-center relative py-20 ${className}`}>
+const Section = ({ id, children, className = "" }: { id?: string; children: React.ReactNode; className?: string }) => (
+    <div id={id} className={`min-h-screen w-full flex flex-col justify-center relative py-20 ${className}`}>
         {children}
     </div>
 );

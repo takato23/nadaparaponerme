@@ -50,7 +50,7 @@ Gemini API    Gemini API
 ### Frontend (Desarrollo Local)
 **Archivo**: `.env.local`
 ```bash
-VITE_GEMINI_API_KEY=AIzaSyCd7P01moiQLSu425iB2g5b68OKIw60oIk
+VITE_GEMINI_API_KEY=<YOUR_GEMINI_API_KEY>
 ```
 
 **Estado**: ✅ Configurado correctamente
@@ -65,7 +65,7 @@ VITE_GEMINI_API_KEY=AIzaSyCd7P01moiQLSu425iB2g5b68OKIw60oIk
 
 **Comando para configurar**:
 ```bash
-supabase secrets set GEMINI_API_KEY=AIzaSyCd7P01moiQLSu425iB2g5b68OKIw60oIk
+supabase secrets set GEMINI_API_KEY=<YOUR_GEMINI_API_KEY>
 ```
 
 **Estado**: ⚠️ REQUIERE CONFIGURACIÓN MANUAL
@@ -181,7 +181,7 @@ supabase login
 supabase link --project-ref qpoojigxxswkpkfbrfiy
 
 # Configurar API key
-supabase secrets set GEMINI_API_KEY=AIzaSyCd7P01moiQLSu425iB2g5b68OKIw60oIk
+supabase secrets set GEMINI_API_KEY=<YOUR_GEMINI_API_KEY>
 
 # Verificar secrets configurados
 supabase secrets list

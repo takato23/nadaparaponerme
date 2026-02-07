@@ -1,9 +1,7 @@
-import React, { useRef, useEffect } from 'react';
-import { useFrame, useThree } from '@react-three/fiber';
+import React from 'react';
 import { useLocation } from 'react-router-dom';
 import { Environment, Float, Lightformer } from '@react-three/drei';
 import { LiquidMesh } from './LiquidMesh';
-import * as THREE from 'three';
 
 interface SceneOrchestratorProps {
     isAuth?: boolean;
@@ -11,7 +9,6 @@ interface SceneOrchestratorProps {
 
 export const SceneOrchestrator: React.FC<SceneOrchestratorProps> = ({ isAuth }) => {
     const location = useLocation();
-    const { viewport } = useThree();
 
     // Determine current section based on path or auth state
     const getSection = () => {

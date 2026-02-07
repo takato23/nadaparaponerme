@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import type { GroundingChunk } from '../types';
-import { searchProductsFromImage, searchProductsForItem } from '../src/services/geminiService';
-import { getShoppingLinks, getSponsoredPlacements, ShoppingLink } from '../src/services/monetizationService';
+import { searchProductsFromImage, searchProductsForItem } from '../src/services/aiService';
+import { getShoppingLinks, getSponsoredPlacements, trackSponsorClick, ShoppingLink } from '../src/services/monetizationService';
 import Loader from './Loader';
 import { Card } from './ui/Card';
 
@@ -233,6 +233,7 @@ export default function ShopLookView({ onClose }: ShopLookViewProps) {
                           href={placement.url}
                           target="_blank"
                           rel="noopener noreferrer"
+                          onClick={() => trackSponsorClick(placement.id, 'shop_the_look', { searchTerm: results.description })}
                           className="p-4 rounded-xl bg-white/5 hover:bg-emerald-500/10 border border-white/10 hover:border-emerald-500/30 transition-all"
                         >
                           <div className="flex items-center gap-2">

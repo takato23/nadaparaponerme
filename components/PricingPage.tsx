@@ -6,99 +6,29 @@
  */
 
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+    import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { createPaymentPreference } from '../src/services/paymentService';
-import { useSubscription } from '../hooks/useSubscription';
-import type { SubscriptionTier, SubscriptionPlan } from '../types-payment';
-import { PAYMENTS_ENABLED, USD_ENABLED, V1_SAFE_MODE } from '../src/config/runtime';
+import type { Variants } from 'framer-motion';
+import * as paymentService from '../src/services/paymentService';
+    import { useSubscription } from '../hooks/useSubscription';
+    import { ROUTES } from '../src/routes';
+import {
+    SUBSCRIPTION_PLANS,
+    type SubscriptionTier,
+    type SubscriptionPlan
+} from '../types-payment';
+import { PAYMENTS_ENABLED, USD_ENABLED } from '../src/config/runtime';
 import * as analytics from '../src/services/analyticsService';
 
 // ============================================================================
 // CONSTANTS
 // ============================================================================
 
-const PLANS: SubscriptionPlan[] = [
-    {
-        id: 'free',
-        name: 'Free',
-        description: 'Para empezar a organizar tu armario',
-        price_monthly_ars: 0,
-        price_monthly_usd: 0,
-        features: [
-            'Hasta 50 prendas',
-            '200 créditos IA/mes (Rápido)',
-            'Análisis básico de color',
-            'Outfits guardados ilimitados',
-        ],
-        limits: {
-            ai_generations_per_month: 200,
-            max_closet_items: 50,
-            max_saved_outfits: -1,
-            can_use_virtual_tryon: true,
-            can_use_ai_designer: true,
-            can_use_lookbook: false,
-            can_use_style_dna: false,
-            can_export_lookbooks: false,
-        },
-    },
-    {
-        id: 'pro',
-        name: 'Pro',
-        description: 'Para fashionistas serios',
-        price_monthly_ars: 2999,
-        price_monthly_usd: 9.99,
-        features: [
-            'Prendas ilimitadas',
-            '300 créditos IA/mes',
-            'Probador virtual Rápido',
-            'Ultra habilitado',
-            'AI Fashion Designer',
-            'Lookbook Creator',
-            'Sin anuncios',
-        ],
-        limits: {
-            ai_generations_per_month: 300,
-            max_closet_items: -1,
-            max_saved_outfits: -1,
-            can_use_virtual_tryon: true,
-            can_use_ai_designer: true,
-            can_use_lookbook: true,
-            can_use_style_dna: false,
-            can_export_lookbooks: true,
-        },
-        popular: true,
-    },
-    {
-        id: 'premium',
-        name: 'Premium',
-        description: 'Experiencia completa',
-        price_monthly_ars: 4999,
-        price_monthly_usd: 16.99,
-        features: [
-            'Todo lo de Pro +',
-            '400 créditos IA/mes',
-            'Probador virtual Ultra',
-            'Style DNA Profile',
-            'Evolución de estilo',
-            'Acceso anticipado',
-            'Soporte prioritario',
-        ],
-        limits: {
-            ai_generations_per_month: 400,
-            max_closet_items: -1,
-            max_saved_outfits: -1,
-            can_use_virtual_tryon: true,
-            can_use_ai_designer: true,
-            can_use_lookbook: true,
-            can_use_style_dna: true,
-            can_export_lookbooks: true,
-        },
-    },
-];
+const PLANS: SubscriptionPlan[] = SUBSCRIPTION_PLANS;
+const EASE_STANDARD: [number, number, number, number] = [0.22, 1, 0.36, 1];
 
 // Animation variants
-const containerVariants = {
+const containerVariants: Variants = {
     hidden: { opacity: 0 },
     show: {
         opacity: 1,
@@ -106,9 +36,9 @@ const containerVariants = {
     }
 };
 
-const itemVariants = {
+const itemVariants: Variants = {
     hidden: { opacity: 0, y: 20 },
-    show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' } }
+    show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: EASE_STANDARD } }
 };
 
 // ============================================================================
@@ -120,6 +50,7 @@ export default function PricingPage() {
     const subscription = useSubscription();
     const [isLoading, setIsLoading] = useState<SubscriptionTier | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [currency, setCurrency] = useState<'ARS' | 'USD'>('ARS');
 
     const currentTier = subscription.tier;
     const aiGenerationsUsed = subscription.aiGenerationsUsed;
@@ -129,17 +60,16 @@ export default function PricingPage() {
         if (tier === 'free' || tier === currentTier) return;
 
         try {
-            analytics.trackCheckoutStart(tier, 'ARS');
-            if (V1_SAFE_MODE && !PAYMENTS_ENABLED) {
-                setError('Pagos desactivados durante la V1 (beta). Próximamente vas a poder hacer upgrade.');
+            analytics.trackCheckoutStart(tier, currency);
+            if (!PAYMENTS_ENABLED) {
+                setError('Pagos desactivados. Próximamente vas a poder hacer upgrade.');
                 return;
             }
 
             setIsLoading(tier);
             setError(null);
 
-            const preference = await createPaymentPreference(tier, 'ARS');
-            window.location.href = preference.init_point;
+            await paymentService.startCheckout(tier, currency);
         } catch (err) {
             console.error('Error creating payment:', err);
             setError(err instanceof Error ? err.message : 'Error al procesar el pago');
@@ -161,7 +91,7 @@ export default function PricingPage() {
     const isButtonDisabled = (plan: SubscriptionPlan) => {
         if (plan.id === currentTier) return true;
         if (plan.id === 'free') return true;
-        if (V1_SAFE_MODE && !PAYMENTS_ENABLED) return true;
+        if (!PAYMENTS_ENABLED) return true;
         if (isLoading !== null) return true;
         return false;
     };
@@ -209,8 +139,20 @@ export default function PricingPage() {
                 <motion.section variants={itemVariants} className="text-center mb-8">
                     {USD_ENABLED ? (
                         <div className="inline-flex items-center gap-2 rounded-full border border-gray-200 dark:border-gray-700 p-1 text-xs">
-                            <span className="px-3 py-1 rounded-full bg-gray-900 text-white">ARS</span>
-                            <span className="px-3 py-1 rounded-full text-gray-400">USD</span>
+                            <button
+                                type="button"
+                                onClick={() => setCurrency('ARS')}
+                                className={`px-3 py-1 rounded-full ${currency === 'ARS' ? 'bg-gray-900 text-white' : 'text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
+                            >
+                                ARS
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setCurrency('USD')}
+                                className={`px-3 py-1 rounded-full ${currency === 'USD' ? 'bg-gray-900 text-white' : 'text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
+                            >
+                                USD
+                            </button>
                         </div>
                     ) : (
                         <span className="text-sm text-gray-500">Precios en pesos argentinos</span>
@@ -260,13 +202,13 @@ export default function PricingPage() {
                     </motion.div>
                 )}
 
-                {V1_SAFE_MODE && !PAYMENTS_ENABLED && !error && (
+                {!PAYMENTS_ENABLED && !error && (
                     <motion.div
                         variants={itemVariants}
                         className="max-w-md mx-auto mb-6 p-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800"
                     >
                         <p className="text-sm text-amber-700 dark:text-amber-300">
-                            🔒 Beta: los pagos están desactivados por seguridad. Podés usar la app en modo Free mientras validamos el checkout.
+                            🔒 Por ahora, los pagos están desactivados. Podés usar la app en modo Free mientras terminamos de validar el checkout.
                         </p>
                     </motion.div>
                 )}
@@ -315,15 +257,17 @@ export default function PricingPage() {
                                     <div className="mt-6 mb-8">
                                         <div className="flex items-baseline gap-1">
                                             <span className="text-4xl font-bold text-gray-900 dark:text-white">
-                                                {plan.price_monthly_ars === 0
+                                                {(currency === 'ARS' ? plan.price_monthly_ars : plan.price_monthly_usd) === 0
                                                     ? 'Gratis'
-                                                    : `$${plan.price_monthly_ars.toLocaleString('es-AR')}`}
+                                                    : currency === 'ARS'
+                                                        ? `$${plan.price_monthly_ars.toLocaleString('es-AR')}`
+                                                        : `US$ ${plan.price_monthly_usd.toLocaleString('en-US')}`}
                                             </span>
-                                            {plan.price_monthly_ars > 0 && (
+                                            {(currency === 'ARS' ? plan.price_monthly_ars : plan.price_monthly_usd) > 0 && (
                                                 <span className="text-sm text-gray-500 dark:text-gray-400">/mes</span>
                                             )}
                                         </div>
-                                        {plan.price_monthly_usd > 0 && (
+                                        {currency === 'ARS' && plan.price_monthly_usd > 0 && (
                                             <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
                                                 ~USD ${plan.price_monthly_usd}
                                             </p>
@@ -397,8 +341,21 @@ export default function PricingPage() {
                 {/* Footer */}
                 <motion.section variants={itemVariants} className="mt-12 text-center">
                     <p className="text-xs text-gray-400 dark:text-gray-500">
-                        Pagos procesados de forma segura por MercadoPago. Podés cancelar en cualquier momento.
+                        {currency === 'USD'
+                            ? 'Pagos procesados de forma segura por Paddle. Podés cancelar en cualquier momento.'
+                            : 'Pagos procesados de forma segura por MercadoPago. Podés cancelar en cualquier momento.'}
                     </p>
+                    <div className="mt-3 flex flex-wrap items-center justify-center gap-4 text-xs text-gray-500 dark:text-gray-400">
+                        <Link to={ROUTES.TERMS} className="hover:text-gray-700 dark:hover:text-gray-200 underline underline-offset-4">
+                            Términos
+                        </Link>
+                        <Link to={ROUTES.PRIVACY} className="hover:text-gray-700 dark:hover:text-gray-200 underline underline-offset-4">
+                            Privacidad
+                        </Link>
+                        <Link to={ROUTES.REFUND} className="hover:text-gray-700 dark:hover:text-gray-200 underline underline-offset-4">
+                            Reembolsos
+                        </Link>
+                    </div>
                 </motion.section>
             </motion.main>
         </div>

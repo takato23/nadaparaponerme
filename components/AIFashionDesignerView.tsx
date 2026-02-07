@@ -38,14 +38,8 @@ const AIFashionDesignerView = ({ onClose, onAddToCloset, onShowHistory }: AIFash
 
   // Load quota and recent generations on mount
   useEffect(() => {
-    // TEMPORALMENTE DESHABILITADO: Evitar errores 406 hasta que database esté configurada
-    // loadQuota();
-    // loadRecentGenerations();
-
-    // Valores hardcoded para testing
-    setRemainingQuota(9);
-    setQuotaLimit(10);
-    setPlanType('free');
+    void loadQuota();
+    void loadRecentGenerations();
   }, []);
 
   const loadQuota = async () => {
@@ -120,7 +114,11 @@ const AIFashionDesignerView = ({ onClose, onAddToCloset, onShowHistory }: AIFash
     if (!generatedImageUrl) return;
 
     try {
-      await aiImageService.saveToCloset(generatedImageUrl, generatedPrompt);
+      await aiImageService.saveToCloset(generatedImageUrl, generatedPrompt, {
+        category,
+        season: season || undefined,
+        occasion: occasion.trim() || undefined,
+      });
       onAddToCloset(generatedImageUrl, {
         category,
         subcategory: 'AI Generated',

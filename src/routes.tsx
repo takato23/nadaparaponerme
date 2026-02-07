@@ -32,10 +32,12 @@ export const ROUTES = {
   SHARED_LOOK: '/look/:token',
   TERMS: '/legal/terminos',
   PRIVACY: '/legal/privacidad',
+  REFUND: '/legal/reembolsos',
 
   // Subscription pages
   PRICING: '/pricing',
   PLANES: '/planes',
+  PAY: '/pay',
 
 } as const;
 

@@ -12,9 +12,13 @@
 
 - [ ] `VITE_SUPABASE_URL` (desde Supabase Dashboard)
 - [ ] `VITE_SUPABASE_ANON_KEY` (desde Supabase Dashboard)
-- [ ] `VITE_GEMINI_API_KEY` (desde Google AI Studio)
+- [ ] `GEMINI_API_KEY` (Supabase Secrets, desde Google AI Studio; NO usar `VITE_GEMINI_API_KEY` en Vercel)
 - [ ] `VITE_OPENWEATHER_API_KEY` (desde OpenWeatherMap)
 - [ ] `VITE_MERCADOPAGO_PUBLIC_KEY` (opcional, desde MercadoPago)
+- [ ] `MERCADOPAGO_ACCESS_TOKEN` (Supabase Secrets; NO en Vercel)
+- [ ] `MERCADOPAGO_WEBHOOK_TOKEN` (Supabase Secrets; recomendado para proteger el endpoint público de webhook)
+- [ ] `MERCADOPAGO_WEBHOOK_SECRET` (Supabase Secrets; recomendado si activás firma HMAC de webhook)
+- [ ] `APP_URL` / `APP_URL_ALLOWLIST` (Supabase Secrets; para callbacks correctos en pagos)
 
 ## Deployment en Vercel
 
@@ -29,7 +33,8 @@
 - [ ] CORS configurado con dominio de Vercel
 - [ ] Auth Redirect URLs actualizadas
 - [ ] Storage policies verificadas
-- [ ] Edge Functions funcionando
+- [ ] Edge Functions funcionando (IA + pagos)
+- [ ] Webhooks de pagos configurados en el proveedor (MercadoPago/Paddle) apuntando a Supabase Functions
 
 ## Verificación Post-Deployment
 

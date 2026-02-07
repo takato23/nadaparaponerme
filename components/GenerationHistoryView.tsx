@@ -20,26 +20,23 @@ const GenerationHistoryView = ({ onClose, onAddToCloset }: GenerationHistoryView
   const ITEMS_PER_PAGE = 20;
 
   useEffect(() => {
-    loadHistory();
-  }, []);
+    void loadHistory(page * ITEMS_PER_PAGE);
+  }, [page]);
 
-  const loadHistory = async (loadMore = false) => {
+  const loadHistory = async (limit: number) => {
     try {
-      if (loadMore) {
+      if (limit > ITEMS_PER_PAGE) {
         setLoadingMore(true);
       } else {
         setLoading(true);
       }
 
-      const limit = page * ITEMS_PER_PAGE;
       const history = await aiImageService.getGenerationHistory(limit);
 
       setGenerations(history);
 
       // Check if there are more items
-      if (history.length < limit) {
-        setHasMore(false);
-      }
+      setHasMore(history.length >= limit);
     } catch (error) {
       console.error('Error loading history:', error);
     } finally {
@@ -49,8 +46,8 @@ const GenerationHistoryView = ({ onClose, onAddToCloset }: GenerationHistoryView
   };
 
   const handleLoadMore = () => {
-    setPage(page + 1);
-    loadHistory(true);
+    if (loadingMore || !hasMore) return;
+    setPage((prev) => prev + 1);
   };
 
   const handleRegeneratePrompt = () => {
@@ -64,17 +61,23 @@ const GenerationHistoryView = ({ onClose, onAddToCloset }: GenerationHistoryView
     if (!selectedImage) return;
 
     try {
-      await aiImageService.saveToCloset(selectedImage.image_url, selectedImage.prompt);
+      await aiImageService.saveToCloset(
+        selectedImage.image_url,
+        selectedImage.prompt,
+        {
+          category: selectedImage.metadata?.category || 'top',
+        }
+      );
       onAddToCloset(selectedImage.image_url, {
-        category: 'top', // Should come from metadata
+        category: selectedImage.metadata?.category || 'top',
         subcategory: 'AI Generated',
-        color_primary: '#000000',
-        vibe_tags: ['ai-generated'],
+        color_primary: selectedImage.metadata?.color_primary || '#000000',
+        vibe_tags: selectedImage.metadata?.style_tags || ['ai-generated'],
         seasons: ['spring', 'summer', 'fall', 'winter'],
       });
 
       // Refresh the generation to show updated added_to_closet status
-      await loadHistory();
+      await loadHistory(page * ITEMS_PER_PAGE);
 
       // Close detail modal
       setSelectedImage(null);
@@ -92,10 +95,10 @@ const GenerationHistoryView = ({ onClose, onAddToCloset }: GenerationHistoryView
   };
 
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    const bottom =
-      e.currentTarget.scrollHeight - e.currentTarget.scrollTop === e.currentTarget.clientHeight;
+    const distanceToBottom =
+      e.currentTarget.scrollHeight - e.currentTarget.scrollTop - e.currentTarget.clientHeight;
 
-    if (bottom && hasMore && !loadingMore) {
+    if (distanceToBottom <= 1 && hasMore && !loadingMore) {
       handleLoadMore();
     }
   };

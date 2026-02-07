@@ -202,26 +202,14 @@ const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }
       setIsSaving(true);
       let newItemId: string | null = null;
 
-      const itemToSave: any = {
-        metadata,
-        status: itemStatus
-      };
-
       if (useSupabaseCloset) {
         const response = await fetch(imageDataUrl);
         const blob = await response.blob();
         const fileName = imageFile?.name || `${Date.now()}.jpg`;
         const file = new File([blob], fileName, { type: blob.type || 'image/jpeg' });
 
-        // Pass status via metadata or separate argument if service supported it directly,
-        // For now, we assume closetService might need an update or we handle it post-save.
-        // NOTE: addClothingItem might not support status argument yet.
-        // We will need to update addClothingItem signature or ensure metadata carries it.
-        await addClothingItem(file, { ...metadata, status: itemStatus } as any, backImageFile || undefined);
-
-        // Ideally we would update the status immediately if addClothingItem doesn't support it
-        // But for this implementation, let's assume valid handling or future update.
-        // Since we modified convertToLegacyFormat, read is OK. Write needs verify.
+        const savedItem = await addClothingItem(file, metadata, backImageFile || undefined, itemStatus);
+        newItemId = savedItem.id;
 
         const updatedCloset = await getClothingItems();
         onClosetSync(updatedCloset);

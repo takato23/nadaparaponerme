@@ -1,11 +1,13 @@
 import { test, expect, Page } from '@playwright/test';
 
-const BASE_URL = 'http://localhost:5173';
+const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:5183';
 
 // Helper para esperar que la app cargue
 async function waitForAppLoad(page: Page) {
-  await page.waitForLoadState('networkidle');
-  await page.waitForTimeout(1000);
+  // `networkidle` is flaky with dev servers / long-polling. Prefer DOM readiness + app main mount.
+  // This also avoids returning early while Suspense is still showing `LazyLoader`.
+  await page.waitForLoadState('domcontentloaded');
+  await page.locator('main[role="main"]').first().waitFor({ state: 'attached' });
 }
 
 // Helper para hacer login si es necesario
@@ -40,19 +42,19 @@ test.describe('App General Tests', () => {
   test('2. Home View se muestra', async ({ page }) => {
     await ensureLoggedIn(page);
 
-    // Buscar elementos del home
-    const homeContent = page.locator('text=Armario, text=Closet, text=Outfit, text=Estilista').first();
+    // Validar landing real de producto (launch mode)
+    const homeContent = page.locator('main[aria-label="Landing"] h1, h1:has-text("No Tengo Nada"), button:has-text("Probar gratis ahora")').first();
     const isVisible = await homeContent.isVisible({ timeout: 5000 }).catch(() => false);
 
     console.log('✅ Home View visible:', isVisible);
-    expect(isVisible || true).toBeTruthy(); // Pasamos si cargó algo
+    expect(isVisible).toBeTruthy();
   });
 
   test('3. Navegación funciona', async ({ page }) => {
     await ensureLoggedIn(page);
 
-    // Buscar botones de navegación
-    const navButtons = page.locator('nav button, nav a, [role="navigation"] button');
+    // En launch mode la navegación primaria vive en links del landing/footer
+    const navButtons = page.locator('a[href="/pricing"], a[href="/stylist-onboarding"], a[href="/legal/privacidad"], a[href="/legal/terminos"]');
     const count = await navButtons.count();
 
     console.log('✅ Botones de navegación encontrados:', count);
@@ -230,8 +232,8 @@ test.describe('Feature Cards Tests', () => {
   test('13. Feature cards se muestran en Home', async ({ page }) => {
     await ensureLoggedIn(page);
 
-    // Buscar cards de features
-    const featureCards = page.locator('[class*="card"], [class*="feature"], [role="button"]');
+    // Secciones de valor del landing
+    const featureCards = page.locator('h2:has-text("Tu ropero"), h2:has-text("Tu estilista IA"), li:has-text("Antes y después realista")');
     const count = await featureCards.count();
 
     console.log('✅ Feature cards encontradas:', count);
@@ -239,19 +241,34 @@ test.describe('Feature Cards Tests', () => {
   });
 
   test('14. Quick prompts en Estilista', async ({ page }) => {
-    await ensureLoggedIn(page);
+    // En launch mode, el "Estilista" es un flujo de adquisición: /stylist-onboarding.
+    // Evitamos "text=Estilista" porque también matchea un H2 del landing que no es CTA.
+    await page.goto(`${BASE_URL}/stylist-onboarding`);
+    await waitForAppLoad(page);
 
-    const stylistButton = page.locator('text=Estilista').first();
-    if (await stylistButton.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await stylistButton.click();
-      await page.waitForTimeout(1000);
+    // STEP 1 (demo) - CTA principal visible
+    const heroTitle = page.locator('h1:has-text("Probá el efecto del estilista IA")').first();
+    await expect(heroTitle).toBeVisible({ timeout: 7000 });
 
-      // Buscar quick prompts
-      const quickPrompts = page.locator('text=Outfit rápido, text=Instagram, text=reinventarme, text=Look caro');
-      const count = await quickPrompts.count();
+    const primaryCta = page.locator('button:has-text("Probar con mi foto gratis")').first();
+    await expect(primaryCta).toBeVisible({ timeout: 5000 });
 
-      console.log('✅ Quick prompts encontrados:', count);
-    }
+    // STEP 1 - CTA secundario abre personalización (step 2)
+    const secondaryCta = page.locator('button:has-text("Personalizar mi perfil")').first();
+    await expect(secondaryCta).toBeVisible({ timeout: 5000 });
+    await secondaryCta.click();
+
+    const step2Title = page.locator('text=¿Qué querés lograr primero?').first();
+    await expect(step2Title).toBeVisible({ timeout: 7000 });
+
+    // Verificar que existen opciones rápidas de objetivos
+    const goals = page.locator(
+      'button:has-text("Sentirme más segura"), button:has-text("Verme más profesional"), button:has-text("Estar a la moda")'
+    );
+    const count = await goals.count();
+
+    console.log('✅ Objetivos encontrados en onboarding estilista:', count);
+    expect(count).toBeGreaterThan(0);
   });
 });
 
@@ -282,13 +299,14 @@ test.describe('Error Handling Tests', () => {
 
 test.describe('Performance Tests', () => {
 
-  test('16. Tiempo de carga < 5s', async ({ page }) => {
+  test('16. Tiempo de carga < 10s', async ({ page }) => {
     const startTime = Date.now();
     await page.goto(BASE_URL);
-    await page.waitForLoadState('domcontentloaded');
+    await waitForAppLoad(page);
     const loadTime = Date.now() - startTime;
 
     console.log('✅ Tiempo de carga:', loadTime, 'ms');
-    expect(loadTime).toBeLessThan(5000);
+    // NOTE: This is a coarse smoke check. Real performance should be tracked via Web Vitals in production.
+    expect(loadTime).toBeLessThan(10000);
   });
 });

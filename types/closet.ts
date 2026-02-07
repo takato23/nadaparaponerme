@@ -37,7 +37,7 @@ export interface CollectionWithItems extends Collection {
 // ADVANCED FILTERS SYSTEM
 // =====================================================
 
-export type CategoryFilter = 'top' | 'bottom' | 'shoes' | 'accessory' | 'outerwear' | 'one-piece';
+export type CategoryFilter = 'all' | 'top' | 'bottom' | 'shoes' | 'accessory' | 'outerwear' | 'one-piece' | 'dress';
 
 export interface ColorFilter {
   colors: string[];                     // Selected colors (hex or name)

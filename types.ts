@@ -32,7 +32,9 @@ export interface ClothingItem {
   backImageDataUrl?: string; // Optional back view image
   metadata: ClothingItemMetadata;
   // Status tracking: 'owned' (default), 'wishlist' (store/external), 'virtual' (try-on draft)
-  status?: 'owned' | 'wishlist' | 'virtual';
+  status?: 'owned' | 'wishlist' | 'virtual' | 'quick';
+  // Legacy flat color field still consumed in some enhanced closet flows.
+  color_primary?: string;
   store_info?: {
     name?: string;
     price?: number;
@@ -109,7 +111,7 @@ export interface ItemShoppingState {
 
 export interface ColorPaletteAnalysis {
   dominant_colors: ColorInfo[];
-  color_scheme: 'monochromatic' | 'complementary' | 'analogous' | 'triadic' | 'diverse';
+  color_scheme: 'monochromatic' | 'complementary' | 'analogous' | 'triadic' | 'diverse' | string;
   missing_colors: string[];
   versatility_score: number;
   recommendations: string;
@@ -198,9 +200,13 @@ export interface LookbookOutfit {
 }
 
 export interface Lookbook {
-  theme: string;
+  // Legacy fields used by older UI flows
+  title?: string;
+  description?: string;
+  // Newer structured fields
+  theme?: string;
   outfits: LookbookOutfit[];
-  theme_description: string;
+  theme_description?: string;
 }
 
 // Types moved to Multiplayer Challenges section
@@ -238,6 +244,9 @@ export interface OutfitRating {
   outfit_id: string;
   rating: number; // 1-5 stars
   notes?: string;
+  // Legacy aliases still referenced in activity feed cards
+  overall_rating?: number;
+  feedback?: string;
   created_at?: string;
   updated_at?: string;
 }
@@ -266,13 +275,16 @@ export interface PreferencePattern {
 }
 
 export interface FeedbackInsights {
-  satisfaction_score: number; // 0-100, overall satisfaction with wardrobe
-  top_preferences: PreferencePattern[]; // what user loves (high ratings)
-  least_favorites: PreferencePattern[]; // what user dislikes (low ratings)
-  style_evolution: string; // narrative of how style preferences are evolving
-  improvement_suggestions: string[]; // specific actionable suggestions
-  shopping_recommendations: string[]; // items to buy based on preferences
-  unused_potential: string[]; // existing items user should try more
+  satisfaction_score?: number; // 0-100, overall satisfaction with wardrobe
+  top_preferences?: PreferencePattern[]; // what user loves (high ratings)
+  least_favorites?: PreferencePattern[]; // what user dislikes (low ratings)
+  style_evolution?: string; // narrative of how style preferences are evolving
+  improvement_suggestions?: string[]; // specific actionable suggestions
+  shopping_recommendations?: string[]; // items to buy based on preferences
+  unused_potential?: string[]; // existing items user should try more
+  // Fallback shape returned by legacy prompt templates
+  trends?: any[];
+  insights?: any[];
 }
 
 export interface FeedbackAnalysisResult {
@@ -459,6 +471,8 @@ export interface CapsuleWardrobe {
   suggested_outfits: CapsuleOutfitCombination[]; // pre-generated outfit ideas
   total_combinations: number; // mathematical combinations possible
   color_palette: string[]; // dominant colors in the capsule
+  // Legacy alias kept for backward-compatible renderers
+  total_outfits_possible?: number;
   missing_pieces?: string[]; // gaps in the capsule (optional items to add)
   season?: string; // if seasonal theme
   created_at: string; // ISO timestamp

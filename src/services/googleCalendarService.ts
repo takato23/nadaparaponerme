@@ -204,7 +204,7 @@ export async function generateOutfitForEvent(
   try {
     // Use existing generateOutfit with contextual prompt
     const contextPrompt = getEventContextPrompt(event, eventType);
-    const fitResult = await geminiService.generateOutfit(closet, contextPrompt);
+    const fitResult = await geminiService.generateOutfit(contextPrompt, closet);
 
     // Generate reasoning specifically for this event
     const reasoning = await generateEventReasoning(event, eventType, fitResult);

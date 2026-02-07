@@ -5,7 +5,7 @@
  */
 
 import React, { useMemo } from 'react';
-import { getCreditStatus } from '../../services/usageTrackingService';
+import { getCreditStatus } from '../../src/services/usageTrackingService';
 
 interface AIModalHeaderProps {
   title: string;

@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useState } from 'react';
 import AuthView from './AuthView';
-import Eye3D from './Eye3D';
+
+const Eye3D = lazy(() => import('./Eye3D'));
 
 function useMediaQuery(query: string) {
     const [matches, setMatches] = useState(false);
@@ -53,7 +54,9 @@ export default function AuthEyeScreen({
 
             {/* Eye behind the portal */}
             <div className="absolute inset-0 z-0 pointer-events-none opacity-90 -translate-y-8 sm:-translate-y-10">
-                <Eye3D variant="landing" blinkInterval={blinkInterval} reducedMotion={prefersReducedMotion} dpr={dpr} className="absolute inset-0" />
+                <Suspense fallback={null}>
+                    <Eye3D variant="landing" blinkInterval={blinkInterval} reducedMotion={prefersReducedMotion} dpr={dpr} className="absolute inset-0" />
+                </Suspense>
             </div>
 
             <div className="relative z-10 w-full h-full">

@@ -11,8 +11,8 @@ max_rows = 1000
 
 [auth]
 enabled = true
-site_url = "http://localhost:3000"
-additional_redirect_urls = ["http://localhost:3000/**"]
+site_url = "http://localhost:5173"
+additional_redirect_urls = ["http://localhost:5173/**", "http://127.0.0.1:5173/**", "http://127.0.0.1:5183/**"]
 jwt_expiry = 3600
 enable_signup = true
 

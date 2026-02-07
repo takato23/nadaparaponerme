@@ -13,6 +13,7 @@ import type { Database, ClothingCategory, Season } from '../types/api';
 type ClothingItemRow = Database['public']['Tables']['clothing_items']['Row'];
 type ClothingItemInsert = Database['public']['Tables']['clothing_items']['Insert'];
 type ClothingItemUpdate = Database['public']['Tables']['clothing_items']['Update'];
+type PersistedItemStatus = NonNullable<ClothingItemInsert['status']>;
 
 // Type guards for safe category validation
 const VALID_CATEGORIES = ['top', 'bottom', 'shoes', 'accessory', 'outerwear', 'one-piece'] as const;
@@ -33,6 +34,9 @@ function safeParseCategory(category: string | null): string {
   if (normalized.includes('shoe')) return 'shoes';
   if (normalized.includes('accessory')) return 'accessory';
   if (normalized.includes('jacket') || normalized.includes('coat')) return 'outerwear';
+  if (normalized.includes('dress') || normalized.includes('one-piece') || normalized.includes('onepiece')) {
+    return 'one-piece';
+  }
 
   return 'top'; // Default fallback
 }
@@ -125,7 +129,8 @@ export async function getClothingItem(id: string): Promise<LegacyClothingItem | 
 export async function addClothingItem(
   imageFile: File,
   metadata: ClothingItemMetadata,
-  backImageFile?: File // Optional back view image
+  backImageFile?: File, // Optional back view image
+  status: PersistedItemStatus = 'owned'
 ): Promise<LegacyClothingItem> {
   try {
     const { data: { user } } = await supabase.auth.getUser();
@@ -172,7 +177,7 @@ export async function addClothingItem(
     const newItem: ClothingItemInsert = {
       user_id: user.id,
       name: metadata.subcategory,
-      category: metadata.category as ClothingCategory,
+      category: safeParseCategory(metadata.category) as ClothingCategory,
       subcategory: metadata.subcategory,
       color_primary: metadata.color_primary,
       image_url: imageUrl,
@@ -187,6 +192,7 @@ export async function addClothingItem(
       },
       tags: metadata.vibe_tags || [],
       notes: metadata.description || null,
+      status,
     };
 
     const { data, error } = await (supabase.from('clothing_items') as any)
@@ -208,6 +214,51 @@ export async function addClothingItem(
     logger.error('Failed to add closet item:', error);
     throw error;
   }
+}
+
+/**
+ * Add a generated clothing item from an existing image URL (no upload step).
+ * Used by AI generation flows when image is already hosted.
+ */
+export async function addGeneratedClothingItem(
+  imageUrl: string,
+  metadata: ClothingItemMetadata,
+  status: PersistedItemStatus = 'owned'
+): Promise<LegacyClothingItem> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+
+  const safeCategory = safeParseCategory(metadata.category);
+  const itemToInsert: ClothingItemInsert = {
+    user_id: user.id,
+    name: metadata.subcategory || 'AI Generated Item',
+    category: safeCategory as ClothingCategory,
+    subcategory: metadata.subcategory || 'AI Generated Item',
+    color_primary: metadata.color_primary || '#000000',
+    image_url: imageUrl,
+    thumbnail_url: imageUrl,
+    ai_metadata: {
+      neckline: metadata.neckline,
+      sleeve_type: metadata.sleeve_type,
+      vibe_tags: metadata.vibe_tags || ['ai-generated'],
+      seasons: (metadata.seasons || []) as Season[],
+    },
+    tags: metadata.vibe_tags || ['ai-generated'],
+    notes: metadata.description || null,
+    status,
+  };
+
+  const { data, error } = await (supabase.from('clothing_items') as any)
+    .insert(itemToInsert)
+    .select()
+    .single();
+
+  if (error) {
+    logger.error('Failed to add generated closet item:', error);
+    throw error;
+  }
+
+  return convertToLegacyFormat(data);
 }
 
 /**

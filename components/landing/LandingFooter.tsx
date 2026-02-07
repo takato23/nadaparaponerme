@@ -1,9 +1,11 @@
 import React from 'react';
 import { useThemeContext } from '../../contexts/ThemeContext';
+import { ROUTES } from '../../src/routes';
 
 export default function LandingFooter() {
     const { theme } = useThemeContext();
     const isDark = theme === 'dark';
+    const currentYear = new Date().getFullYear();
 
     return (
         <footer className={`py-12 px-4 transition-colors duration-500 ${
@@ -25,20 +27,20 @@ export default function LandingFooter() {
                 <div className="flex flex-wrap justify-center gap-8">
                     <div className="flex flex-col gap-3 items-center md:items-start text-sm">
                         <h4 className={`font-bold mb-1 ${isDark ? 'text-white' : 'text-slate-800'}`}>Producto</h4>
-                        <a href="#" className={`hover:text-primary transition-colors ${isDark ? 'text-gray-500' : 'text-slate-500'}`}>Características</a>
-                        <a href="#" className={`hover:text-primary transition-colors ${isDark ? 'text-gray-500' : 'text-slate-500'}`}>Precio</a>
-                        <a href="#" className={`hover:text-primary transition-colors ${isDark ? 'text-gray-500' : 'text-slate-500'}`}>IA Stylist</a>
+                        <a href="#funcionalidades" className={`hover:text-primary transition-colors ${isDark ? 'text-gray-500' : 'text-slate-500'}`}>Características</a>
+                        <a href={ROUTES.PRICING} className={`hover:text-primary transition-colors ${isDark ? 'text-gray-500' : 'text-slate-500'}`}>Precio</a>
+                        <a href={ROUTES.ONBOARDING_STYLIST} className={`hover:text-primary transition-colors ${isDark ? 'text-gray-500' : 'text-slate-500'}`}>IA Stylist</a>
                     </div>
                     <div className="flex flex-col gap-3 items-center md:items-start text-sm">
                         <h4 className={`font-bold mb-1 ${isDark ? 'text-white' : 'text-slate-800'}`}>Compañía</h4>
-                        <a href="#" className={`hover:text-primary transition-colors ${isDark ? 'text-gray-500' : 'text-slate-500'}`}>Sobre nosotros</a>
-                        <a href="#" className={`hover:text-primary transition-colors ${isDark ? 'text-gray-500' : 'text-slate-500'}`}>Contacto</a>
-                        <a href="#" className={`hover:text-primary transition-colors ${isDark ? 'text-gray-500' : 'text-slate-500'}`}>Blog</a>
+                        <a href="#hero" className={`hover:text-primary transition-colors ${isDark ? 'text-gray-500' : 'text-slate-500'}`}>Sobre nosotros</a>
+                        <a href="mailto:hola@ojodeloca.app" className={`hover:text-primary transition-colors ${isDark ? 'text-gray-500' : 'text-slate-500'}`}>Contacto</a>
+                        <a href="https://instagram.com/santiagobalosky" target="_blank" rel="noopener noreferrer" className={`hover:text-primary transition-colors ${isDark ? 'text-gray-500' : 'text-slate-500'}`}>Blog</a>
                     </div>
                     <div className="flex flex-col gap-3 items-center md:items-start text-sm">
                         <h4 className={`font-bold mb-1 ${isDark ? 'text-white' : 'text-slate-800'}`}>Legal</h4>
-                        <a href="#" className={`hover:text-primary transition-colors ${isDark ? 'text-gray-500' : 'text-slate-500'}`}>Privacidad</a>
-                        <a href="#" className={`hover:text-primary transition-colors ${isDark ? 'text-gray-500' : 'text-slate-500'}`}>Términos</a>
+                        <a href={ROUTES.PRIVACY} className={`hover:text-primary transition-colors ${isDark ? 'text-gray-500' : 'text-slate-500'}`}>Privacidad</a>
+                        <a href={ROUTES.TERMS} className={`hover:text-primary transition-colors ${isDark ? 'text-gray-500' : 'text-slate-500'}`}>Términos</a>
                     </div>
                 </div>
             </div>
@@ -46,11 +48,11 @@ export default function LandingFooter() {
             <div className={`max-w-6xl mx-auto mt-12 pt-8 flex flex-col md:flex-row items-center justify-between gap-4 text-xs ${
                 isDark ? 'border-t border-white/5 text-gray-600' : 'border-t border-slate-200 text-slate-500'
             }`}>
-                <p>© 2025 Ojo de Loca. Todos los derechos reservados.</p>
+                <p>© {currentYear} Ojo de Loca. Todos los derechos reservados.</p>
                 <div className="flex gap-6">
-                    <a href="#" className={`transition-colors underline underline-offset-4 ${isDark ? 'hover:text-white' : 'hover:text-slate-800'}`}>Instagram</a>
-                    <a href="#" className={`transition-colors underline underline-offset-4 ${isDark ? 'hover:text-white' : 'hover:text-slate-800'}`}>TikTok</a>
-                    <a href="#" className={`transition-colors underline underline-offset-4 ${isDark ? 'hover:text-white' : 'hover:text-slate-800'}`}>Twitter</a>
+                    <a href="https://instagram.com/santiagobalosky" target="_blank" rel="noopener noreferrer" className={`transition-colors underline underline-offset-4 ${isDark ? 'hover:text-white' : 'hover:text-slate-800'}`}>Instagram</a>
+                    <a href="https://www.tiktok.com/@santiagobalosky" target="_blank" rel="noopener noreferrer" className={`transition-colors underline underline-offset-4 ${isDark ? 'hover:text-white' : 'hover:text-slate-800'}`}>TikTok</a>
+                    <a href="https://x.com/santiagobalosky" target="_blank" rel="noopener noreferrer" className={`transition-colors underline underline-offset-4 ${isDark ? 'hover:text-white' : 'hover:text-slate-800'}`}>Twitter</a>
                 </div>
             </div>
         </footer>

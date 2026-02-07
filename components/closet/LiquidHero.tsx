@@ -1,11 +1,11 @@
-import React, { useRef, useMemo } from 'react';
+import React, { useRef } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { MeshTransmissionMaterial, Text, Float, Environment, Lightformer } from '@react-three/drei';
-import { useScroll, useTransform, motion } from 'framer-motion';
-import * as THREE from 'three';
+import { MeshTransmissionMaterial, Float, Environment, Lightformer } from '@react-three/drei';
+import { motion } from 'framer-motion';
+import type { Mesh } from 'three';
 
-function LiquidSphere({ scrollY }: { scrollY: any }) {
-    const meshRef = useRef<THREE.Mesh>(null);
+function LiquidSphere() {
+    const meshRef = useRef<Mesh | null>(null);
 
     useFrame((state) => {
         if (!meshRef.current) return;
@@ -63,13 +63,11 @@ interface LiquidHeroProps {
 }
 
 export default function LiquidHero({ totalItems, totalValue }: LiquidHeroProps) {
-    const { scrollY } = useScroll();
-
     return (
         <div className="relative h-[40vh] w-full overflow-hidden bg-gradient-to-b from-blue-50/50 to-transparent dark:from-blue-900/20">
             <div className="absolute inset-0 z-0">
                 <Canvas camera={{ position: [0, 0, 5], fov: 45 }} dpr={[1, 2]}>
-                    <LiquidSphere scrollY={scrollY} />
+                    <LiquidSphere />
                     <Background />
                     <ambientLight intensity={0.5} />
                     <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} intensity={1} />

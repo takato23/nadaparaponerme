@@ -53,7 +53,7 @@ const STYLE_GOALS = [
 export const OnboardingStylistFlow = () => {
   const navigate = useNavigate();
   const [step, setStep] = useState<OnboardingStep>('demo');
-  const [demoMode, setDemoMode] = useState<'before' | 'after'>('after');
+  const [demoMode, setDemoMode] = useState<'before' | 'after'>('before');
   const [isGenerating, setIsGenerating] = useState(false);
   const [draft, setDraft] = useLocalStorage<StylistDraft>(DRAFT_STORAGE_KEY, {
     bodyShape: '',
@@ -80,6 +80,10 @@ export const OnboardingStylistFlow = () => {
   const handleNext = () => {
     const nextIndex = Math.min(stepIndex + 1, stepOrder.length - 1);
     setStep(stepOrder[nextIndex]);
+  };
+  const handleBack = () => {
+    const previousIndex = Math.max(stepIndex - 1, 0);
+    setStep(stepOrder[previousIndex]);
   };
 
   const handleSkipToCTA = () => setStep('cta');
@@ -129,7 +133,7 @@ export const OnboardingStylistFlow = () => {
   }, [draft]);
 
   return (
-    <div className="fixed inset-0 z-[9999] bg-[#05060a] text-white flex flex-col items-center justify-center overflow-hidden">
+    <div className="fixed inset-0 z-[9999] bg-[#05060a] text-white overflow-y-auto overscroll-contain">
       {/* Ambient background */}
       <div className="absolute inset-0 pointer-events-none">
         <div className="absolute -top-20 -left-16 w-[380px] h-[380px] bg-fuchsia-500/20 rounded-full blur-[120px]" />
@@ -139,7 +143,7 @@ export const OnboardingStylistFlow = () => {
         }} />
       </div>
 
-      <div className="relative w-full max-w-xl px-5 py-8">
+      <div className="relative w-full max-w-xl mx-auto px-5 pt-6 pb-8 min-h-dvh">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
@@ -169,6 +173,22 @@ export const OnboardingStylistFlow = () => {
           ))}
         </div>
 
+        <div className="flex items-center justify-between mb-4">
+          {stepIndex > 0 ? (
+            <button
+              onClick={handleBack}
+              className="text-sm text-white/70 hover:text-white transition"
+            >
+              Volver
+            </button>
+          ) : (
+            <span className="text-sm text-white/40">Inicio</span>
+          )}
+          <span className="text-xs uppercase tracking-[0.2em] text-white/50">
+            Paso {stepIndex + 1} de {stepOrder.length}
+          </span>
+        </div>
+
         <AnimatePresence mode="wait">
           {/* STEP 1: DEMO */}
           {step === 'demo' && (
@@ -177,18 +197,18 @@ export const OnboardingStylistFlow = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="space-y-6"
+              className="space-y-6 pb-24"
             >
               <div className="space-y-3">
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 text-xs uppercase tracking-[0.2em] text-white/70">
                   <Sparkles className="w-3.5 h-3.5" />
                   Demo sin costo
                 </div>
-                <h1 className="text-3xl font-semibold leading-tight">
+                <h1 className="text-2xl sm:text-3xl font-semibold leading-tight">
                   Probá el efecto del estilista IA en segundos
                 </h1>
                 <p className="text-white/70">
-                  Mirá un antes y después realista. Cuando quieras, subís tu foto y la IA respeta tu pose y tu estilo.
+                  Mirá un antes y después realista. Si venís desde Instagram, en menos de un minuto podés probarlo con tu propia foto.
                 </p>
               </div>
 
@@ -212,7 +232,7 @@ export const OnboardingStylistFlow = () => {
                   </button>
                 </div>
 
-                <div className="relative overflow-hidden rounded-2xl bg-black/30 h-[52vh] max-h-[520px] min-h-[340px] p-2">
+                <div className="relative overflow-hidden rounded-2xl bg-black/30 h-[34vh] sm:h-[40vh] max-h-[420px] min-h-[220px] p-2">
                   <AnimatePresence mode="wait">
                     <motion.img
                       key={demoMode}
@@ -231,7 +251,7 @@ export const OnboardingStylistFlow = () => {
                   </span>
 
                   {demoMode === 'after' && !isGenerating && (
-                    <div className="absolute bottom-3 left-3 flex gap-2 text-[11px]">
+                    <div className="absolute bottom-3 left-3 flex gap-2 text-[10px] sm:text-[11px]">
                       <span className="px-2.5 py-1 rounded-full bg-white/15 border border-white/20">Top aplicado</span>
                       <span className="px-2.5 py-1 rounded-full bg-white/15 border border-white/20">Bottom aplicado</span>
                     </div>
@@ -279,7 +299,7 @@ export const OnboardingStylistFlow = () => {
 
                 <div className="mt-4 space-y-3">
                   <div className="text-xs uppercase tracking-[0.2em] text-white/50">Prendas elegidas</div>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-2xl p-2.5">
                       <div className="w-12 h-12 rounded-xl overflow-hidden bg-white/10">
                         <img src={DEMO_ITEMS.top} alt="Prenda superior" className="w-full h-full object-cover" />
@@ -300,20 +320,20 @@ export const OnboardingStylistFlow = () => {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-2 text-xs text-white/70">
+                  <div className="grid grid-cols-3 gap-2 text-[11px] sm:text-xs text-white/70">
                     <div className="rounded-xl bg-white/5 px-3 py-2 text-center">Pose intacta</div>
                     <div className="rounded-xl bg-white/5 px-3 py-2 text-center">Look realista</div>
-                    <div className="rounded-xl bg-white/5 px-3 py-2 text-center">Listo en 60s</div>
+                    <div className="rounded-xl bg-white/5 px-3 py-2 text-center">Listo en segundos</div>
                   </div>
                 </div>
               </div>
 
-              <div className="space-y-3">
+              <div className="space-y-3 sticky bottom-0 z-20 bg-gradient-to-t from-[#05060a] via-[#05060a]/95 to-transparent pt-4 pb-[max(env(safe-area-inset-bottom),12px)]">
                 <button
                   onClick={() => goToAuth('signup')}
                   className="w-full py-4 bg-white text-black font-bold text-lg rounded-2xl shadow-[0_20px_60px_rgba(255,255,255,0.25)] hover:scale-[1.01] transition"
                 >
-                  Probar con mi foto
+                  Probar con mi foto gratis
                 </button>
                 <button
                   onClick={handleNext}
@@ -508,7 +528,7 @@ const WizardStep = ({ title, subtitle, children, onNext, onSkip, canProceed }: W
     initial={{ opacity: 0, x: 20 }}
     animate={{ opacity: 1, x: 0 }}
     exit={{ opacity: 0, x: -20 }}
-    className="space-y-6"
+    className="space-y-6 pb-24"
   >
     <div>
       <h2 className="text-2xl font-semibold mb-2">{title}</h2>
@@ -517,7 +537,7 @@ const WizardStep = ({ title, subtitle, children, onNext, onSkip, canProceed }: W
     <div className="max-h-[50vh] overflow-y-auto pr-2">
       {children}
     </div>
-    <div className="space-y-3">
+    <div className="space-y-3 sticky bottom-0 z-20 bg-gradient-to-t from-[#05060a] via-[#05060a]/95 to-transparent pt-4 pb-[max(env(safe-area-inset-bottom),12px)]">
       <button
         onClick={onNext}
         disabled={!canProceed}

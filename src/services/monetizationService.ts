@@ -1,4 +1,4 @@
-import { ClothingItem } from '../types';
+import { ClothingItem } from '../../types';
 
 // Feature Flags Keys
 export const MONETIZATION_FLAGS = {
@@ -197,8 +197,118 @@ export function buildLookSearchTerm(items: ClothingItem[]): string {
     return `${normalized} outfit mujer`.trim();
 }
 
+// ============================================================================
+// SUPABASE-BACKED SPONSORS SYSTEM
+// ============================================================================
+
+import { supabase } from '../lib/supabase';
+
+// DB-backed sponsor type (matches Supabase schema)
+export interface DBSponsor {
+    id: string;
+    slug: string;
+    name: string;
+    logo_url: string | null;
+    website_url: string;
+    icon: string;
+    description: string;
+    cta_text: string;
+    match_categories: string[];
+    match_vibes: string[];
+    match_colors: string[];
+    priority: number;
+    is_active: boolean;
+}
+
+// Cache for sponsors (TTL: 5 minutes)
+let sponsorsCache: SponsoredPlacement[] | null = null;
+let sponsorsCacheTime: number = 0;
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Convert DB sponsor to SponsoredPlacement format
+ */
+function dbSponsorToPlacement(sponsor: DBSponsor): SponsoredPlacement {
+    return {
+        id: sponsor.id,
+        name: sponsor.name,
+        url: sponsor.website_url,
+        icon: sponsor.icon,
+        description: sponsor.description,
+        cta: sponsor.cta_text,
+        matchTags: [...sponsor.match_categories, ...sponsor.match_vibes, ...sponsor.match_colors],
+        priority: sponsor.priority,
+    };
+}
+
+/**
+ * Fetch sponsors from Supabase (with caching)
+ */
+export async function fetchSponsorsFromDB(): Promise<SponsoredPlacement[]> {
+    // Check cache first
+    if (sponsorsCache && Date.now() - sponsorsCacheTime < CACHE_TTL_MS) {
+        return sponsorsCache;
+    }
+
+    try {
+        const { data, error } = await supabase
+            .from('sponsors')
+            .select('*')
+            .eq('is_active', true)
+            .order('priority', { ascending: false });
+
+        if (error) {
+            console.error('[Sponsors] DB fetch error:', error);
+            return SPONSORED_PLACEMENTS; // Fallback to hardcoded
+        }
+
+        if (!data || data.length === 0) {
+            console.warn('[Sponsors] No active sponsors in DB, using fallback');
+            return SPONSORED_PLACEMENTS;
+        }
+
+        // Convert and cache
+        sponsorsCache = data.map(dbSponsorToPlacement);
+        sponsorsCacheTime = Date.now();
+        return sponsorsCache;
+
+    } catch (err) {
+        console.error('[Sponsors] Unexpected error:', err);
+        return SPONSORED_PLACEMENTS; // Fallback to hardcoded
+    }
+}
+
+/**
+ * Track a sponsor click for analytics
+ */
+export async function trackSponsorClick(
+    sponsorId: string,
+    context: 'dupe_finder' | 'outfit_result' | 'shop_the_look' | 'fit_result' | 'shopping_gap',
+    metadata?: { itemCategory?: string; searchTerm?: string }
+): Promise<void> {
+    try {
+        // Get current user (might be null for anonymous)
+        const { data: { user } } = await supabase.auth.getUser();
+
+        // Note: Type assertion needed until migration is applied and types are regenerated
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase.from('sponsor_clicks') as any).insert({
+            sponsor_id: sponsorId,
+            user_id: user?.id || null,
+            placement_context: context,
+            item_category: metadata?.itemCategory || null,
+            search_term: metadata?.searchTerm || null,
+        });
+
+    } catch (err) {
+        // Silently fail - tracking shouldn't break the app
+        console.warn('[Sponsors] Click tracking failed:', err);
+    }
+}
+
 /**
  * Return sponsored placements based on item metadata or search term
+ * Now fetches from DB with fallback to hardcoded
  */
 export function getSponsoredPlacements(
     searchTerm: string,
@@ -206,6 +316,9 @@ export function getSponsoredPlacements(
     limit = 2
 ): SponsoredPlacement[] {
     if (!getFeatureFlag(MONETIZATION_FLAGS.ENABLE_SPONSORED_PLACEMENTS)) return [];
+
+    // Use cached sponsors or fallback to hardcoded
+    const sponsors = sponsorsCache || SPONSORED_PLACEMENTS;
 
     const tokens = new Set(
         searchTerm
@@ -220,7 +333,7 @@ export function getSponsoredPlacements(
         item.metadata.vibe_tags.forEach((tag) => tokens.add(tag.toLowerCase()));
     }
 
-    const scored = SPONSORED_PLACEMENTS.map((placement) => {
+    const scored = sponsors.map((placement) => {
         const matches = placement.matchTags?.filter((tag) => tokens.has(tag.toLowerCase())).length ?? 0;
         const score = (placement.priority ?? 0) + matches * 2;
         return { placement, score };
@@ -229,10 +342,36 @@ export function getSponsoredPlacements(
         .sort((a, b) => b.score - a.score)
         .map(({ placement }) => placement);
 
-    const fallback = [...SPONSORED_PLACEMENTS].sort(
+    const fallback = [...sponsors].sort(
         (a, b) => (b.priority ?? 0) - (a.priority ?? 0)
     );
 
     const placements = scored.length > 0 ? scored : fallback;
     return placements.slice(0, limit);
 }
+
+/**
+ * Async version of getSponsoredPlacements that fetches from DB first
+ */
+export async function getSponsoredPlacementsAsync(
+    searchTerm: string,
+    item?: ClothingItem,
+    limit = 2
+): Promise<SponsoredPlacement[]> {
+    if (!getFeatureFlag(MONETIZATION_FLAGS.ENABLE_SPONSORED_PLACEMENTS)) return [];
+
+    // Fetch from DB (uses cache if available)
+    await fetchSponsorsFromDB();
+
+    // Now use the sync version which will use cached data
+    return getSponsoredPlacements(searchTerm, item, limit);
+}
+
+/**
+ * Invalidate sponsors cache (call when sponsors are updated)
+ */
+export function invalidateSponsorsCache(): void {
+    sponsorsCache = null;
+    sponsorsCacheTime = 0;
+}
+

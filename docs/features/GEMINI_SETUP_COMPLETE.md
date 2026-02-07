@@ -63,7 +63,7 @@
 ```bash
 File: .env.local (NOT committed to git)
 Variable: VITE_GEMINI_API_KEY
-Value: AIzaSyCd7P01moiQLSu425iB2g5b68OKIw60oIk
+Value: <REDACTED>
 ```
 
 #### Production (Supabase)

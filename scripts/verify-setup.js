@@ -59,7 +59,7 @@ const checks = [
     name: '.env.local file exists',
     check: () => envExists,
     severity: 'error',
-    help: 'Copy .env.local.example to .env.local and configure your API keys',
+    help: 'Copy .env.example to .env.local and configure your API keys',
   },
   {
     name: 'VITE_GEMINI_API_KEY is set',
@@ -124,7 +124,7 @@ if (!hasErrors && !hasWarnings) {
   console.log(`${colors.red}${symbols.error} Configuration errors found. Please fix them before continuing.${colors.reset}`);
   console.log('');
   console.log(`${colors.cyan}Quick fix:${colors.reset}`);
-  console.log(`  1. Copy example file: ${colors.blue}cp .env.local.example .env.local${colors.reset}`);
+  console.log(`  1. Copy example file: ${colors.blue}cp .env.example .env.local${colors.reset}`);
   console.log(`  2. Edit .env.local with your API keys`);
   console.log(`  3. Run this script again: ${colors.blue}npm run verify-setup${colors.reset}`);
   process.exit(1);

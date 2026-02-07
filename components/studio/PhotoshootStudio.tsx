@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import type { Variants } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ROUTES } from '../../src/routes';
 import type { ClothingItem, ClothingSlot, GenerationPreset, SlotSelection, GenerationFit } from '../../types';
@@ -60,8 +61,9 @@ const QUICK_CATEGORIES: Array<{ id: string; label: string; icon: string }> = [
   { id: 'outerwear', label: 'Campera/Abrigo', icon: '🧥' },
   { id: 'shoes', label: 'Zapatos', icon: '👟' },
 ];
+const EASE_STANDARD: [number, number, number, number] = [0.22, 1, 0.36, 1];
 
-const containerVariants = {
+const containerVariants: Variants = {
   hidden: { opacity: 0 },
   show: {
     opacity: 1,
@@ -69,9 +71,9 @@ const containerVariants = {
   }
 };
 
-const itemVariants = {
+const itemVariants: Variants = {
   hidden: { opacity: 0, y: 12 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: 'easeOut' } }
+  show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: EASE_STANDARD } }
 };
 
 const studioTheme = {
@@ -229,11 +231,12 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
 
   // Remove restriction: All users can use Ultra (it just costs more credits)
   // No longer force flash for non-premium users
-  // useEffect(() => {
-  //   if (!subscription.isPremium && generationQuality === 'pro') {
-  //     setGenerationQuality('flash');
-  //   }
-  // }, [subscription.isPremium, generationQuality]);
+  useEffect(() => {
+    // Server enforces Ultra (pro model) as Premium-only. Keep UI aligned.
+    if (!subscription.isPremium && generationQuality === 'pro') {
+      setGenerationQuality('flash');
+    }
+  }, [subscription.isPremium, generationQuality]);
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 1024);
@@ -681,7 +684,7 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
         return;
       }
 
-      if (!image.clothingItems || image.clothingItems.length === 0) {
+      if (!image.itemIds || Object.keys(image.itemIds).length === 0) {
         toast.error('No hay prendas seleccionadas para guardar');
         return;
       }

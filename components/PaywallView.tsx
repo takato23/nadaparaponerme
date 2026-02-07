@@ -3,7 +3,7 @@ import type { SubscriptionPlan, Subscription } from '../types-payment';
 import * as paymentService from '../src/services/paymentService';
 import Loader from './Loader';
 import { Card } from './ui/Card';
-import { PAYMENTS_ENABLED, USD_ENABLED, V1_SAFE_MODE } from '../src/config/runtime';
+import { PAYMENTS_ENABLED, USD_ENABLED } from '../src/config/runtime';
 import * as analytics from '../src/services/analyticsService';
 
 interface PaywallViewProps {
@@ -19,7 +19,7 @@ const PaywallView = ({ onClose, featureName, featureDescription }: PaywallViewPr
   const [loading, setLoading] = useState(true);
   const [upgrading, setUpgrading] = useState(false);
   const [error, setError] = useState<string>('');
-  const [currency] = useState<'ARS' | 'USD'>('ARS');
+  const [currency, setCurrency] = useState<'ARS' | 'USD'>('ARS');
 
   useEffect(() => {
     loadData();
@@ -50,15 +50,15 @@ const PaywallView = ({ onClose, featureName, featureDescription }: PaywallViewPr
   const handleUpgrade = async (tier: 'pro' | 'premium') => {
     try {
       analytics.trackCheckoutStart(tier, currency);
-      if (V1_SAFE_MODE && !PAYMENTS_ENABLED) {
-        setError('Pagos desactivados durante la V1 (beta). Próximamente vas a poder hacer upgrade.');
+      if (!PAYMENTS_ENABLED) {
+        setError('Pagos desactivados. Próximamente vas a poder hacer upgrade.');
         return;
       }
 
       setUpgrading(true);
       setError('');
 
-      await paymentService.upgradeSubscription(tier);
+      await paymentService.startCheckout(tier, currency);
       // User will be redirected to MercadoPago, so no need to update state
     } catch (err) {
       console.error('Error upgrading subscription:', err);
@@ -81,7 +81,7 @@ const PaywallView = ({ onClose, featureName, featureDescription }: PaywallViewPr
   };
 
   const canUpgradeTo = (planId: string) => {
-    if (V1_SAFE_MODE && !PAYMENTS_ENABLED) return false;
+    if (!PAYMENTS_ENABLED) return false;
     if (!currentSubscription) return planId !== 'free';
 
     const currentTier = currentSubscription.tier;
@@ -130,7 +130,22 @@ const PaywallView = ({ onClose, featureName, featureDescription }: PaywallViewPr
           {/* Currency Label */}
           <div className="flex items-center justify-center gap-2 mt-4">
             {USD_ENABLED ? (
-              <span className="text-xs text-text-secondary dark:text-gray-400">ARS · USD</span>
+              <div className="inline-flex items-center gap-2 rounded-full border border-gray-200 dark:border-gray-700 p-1 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setCurrency('ARS')}
+                  className={`px-3 py-1 rounded-full ${currency === 'ARS' ? 'bg-gray-900 text-white' : 'text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
+                >
+                  ARS
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCurrency('USD')}
+                  className={`px-3 py-1 rounded-full ${currency === 'USD' ? 'bg-gray-900 text-white' : 'text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
+                >
+                  USD
+                </button>
+              </div>
             ) : (
               <span className="text-xs text-text-secondary dark:text-gray-400">Precios en ARS</span>
             )}
@@ -145,10 +160,10 @@ const PaywallView = ({ onClose, featureName, featureDescription }: PaywallViewPr
               <p className="text-red-600 dark:text-red-400 text-sm">{error}</p>
             </div>
           )}
-          {V1_SAFE_MODE && !PAYMENTS_ENABLED && !error && (
+          {!PAYMENTS_ENABLED && !error && (
             <div className="mb-6 p-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
               <p className="text-amber-700 dark:text-amber-300 text-sm">
-                Beta: pagos desactivados por seguridad. La app funciona en modo Free mientras validamos el checkout.
+                Por ahora, los pagos están desactivados. La app funciona en modo Free mientras terminamos de validar el checkout.
               </p>
             </div>
           )}
@@ -303,7 +318,7 @@ const PaywallView = ({ onClose, featureName, featureDescription }: PaywallViewPr
           {/* Info Footer */}
           <div className="mt-8 text-center">
             <p className="text-sm text-text-secondary dark:text-gray-400">
-              💳 Pago seguro procesado por <strong>MercadoPago</strong>
+              💳 Pago seguro procesado por <strong>{currency === 'USD' ? 'Paddle' : 'MercadoPago'}</strong>
             </p>
             <p className="text-xs text-text-secondary dark:text-gray-400 mt-2">
               Cancelá cuando quieras. Sin cargos ocultos.

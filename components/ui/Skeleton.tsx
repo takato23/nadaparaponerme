@@ -63,4 +63,10 @@ export const ListItemSkeleton = () => (
   </Card>
 );
 
+export const CardSkeleton = OutfitCardSkeleton;
+
+export const TextSkeleton = () => <Skeleton variant="text" width="100%" />;
+
+export const AvatarSkeleton = () => <Skeleton variant="circular" width={40} height={40} />;
+
 export default Skeleton;

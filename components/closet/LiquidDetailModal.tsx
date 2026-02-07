@@ -37,6 +37,8 @@ export default function LiquidDetailModal({ item, isOpen, onClose }: LiquidDetai
 
     if (!localItem) return null;
 
+    const dupeItems = Array.isArray(dupeResult?.dupes) ? dupeResult.dupes : [];
+
     const hasRealImage = isRealImage(localItem.imageDataUrl || (localItem as any).image_url);
 
     const handleBackFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -425,10 +427,10 @@ export default function LiquidDetailModal({ item, isOpen, onClose }: LiquidDetai
                                             <Loader size="large" />
                                             <p className="text-gray-500 mt-4">Buscando alternativas...</p>
                                         </div>
-                                    ) : dupeResult && dupeResult.dupes.length > 0 ? (
+                                    ) : dupeResult && dupeItems.length > 0 ? (
                                         <div className="space-y-3">
                                             <h3 className="font-bold text-lg mb-4">Alternativas más baratas:</h3>
-                                            {dupeResult.dupes.slice(0, 5).map((dupe, idx) => (
+                                            {dupeItems.slice(0, 5).map((dupe, idx) => (
                                                 <a
                                                     key={idx}
                                                     href={dupe.shop_url}
@@ -452,6 +454,23 @@ export default function LiquidDetailModal({ item, isOpen, onClose }: LiquidDetai
                                                     </div>
                                                 </a>
                                             ))}
+                                        </div>
+                                    ) : dupeResult && dupeItems.length === 0 ? (
+                                        <div className="flex flex-col items-center justify-center py-12">
+                                            <div className="w-20 h-20 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center mb-4">
+                                                <span className="material-symbols-outlined text-4xl text-orange-500">search_off</span>
+                                            </div>
+                                            <p className="text-gray-700 dark:text-gray-300 font-medium mb-2">No encontramos alternativas</p>
+                                            <p className="text-gray-500 text-sm text-center max-w-xs mb-4">
+                                                Probá con otra prenda más común o intentá de nuevo más tarde.
+                                            </p>
+                                            <button
+                                                onClick={handleFindDupes}
+                                                className="px-6 py-2 rounded-xl bg-primary/10 text-primary font-medium hover:bg-primary/20 transition-colors flex items-center gap-2"
+                                            >
+                                                <span className="material-symbols-outlined text-lg">refresh</span>
+                                                Reintentar búsqueda
+                                            </button>
                                         </div>
                                     ) : (
                                         <div className="flex flex-col items-center justify-center py-12">

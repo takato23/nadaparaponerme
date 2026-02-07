@@ -57,6 +57,7 @@ export interface Subscription {
   // Payment details
   payment_method: PaymentMethod;
   mercadopago_subscription_id?: string;
+  paddle_subscription_id?: string;
 
   // Usage tracking
   ai_generations_used: number;
@@ -75,7 +76,8 @@ export type PaymentMethod =
   | 'mercadopago_debit_card'
   | 'mercadopago_cash'
   | 'mercadopago_bank_transfer'
-  | 'stripe_card';
+  | 'stripe_card'
+  | 'paddle_card';
 
 export interface PaymentMethodDetails {
   id: string;
@@ -117,7 +119,7 @@ export interface PaymentTransaction {
   status: PaymentStatus;
 
   // Payment provider details
-  provider: 'mercadopago' | 'stripe';
+  provider: 'mercadopago' | 'stripe' | 'paddle';
   provider_transaction_id: string;
   provider_payment_method_id?: string;
 
@@ -278,13 +280,13 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     price_monthly_usd: 0,
     features: [
       'Hasta 50 prendas en tu armario',
-      '10 créditos IA por mes (Rápido)',
+      '200 créditos IA por mes (Rápido)',
       'Análisis básico de color',
       'Outfits guardados ilimitados',
       'Compartir en comunidad',
     ],
     limits: {
-      ai_generations_per_month: 10,
+      ai_generations_per_month: 200,
       max_closet_items: 50,
       max_saved_outfits: -1,  // Unlimited
       can_use_virtual_tryon: true,  // Enabled during testing phase
@@ -303,7 +305,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     features: [
       'Todo lo de Free +',
       'Prendas ilimitadas',
-      '150 créditos IA por mes',
+      '300 créditos IA por mes',
       'Probador virtual Rápido',
       'Ultra habilitado',
       'AI Fashion Designer',
@@ -313,7 +315,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
       'Sin anuncios',
     ],
     limits: {
-      ai_generations_per_month: 150,
+      ai_generations_per_month: 300,
       max_closet_items: -1,  // Unlimited
       max_saved_outfits: -1,  // Unlimited
       can_use_virtual_tryon: true,

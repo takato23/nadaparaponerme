@@ -34,40 +34,49 @@ export function useAuth(): UseAuthReturn {
 
   // Initialize auth state
   useEffect(() => {
-    if (useSupabaseAuth) {
-      // Use Supabase authentication
-      initSupabaseAuth();
-    } else {
+    if (!useSupabaseAuth) {
       // Use localStorage authentication (legacy)
       initLocalStorageAuth();
+      return;
     }
-  }, [useSupabaseAuth]);
 
-  const initSupabaseAuth = async () => {
-    setLoading(true);
-    try {
-      // Get current session
-      const { data: { session } } = await supabase.auth.getSession();
-      setUser(session?.user ?? null);
+    let isMounted = true;
+    let unsubscribe: (() => void) | null = null;
 
-      // Listen for auth changes
-      const { data: { subscription } } = supabase.auth.onAuthStateChange(
-        (_event, session) => {
-          setUser(session?.user ?? null);
+    const initSupabaseAuth = async () => {
+      setLoading(true);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!isMounted) return;
+        setUser(session?.user ?? null);
+
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(
+          (_event, authSession) => {
+            if (!isMounted) return;
+            setUser(authSession?.user ?? null);
+          }
+        );
+        unsubscribe = () => subscription.unsubscribe();
+      } catch (err) {
+        if (!isMounted) return;
+        console.error('Failed to initialize Supabase auth:', err);
+        setError('Failed to initialize authentication');
+      } finally {
+        if (isMounted) {
+          setLoading(false);
         }
-      );
+      }
+    };
 
-      // Cleanup subscription on unmount
-      return () => {
-        subscription.unsubscribe();
-      };
-    } catch (err) {
-      console.error('Failed to initialize Supabase auth:', err);
-      setError('Failed to initialize authentication');
-    } finally {
-      setLoading(false);
-    }
-  };
+    void initSupabaseAuth();
+
+    return () => {
+      isMounted = false;
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
+  }, [useSupabaseAuth]);
 
   const initLocalStorageAuth = () => {
     // Legacy authentication check

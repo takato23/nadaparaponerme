@@ -20,9 +20,14 @@ VITE_SUPABASE_ANON_KEY=tu_supabase_anon_key
 ```
 📍 **Dónde encontrarlas**: [Supabase Dashboard](https://app.supabase.com) → Tu Proyecto → Settings → API
 
-### 🤖 Google Gemini AI
+### 🤖 Google Gemini AI (seguro)
+**Producción (Vercel): NO configures `VITE_GEMINI_API_KEY`.**
+
+Esta app bloquea explícitamente el uso de `VITE_GEMINI_API_KEY` en builds de producción para evitar exponer la key en el bundle del navegador.
+
+**Backend (Supabase secrets):**
 ```
-VITE_GEMINI_API_KEY=tu_gemini_api_key
+GEMINI_API_KEY=tu_gemini_api_key
 ```
 📍 **Dónde obtenerla**: [Google AI Studio](https://makersuite.google.com/app/apikey)
 
@@ -33,10 +38,57 @@ VITE_OPENWEATHER_API_KEY=tu_openweather_api_key
 📍 **Dónde obtenerla**: [OpenWeatherMap API Keys](https://home.openweathermap.org/api_keys)
 
 ### 💳 MercadoPago (Opcional - solo si usas pagos)
-```
+**Frontend (Vercel env):**
+```bash
 VITE_MERCADOPAGO_PUBLIC_KEY=tu_mercadopago_public_key
+# Habilitar SOLO cuando tengas los webhooks desplegados y probados end-to-end:
+VITE_PAYMENTS_ENABLED=true
 ```
-📍 **Dónde obtenerla**: [MercadoPago Developers](https://www.mercadopago.com.ar/developers/panel)
+
+**Backend (Supabase secrets, NO en Vercel):**
+```bash
+MERCADOPAGO_ACCESS_TOKEN=APP_USR-...
+# Recomendado: token en URL para proteger el endpoint público (webhooks requieren verify_jwt=false).
+MERCADOPAGO_WEBHOOK_TOKEN=tu_webhook_token_random
+# Recomendado: activar firma de webhook (si lo configurás en MercadoPago Developers)
+MERCADOPAGO_WEBHOOK_SECRET=tu_webhook_signing_secret
+# Base URL para callbacks (si usás dominio propio) o allowlist de orígenes permitidos.
+APP_URL=https://tu-dominio.com
+# APP_URL_ALLOWLIST=https://tu-dominio.com,https://tu-proyecto.vercel.app
+```
+
+**Webhook endpoint (configurar en MercadoPago Developers):**
+`https://<SUPABASE_PROJECT>.supabase.co/functions/v1/mercadopago-webhook?token=<MERCADOPAGO_WEBHOOK_TOKEN>`
+
+⚠️ **Importante**:
+- No pongas `MERCADOPAGO_ACCESS_TOKEN` en Vercel (no lo usa el frontend y es un secreto).
+- Si ya lo agregaste en Vercel o lo compartiste por error, rotalo en MercadoPago y en Supabase Secrets.
+
+**Deploy de Edge Functions (pagos):**
+```bash
+export SUPABASE_ACCESS_TOKEN=...
+SUPABASE_PROJECT_REF=<SUPABASE_PROJECT> ./scripts/deploy-supabase-functions.sh payments
+```
+Esto despliega `create-payment-preference`, `create-mp-preapproval`, `process-payment` y deja los webhooks públicos (`verify_jwt=false`).
+
+### 🌍 Paddle (Opcional - pagos internacionales)
+Paddle funciona como Merchant of Record (útil si cobrás internacionalmente desde Argentina).
+
+**Frontend (Vercel env):**
+```
+VITE_USD_ENABLED=true
+VITE_PADDLE_CLIENT_TOKEN=tu_paddle_client_token
+```
+
+**Backend (Supabase secrets, NO en Vercel):**
+```
+PADDLE_API_KEY=tu_paddle_api_key
+PADDLE_WEBHOOK_SECRET_KEY=tu_webhook_secret
+PADDLE_PRICE_ID_PRO=pri_...
+PADDLE_PRICE_ID_PREMIUM=pri_...
+APP_URL=https://tu-dominio.com
+```
+Webhook endpoint (en Paddle): `https://<SUPABASE_PROJECT>.supabase.co/functions/v1/paddle-webhook`
 
 ---
 
@@ -100,7 +152,6 @@ En la sección **"Environment Variables"**:
 ```
 VITE_SUPABASE_URL
 VITE_SUPABASE_ANON_KEY
-VITE_GEMINI_API_KEY
 VITE_OPENWEATHER_API_KEY
 VITE_MERCADOPAGO_PUBLIC_KEY (opcional)
 ```
@@ -166,9 +217,9 @@ vercel env add VITE_SUPABASE_URL
 vercel env add VITE_SUPABASE_ANON_KEY
 # Pega el valor cuando te lo pida
 
-# Gemini AI
-vercel env add VITE_GEMINI_API_KEY
-# Pega el valor cuando te lo pida
+#
+# Gemini AI (producción): se configura en Supabase Secrets (NO en Vercel)
+# supabase secrets set GEMINI_API_KEY=<tu_key>
 
 # OpenWeather
 vercel env add VITE_OPENWEATHER_API_KEY
@@ -272,7 +323,7 @@ Después de agregar dominio personalizado:
 **Causa**: API key incorrecta o cuota excedida
 
 **Solución**:
-1. Verifica `VITE_GEMINI_API_KEY` en Vercel
+1. Verifica `GEMINI_API_KEY` en Supabase Secrets (NO en Vercel)
 2. Revisa logs de Edge Functions en Supabase
 3. Verifica cuota en [Google AI Studio](https://makersuite.google.com)
 

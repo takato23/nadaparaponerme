@@ -10,7 +10,33 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Environment, Float, Lightformer } from '@react-three/drei';
-import * as THREE from 'three';
+import {
+    ACESFilmicToneMapping,
+    AlwaysStencilFunc,
+    BufferGeometry,
+    CanvasTexture,
+    CatmullRomCurve3,
+    ClampToEdgeWrapping,
+    Color,
+    ConeGeometry,
+    CubicBezierCurve3,
+    EqualStencilFunc,
+    Float32BufferAttribute,
+    FrontSide,
+    KeepStencilOp,
+    MathUtils,
+    NoColorSpace,
+    NotEqualStencilFunc,
+    Quaternion,
+    ReplaceStencilOp,
+    RepeatWrapping,
+    Shape,
+    ShapeGeometry,
+    SRGBColorSpace,
+    TubeGeometry,
+    Vector3,
+} from 'three';
+import type { Curve, Group, Mesh } from 'three';
 
 const STENCIL_REF_APERTURE = 1;
 const STENCIL_REF_EYE_REGION = 2;
@@ -30,9 +56,9 @@ const V27_TUNING = {
     },
     lights: {
         ambient: 0.35,
-        key: { intensity: 1.85, pos: new THREE.Vector3(5, 5.2, 6.2) },
-        fill: { intensity: 0.55, pos: new THREE.Vector3(-4.5, 1.0, 5.2) },
-        rim: { intensity: 0.45, pos: new THREE.Vector3(0.0, 2.2, -3.2) },
+        key: { intensity: 1.85, pos: new Vector3(5, 5.2, 6.2) },
+        fill: { intensity: 0.55, pos: new Vector3(-4.5, 1.0, 5.2) },
+        rim: { intensity: 0.45, pos: new Vector3(0.0, 2.2, -3.2) },
     },
     // 1) Aperture (what part of the eyeball is visible)
     aperture: {
@@ -55,8 +81,8 @@ const V27_TUNING = {
     rim: {
         rimRadius: 0.043,
         waterlineRadius: 0.026,
-        rimPos: new THREE.Vector3(0, -0.01, 1.01),
-        waterlinePos: new THREE.Vector3(0, -0.012, 1.015),
+        rimPos: new Vector3(0, -0.01, 1.01),
+        waterlinePos: new Vector3(0, -0.012, 1.015),
         rimCurve: { wMul: 1.03, hMul: 1.01, upperK: 0.8, lowerK: 0.72, segments: 240, radial: 16 },
         waterlineCurve: { wMul: 0.99, hMul: 0.92, upperK: 0.78, lowerK: 0.7, segments: 210, radial: 16 },
     },
@@ -72,7 +98,7 @@ const V27_TUNING = {
         radius: 0.055,
         segments: 210,
         radial: 12,
-        pos: new THREE.Vector3(0, -0.016, 1.002),
+        pos: new Vector3(0, -0.016, 1.002),
     },
     // Lid ribbon (procedural loft)
     lids: {
@@ -131,7 +157,7 @@ export type EyeColorKey = keyof typeof EYE_COLORS;
 type EyeColorScheme = (typeof EYE_COLORS)[EyeColorKey];
 type PointerRef = React.MutableRefObject<{ x: number; y: number }>;
 export type Eye3DVariant = 'playground' | 'landing';
-export type Eye3DQuality = 'default' | 'watermark';
+export type Eye3DQuality = 'default' | 'medium' | 'watermark';
 
 function WatermarkFrameDriver({
     enabled,
@@ -176,7 +202,7 @@ function lerp(a: number, b: number, t: number) {
 }
 
 function createAlmondShape(w: number, h: number, upperK: number, lowerK: number) {
-    const s = new THREE.Shape();
+    const s = new Shape();
     s.moveTo(-w / 2, 0);
     s.bezierCurveTo(-w * 0.28, h * upperK, w * 0.28, h * upperK, w / 2, 0);
     s.bezierCurveTo(w * 0.28, -h * lowerK, -w * 0.28, -h * lowerK, -w / 2, 0);
@@ -184,30 +210,30 @@ function createAlmondShape(w: number, h: number, upperK: number, lowerK: number)
 }
 
 function createAlmondBezierCurves(w: number, h: number, upperK: number, lowerK: number) {
-    const p0 = new THREE.Vector3(-w / 2, 0, 0);
-    const p1 = new THREE.Vector3(-w * 0.28, h * upperK, 0);
-    const p2 = new THREE.Vector3(w * 0.28, h * upperK, 0);
-    const p3 = new THREE.Vector3(w / 2, 0, 0);
+    const p0 = new Vector3(-w / 2, 0, 0);
+    const p1 = new Vector3(-w * 0.28, h * upperK, 0);
+    const p2 = new Vector3(w * 0.28, h * upperK, 0);
+    const p3 = new Vector3(w / 2, 0, 0);
 
-    const p4 = new THREE.Vector3(w * 0.28, -h * lowerK, 0);
-    const p5 = new THREE.Vector3(-w * 0.28, -h * lowerK, 0);
+    const p4 = new Vector3(w * 0.28, -h * lowerK, 0);
+    const p5 = new Vector3(-w * 0.28, -h * lowerK, 0);
 
     return {
-        upper: new THREE.CubicBezierCurve3(p0, p1, p2, p3),
-        lower: new THREE.CubicBezierCurve3(p3, p4, p5, p0),
+        upper: new CubicBezierCurve3(p0, p1, p2, p3),
+        lower: new CubicBezierCurve3(p3, p4, p5, p0),
     } as const;
 }
 
 function createAlmondClosedCurve(w: number, h: number, upperK: number, lowerK: number) {
     const { upper, lower } = createAlmondBezierCurves(w, h, upperK, lowerK);
 
-    const pts: THREE.Vector3[] = [];
+    const pts: Vector3[] = [];
     const seg = 80;
     for (let i = 0; i <= seg; i++) pts.push(upper.getPoint(i / seg));
     for (let i = 1; i < seg; i++) pts.push(lower.getPoint(i / seg));
 
     // "centripetal" avoids overshoot at corners and reads more organic for rims.
-    return new THREE.CatmullRomCurve3(pts, true, 'centripetal');
+    return new CatmullRomCurve3(pts, true, 'centripetal');
 }
 
 function useIrisTexture(colorHex: string) {
@@ -283,8 +309,8 @@ function useIrisTexture(colorHex: string) {
 
         ctx.restore();
 
-        const tex = new THREE.CanvasTexture(canvas);
-        tex.colorSpace = THREE.SRGBColorSpace;
+        const tex = new CanvasTexture(canvas);
+        tex.colorSpace = SRGBColorSpace;
         tex.anisotropy = 8;
         return tex;
     }, [colorHex]);
@@ -338,8 +364,8 @@ function useScleraTexture() {
         ctx.fillStyle = vignette;
         ctx.fillRect(0, 0, w, h);
 
-        const tex = new THREE.CanvasTexture(canvas);
-        tex.colorSpace = THREE.SRGBColorSpace;
+        const tex = new CanvasTexture(canvas);
+        tex.colorSpace = SRGBColorSpace;
         tex.anisotropy = 8;
         return tex;
     }, []);
@@ -387,8 +413,8 @@ function useSocketVignetteAlpha() {
         }
         ctx.putImageData(img, 0, 0);
 
-        const tex = new THREE.CanvasTexture(canvas);
-        tex.colorSpace = THREE.NoColorSpace;
+        const tex = new CanvasTexture(canvas);
+        tex.colorSpace = NoColorSpace;
         tex.anisotropy = 4;
         return tex;
     }, []);
@@ -435,11 +461,11 @@ function useSocketVignetteMap() {
         }
         ctx.globalAlpha = 1;
 
-        const tex = new THREE.CanvasTexture(canvas);
-        tex.colorSpace = THREE.SRGBColorSpace;
+        const tex = new CanvasTexture(canvas);
+        tex.colorSpace = SRGBColorSpace;
         tex.anisotropy = 4;
-        tex.wrapS = THREE.ClampToEdgeWrapping;
-        tex.wrapT = THREE.ClampToEdgeWrapping;
+        tex.wrapS = ClampToEdgeWrapping;
+        tex.wrapT = ClampToEdgeWrapping;
         return tex;
     }, []);
 
@@ -500,8 +526,8 @@ function useApertureOcclusionAlpha() {
         }
         ctx.putImageData(img, 0, 0);
 
-        const tex = new THREE.CanvasTexture(canvas);
-        tex.colorSpace = THREE.NoColorSpace;
+        const tex = new CanvasTexture(canvas);
+        tex.colorSpace = NoColorSpace;
         tex.anisotropy = 4;
         return tex;
     }, []);
@@ -548,10 +574,10 @@ function useSkinMicroRoughnessMap() {
         }
         ctx.putImageData(img, 0, 0);
 
-        const tex = new THREE.CanvasTexture(canvas);
-        tex.colorSpace = THREE.NoColorSpace;
-        tex.wrapS = THREE.RepeatWrapping;
-        tex.wrapT = THREE.RepeatWrapping;
+        const tex = new CanvasTexture(canvas);
+        tex.colorSpace = NoColorSpace;
+        tex.wrapS = RepeatWrapping;
+        tex.wrapT = RepeatWrapping;
         tex.repeat.set(2, 2);
         tex.anisotropy = 8;
         return tex;
@@ -567,8 +593,8 @@ function useSkinMicroRoughnessMap() {
 }
 
 function Eyeball({ colors, mousePos }: { colors: EyeColorScheme; mousePos: PointerRef }) {
-    const gazeRef = useRef<THREE.Group>(null);
-    const pupilRef = useRef<THREE.Mesh>(null);
+    const gazeRef = useRef<Group>(null);
+    const pupilRef = useRef<Mesh>(null);
 
     const irisTex = useIrisTexture(colors.iris);
     const scleraTex = useScleraTexture();
@@ -577,10 +603,10 @@ function Eyeball({ colors, mousePos }: { colors: EyeColorScheme; mousePos: Point
         () => ({
             stencilWrite: true,
             stencilRef: STENCIL_REF_APERTURE,
-            stencilFunc: THREE.EqualStencilFunc,
-            stencilFail: THREE.KeepStencilOp,
-            stencilZFail: THREE.KeepStencilOp,
-            stencilZPass: THREE.KeepStencilOp,
+            stencilFunc: EqualStencilFunc,
+            stencilFail: KeepStencilOp,
+            stencilZFail: KeepStencilOp,
+            stencilZPass: KeepStencilOp,
         }),
         []
     );
@@ -591,10 +617,10 @@ function Eyeball({ colors, mousePos }: { colors: EyeColorScheme; mousePos: Point
 
         // Rotate the eyeball (avoids the "white interior gap" you get when sliding flat iris planes)
         if (gazeRef.current) {
-            const targetYaw = THREE.MathUtils.clamp(x * 0.52, -0.52, 0.52);
-            const targetPitch = THREE.MathUtils.clamp(-y * 0.34, -0.34, 0.34);
-            gazeRef.current.rotation.y = THREE.MathUtils.damp(gazeRef.current.rotation.y, targetYaw, 9, delta);
-            gazeRef.current.rotation.x = THREE.MathUtils.damp(gazeRef.current.rotation.x, targetPitch, 9, delta);
+            const targetYaw = MathUtils.clamp(x * 0.52, -0.52, 0.52);
+            const targetPitch = MathUtils.clamp(-y * 0.34, -0.34, 0.34);
+            gazeRef.current.rotation.y = MathUtils.damp(gazeRef.current.rotation.y, targetYaw, 9, delta);
+            gazeRef.current.rotation.x = MathUtils.damp(gazeRef.current.rotation.x, targetPitch, 9, delta);
         }
 
         if (pupilRef.current) {
@@ -602,9 +628,9 @@ function Eyeball({ colors, mousePos }: { colors: EyeColorScheme; mousePos: Point
             const dist = Math.min(1, Math.sqrt(x * x + y * y));
             const base = lerp(1.12, 0.88, dist);
             const pulse = 0.03 * Math.sin(t * 6.2) + 0.02 * Math.sin(t * 2.1);
-            const s = THREE.MathUtils.clamp(base + pulse, 0.72, 1.28);
+            const s = MathUtils.clamp(base + pulse, 0.72, 1.28);
             const current = pupilRef.current.scale.x;
-            const next = THREE.MathUtils.damp(current, s, 10, delta);
+            const next = MathUtils.damp(current, s, 10, delta);
             pupilRef.current.scale.setScalar(next);
         }
     });
@@ -633,7 +659,7 @@ function Eyeball({ colors, mousePos }: { colors: EyeColorScheme; mousePos: Point
                         transparent
                         roughness={0.42}
                         metalness={0}
-                        emissive={new THREE.Color(colors.glow)}
+                        emissive={new Color(colors.glow)}
                         emissiveIntensity={0.1}
                         depthWrite={false}
                         polygonOffset
@@ -699,7 +725,7 @@ function FaceSocket({ enabled }: { enabled: boolean }) {
             V27_TUNING.aperture.outerUpperK,
             V27_TUNING.aperture.outerLowerK
         );
-        const g = new THREE.ShapeGeometry(s, 96);
+        const g = new ShapeGeometry(s, 96);
         g.computeVertexNormals();
         return g;
     }, []);
@@ -741,27 +767,27 @@ function EyeAperture({
     innerH?: number;
     blink?: React.MutableRefObject<number>;
 }) {
-    const outerBlinkRef = useRef<THREE.Group>(null);
-    const apertureBlinkRef = useRef<THREE.Group>(null);
+    const outerBlinkRef = useRef<Group>(null);
+    const apertureBlinkRef = useRef<Group>(null);
 
     useFrame((_, delta) => {
         if (!blink) return;
         const t = clamp01(blink.current);
         const ease = t * t * (3 - 2 * t); // smoothstep
-        const outerTargetY = THREE.MathUtils.lerp(1, V27_TUNING.blink.outerMinY, ease);
-        const innerTargetY = THREE.MathUtils.lerp(1, V27_TUNING.blink.innerMinY, ease);
-        if (outerBlinkRef.current) outerBlinkRef.current.scale.y = THREE.MathUtils.damp(outerBlinkRef.current.scale.y, outerTargetY, 18, delta);
-        if (apertureBlinkRef.current) apertureBlinkRef.current.scale.y = THREE.MathUtils.damp(apertureBlinkRef.current.scale.y, innerTargetY, 18, delta);
+        const outerTargetY = MathUtils.lerp(1, V27_TUNING.blink.outerMinY, ease);
+        const innerTargetY = MathUtils.lerp(1, V27_TUNING.blink.innerMinY, ease);
+        if (outerBlinkRef.current) outerBlinkRef.current.scale.y = MathUtils.damp(outerBlinkRef.current.scale.y, outerTargetY, 18, delta);
+        if (apertureBlinkRef.current) apertureBlinkRef.current.scale.y = MathUtils.damp(apertureBlinkRef.current.scale.y, innerTargetY, 18, delta);
     });
 
     const stencilInEyeRegion = useMemo(
         () => ({
             stencilWrite: true,
             stencilRef: 0,
-            stencilFunc: THREE.NotEqualStencilFunc,
-            stencilFail: THREE.KeepStencilOp,
-            stencilZFail: THREE.KeepStencilOp,
-            stencilZPass: THREE.KeepStencilOp,
+            stencilFunc: NotEqualStencilFunc,
+            stencilFail: KeepStencilOp,
+            stencilZFail: KeepStencilOp,
+            stencilZPass: KeepStencilOp,
         }),
         []
     );
@@ -770,10 +796,10 @@ function EyeAperture({
         () => ({
             stencilWrite: true,
             stencilRef: STENCIL_REF_EYE_REGION,
-            stencilFunc: THREE.EqualStencilFunc,
-            stencilFail: THREE.KeepStencilOp,
-            stencilZFail: THREE.KeepStencilOp,
-            stencilZPass: THREE.KeepStencilOp,
+            stencilFunc: EqualStencilFunc,
+            stencilFail: KeepStencilOp,
+            stencilZFail: KeepStencilOp,
+            stencilZPass: KeepStencilOp,
         }),
         []
     );
@@ -782,10 +808,10 @@ function EyeAperture({
         () => ({
             stencilWrite: false,
             stencilRef: STENCIL_REF_APERTURE,
-            stencilFunc: THREE.EqualStencilFunc,
-            stencilFail: THREE.KeepStencilOp,
-            stencilZFail: THREE.KeepStencilOp,
-            stencilZPass: THREE.KeepStencilOp,
+            stencilFunc: EqualStencilFunc,
+            stencilFail: KeepStencilOp,
+            stencilZFail: KeepStencilOp,
+            stencilZPass: KeepStencilOp,
         }),
         []
     );
@@ -803,7 +829,7 @@ function EyeAperture({
             V27_TUNING.aperture.outerUpperK,
             V27_TUNING.aperture.outerLowerK
         );
-        const outerMask = new THREE.ShapeGeometry(outerMaskShape, V27_TUNING.aperture.shapeSegments);
+        const outerMask = new ShapeGeometry(outerMaskShape, V27_TUNING.aperture.shapeSegments);
 
         const apertureMaskShape = createAlmondShape(
             innerW * 0.985,
@@ -811,11 +837,11 @@ function EyeAperture({
             V27_TUNING.aperture.innerUpperK,
             V27_TUNING.aperture.innerLowerK
         );
-        const apertureMask = new THREE.ShapeGeometry(apertureMaskShape, V27_TUNING.aperture.shapeSegments);
+        const apertureMask = new ShapeGeometry(apertureMaskShape, V27_TUNING.aperture.shapeSegments);
 
         // Socket shadow + outer skin rim (kept subtle, lives behind).
         const shadowShape = createAlmondShape(outerW * 1.05, outerH * 1.05, V27_TUNING.aperture.outerUpperK, V27_TUNING.aperture.outerLowerK);
-        const shadow = new THREE.ShapeGeometry(shadowShape, 64);
+        const shadow = new ShapeGeometry(shadowShape, 64);
 
         outerMask.computeVertexNormals();
         apertureMask.computeVertexNormals();
@@ -836,15 +862,15 @@ function EyeAperture({
         );
         const contactShadowCurve = createAlmondClosedCurve(innerW * 1.01, innerH * 0.965, 0.79, 0.71);
 
-        const rimTube = new THREE.TubeGeometry(rimCurve, V27_TUNING.rim.rimCurve.segments, V27_TUNING.rim.rimRadius, V27_TUNING.rim.rimCurve.radial, true);
-        const waterlineTube = new THREE.TubeGeometry(
+        const rimTube = new TubeGeometry(rimCurve, V27_TUNING.rim.rimCurve.segments, V27_TUNING.rim.rimRadius, V27_TUNING.rim.rimCurve.radial, true);
+        const waterlineTube = new TubeGeometry(
             waterlineCurve,
             V27_TUNING.rim.waterlineCurve.segments,
             V27_TUNING.rim.waterlineRadius,
             V27_TUNING.rim.waterlineCurve.radial,
             true
         );
-        const contactShadowTube = new THREE.TubeGeometry(
+        const contactShadowTube = new TubeGeometry(
             contactShadowCurve,
             V27_TUNING.contactShadow.segments,
             V27_TUNING.contactShadow.radius,
@@ -879,10 +905,10 @@ function EyeAperture({
                         depthTest={false}
                         stencilWrite
                         stencilRef={STENCIL_REF_EYE_REGION}
-                        stencilFunc={THREE.AlwaysStencilFunc}
-                        stencilFail={THREE.KeepStencilOp}
-                        stencilZFail={THREE.KeepStencilOp}
-                        stencilZPass={THREE.ReplaceStencilOp}
+                        stencilFunc={AlwaysStencilFunc}
+                        stencilFail={KeepStencilOp}
+                        stencilZFail={KeepStencilOp}
+                        stencilZPass={ReplaceStencilOp}
                     />
                 </mesh>
 
@@ -912,7 +938,7 @@ function EyeAperture({
                         clearcoatRoughness={0.55}
                         sheen={0.18}
                         sheenRoughness={0.85}
-                        sheenColor={new THREE.Color('#b97c74')}
+                        sheenColor={new Color('#b97c74')}
                         specularIntensity={0.4}
                         depthWrite
                         polygonOffset
@@ -948,10 +974,10 @@ function EyeAperture({
                         depthTest={false}
                         stencilWrite
                         stencilRef={STENCIL_REF_APERTURE}
-                        stencilFunc={THREE.AlwaysStencilFunc}
-                        stencilFail={THREE.KeepStencilOp}
-                        stencilZFail={THREE.KeepStencilOp}
-                        stencilZPass={THREE.ReplaceStencilOp}
+                        stencilFunc={AlwaysStencilFunc}
+                        stencilFail={KeepStencilOp}
+                        stencilZFail={KeepStencilOp}
+                        stencilZPass={ReplaceStencilOp}
                     />
                 </mesh>
 
@@ -988,17 +1014,17 @@ function Eyelashes({
     side = 'top' as 'top' | 'bottom',
 }: {
     count?: number;
-    edgeCurve: THREE.Curve<THREE.Vector3>;
+    edgeCurve: Curve<Vector3>;
     side?: 'top' | 'bottom';
 }) {
     const stencilOnlyRing = useMemo(
         () => ({
             stencilWrite: true,
             stencilRef: STENCIL_REF_EYE_REGION,
-            stencilFunc: THREE.EqualStencilFunc,
-            stencilFail: THREE.KeepStencilOp,
-            stencilZFail: THREE.KeepStencilOp,
-            stencilZPass: THREE.KeepStencilOp,
+            stencilFunc: EqualStencilFunc,
+            stencilFail: KeepStencilOp,
+            stencilZFail: KeepStencilOp,
+            stencilZPass: KeepStencilOp,
         }),
         []
     );
@@ -1017,10 +1043,10 @@ function Eyelashes({
 
             const p = edgeCurve.getPoint(u);
             const tng = edgeCurve.getTangent(u).normalize();
-            const view = new THREE.Vector3(0, 0, 1);
+            const view = new Vector3(0, 0, 1);
 
-            const radial2D = new THREE.Vector3(p.x, p.y, 0).normalize();
-            const outward = new THREE.Vector3().crossVectors(view, tng).normalize();
+            const radial2D = new Vector3(p.x, p.y, 0).normalize();
+            const outward = new Vector3().crossVectors(view, tng).normalize();
             if (outward.dot(radial2D) < 0) outward.negate();
 
             // Push roots OUT of the aperture so they survive the ring-only stencil (ref 2).
@@ -1034,7 +1060,7 @@ function Eyelashes({
                 .addScaledVector(view, V27_TUNING.lashes.viewLift);
 
             // Quaternion: align cone's +Y to the normal direction (so it "grows" out from the lid edge)
-            const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+            const q = new Quaternion().setFromUnitVectors(new Vector3(0, 1, 0), dir);
 
             const centerBoost = 0.7 + 0.5 * arc;
             const noise = (Math.random() - 0.5) * 0.16;
@@ -1052,7 +1078,7 @@ function Eyelashes({
         return temp;
     }, [count, edgeCurve, side]);
 
-    const coneGeo = useMemo(() => new THREE.ConeGeometry(V27_TUNING.lashes.thickness, 1, 7), []);
+    const coneGeo = useMemo(() => new ConeGeometry(V27_TUNING.lashes.thickness, 1, 7), []);
 
     useEffect(() => {
         return () => {
@@ -1087,18 +1113,18 @@ function Eyelashes({
 }
 
 function Eyelids({ blink, mousePos }: { blink: React.MutableRefObject<number>; mousePos: PointerRef }) {
-    const upperRef = useRef<THREE.Group>(null);
-    const lowerRef = useRef<THREE.Group>(null);
+    const upperRef = useRef<Group>(null);
+    const lowerRef = useRef<Group>(null);
 
     const skinColor = '#d6a09a';
 
     useFrame((_, delta) => {
         const t = clamp01(blink.current);
-        const gazeY = THREE.MathUtils.clamp(mousePos.current.y, -1, 1);
-        const gazeX = THREE.MathUtils.clamp(mousePos.current.x, -1, 1);
+        const gazeY = MathUtils.clamp(mousePos.current.y, -1, 1);
+        const gazeX = MathUtils.clamp(mousePos.current.x, -1, 1);
 
-        const yaw = THREE.MathUtils.clamp(gazeX * 0.06, -0.06, 0.06);
-        const pitch = THREE.MathUtils.clamp(-gazeY * 0.10, -0.10, 0.10);
+        const yaw = MathUtils.clamp(gazeX * 0.06, -0.06, 0.06);
+        const pitch = MathUtils.clamp(-gazeY * 0.10, -0.10, 0.10);
         const ease = t * t * (3 - 2 * t); // smoothstep
 
         // Rotate lids around eye center (more natural than translating them on Y)
@@ -1112,26 +1138,26 @@ function Eyelids({ blink, mousePos }: { blink: React.MutableRefObject<number>; m
 
         if (upperRef.current) {
             upperRef.current.position.set(0, 0, 0.0);
-            upperRef.current.rotation.x = THREE.MathUtils.damp(upperRef.current.rotation.x, upperRotX, 14, delta);
-            upperRef.current.rotation.y = THREE.MathUtils.damp(upperRef.current.rotation.y, yaw, 10, delta);
+            upperRef.current.rotation.x = MathUtils.damp(upperRef.current.rotation.x, upperRotX, 14, delta);
+            upperRef.current.rotation.y = MathUtils.damp(upperRef.current.rotation.y, yaw, 10, delta);
         }
         if (lowerRef.current) {
             lowerRef.current.position.set(0, 0, 0.0);
-            lowerRef.current.rotation.x = THREE.MathUtils.damp(lowerRef.current.rotation.x, lowerRotX, 14, delta);
-            lowerRef.current.rotation.y = THREE.MathUtils.damp(lowerRef.current.rotation.y, yaw, 10, delta);
+            lowerRef.current.rotation.x = MathUtils.damp(lowerRef.current.rotation.x, lowerRotX, 14, delta);
+            lowerRef.current.rotation.y = MathUtils.damp(lowerRef.current.rotation.y, yaw, 10, delta);
         }
     });
 
     const skinMicroRoughness = useSkinMicroRoughnessMap();
 
     const [upperLidGeo, lowerLidGeo, upperEdgeCurve, lowerEdgeCurve] = useMemo(() => {
-        const buildLidRibbon = (edgePts: THREE.Vector3[], opts: { lift: number }) => {
+        const buildLidRibbon = (edgePts: Vector3[], opts: { lift: number }) => {
             const positions: number[] = [];
             const uvs: number[] = [];
             const indices: number[] = [];
 
-            const view = new THREE.Vector3(0, 0, 1);
-            const tmp = new THREE.Vector3();
+            const view = new Vector3(0, 0, 1);
+            const tmp = new Vector3();
 
             for (let i = 0; i < edgePts.length; i++) {
                 const u = edgePts.length <= 1 ? 0.5 : i / (edgePts.length - 1);
@@ -1142,16 +1168,16 @@ function Eyelids({ blink, mousePos }: { blink: React.MutableRefObject<number>; m
                 const next = edgePts[Math.min(edgePts.length - 1, i + 1)];
 
                 const tangent = tmp.copy(next).sub(prev).normalize();
-                const radial2D = new THREE.Vector3(p.x, p.y, 0).normalize();
-                const outward = new THREE.Vector3().crossVectors(view, tangent).normalize();
+                const radial2D = new Vector3(p.x, p.y, 0).normalize();
+                const outward = new Vector3().crossVectors(view, tangent).normalize();
                 if (outward.dot(radial2D) < 0) outward.negate();
 
-                const inner = new THREE.Vector3(p.x, p.y, p.z);
+                const inner = new Vector3(p.x, p.y, p.z);
                 const outer = inner
                     .clone()
                     .addScaledVector(outward, V27_TUNING.lids.ribbonWidth)
                     .addScaledVector(view, -V27_TUNING.lids.ribbonBack)
-                    .addScaledVector(new THREE.Vector3(0, 1, 0), opts.lift * (0.35 + 0.65 * arc));
+                    .addScaledVector(new Vector3(0, 1, 0), opts.lift * (0.35 + 0.65 * arc));
 
                 positions.push(inner.x, inner.y, inner.z);
                 positions.push(outer.x, outer.y, outer.z);
@@ -1170,9 +1196,9 @@ function Eyelids({ blink, mousePos }: { blink: React.MutableRefObject<number>; m
                 indices.push(b, d, c);
             }
 
-            const geo = new THREE.BufferGeometry();
-            geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-            geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+            const geo = new BufferGeometry();
+            geo.setAttribute('position', new Float32BufferAttribute(positions, 3));
+            geo.setAttribute('uv', new Float32BufferAttribute(uvs, 2));
             geo.setIndex(indices);
             geo.computeVertexNormals();
             return geo;
@@ -1184,20 +1210,20 @@ function Eyelids({ blink, mousePos }: { blink: React.MutableRefObject<number>; m
         const upper2D = upper.getPoints(seg);
         const lower2D = lower.getPoints(seg);
 
-        const mapEdge = (pts: THREE.Vector3[], side: 'top' | 'bottom') => {
+        const mapEdge = (pts: Vector3[], side: 'top' | 'bottom') => {
             return pts.map((p, i) => {
                 const u = pts.length <= 1 ? 0.5 : i / (pts.length - 1);
                 const arc = 1 - Math.pow((u - 0.5) * 2, 2);
                 const bulge = (side === 'top' ? 1 : 0.75) * V27_TUNING.lids.edgeBulge * arc;
-                return new THREE.Vector3(p.x, p.y, V27_TUNING.lids.edgeZ + bulge);
+                return new Vector3(p.x, p.y, V27_TUNING.lids.edgeZ + bulge);
             });
         };
 
         const upperPts = mapEdge(upper2D, 'top');
         const lowerPts = mapEdge(lower2D, 'bottom');
 
-        const upperCurve = new THREE.CatmullRomCurve3(upperPts, false, 'centripetal');
-        const lowerCurve = new THREE.CatmullRomCurve3(lowerPts, false, 'centripetal');
+        const upperCurve = new CatmullRomCurve3(upperPts, false, 'centripetal');
+        const lowerCurve = new CatmullRomCurve3(lowerPts, false, 'centripetal');
 
         const upperGeo = buildLidRibbon(upperPts, { lift: V27_TUNING.lids.upperLift });
         const lowerGeo = buildLidRibbon(lowerPts, { lift: V27_TUNING.lids.lowerLift });
@@ -1209,10 +1235,10 @@ function Eyelids({ blink, mousePos }: { blink: React.MutableRefObject<number>; m
         () => ({
             stencilWrite: true,
             stencilRef: STENCIL_REF_EYE_REGION,
-            stencilFunc: THREE.EqualStencilFunc,
-            stencilFail: THREE.KeepStencilOp,
-            stencilZFail: THREE.KeepStencilOp,
-            stencilZPass: THREE.KeepStencilOp,
+            stencilFunc: EqualStencilFunc,
+            stencilFail: KeepStencilOp,
+            stencilZFail: KeepStencilOp,
+            stencilZPass: KeepStencilOp,
         }),
         []
     );
@@ -1231,9 +1257,9 @@ function Eyelids({ blink, mousePos }: { blink: React.MutableRefObject<number>; m
                         clearcoatRoughness={0.62}
                         sheen={0.18}
                         sheenRoughness={0.9}
-                        sheenColor={new THREE.Color('#b97c74')}
+                        sheenColor={new Color('#b97c74')}
                         specularIntensity={0.35}
-                        side={THREE.FrontSide}
+                        side={FrontSide}
                         {...stencilOnlyRing}
                     />
                 </mesh>
@@ -1252,9 +1278,9 @@ function Eyelids({ blink, mousePos }: { blink: React.MutableRefObject<number>; m
                         clearcoatRoughness={0.7}
                         sheen={0.14}
                         sheenRoughness={0.92}
-                        sheenColor={new THREE.Color('#b97c74')}
+                        sheenColor={new Color('#b97c74')}
                         specularIntensity={0.3}
-                        side={THREE.FrontSide}
+                        side={FrontSide}
                         {...stencilOnlyRing}
                     />
                 </mesh>
@@ -1283,7 +1309,7 @@ function EyeScene({
     variant?: Eye3DVariant;
     showBackdrop?: boolean;
 }) {
-    const rigRef = useRef<THREE.Group>(null);
+    const rigRef = useRef<Group>(null);
     const mousePos = useRef({ x: 0, y: 0 }); // smoothed pointer
     const pointerRaw = useRef({ x: 0, y: 0 });
     const blink = useRef(0);
@@ -1298,14 +1324,14 @@ function EyeScene({
     useFrame((state, delta) => {
         pointerRaw.current.x = state.pointer.x;
         pointerRaw.current.y = state.pointer.y;
-        mousePos.current.x = THREE.MathUtils.damp(mousePos.current.x, pointerRaw.current.x, 10, delta);
-        mousePos.current.y = THREE.MathUtils.damp(mousePos.current.y, pointerRaw.current.y, 10, delta);
+        mousePos.current.x = MathUtils.damp(mousePos.current.x, pointerRaw.current.x, 10, delta);
+        mousePos.current.y = MathUtils.damp(mousePos.current.y, pointerRaw.current.y, 10, delta);
 
         if (rigRef.current) {
-            const targetYaw = THREE.MathUtils.clamp(mousePos.current.x * 0.18, -0.18, 0.18);
-            const targetPitch = THREE.MathUtils.clamp(-mousePos.current.y * 0.12, -0.12, 0.12);
-            rigRef.current.rotation.y = THREE.MathUtils.damp(rigRef.current.rotation.y, targetYaw, 10, delta);
-            rigRef.current.rotation.x = THREE.MathUtils.damp(rigRef.current.rotation.x, targetPitch, 10, delta);
+            const targetYaw = MathUtils.clamp(mousePos.current.x * 0.18, -0.18, 0.18);
+            const targetPitch = MathUtils.clamp(-mousePos.current.y * 0.12, -0.12, 0.12);
+            rigRef.current.rotation.y = MathUtils.damp(rigRef.current.rotation.y, targetYaw, 10, delta);
+            rigRef.current.rotation.x = MathUtils.damp(rigRef.current.rotation.x, targetPitch, 10, delta);
         }
 
         const nowMs = state.clock.elapsedTime * 1000;
@@ -1348,7 +1374,7 @@ function EyeScene({
                 }
             }
         } else if (m.phase === 'pause') {
-            blink.current = THREE.MathUtils.damp(blink.current, 0, 15, delta);
+            blink.current = MathUtils.damp(blink.current, 0, 15, delta);
             if (nowMs - m.phaseStartMs >= pauseMs) {
                 m.doubleStep = 1;
                 m.phase = 'closing';
@@ -1390,7 +1416,8 @@ export default function Eye3D({
     className?: string;
     enableBackdrop?: boolean;
 }) {
-    const isWatermark = quality === 'watermark';
+    const normalizedQuality: Exclude<Eye3DQuality, 'medium'> = quality === 'medium' ? 'default' : quality;
+    const isWatermark = normalizedQuality === 'watermark';
     const computedDpr = dpr ?? (isWatermark ? [0.8, 1.15] : [1, 1.75]);
     const floatIntensity = reducedMotion ? 0 : isWatermark ? 0.03 : variant === 'landing' ? 0.06 : 0.15;
     const floatSpeed = reducedMotion ? 0 : isWatermark ? 0.75 : 1.2;
@@ -1419,9 +1446,9 @@ export default function Eye3D({
                 }}
                 style={{ pointerEvents: interactive ? 'auto' : 'none' }}
                 onCreated={({ gl }) => {
-                    gl.toneMapping = THREE.ACESFilmicToneMapping;
+                    gl.toneMapping = ACESFilmicToneMapping;
                     gl.toneMappingExposure = V27_TUNING.render.exposure;
-                    gl.outputColorSpace = THREE.SRGBColorSpace;
+                    gl.outputColorSpace = SRGBColorSpace;
                 }}
             >
                 <WatermarkFrameDriver enabled={isWatermark} fps={watermarkFps} reduced={reducedMotion} />
