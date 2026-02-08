@@ -86,7 +86,7 @@ CREATE POLICY "Service role manages sponsors"
 DROP POLICY IF EXISTS "Anyone can insert clicks" ON sponsor_clicks;
 CREATE POLICY "Anyone can insert clicks"
   ON sponsor_clicks FOR INSERT
-  WITH CHECK (true);
+  WITH CHECK (user_id IS NULL OR auth.uid() = user_id);
 
 -- Users can view their own clicks
 DROP POLICY IF EXISTS "Users can view their own clicks" ON sponsor_clicks;
