@@ -1,4 +1,5 @@
 import { ClothingItem } from '../../types';
+import { supabase } from '../lib/supabase';
 
 // Feature Flags Keys
 export const MONETIZATION_FLAGS = {
@@ -200,8 +201,6 @@ export function buildLookSearchTerm(items: ClothingItem[]): string {
 // ============================================================================
 // SUPABASE-BACKED SPONSORS SYSTEM
 // ============================================================================
-
-import { supabase } from '../lib/supabase';
 
 // DB-backed sponsor type (matches Supabase schema)
 export interface DBSponsor {

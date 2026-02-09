@@ -48,6 +48,16 @@ export default defineConfig(({ mode, command }) => {
           entryFileNames: 'assets/[name]-[hash].js',
           assetFileNames: 'assets/[name]-[hash].[ext]',
           manualChunks: (id) => {
+            // IMPORTANT: keep Rollup/Vite virtual helper modules inside `vendor-react`.
+            // Otherwise Rollup may place helpers (ex: commonjs default-export interop)
+            // into some other vendor chunk (charts/3d/etc). If `vendor-react` then imports
+            // that helper from a chunk that itself imports React from `vendor-react`,
+            // you get a circular chunk dependency and runtime TDZ errors like:
+            // "Cannot access 'P' before initialization".
+            if (id.includes('commonjsHelpers') || id.startsWith('\0commonjsHelpers')) {
+              return 'vendor-react';
+            }
+
             // Vendor chunks for heavy dependencies
             if (id.includes('node_modules')) {
               // React core - include react itself to avoid R3F reconciler issues
@@ -99,12 +109,14 @@ export default defineConfig(({ mode, command }) => {
               }
               // Charts - let Vite handle recharts naturally to avoid initialization issues
               // Recharts has complex internal dependencies that break with manual chunking
+              /*
               if (id.includes('recharts')) {
                 return 'vendor-charts';
               }
               if (id.includes('victory')) {
                 return 'vendor-charts';
               }
+              */
               // Date utilities
               if (id.includes('date-fns') || id.includes('dayjs') || id.includes('moment')) {
                 return 'vendor-date';
