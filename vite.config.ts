@@ -77,26 +77,11 @@ export default defineConfig(({ mode, command }) => {
                 return 'vendor-supabase';
               }
               // Three.js and 3D (heavy)
-              if (id.includes('/node_modules/three/examples/')) {
-                return 'vendor-three-extras';
-              }
-              if (id.includes('/node_modules/three/src/renderers/')) {
-                return 'vendor-three-renderers';
-              }
-              if (id.includes('/node_modules/three/src/math/')) {
-                return 'vendor-three-math';
-              }
-              if (id.includes('/node_modules/three/src/geometries/')) {
-                return 'vendor-three-geometries';
-              }
-              if (id.includes('/node_modules/three/src/materials/')) {
-                return 'vendor-three-materials';
-              }
-              if (id.includes('/node_modules/three/src/loaders/')) {
-                return 'vendor-three-loaders';
-              }
               if (id.includes('/node_modules/three/')) {
-                return 'vendor-three-core';
+                // Keep all of Three.js in a single chunk. Splitting `three/src/Three.js` (entry)
+                // from submodules (geometries/materials/math/...) can create circular chunk
+                // dependencies and runtime TDZ errors in production.
+                return 'vendor-three';
               }
               if (id.includes('@react-three/fiber')) {
                 return 'vendor-r3f';
