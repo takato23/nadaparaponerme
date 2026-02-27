@@ -110,6 +110,11 @@ interface TryOnState {
   resultImageUrl?: string;
 }
 
+interface HybridLookChoiceState {
+  requestText: string;
+  parsed: Partial<LookCreationDraft>;
+}
+
 // ============================================================================
 // CONSTANTS
 // ============================================================================
@@ -203,6 +208,7 @@ const AIStylistView: React.FC<AIStylistViewProps> = ({
   const [garmentEdit, setGarmentEdit] = useState<GarmentEditState | null>(null);
   const [editInstructionInput, setEditInstructionInput] = useState('');
   const [tryOn, setTryOn] = useState<TryOnState>({ status: 'idle' });
+  const [hybridLookChoice, setHybridLookChoice] = useState<HybridLookChoiceState | null>(null);
   const [guidedWorkflow, setGuidedWorkflow] = useState<GuidedLookWorkflowResponse | null>(null);
   const [guidedAutosaveEnabled, setGuidedAutosaveEnabled] = useState(false);
   const [limitModalSource, setLimitModalSource] = useState<'chat' | 'guided' | 'edit' | 'tryon' | null>(null);
@@ -243,6 +249,7 @@ const AIStylistView: React.FC<AIStylistViewProps> = ({
     setGarmentEdit(null);
     setEditInstructionInput('');
     setTryOn({ status: 'idle' });
+    setHybridLookChoice(null);
     setGuidedWorkflow(null);
     setGuidedAutosaveEnabled(false);
     setLimitModalSource(null);
@@ -763,6 +770,93 @@ const AIStylistView: React.FC<AIStylistViewProps> = ({
     withTimeout,
   ]);
 
+  const runDirectLookGeneration = useCallback(async (
+    baseMessages: ChatMessage[],
+    choice: HybridLookChoiceState,
+  ) => {
+    const category = (choice.parsed.category || 'top') as 'top' | 'bottom' | 'shoes';
+    const occasion = choice.parsed.occasion || 'uso diario';
+    const style = choice.parsed.style || 'casual';
+    const draft: LookCreationDraft = {
+      requestText: choice.requestText,
+      category,
+      occasion,
+      style,
+    };
+
+    setLookCreation({
+      ...draft,
+      status: 'generating',
+      awaitingField: undefined,
+    });
+    setIsTyping(true);
+    setStreamingMessage('');
+
+    try {
+      const generationPrompt = buildLookCreationPrompt(draft);
+      const generationResult = await withTimeout(
+        aiImageService.generateFashionImage(generationPrompt, {
+          category,
+          occasion,
+        }),
+        90000,
+      );
+
+      if (!generationResult.success || !generationResult.image_url) {
+        throw new Error(generationResult.error || 'No se pudo generar la imagen');
+      }
+
+      const generatedItem: ClothingItem = {
+        id: `ai_chat_direct_${Date.now()}`,
+        imageDataUrl: generationResult.image_url,
+        metadata: {
+          category,
+          subcategory: `Prenda IA - ${getCategoryLabel(category)}`,
+          color_primary: '#000000',
+          vibe_tags: ['ai-generated', style, 'nano-banana-flow'],
+          seasons: ['spring', 'summer', 'fall', 'winter'],
+          description: generationPrompt,
+        },
+        isAIGenerated: true,
+        aiGenerationPrompt: generationPrompt,
+      };
+
+      setGeneratedClosetItems((prev) => [generatedItem, ...prev]);
+      setLookCreation({
+        ...draft,
+        status: 'result',
+        generatedImageUrl: generationResult.image_url,
+        generatedPrompt: generationPrompt,
+        generatedItem,
+        savedToCloset: false,
+      });
+      setHybridLookChoice(null);
+
+      appendAssistantMessage(
+        baseMessages,
+        `Listo. Lo resolví en modo directo (chat + generación IA) y consumió ${LOOK_CREATION_CREDIT_COST} créditos de generación. Si querés, ahora la guardamos en tu armario o armamos outfit completo.`,
+      );
+      await subscription.refresh();
+    } catch (error: any) {
+      console.error('Error generating direct look from chat:', error);
+      const userFacingError = mapLookCreationErrorMessage(error);
+      if (isCreditError(error?.message || String(error))) {
+        setLimitModalSource('chat');
+        setShowLimitModal(true);
+      }
+      appendAssistantMessage(baseMessages, userFacingError);
+      setLookCreation({ status: 'idle' });
+    } finally {
+      setIsTyping(false);
+    }
+  }, [
+    appendAssistantMessage,
+    isCreditError,
+    mapLookCreationErrorMessage,
+    subscription,
+    withTimeout,
+  ]);
+
   const handlePrepareGarmentEditFromInput = useCallback(() => {
     if (!lookCreation.generatedItem || isTyping) return;
     requestGarmentEditConfirmation(messages, editInstructionInput);
@@ -1040,6 +1134,39 @@ const AIStylistView: React.FC<AIStylistViewProps> = ({
       return;
     }
 
+    if (hybridLookChoice) {
+      const updatedMessages = beginUserTurn(trimmedText);
+      const normalized = trimmedText.toLowerCase();
+      const wantsGuided = normalized.includes('guiad');
+      const wantsDirect = normalized.includes('direct') || isAffirmative(trimmedText);
+
+      if (wantsGuided) {
+        setHybridLookChoice(null);
+        await runGuidedWorkflowAction('start', updatedMessages, {
+          message: hybridLookChoice.requestText,
+          autosaveEnabled: guidedAutosaveEnabled,
+        });
+        return;
+      }
+
+      if (wantsDirect) {
+        await runDirectLookGeneration(updatedMessages, hybridLookChoice);
+        return;
+      }
+
+      if (isNegative(trimmedText)) {
+        setHybridLookChoice(null);
+        appendAssistantMessage(updatedMessages, 'Perfecto, cancelé la creación de prenda/look por ahora.');
+        return;
+      }
+
+      appendAssistantMessage(
+        updatedMessages,
+        `Decime "directo" para generar ahora (${LOOK_CREATION_CREDIT_COST} créditos) o "guiado" para afinar primero.`,
+      );
+      return;
+    }
+
     const guidedStatus = guidedWorkflow?.status;
     const guidedInProgress = guidedStatus === 'collecting'
       || guidedStatus === 'confirming'
@@ -1055,9 +1182,22 @@ const AIStylistView: React.FC<AIStylistViewProps> = ({
     }
 
     const lookIntentDetected = detectLookCreationIntent(trimmedText);
+    if (useGuidedLookBackend && !guidedInProgress && lookIntentDetected) {
+      const updatedMessages = beginUserTurn(trimmedText);
+      const parsed = parseLookCreationFields(trimmedText);
+      setHybridLookChoice({
+        requestText: trimmedText,
+        parsed,
+      });
+      appendAssistantMessage(
+        updatedMessages,
+        `Puedo resolverlo de dos maneras:\n1) Modo directo (chat intermediario + generación IA) → ${LOOK_CREATION_CREDIT_COST} créditos.\n2) Modo guiado paso a paso → mismo costo al confirmar.\n\nRespondé "directo" o "guiado".`,
+      );
+      return;
+    }
+
     const shouldUseGuidedWorkflow = useGuidedLookBackend && (
-      lookIntentDetected
-      || guidedStatus === 'collecting'
+      guidedStatus === 'collecting'
       || guidedStatus === 'confirming'
       || guidedStatus === 'generating'
     );
@@ -1077,7 +1217,7 @@ const AIStylistView: React.FC<AIStylistViewProps> = ({
         return;
       }
 
-      await runGuidedWorkflowAction(lookIntentDetected ? 'start' : 'submit', updatedMessages, {
+      await runGuidedWorkflowAction('submit', updatedMessages, {
         message: trimmedText,
         autosaveEnabled: guidedAutosaveEnabled,
       });
@@ -1294,6 +1434,7 @@ const AIStylistView: React.FC<AIStylistViewProps> = ({
     currentConversation,
     enrichedCloset,
     garmentEdit,
+    hybridLookChoice,
     guidedAutosaveEnabled,
     guidedWorkflow,
     isCreditError,
@@ -1303,6 +1444,7 @@ const AIStylistView: React.FC<AIStylistViewProps> = ({
     mapLookCreationErrorMessage,
     messages,
     requestGarmentEditConfirmation,
+    runDirectLookGeneration,
     runGarmentEditGeneration,
     runGuidedWorkflowAction,
     runTryOnGeneration,
@@ -1587,7 +1729,7 @@ const AIStylistView: React.FC<AIStylistViewProps> = ({
                   className="mt-5 w-full max-w-xl px-4 py-3 rounded-2xl border border-violet-300/60 dark:border-violet-700/60 bg-violet-50/70 dark:bg-violet-900/20 text-violet-700 dark:text-violet-300 hover:bg-violet-100/80 dark:hover:bg-violet-900/30 transition-all font-semibold text-sm flex items-center justify-center gap-2 disabled:opacity-50"
                 >
                   <span className="material-symbols-rounded text-base">auto_awesome</span>
-                  Crear look nuevo con IA ({LOOK_CREATION_CREDIT_COST} créditos)
+                  Crear look nuevo con IA ({LOOK_CREATION_CREDIT_COST} créditos, directo o guiado)
                 </button>
 
                 {/* Closet info */}
@@ -1954,6 +2096,31 @@ const AIStylistView: React.FC<AIStylistViewProps> = ({
                   Crear prenda con IA ({LOOK_CREATION_CREDIT_COST} créditos)
                 </button>
               </div>
+              {hybridLookChoice && (
+                <div className="mb-2 flex flex-wrap gap-2">
+                  <button
+                    onClick={() => handleSend('directo')}
+                    disabled={isTyping}
+                    className="px-3 py-1.5 rounded-full border border-violet-300/70 dark:border-violet-700/60 bg-violet-50/70 dark:bg-violet-900/20 text-violet-700 dark:text-violet-300 text-xs font-semibold hover:bg-violet-100/80 dark:hover:bg-violet-900/30 transition-all disabled:opacity-50"
+                  >
+                    Directo ({LOOK_CREATION_CREDIT_COST} créditos)
+                  </button>
+                  <button
+                    onClick={() => handleSend('guiado')}
+                    disabled={isTyping}
+                    className="px-3 py-1.5 rounded-full border border-gray-300/70 dark:border-gray-700/80 bg-white/70 dark:bg-white/5 text-gray-700 dark:text-gray-300 text-xs font-semibold hover:border-violet-400/60 hover:text-violet-600 dark:hover:text-violet-300 transition-all disabled:opacity-50"
+                  >
+                    Guiado
+                  </button>
+                  <button
+                    onClick={() => handleSend('cancelar')}
+                    disabled={isTyping}
+                    className="px-3 py-1.5 rounded-full border border-gray-300/70 dark:border-gray-700/80 bg-white/70 dark:bg-white/5 text-gray-700 dark:text-gray-300 text-xs font-semibold hover:border-red-400/60 hover:text-red-600 dark:hover:text-red-300 transition-all disabled:opacity-50"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              )}
               {useGuidedLookBackend && (
                 <div className="mb-2">
                   <label className="inline-flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300">

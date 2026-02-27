@@ -25,11 +25,6 @@ export const supabase: any = createClient<any>(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true,
     detectSessionInUrl: true,
   },
-  global: {
-    headers: {
-      'x-application-name': 'no-tengo-nada-para-ponerme',
-    },
-  },
 });
 
 // Handle auth errors globally
