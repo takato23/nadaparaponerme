@@ -324,6 +324,20 @@
     letter-spacing: -0.02em;
   }
 
+  .contain-overflow-x {
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: clip;
+  }
+
+  .min-w-0-safe {
+    min-width: 0;
+  }
+
+  .max-w-full-safe {
+    max-width: 100%;
+  }
+
 
   /* Accessibility - Screen Reader Only */
   .sr-only {
@@ -485,6 +499,20 @@
 
   100% {
     left: 100%;
+  }
+}
+
+@keyframes shimmer-btn {
+  0% {
+    background-position: 200% center;
+  }
+
+  50% {
+    background-position: 0% center;
+  }
+
+  100% {
+    background-position: 200% center;
   }
 }
 

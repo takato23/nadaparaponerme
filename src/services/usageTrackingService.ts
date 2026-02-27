@@ -380,7 +380,7 @@ export function canUseCredits(): boolean {
  * Use one credit (call after successful AI operation)
  * Returns true if credit was used, false if no credits remaining
  */
-export function useCredit(): boolean {
+export function consumeCredit(): boolean {
   const status = getCreditStatus();
 
   if (!status.canUse) {
@@ -485,10 +485,10 @@ export function canUseFeature(_feature: FeatureType): UsageStatus {
 }
 
 /**
- * @deprecated Use useCredit() instead
+ * @deprecated Use consumeCredit() instead
  */
-export function recordUsage(_feature: FeatureType): boolean {
-  const ok = useCredit();
+export function recordCreditUsage(_feature: FeatureType): boolean {
+  const ok = consumeCredit();
   if (!ok) return false;
 
   const store = getFeatureUsageStore();
@@ -496,6 +496,9 @@ export function recordUsage(_feature: FeatureType): boolean {
   saveFeatureUsage(store);
   return true;
 }
+
+// NOTE: do not re-export legacy hook-like aliases (`useCredit`, `recordUsage`)
+// to avoid triggering `react-hooks/rules-of-hooks` naming checks for hook-like names.
 
 /**
  * @deprecated No longer needed with unified credits

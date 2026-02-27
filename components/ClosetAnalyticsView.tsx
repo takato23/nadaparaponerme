@@ -1,5 +1,5 @@
 
-import React, { useMemo, lazy, Suspense } from 'react';
+import React, { useMemo, lazy, Suspense, useRef } from 'react';
 import type { ClothingItem } from '../types';
 import { Card } from './ui/Card';
 import LazyLoader from './LazyLoader';
@@ -19,6 +19,7 @@ interface ClosetAnalyticsViewProps {
 const ClosetAnalyticsView = ({ closet, onClose }: ClosetAnalyticsViewProps) => {
 
   // Calculate analytics data
+  const thirtyDaysAgoRef = useRef(Date.now() - (30 * 24 * 60 * 60 * 1000));
   const analytics = useMemo(() => {
     // Category distribution
     const categoryCount: Record<string, number> = {};
@@ -47,8 +48,7 @@ const ClosetAnalyticsView = ({ closet, onClose }: ClosetAnalyticsViewProps) => {
     });
 
     // Age analysis (items added in last 30 days vs older)
-    const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
-    const newItems = closet.filter(item => parseInt(item.id) > thirtyDaysAgo).length;
+    const newItems = closet.filter(item => parseInt(item.id) > thirtyDaysAgoRef.current).length;
     const oldItems = closet.length - newItems;
 
     return {

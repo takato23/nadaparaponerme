@@ -5,10 +5,11 @@ import { Card } from './ui/Card';
 import { clearToneCache } from '../src/services/aiToneHelper';
 import { FaceReferenceUploader } from './FaceReferenceUploader';
 import { getPendingRequestsCount, getActiveBorrowsCount } from '../src/services/borrowedItemsService';
-import { getProfileVisibility, updateProfileVisibility } from '../src/services/profileService';
+import { getProfileVisibility, updateProfileVisibility, getProfileTokens } from '../src/services/profileService';
 import ConfirmDeleteModal from './ui/ConfirmDeleteModal';
 import { useConsentPreferences } from '../hooks/useConsentPreferences';
 import { setConsentPreferences } from '../src/services/consentService';
+import { isAdminUser } from '../src/services/accessControlService';
 import type { ClothingItem } from '../types';
 
 export type AITone = 'concise' | 'balanced' | 'detailed';
@@ -31,6 +32,27 @@ interface ProfileViewProps {
     onOpenBorrowedItems?: () => void;
     onDeleteAccount?: () => Promise<void> | void;
     onLoadSampleData?: () => void;
+    onCreateBetaInvite?: () => Promise<void> | void;
+    onListBetaInviteClaims?: (code?: string) => Promise<{
+        invites: Array<{
+            code: string;
+            max_uses: number;
+            uses_count: number;
+            expires_at: string | null;
+            revoked_at: string | null;
+            created_by: string | null;
+            created_at: string;
+        }>;
+        claims: Array<{
+            code: string;
+            user_id: string;
+            claimed_at: string;
+            source: string;
+            email: string | null;
+            username: string | null;
+            display_name: string | null;
+        }>;
+    }>;
 }
 
 const ProfileView = ({
@@ -45,7 +67,9 @@ const ProfileView = ({
     onOpenAestheticPlayground,
     onOpenBorrowedItems,
     onDeleteAccount,
-    onLoadSampleData
+    onLoadSampleData,
+    onCreateBetaInvite,
+    onListBetaInviteClaims
 }: ProfileViewProps) => {
     const { theme, toggleTheme } = useThemeContext();
     const [pendingRequests, setPendingRequests] = useState(0);
@@ -53,9 +77,16 @@ const ProfileView = ({
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [isDeletingAccount, setIsDeletingAccount] = useState(false);
     const [isPublicProfile, setIsPublicProfile] = useState<boolean | null>(null);
+    const [tokensBalance, setTokensBalance] = useState<number | null>(null);
     const [isUpdatingVisibility, setIsUpdatingVisibility] = useState(false);
+    const [isCreatingBetaInvite, setIsCreatingBetaInvite] = useState(false);
+    const [isLoadingBetaTrace, setIsLoadingBetaTrace] = useState(false);
+    const [betaTraceCodeFilter, setBetaTraceCodeFilter] = useState('');
+    const [betaTraceError, setBetaTraceError] = useState<string | null>(null);
+    const [betaTrace, setBetaTrace] = useState<Awaited<ReturnType<NonNullable<ProfileViewProps['onListBetaInviteClaims']>>> | null>(null);
     const consent = useConsentPreferences();
     const [consentDraft, setConsentDraft] = useState({ analytics: false, ads: false });
+    const userIsAdmin = useMemo(() => isAdminUser(user), [user]);
 
     useEffect(() => {
         loadBorrowCounts();
@@ -64,13 +95,17 @@ const ProfileView = ({
     useEffect(() => {
         if (!user?.id) return;
         let isActive = true;
-        const loadVisibility = async () => {
-            const visibility = await getProfileVisibility(user.id);
+        const loadData = async () => {
+            const [visibility, tokens] = await Promise.all([
+                getProfileVisibility(user.id),
+                getProfileTokens(user.id)
+            ]);
             if (isActive) {
                 setIsPublicProfile(visibility);
+                setTokensBalance(tokens);
             }
         };
-        loadVisibility();
+        loadData();
         return () => {
             isActive = false;
         };
@@ -173,6 +208,50 @@ const ProfileView = ({
         }
     };
 
+    const handleCreateBetaInvite = async () => {
+        if (!onCreateBetaInvite || isCreatingBetaInvite) return;
+        setIsCreatingBetaInvite(true);
+        try {
+            await onCreateBetaInvite();
+            if (onListBetaInviteClaims) {
+                const trace = await onListBetaInviteClaims();
+                setBetaTrace(trace);
+            }
+        } finally {
+            setIsCreatingBetaInvite(false);
+        }
+    };
+
+    const handleLoadBetaTrace = async () => {
+        if (!onListBetaInviteClaims || isLoadingBetaTrace) return;
+        setIsLoadingBetaTrace(true);
+        setBetaTraceError(null);
+        try {
+            const trace = await onListBetaInviteClaims(betaTraceCodeFilter.trim() || undefined);
+            setBetaTrace(trace);
+        } catch (error) {
+            setBetaTraceError(error instanceof Error ? error.message : 'No se pudo cargar la trazabilidad');
+        } finally {
+            setIsLoadingBetaTrace(false);
+        }
+    };
+
+    const handleApplyInviteFilter = async (code: string) => {
+        const normalized = String(code || '').trim().toUpperCase();
+        setBetaTraceCodeFilter(normalized);
+        if (!onListBetaInviteClaims || isLoadingBetaTrace) return;
+        setIsLoadingBetaTrace(true);
+        setBetaTraceError(null);
+        try {
+            const trace = await onListBetaInviteClaims(normalized || undefined);
+            setBetaTrace(trace);
+        } catch (error) {
+            setBetaTraceError(error instanceof Error ? error.message : 'No se pudo cargar la trazabilidad');
+        } finally {
+            setIsLoadingBetaTrace(false);
+        }
+    };
+
     return (
         <div className="w-full h-full overflow-y-auto p-6 animate-fade-in">
             <div className="max-w-4xl mx-auto space-y-8">
@@ -217,7 +296,141 @@ const ProfileView = ({
                     >
                         Cerrar Sesión
                     </button>
+                    {userIsAdmin && onCreateBetaInvite && (
+                        <div className="mt-3 w-full max-w-xl">
+                            <div className="flex flex-wrap items-center justify-center gap-2">
+                                <button
+                                    onClick={handleCreateBetaInvite}
+                                    disabled={isCreatingBetaInvite}
+                                    className={`px-6 py-2 rounded-full text-sm font-bold transition-colors ${
+                                        isCreatingBetaInvite
+                                            ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                                            : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
+                                    }`}
+                                >
+                                    {isCreatingBetaInvite ? 'Generando link beta...' : 'Generar link beta (10 usos)'}
+                                </button>
+                                {userIsAdmin && onListBetaInviteClaims && (
+                                    <button
+                                        onClick={handleLoadBetaTrace}
+                                        disabled={isLoadingBetaTrace}
+                                        className={`px-6 py-2 rounded-full text-sm font-bold transition-colors ${
+                                            isLoadingBetaTrace
+                                                ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                                                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                                        }`}
+                                    >
+                                        {isLoadingBetaTrace ? 'Cargando trazabilidad...' : 'Ver trazabilidad'}
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    )}
                 </div>
+
+                {userIsAdmin && onListBetaInviteClaims && (
+                    <Card variant="glass" padding="md" rounded="2xl" className="space-y-4">
+                        <div className="flex items-center justify-between">
+                            <p className="text-sm font-semibold text-gray-900 dark:text-white">Beta Admin</p>
+                            <button
+                                onClick={handleLoadBetaTrace}
+                                disabled={isLoadingBetaTrace}
+                                className="px-3 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 disabled:opacity-50"
+                            >
+                                Actualizar
+                            </button>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 text-center">
+                            <div className="rounded-xl bg-white/70 dark:bg-gray-900/60 border border-white/20 p-2">
+                                <p className="text-[10px] uppercase tracking-wide text-gray-500">Links</p>
+                                <p className="text-lg font-bold text-gray-900 dark:text-white">{betaTrace?.invites?.length || 0}</p>
+                            </div>
+                            <div className="rounded-xl bg-white/70 dark:bg-gray-900/60 border border-white/20 p-2">
+                                <p className="text-[10px] uppercase tracking-wide text-gray-500">Claims</p>
+                                <p className="text-lg font-bold text-gray-900 dark:text-white">{betaTrace?.claims?.length || 0}</p>
+                            </div>
+                            <div className="rounded-xl bg-white/70 dark:bg-gray-900/60 border border-white/20 p-2">
+                                <p className="text-[10px] uppercase tracking-wide text-gray-500">Filtro</p>
+                                <p className="text-sm font-semibold text-gray-900 dark:text-white">{betaTraceCodeFilter || 'Todos'}</p>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 bg-white/70 dark:bg-gray-900/60 border border-white/20 rounded-xl px-3 py-2">
+                            <input
+                                type="text"
+                                value={betaTraceCodeFilter}
+                                onChange={(e) => setBetaTraceCodeFilter(e.target.value.toUpperCase())}
+                                placeholder="Filtrar por código (ej: BETA-ABCD)"
+                                className="w-full bg-transparent outline-none text-sm text-gray-800 dark:text-gray-100 placeholder:text-gray-400"
+                            />
+                            <button
+                                onClick={handleLoadBetaTrace}
+                                disabled={isLoadingBetaTrace}
+                                className="px-3 py-1 rounded-lg text-xs font-semibold bg-indigo-100 text-indigo-700 hover:bg-indigo-200 disabled:opacity-50"
+                            >
+                                Buscar
+                            </button>
+                        </div>
+
+                        {betaTraceError && (
+                            <p className="text-xs text-red-600 dark:text-red-400">{betaTraceError}</p>
+                        )}
+
+                        <div className="rounded-xl border border-white/20 bg-white/60 dark:bg-gray-900/50 overflow-hidden">
+                            <div className="px-3 py-2 border-b border-white/20 text-xs font-semibold text-gray-600 dark:text-gray-300">
+                                Links y cupos
+                            </div>
+                            <div className="max-h-44 overflow-y-auto divide-y divide-white/20">
+                                {(betaTrace?.invites || []).length === 0 && (
+                                    <p className="px-3 py-3 text-xs text-gray-500 dark:text-gray-400">Sin links cargados.</p>
+                                )}
+                                {(betaTrace?.invites || []).map((invite) => {
+                                    const remaining = Math.max(0, Number(invite.max_uses || 0) - Number(invite.uses_count || 0));
+                                    return (
+                                        <div key={invite.code} className="px-3 py-2 flex items-center justify-between gap-2">
+                                            <div className="min-w-0">
+                                                <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{invite.code}</p>
+                                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                    {invite.uses_count}/{invite.max_uses} usados • {remaining} restantes
+                                                </p>
+                                            </div>
+                                            <button
+                                                onClick={() => handleApplyInviteFilter(invite.code)}
+                                                className="px-2 py-1 rounded-md text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200"
+                                            >
+                                                Ver claims
+                                            </button>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        <div className="rounded-xl border border-white/20 bg-white/60 dark:bg-gray-900/50 overflow-hidden">
+                            <div className="px-3 py-2 border-b border-white/20 text-xs font-semibold text-gray-600 dark:text-gray-300">
+                                Aceptaciones
+                            </div>
+                            <div className="max-h-56 overflow-y-auto divide-y divide-white/20">
+                                {(betaTrace?.claims || []).length === 0 && (
+                                    <p className="px-3 py-3 text-xs text-gray-500 dark:text-gray-400">Todavía no hay aceptaciones.</p>
+                                )}
+                                {(betaTrace?.claims || []).map((claim, idx) => (
+                                    <div key={`${claim.code}-${claim.user_id}-${claim.claimed_at}-${idx}`} className="px-3 py-2">
+                                        <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                                            {claim.display_name || claim.username || claim.email || claim.user_id}
+                                        </p>
+                                        <p className="text-xs text-gray-600 dark:text-gray-300">
+                                            {claim.code} • {claim.email || 'sin email visible'}
+                                        </p>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                                            {new Date(claim.claimed_at).toLocaleString()}
+                                        </p>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </Card>
+                )}
 
                 {/* Profile visibility */}
                 <Card variant="glass" padding="md" rounded="2xl" className="flex items-center justify-between">
@@ -243,7 +456,14 @@ const ProfileView = ({
                 </Card>
 
                 {/* Fast Overview - Stats Grid (Moved to top for visibility) */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                    <div className="bg-white/40 dark:bg-gray-800/40 p-4 rounded-2xl border border-white/10 text-center relative overflow-hidden group border-amber-200/50 dark:border-amber-900/50 shadow-[0_0_15px_rgba(251,191,36,0.15)]">
+                        <div className="absolute inset-0 bg-gradient-to-br from-yellow-300/10 to-amber-500/10 opacity-50 group-hover:opacity-100 transition-opacity"></div>
+                        <p className="text-3xl font-bold text-amber-500 flex items-center justify-center gap-1 drop-shadow-sm">
+                            {tokensBalance ?? '-'} <span className="material-symbols-outlined text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>diamond</span>
+                        </p>
+                        <p className="text-[10px] text-amber-600/80 dark:text-amber-400/80 uppercase font-black tracking-widest mt-1">Gemas AI</p>
+                    </div>
                     <div className="bg-white/40 dark:bg-gray-800/40 p-4 rounded-2xl border border-white/10 text-center">
                         <p className="text-3xl font-bold text-primary">{stats.totalItems}</p>
                         <p className="text-xs text-gray-500 uppercase font-bold tracking-wider">Prendas</p>

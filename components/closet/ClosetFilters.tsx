@@ -327,7 +327,7 @@ export default function ClosetFilters({
                   <span className="material-symbols-outlined text-lg">bolt</span>
                   Filtros Rápidos
                 </h3>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   <button
                     onClick={() => setLocalFilters(prev => ({ ...prev, isFavorite: !prev.isFavorite }))}
                     className={`
@@ -373,6 +373,26 @@ export default function ClosetFilters({
                   >
                     <span className="material-symbols-outlined">schedule</span>
                     Recientes
+                  </button>
+                  <button
+                    onClick={() => {
+                      const currentStatus = localFilters.status || [];
+                      const isVirtualOnly = currentStatus.includes('virtual') && currentStatus.length === 1;
+                      setLocalFilters(prev => ({
+                        ...prev,
+                        status: isVirtualOnly ? undefined : ['virtual']
+                      }));
+                    }}
+                    className={`
+                      px-4 py-3 rounded-xl font-semibold text-sm transition-all flex items-center justify-center gap-2 border col-span-2 md:col-span-1
+                      ${(localFilters.status?.includes('virtual') && localFilters.status.length === 1)
+                        ? 'bg-purple-50 dark:bg-purple-900/20 text-purple-600 border-purple-200 dark:border-purple-800'
+                        : 'bg-gray-50 dark:bg-gray-800 text-text-secondary dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:bg-gray-100'
+                      }
+                    `}
+                  >
+                    <span className="material-symbols-outlined">magic_button</span>
+                    Try-On Virtual
                   </button>
                 </div>
               </section>

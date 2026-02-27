@@ -8,6 +8,48 @@ import type {
   DailyGenerationQuota,
 } from '../types/api';
 
+type EdgeInvokeErrorPayload = {
+  error?: string;
+  message?: string;
+  error_code?: string;
+  code?: string;
+};
+
+async function getEdgeInvokeErrorPayload(error: any): Promise<EdgeInvokeErrorPayload | null> {
+  const context = error?.context;
+  if (!context || typeof context.json !== 'function') return null;
+  try {
+    const payload = await context.json();
+    if (payload && typeof payload === 'object') {
+      return payload as EdgeInvokeErrorPayload;
+    }
+  } catch {
+    // noop
+  }
+  return null;
+}
+
+function mapGenerateImageErrorCode(errorCode?: string, fallbackMessage?: string): string {
+  switch (errorCode) {
+    case 'QUOTA_EXCEEDED':
+    case 'DAILY_BUDGET_LIMIT':
+      return fallbackMessage || 'No tenés créditos suficientes para generar esta prenda. Hacé upgrade para continuar.';
+    case 'RATE_LIMIT':
+      return fallbackMessage || 'Demasiadas solicitudes. Esperá un momento e intentá nuevamente.';
+    case 'INVALID_PROMPT':
+      return fallbackMessage || 'El prompt contiene contenido no permitido.';
+    case 'AUTH_REQUIRED':
+    case 'INVALID_TOKEN':
+      return 'Tu sesión venció. Iniciá sesión nuevamente.';
+    case 'API_ERROR':
+      return fallbackMessage || 'Error en la API de generación de imágenes.';
+    case 'NETWORK_ERROR':
+      return fallbackMessage || 'Error de conexión. Verificá tu internet.';
+    default:
+      return fallbackMessage || 'Error desconocido al generar imagen';
+  }
+}
+
 /**
  * AI Image Generation Service
  * Frontend service layer for managing AI-generated fashion images
@@ -62,7 +104,10 @@ export const aiImageService = {
 
       if (error) {
         console.error('Edge Function error:', error);
-        throw new Error(error.message || 'Error al generar la imagen');
+        const payload = await getEdgeInvokeErrorPayload(error);
+        const errorCode = payload?.error_code || payload?.code;
+        const mappedMessage = mapGenerateImageErrorCode(errorCode, payload?.error || payload?.message || error.message);
+        throw new Error(mappedMessage);
       }
 
       if (!data) {
@@ -73,18 +118,9 @@ export const aiImageService = {
 
       if (!typedData.success) {
         // Handle specific error codes
-        switch (typedData.error_code) {
-          case 'QUOTA_EXCEEDED':
-            throw new Error('Has alcanzado tu límite diario de créditos');
-          case 'INVALID_PROMPT':
-            throw new Error('El prompt contiene contenido no permitido');
-          case 'API_ERROR':
-            throw new Error('Error en la API de generación de imágenes');
-          case 'NETWORK_ERROR':
-            throw new Error('Error de conexión. Verifica tu internet.');
-          default:
-            throw new Error(typedData.error || 'Error desconocido al generar imagen');
-        }
+        throw new Error(
+          mapGenerateImageErrorCode(typedData.error_code, typedData.error),
+        );
       }
 
       return typedData;

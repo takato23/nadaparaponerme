@@ -137,7 +137,7 @@ interface GeneratedLook {
   // Metadata
   selfie_used: boolean;
   generation_preset: 'selfie' | 'casual' | 'pro';
-  generation_model: 'gemini-2.5-flash-image' | 'gemini-3-pro-image-preview';
+  generation_model: 'gemini-2.5-flash-image' | 'gemini-3.1-flash-image-preview';
 
   // Social
   is_favorite: boolean;

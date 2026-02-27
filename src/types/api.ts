@@ -124,6 +124,21 @@ export interface Database {
           common_preferences: string[];
         }[];
       };
+      search_profiles_for_friendship: {
+        Args: {
+          p_user_id: string;
+          p_query: string;
+          p_limit?: number;
+        };
+        Returns: {
+          id: string;
+          username: string;
+          display_name: string | null;
+          avatar_url: string | null;
+          bio: string | null;
+          is_public: boolean;
+        }[];
+      };
     };
     Enums: {
       [_ in never]: never;
@@ -152,6 +167,7 @@ export interface Profile {
   bio: string | null;
   is_public: boolean;
   style_preferences: string[];
+  ai_tokens_balance: number;
   created_at: string;
   updated_at: string;
 }
@@ -164,6 +180,7 @@ export interface ProfileInsert {
   bio?: string | null;
   is_public?: boolean;
   style_preferences?: string[];
+  ai_tokens_balance?: number;
 }
 
 export interface ProfileUpdate {
@@ -173,6 +190,7 @@ export interface ProfileUpdate {
   bio?: string | null;
   is_public?: boolean;
   style_preferences?: string[];
+  ai_tokens_balance?: number;
 }
 
 // ==================== Clothing Items ====================
@@ -213,6 +231,10 @@ export interface ClothingItem {
   times_worn: number;
   last_worn_at: string | null;
   is_favorite: boolean;
+  ai_status: 'pending' | 'processing' | 'ready' | 'failed' | null;
+  ai_analyzed_at: string | null;
+  ai_metadata_version: number;
+  ai_last_error: string | null;
   status: 'owned' | 'wishlist' | 'virtual' | null;
   deleted_at: string | null;
   created_at: string;
@@ -236,6 +258,10 @@ export interface ClothingItemInsert {
   purchase_price?: number | null;
   tags?: string[];
   notes?: string | null;
+  ai_status?: 'pending' | 'processing' | 'ready' | 'failed' | null;
+  ai_analyzed_at?: string | null;
+  ai_metadata_version?: number;
+  ai_last_error?: string | null;
   status?: 'owned' | 'wishlist' | 'virtual' | null;
   is_favorite?: boolean;
 }
@@ -252,6 +278,10 @@ export interface ClothingItemUpdate {
   size?: string | null;
   tags?: string[];
   notes?: string | null;
+  ai_status?: 'pending' | 'processing' | 'ready' | 'failed' | null;
+  ai_analyzed_at?: string | null;
+  ai_metadata_version?: number;
+  ai_last_error?: string | null;
   status?: 'owned' | 'wishlist' | 'virtual' | null;
   is_favorite?: boolean;
   times_worn?: number;
@@ -337,11 +367,7 @@ export interface CloseFriendInsert {
 }
 
 export interface CloseFriendUpdate {
-  // No updateable fields
-}
-
-export interface CloseFriendUpdate {
-  // No updateable fields
+  [key: string]: never;
 }
 
 // ==================== Communities ====================
@@ -408,7 +434,7 @@ export interface OutfitLikeInsert {
 }
 
 export interface OutfitLikeUpdate {
-  // No updateable fields
+  [key: string]: never;
 }
 
 // ==================== Outfit Comments ====================

@@ -409,7 +409,7 @@ const CommunityView = ({ friends: propFriends, onViewFriendCloset }: CommunityVi
           </span>
           <input
             type="text"
-            placeholder="Buscar amigas o usuarios..."
+            placeholder="Buscar por usuario o email..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-10 pr-4 py-3 bg-gray-100 dark:bg-gray-800 rounded-2xl text-text-primary dark:text-gray-200 placeholder-text-secondary focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
@@ -717,7 +717,7 @@ const CommunityView = ({ friends: propFriends, onViewFriendCloset }: CommunityVi
                   <EmptyState
                     icon="explore"
                     title="No hay sugerencias"
-                    description="Buscá usuarios por nombre o username para encontrar amigas"
+                    description="Buscá por nombre, username o email para encontrar amigas"
                   />
                 )}
               </div>

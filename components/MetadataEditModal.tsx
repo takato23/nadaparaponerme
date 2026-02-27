@@ -8,6 +8,10 @@ interface MetadataEditModalProps {
   onCancel: () => void;
 }
 
+type ClothingItemMetadataWithBrand = ClothingItemMetadata & {
+  brand?: string;
+};
+
 const CATEGORIES = [
   { value: 'top', label: 'Parte de Arriba' },
   { value: 'bottom', label: 'Parte de Abajo' },
@@ -37,13 +41,13 @@ const VIBE_TAGS_SUGGESTIONS = [
 ];
 
 export default function MetadataEditModal({ imageDataUrl, metadata, onSave, onCancel }: MetadataEditModalProps) {
-  const [editedMetadata, setEditedMetadata] = useState<ClothingItemMetadata>(metadata);
+  const [editedMetadata, setEditedMetadata] = useState<ClothingItemMetadataWithBrand>(metadata);
   const [customColor, setCustomColor] = useState('');
   const [customTag, setCustomTag] = useState('');
   const [validationError, setValidationError] = useState<string | null>(null);
 
   const handleCategoryChange = (category: string) => {
-    setEditedMetadata(prev => ({ ...prev, category: category as any }));
+    setEditedMetadata(prev => ({ ...prev, category }));
   };
 
   const handleColorSelect = (color: string) => {
@@ -132,10 +136,10 @@ export default function MetadataEditModal({ imageDataUrl, metadata, onSave, onCa
                 </label>
                 <div className="flex gap-2 mb-2 overflow-x-auto pb-2">
                   {CATEGORIES.map(cat => (
-                    <button
+                <button
                       key={cat.value}
-                      onClick={() => handleCategoryChange(cat.label)} // Use label as value for consistency/simplicity if backend allows, or keep specific mapping. User wants freedom. Let's use free text.
-                      className={`px-3 py-2 rounded-xl text-sm font-semibold whitespace-nowrap transition-colors ${editedMetadata.category.toLowerCase() === cat.label.toLowerCase()
+                      onClick={() => handleCategoryChange(cat.value)}
+                    className={`px-3 py-2 rounded-xl text-sm font-semibold whitespace-nowrap transition-colors ${editedMetadata.category.toLowerCase() === cat.value.toLowerCase()
                         ? 'bg-primary text-white'
                         : 'bg-gray-200/60 dark:bg-gray-700/60'
                         }`}
@@ -174,9 +178,8 @@ export default function MetadataEditModal({ imageDataUrl, metadata, onSave, onCa
                 </label>
                 <input
                   type="text"
-                  // @ts-ignore - Brand might not be in strict type but usually ok if index signature or expanded type
-                  value={(editedMetadata as any).brand || ''}
-                  onChange={(e) => setEditedMetadata(prev => ({ ...prev, brand: e.target.value } as any))}
+                  value={editedMetadata.brand || ''}
+                  onChange={(e) => setEditedMetadata(prev => ({ ...prev, brand: e.target.value }))}
                   placeholder="Ej: Zara, Nike, artesanal..."
                   className="w-full p-3 bg-white/50 dark:bg-black/20 rounded-xl border-none focus:ring-2 focus:ring-primary"
                 />

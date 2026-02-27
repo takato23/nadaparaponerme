@@ -4,7 +4,7 @@ Edge Function para generar imágenes de moda usando Gemini AI con rate limiting 
 
 ## Características
 
-- **Modelos**: `gemini-2.5-flash-image` (gratis) y `gemini-2.5-pro-image` (premium)
+- **Modelos**: `gemini-2.5-flash-image` (gratis) y `gemini-3.1-flash-image-preview` (premium)
 - **Rate Limiting**: Control de cuotas diarias por tier de suscripción
 - **Compresión Automática**: Imágenes optimizadas (max 2MB)
 - **Storage Privado**: Almacenamiento seguro en Supabase Storage

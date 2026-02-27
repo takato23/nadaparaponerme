@@ -11,7 +11,7 @@
  * 4. Display events with outfit suggestions
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import type {
   ClothingItem,
   GoogleCalendarConnection,
@@ -39,6 +39,59 @@ const CalendarSyncView = ({ closet, onClose, onViewOutfit }: CalendarSyncViewPro
   const [tokenInput, setTokenInput] = useState<string>('');
   const [isConnecting, setIsConnecting] = useState<boolean>(false);
 
+  const handleGenerateSuggestions = useCallback(async (eventsToProcess: GoogleCalendarEvent[]) => {
+    try {
+      if (closet.length < 5) {
+        setError('Necesitás al menos 5 prendas en tu armario para generar sugerencias.');
+        setCurrentStep('connection');
+        setIsConnecting(false);
+        return;
+      }
+
+      const generatedSuggestions = await calendarService.generateSuggestionsForEvents(
+        eventsToProcess,
+        closet
+      );
+
+      setSuggestions(generatedSuggestions);
+      setCurrentStep('results');
+      setIsConnecting(false);
+    } catch (e) {
+      const errorMessage = e instanceof Error ? e.message : 'Error al generar sugerencias';
+      setError(errorMessage);
+      setCurrentStep('connection');
+      setIsConnecting(false);
+    }
+  }, [closet]);
+
+  const handleFetchEvents = useCallback(async () => {
+    setError('');
+    setCurrentStep('loading_events');
+    setIsConnecting(true);
+
+    try {
+      const fetchedEvents = await calendarService.fetchUpcomingEvents();
+
+      if (fetchedEvents.length === 0) {
+        setError('No tenés eventos en los próximos 14 días.');
+        setCurrentStep('connection');
+        setIsConnecting(false);
+        return;
+      }
+
+      setEvents(fetchedEvents);
+      setCurrentStep('generating_suggestions');
+
+      // Generate outfit suggestions for all events
+      await handleGenerateSuggestions(fetchedEvents);
+    } catch (e) {
+      const errorMessage = e instanceof Error ? e.message : 'Error al cargar eventos';
+      setError(errorMessage);
+      setCurrentStep('connection');
+      setIsConnecting(false);
+    }
+  }, [handleGenerateSuggestions]);
+
   // Load connection status on mount
   useEffect(() => {
     const existingConnection = calendarService.getConnection();
@@ -48,7 +101,7 @@ const CalendarSyncView = ({ closet, onClose, onViewOutfit }: CalendarSyncViewPro
       // Auto-fetch events if already connected
       handleFetchEvents();
     }
-  }, []);
+  }, [handleFetchEvents]);
 
   // ===== CONNECTION HANDLERS =====
 
@@ -87,58 +140,6 @@ const CalendarSyncView = ({ closet, onClose, onViewOutfit }: CalendarSyncViewPro
   };
 
   // ===== EVENT FETCHING & SUGGESTIONS =====
-
-  const handleFetchEvents = async () => {
-    setError('');
-    setCurrentStep('loading_events');
-
-    try {
-      const fetchedEvents = await calendarService.fetchUpcomingEvents();
-
-      if (fetchedEvents.length === 0) {
-        setError('No tenés eventos en los próximos 14 días.');
-        setCurrentStep('connection');
-        setIsConnecting(false);
-        return;
-      }
-
-      setEvents(fetchedEvents);
-      setCurrentStep('generating_suggestions');
-
-      // Generate outfit suggestions for all events
-      await handleGenerateSuggestions(fetchedEvents);
-    } catch (e) {
-      const errorMessage = e instanceof Error ? e.message : 'Error al cargar eventos';
-      setError(errorMessage);
-      setCurrentStep('connection');
-      setIsConnecting(false);
-    }
-  };
-
-  const handleGenerateSuggestions = async (eventsToProcess: GoogleCalendarEvent[]) => {
-    try {
-      if (closet.length < 5) {
-        setError('Necesitás al menos 5 prendas en tu armario para generar sugerencias.');
-        setCurrentStep('connection');
-        setIsConnecting(false);
-        return;
-      }
-
-      const generatedSuggestions = await calendarService.generateSuggestionsForEvents(
-        eventsToProcess,
-        closet
-      );
-
-      setSuggestions(generatedSuggestions);
-      setCurrentStep('results');
-      setIsConnecting(false);
-    } catch (e) {
-      const errorMessage = e instanceof Error ? e.message : 'Error al generar sugerencias';
-      setError(errorMessage);
-      setCurrentStep('connection');
-      setIsConnecting(false);
-    }
-  };
 
   // ===== HELPER FUNCTIONS =====
 

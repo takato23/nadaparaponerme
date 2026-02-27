@@ -374,28 +374,54 @@ export async function getSentRequests(): Promise<PendingRequest[]> {
 // ===== USER SEARCH =====
 
 /**
- * Search for users by username or display name
+ * Search for users by username, display name, or email
  */
 export async function searchUsers(query: string): Promise<FriendProfile[]> {
   try {
-    if (!query || query.length < 2) return [];
+    const normalizedQuery = query.trim().replace(/^@/, '');
+    if (!normalizedQuery || normalizedQuery.length < 2) return [];
 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return [];
 
-    const { data: profiles, error } = await supabase
-      .from('profiles')
-      .select('id, username, display_name, avatar_url, bio, is_public')
-      .neq('id', user.id)
-      .or(`username.ilike.%${query}%,display_name.ilike.%${query}%`)
-      .limit(20);
+    const { data: rpcProfiles, error: rpcError } = await supabase.rpc('search_profiles_for_friendship', {
+      p_user_id: user.id,
+      p_query: normalizedQuery,
+      p_limit: 20,
+    });
 
-    if (error) {
-      console.error('Error searching users:', error);
+    if (!rpcError) {
+      return rpcProfiles || [];
+    }
+
+    // Compatibility fallback while migration is rolling out.
+    console.warn('Falling back to legacy user search:', rpcError);
+    const searchPattern = `%${normalizedQuery}%`;
+    const [usernameRes, displayNameRes] = await Promise.all([
+      supabase
+        .from('profiles')
+        .select('id, username, display_name, avatar_url, bio, is_public')
+        .neq('id', user.id)
+        .ilike('username', searchPattern)
+        .limit(20),
+      supabase
+        .from('profiles')
+        .select('id, username, display_name, avatar_url, bio, is_public')
+        .neq('id', user.id)
+        .ilike('display_name', searchPattern)
+        .limit(20),
+    ]);
+
+    if (usernameRes.error && displayNameRes.error) {
+      console.error('Error searching users:', usernameRes.error, displayNameRes.error);
       return [];
     }
 
-    return profiles || [];
+    const mergedProfiles = new Map<string, FriendProfile>();
+    (usernameRes.data || []).forEach((profile: FriendProfile) => mergedProfiles.set(profile.id, profile));
+    (displayNameRes.data || []).forEach((profile: FriendProfile) => mergedProfiles.set(profile.id, profile));
+
+    return Array.from(mergedProfiles.values()).slice(0, 20);
   } catch (error) {
     console.error('Error in searchUsers:', error);
     return [];

@@ -88,7 +88,6 @@ const MINIMAL_ACTIONS = [
 // Acciones para modo STANDARD (4 principales + extras)
 const STANDARD_ACTIONS = [
   { id: 'studio', icon: 'auto_fix_high', label: 'Studio', description: 'Crear un look', handlerKey: 'onStartStudio' },
-  { id: 'stylist', icon: 'auto_awesome', label: 'Estilista', description: 'IA sugiere outfit', handlerKey: 'onStartStylist' },
   { id: 'closet', icon: 'checkroom', label: 'Armario', description: 'Tus prendas', handlerKey: 'onNavigateToCloset' },
   { id: 'saved-looks', icon: 'photo_library', label: 'Armario de looks', description: 'Tus looks guardados', handlerKey: 'onNavigateToSavedLooks' },
   { id: 'chat', icon: 'forum', label: 'Chat', description: 'Hablar con IA', handlerKey: 'onStartChat' },
@@ -96,6 +95,7 @@ const STANDARD_ACTIONS = [
 
 // Herramientas secundarias (colapsables) - solo en modo standard
 const MORE_TOOLS = [
+  { id: 'stylist', icon: 'auto_awesome', label: 'Estilista IA', handlerKey: 'onStartStylist' },
   { id: 'add', icon: 'add_photo_alternate', label: 'Agregar prenda', handlerKey: 'onAddItem' },
   { id: 'bulk', icon: 'cloud_upload', label: 'Carga múltiple', handlerKey: 'onStartBulkUpload' },
   { id: 'weather', icon: 'partly_cloudy_day', label: 'Outfit del día', handlerKey: 'onStartWeatherOutfit' },

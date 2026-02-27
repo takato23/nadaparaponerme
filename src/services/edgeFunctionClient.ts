@@ -7,12 +7,124 @@
 
 import { supabase } from '../lib/supabase';
 import { logger } from '../utils/logger';
-import type { ClothingItemMetadata, FitResult, PackingListResult } from '../../types';
+import type {
+  ChatStylistResponse,
+  ClothingItemMetadata,
+  FitResult,
+  GuidedLookWorkflowRequest,
+  GuidedLookWorkflowResponse,
+  PackingListResult
+} from '../../types';
+
+type EdgeErrorCode =
+  | 'rate_limited'
+  | 'blocked'
+  | 'forbidden_origin'
+  | 'invalid_url'
+  | 'payload_too_large'
+  | 'unsupported_content_type'
+  | 'security_guard_error';
+
+type EdgeErrorPayload = {
+  error?: string;
+  message?: string;
+  code?: EdgeErrorCode | string;
+  retry_after_seconds?: number;
+  request_id?: string;
+};
+
+class EdgeFunctionError extends Error {
+  code?: EdgeErrorCode;
+  retryAfterSeconds?: number;
+  requestId?: string;
+
+  constructor(message: string, meta: { code?: EdgeErrorCode; retryAfterSeconds?: number; requestId?: string } = {}) {
+    super(message);
+    this.name = 'EdgeFunctionError';
+    this.code = meta.code;
+    this.retryAfterSeconds = meta.retryAfterSeconds;
+    this.requestId = meta.requestId;
+  }
+}
+
+const parseEdgeErrorPayload = async (error: any): Promise<EdgeErrorPayload | null> => {
+  const context = error?.context;
+  if (!context) return null;
+
+  try {
+    if (typeof context.json === 'function') {
+      const payload = await context.json();
+      return payload && typeof payload === 'object' ? payload as EdgeErrorPayload : null;
+    }
+  } catch {
+    // no-op: some responses are not JSON
+  }
+
+  return null;
+};
+
+const formatRetryMessage = (seconds?: number): string => {
+  if (!Number.isFinite(seconds) || !seconds || seconds <= 0) {
+    return 'Esperá unos segundos y reintentá.';
+  }
+  return `Esperá ${Math.max(1, Math.floor(seconds))} segundos y reintentá.`;
+};
+
+const mapEdgeErrorMessage = (
+  payload: EdgeErrorPayload | null,
+  fallbackMessage: string,
+): string => {
+  if (!payload?.code) {
+    return payload?.error || fallbackMessage;
+  }
+
+  if (payload.code === 'rate_limited' || payload.code === 'blocked') {
+    return formatRetryMessage(payload.retry_after_seconds);
+  }
+  if (payload.code === 'forbidden_origin') {
+    return 'Origen no permitido para esta operación. Verificá dominio y sesión.';
+  }
+  if (payload.code === 'invalid_url') {
+    return 'La URL ingresada no es válida o no está permitida.';
+  }
+  if (payload.code === 'payload_too_large') {
+    return 'La imagen excede el tamaño máximo permitido.';
+  }
+  if (payload.code === 'unsupported_content_type') {
+    return 'La URL no apunta a una imagen compatible.';
+  }
+  if (payload.code === 'security_guard_error') {
+    return 'El servicio está temporalmente protegido. Reintentá en unos segundos.';
+  }
+
+  return payload.error || fallbackMessage;
+};
+
+const toEdgeFunctionError = async (error: unknown, fallbackMessage: string): Promise<EdgeFunctionError> => {
+  const payload = await parseEdgeErrorPayload(error);
+  const message = mapEdgeErrorMessage(payload, fallbackMessage);
+  return new EdgeFunctionError(message, {
+    code: payload?.code,
+    retryAfterSeconds: payload?.retry_after_seconds,
+    requestId: payload?.request_id,
+  });
+};
 
 // Helper to add timeout to Supabase invocations
 const invokeWithTimeout = async (functionName: string, options: any, timeoutMs = 90000) => {
   const start = Date.now();
   console.log(`[Edge Function] Invoking ${functionName}... (Timeout: ${timeoutMs}ms)`);
+
+  const mergedHeaders: Record<string, string> = {
+    ...(options?.headers || {}),
+  };
+
+  if (!mergedHeaders.Authorization) {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.access_token) {
+      mergedHeaders.Authorization = `Bearer ${session.access_token}`;
+    }
+  }
 
   const timeoutPromise = new Promise<any>((_, reject) => {
     const id = setTimeout(() => {
@@ -23,7 +135,10 @@ const invokeWithTimeout = async (functionName: string, options: any, timeoutMs =
 
   try {
     const result = await Promise.race([
-      supabase.functions.invoke(functionName, options),
+      supabase.functions.invoke(functionName, {
+        ...options,
+        headers: mergedHeaders,
+      }),
       timeoutPromise
     ]);
     const duration = Date.now() - start;
@@ -71,13 +186,15 @@ export async function analyzeClothingViaEdge(
  */
 export async function generateOutfitViaEdge(
   prompt: string,
-  closetItemIds: string[]
+  closetItemIds: string[],
+  options: { idempotencyKey?: string } = {}
 ): Promise<FitResult> {
   try {
     const { data, error } = await invokeWithTimeout('generate-outfit', {
       body: {
         prompt,
         closetItemIds,
+        idempotencyKey: options.idempotencyKey || undefined,
       },
     });
 
@@ -222,7 +339,7 @@ export async function generateVirtualTryOnWithSlots(
         userImage,
         slots,
         preset: options.preset || 'overlay',
-        quality: options.quality || 'flash',
+        quality: options.quality || 'pro',
         customScene: options.customScene,
         keepPose: options.keepPose ?? false,
         useFaceReferences: options.useFaceReferences ?? true,
@@ -248,23 +365,48 @@ export async function generateVirtualTryOnWithSlots(
     // Log full error object for debugging
     console.error('Edge Function (Gemini) Error Details:', error);
 
-    // Try to extract more details if it's a FunctionsHttpError
-    if (error?.context?.json) {
-      try {
-        const errorBody = await error.context.json();
-        console.error('Edge Function (Gemini) Response JSON:', errorBody);
-        if (errorBody.error) {
-          const detail = errorBody.code ? `${errorBody.error} (${errorBody.code})` : errorBody.error;
-          throw new Error(`Edge Function: ${detail}`);
-        }
-      } catch (e) {
-        // ignore json parse error
-      }
+    const payload = await parseEdgeErrorPayload(error);
+    if (payload) {
+      console.error('Edge Function (Gemini) Response JSON:', JSON.stringify(payload, null, 2));
     }
 
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    logger.error('Edge function virtual-try-on (slots) failed:', message);
-    throw new Error('Failed to generate virtual try-on via Edge Function');
+    const rawMessage = String(
+      payload?.error
+      || payload?.message
+      || (error instanceof Error ? error.message : 'Error desconocido'),
+    );
+    const normalized = rawMessage.toLowerCase();
+
+    if (
+      normalized.includes('crédito')
+      || normalized.includes('credito')
+      || normalized.includes('insufficient')
+      || normalized.includes('402')
+      || normalized.includes('upgrade')
+    ) {
+      throw new Error('No tenés créditos suficientes para usar el probador virtual. Hacé upgrade o sumá créditos para continuar.');
+    }
+
+    if (normalized.includes('timed out') || normalized.includes('timeout')) {
+      throw new Error('El probador virtual tardó más de lo esperado. Intentá nuevamente en unos segundos.');
+    }
+
+    if (
+      normalized.includes('429')
+      || normalized.includes('rate limit')
+      || normalized.includes('demasiadas solicitudes')
+      || payload?.code === 'rate_limited'
+      || payload?.code === 'blocked'
+    ) {
+      throw new Error('Hay mucha demanda en este momento. Esperá un momento e intentá nuevamente.');
+    }
+
+    if (normalized && normalized !== 'error desconocido') {
+      throw new Error(rawMessage);
+    }
+
+    logger.error('Edge function virtual-try-on (slots) failed:', rawMessage);
+    throw new Error('No pudimos generar el probador virtual en este momento.');
   }
 }
 
@@ -445,14 +587,26 @@ export async function analyzeStyleDNAViaEdge(
 export async function chatWithStylistViaEdge(
   message: string,
   chatHistory: Array<{ role: 'user' | 'assistant'; content: string }>,
-  closetContext?: Array<{ id: string; metadata: any }>
-): Promise<{ role: 'assistant'; content: string }> {
+  closetContext?: Array<{ id: string; metadata: any }>,
+  options: {
+    responseMode?: 'text' | 'structured';
+    surface?: 'studio' | 'closet';
+    threadId?: string | null;
+    idempotencyKey?: string;
+    workflow?: GuidedLookWorkflowRequest;
+  } = {}
+): Promise<ChatStylistResponse & { validation_warnings?: string[]; workflow?: GuidedLookWorkflowResponse }> {
   try {
     const { data, error } = await invokeWithTimeout('chat-stylist', {
       body: {
         message,
         chatHistory,
         closetContext,
+        responseMode: options.responseMode || 'text',
+        surface: options.surface || 'closet',
+        threadId: options.threadId || null,
+        idempotencyKey: options.idempotencyKey || undefined,
+        workflow: options.workflow || undefined,
       },
     });
 
@@ -461,11 +615,64 @@ export async function chatWithStylistViaEdge(
     return {
       role: 'assistant',
       content: data.content || data.message || '',
+      outfitSuggestion: data.outfitSuggestion || null,
+      validation_warnings: Array.isArray(data.validation_warnings) ? data.validation_warnings : [],
+      threadId: data.threadId || null,
+      model: data.model || 'gemini-2.5-flash',
+      credits_used: data.credits_used || 0,
+      cache_hit: Boolean(data.cache_hit),
+      workflow: data.workflow || undefined,
     };
   } catch (error) {
     logger.error('Edge function chat-stylist failed:', error);
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    throw new Error(`Failed to chat with stylist via Edge Function: ${message}`);
+    throw await toEdgeFunctionError(error, 'No se pudo consultar al estilista');
+  }
+}
+
+export async function prepareClosetInsightsViaEdge(
+  insightType: 'mix' | 'chat' | 'report',
+  options: {
+    prompt?: string;
+    closetItemIds?: string[];
+  } = {},
+): Promise<{
+  ready: boolean;
+  missingCount: number;
+  processingCount: number;
+  estimatedSeconds?: number;
+  coverage: { top: number; bottom: number; shoes: number };
+  analyzedCount?: number;
+  failedCount?: number;
+  credits_used?: number;
+}> {
+  try {
+    const { data, error } = await invokeWithTimeout('prepare-closet-insights', {
+      body: {
+        insightType,
+        prompt: options.prompt || undefined,
+        closetItemIds: options.closetItemIds || undefined,
+      },
+    }, 120000);
+
+    if (error) throw error;
+
+    return {
+      ready: Boolean(data?.ready),
+      missingCount: Number(data?.missingCount || 0),
+      processingCount: Number(data?.processingCount || 0),
+      estimatedSeconds: data?.estimatedSeconds,
+      coverage: {
+        top: Number(data?.coverage?.top || 0),
+        bottom: Number(data?.coverage?.bottom || 0),
+        shoes: Number(data?.coverage?.shoes || 0),
+      },
+      analyzedCount: Number(data?.analyzedCount || 0),
+      failedCount: Number(data?.failedCount || 0),
+      credits_used: Number(data?.credits_used || 0),
+    };
+  } catch (error) {
+    logger.error('Edge function prepare-closet-insights failed:', error);
+    throw new Error('Failed to prepare closet insights via Edge Function');
   }
 }
 
@@ -511,5 +718,139 @@ export async function checkEdgeFunctionsAvailable(): Promise<boolean> {
   } catch (error) {
     logger.warn('Edge Functions not available:', error);
     return false;
+  }
+}
+
+/**
+ * Proxy an external image URL to avoid CORS when cutting background.
+ */
+export async function proxyImageViaEdge(url: string): Promise<string> {
+  try {
+    const { data, error } = await invokeWithTimeout('proxy-image', {
+      body: { url },
+    });
+
+    if (error) throw error;
+    if (!data?.dataUrl) throw new Error('No dataUrl returned from proxy');
+
+    return data.dataUrl;
+  } catch (error) {
+    logger.error('Edge function proxy-image failed:', error);
+    throw await toEdgeFunctionError(error, 'No se pudo procesar la imagen');
+  }
+}
+
+export async function createBetaInviteViaEdge(
+  options: {
+    maxUses?: number;
+    validDays?: number;
+    grantsPremium?: boolean;
+    grantsUnlimitedAI?: boolean;
+    note?: string;
+    prefix?: string;
+  } = {},
+): Promise<{
+  code: string;
+  shareLink: string;
+  maxUses: number;
+  validDays: number;
+  grantsPremium: boolean;
+  grantsUnlimitedAI: boolean;
+}> {
+  try {
+    const { data, error } = await invokeWithTimeout('create-beta-invite', {
+      body: options,
+    });
+
+    if (error) throw error;
+    if (!data?.code || !data?.shareLink) {
+      throw new Error('Invalid invite response');
+    }
+
+    return {
+      code: String(data.code),
+      shareLink: String(data.shareLink),
+      maxUses: Number(data.maxUses || 0),
+      validDays: Number(data.validDays || 0),
+      grantsPremium: Boolean(data.grantsPremium),
+      grantsUnlimitedAI: Boolean(data.grantsUnlimitedAI),
+    };
+  } catch (error) {
+    logger.error('Edge function create-beta-invite failed:', error);
+    throw await toEdgeFunctionError(error, 'No se pudo generar el link beta');
+  }
+}
+
+export async function claimBetaInviteViaEdge(code: string): Promise<{
+  success: boolean;
+  message: string;
+  expires_at?: string | null;
+  premium_override?: boolean;
+  unlimited_ai?: boolean;
+  remaining_uses?: number | null;
+}> {
+  try {
+    const normalizedCode = String(code || '').trim().toUpperCase();
+    if (!normalizedCode) {
+      throw new Error('Missing code');
+    }
+
+    const { data, error } = await invokeWithTimeout('claim-beta-invite', {
+      body: { code: normalizedCode },
+    });
+
+    if (error) throw error;
+
+    return {
+      success: Boolean(data?.success),
+      message: String(data?.message || ''),
+      expires_at: data?.expires_at || null,
+      premium_override: Boolean(data?.premium_override),
+      unlimited_ai: Boolean(data?.unlimited_ai),
+      remaining_uses: typeof data?.remaining_uses === 'number' ? data.remaining_uses : null,
+    };
+  } catch (error) {
+    logger.error('Edge function claim-beta-invite failed:', error);
+    throw await toEdgeFunctionError(error, 'No se pudo activar el acceso beta');
+  }
+}
+
+export async function listBetaInviteClaimsViaEdge(
+  options: { code?: string; limit?: number } = {},
+): Promise<{
+  invites: Array<{
+    code: string;
+    max_uses: number;
+    uses_count: number;
+    expires_at: string | null;
+    revoked_at: string | null;
+    created_by: string | null;
+    created_at: string;
+  }>;
+  claims: Array<{
+    code: string;
+    user_id: string;
+    claimed_at: string;
+    source: string;
+    email: string | null;
+    username: string | null;
+    display_name: string | null;
+  }>;
+}> {
+  try {
+    const { data, error } = await invokeWithTimeout('list-beta-invite-claims', {
+      body: {
+        code: options.code || undefined,
+        limit: options.limit || undefined,
+      },
+    });
+    if (error) throw error;
+    return {
+      invites: Array.isArray(data?.invites) ? data.invites : [],
+      claims: Array.isArray(data?.claims) ? data.claims : [],
+    };
+  } catch (error) {
+    logger.error('Edge function list-beta-invite-claims failed:', error);
+    throw await toEdgeFunctionError(error, 'No se pudo obtener la trazabilidad de links beta');
   }
 }

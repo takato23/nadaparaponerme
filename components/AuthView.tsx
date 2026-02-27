@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import OjoDeLocaLogo from './OjoDeLocaLogo';
 import { signIn, signUp, signInWithGoogle } from '../src/services/authService';
 import { motion, useMotionValue, useSpring, animate } from 'framer-motion';
+import { useMatchMedia } from '../src/hooks/useMatchMedia';
 
 interface AuthViewProps {
     onLogin: () => void;
@@ -21,7 +22,6 @@ const AuthView = ({ onLogin, initialMode = 'login', variant = 'default' }: AuthV
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
-    const [reducedMotion, setReducedMotion] = useState(false);
     const [oauthLoading, setOauthLoading] = useState(false);
 
     // Form states
@@ -45,18 +45,7 @@ const AuthView = ({ onLogin, initialMode = 'login', variant = 'default' }: AuthV
     // Portal Scale (starts at 0, expands to 1, then expands to 20 on login)
     const portalScale = useMotionValue(0);
 
-    useEffect(() => {
-        if (typeof window === 'undefined' || typeof window.matchMedia === 'undefined') return;
-        const mql = window.matchMedia('(prefers-reduced-motion: reduce)');
-        const onChange = (e: MediaQueryListEvent) => setReducedMotion(e.matches);
-        setReducedMotion(mql.matches);
-        if (typeof mql.addEventListener === 'function') mql.addEventListener('change', onChange);
-        else mql.addListener(onChange);
-        return () => {
-            if (typeof mql.removeEventListener === 'function') mql.removeEventListener('change', onChange);
-            else mql.removeListener(onChange);
-        };
-    }, []);
+    const reducedMotion = useMatchMedia('(prefers-reduced-motion: reduce)');
 
     useEffect(() => {
         if (reducedMotion) {

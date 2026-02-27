@@ -13,6 +13,7 @@ import React, { createContext, useContext, useState, useCallback, useRef, useEff
 import { generateVirtualTryOnWithSlots } from '@/src/services/aiService';
 import * as aiService from '@/src/services/aiService';
 import * as analytics from '@/src/services/analyticsService';
+import { aiStorage } from '@/src/utils/aiStorage';
 import type { ClothingItem, GenerationPreset, ClothingSlot, FitResult, PackingListResult } from '@/types';
 
 // ============================================================================
@@ -52,6 +53,9 @@ export interface StudioGenerationRequest extends BaseGenerationRequest {
     provider?: 'google' | 'openai';
     quality?: 'flash' | 'pro';
     view?: 'front' | 'back' | 'side';
+    renderHash?: string;
+    surface?: 'mirror' | 'studio';
+    cachePolicyVersion?: number;
   };
   result?: {
     image: string;
@@ -216,41 +220,59 @@ export function AIGenerationProvider({ children }: { children: React.ReactNode }
   const processingRef = useRef(false);
   const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Load state from localStorage on mount
+  // Load state from localStorage/IndexedDB on mount
   useEffect(() => {
     isMountedRef.current = true;
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const data = JSON.parse(stored);
-        const oneHourAgo = Date.now() - 60 * 60 * 1000;
+    const loadState = async () => {
+      try {
+        // Try IndexedDB first
+        let data: any = await aiStorage.get(STORAGE_KEY);
 
-        // Filter completed requests that are less than 1 hour old
-        const validCompleted = (data.completed || []).filter(
-          (r: GenerationRequest) => r.completedAt && r.completedAt > oneHourAgo
-        );
-
-        // Re-queue any requests that were processing when the page closed
-        const requeued = (data.queue || []).map((r: GenerationRequest) => ({
-          ...r,
-          status: 'queued' as GenerationStatus,
-          retryCount: 0,
-        }));
-
-        if (data.active) {
-          requeued.unshift({
-            ...data.active,
-            status: 'queued' as GenerationStatus,
-            retryCount: 0,
-          });
+        // Fallback to localStorage migration
+        if (!data) {
+          const stored = localStorage.getItem(STORAGE_KEY);
+          if (stored) {
+            data = JSON.parse(stored);
+            // Migrate to IndexedDB for future runs
+            await aiStorage.set(STORAGE_KEY, data);
+            localStorage.removeItem(STORAGE_KEY); // Clean up old localStorage
+          }
         }
 
-        setQueue(requeued);
-        setCompletedRequests(validCompleted.slice(0, MAX_COMPLETED_RESULTS));
+        if (data) {
+          const oneHourAgo = Date.now() - 60 * 60 * 1000;
+
+          // Filter completed requests that are less than 1 hour old
+          const validCompleted = (data.completed || []).filter(
+            (r: GenerationRequest) => r.completedAt && r.completedAt > oneHourAgo
+          );
+
+          // Re-queue any requests that were processing when the page closed
+          const requeued = (data.queue || []).map((r: GenerationRequest) => ({
+            ...r,
+            status: 'queued' as GenerationStatus,
+            retryCount: 0,
+          }));
+
+          if (data.active) {
+            requeued.unshift({
+              ...data.active,
+              status: 'queued' as GenerationStatus,
+              retryCount: 0,
+            });
+          }
+
+          if (isMountedRef.current) {
+            setQueue(requeued);
+            setCompletedRequests(validCompleted.slice(0, MAX_COMPLETED_RESULTS));
+          }
+        }
+      } catch (e) {
+        console.error('Failed to load AI generation state:', e);
       }
-    } catch (e) {
-      console.error('Failed to load AI generation state:', e);
-    }
+    };
+
+    loadState();
 
     return () => {
       isMountedRef.current = false;
@@ -260,19 +282,19 @@ export function AIGenerationProvider({ children }: { children: React.ReactNode }
     };
   }, []);
 
-  // Save state to localStorage when it changes
+  // Save state to IndexedDB when it changes
   useEffect(() => {
     // 1. Cleanup old results (older than 24h) naturally before saving
     const twentyFourHoursAgo = Date.now() - 24 * 60 * 60 * 1000;
 
-    // We only save metadata, but let's be even more aggressive if needed
     const safeCompleted = completedRequests
       .filter(r => (r.completedAt || r.createdAt) > twentyFourHoursAgo)
       .slice(0, MAX_COMPLETED_RESULTS)
       .map(r => ({
         ...r,
-        // Keep result metadata but remove heavy base64 strings
-        // In this app, result.image is a base64 string usually
+        // Since we are using IndexedDB, we could keep more data, but 
+        // it's still good practice to drop heavy images from completed results 
+        // if they are already consumed by the UI.
         result: r.result ? { ...r.result, image: undefined } : undefined,
         payload: {
           ...r.payload,
@@ -289,22 +311,12 @@ export function AIGenerationProvider({ children }: { children: React.ReactNode }
     };
 
     try {
-      const serialized = JSON.stringify(data);
-      // Rough check if we're exceeding 4MB (most browsers allow 5MB-10MB)
-      if (serialized.length > 4 * 1024 * 1024) {
-        console.warn('⚠️ AI Queue state too large, clearing older results');
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...data, completed: [] }));
-      } else {
-        localStorage.setItem(STORAGE_KEY, serialized);
-      }
+      // Use IndexedDB which has massive storage quotas and will handle huge base64 arrays gracefully
+      aiStorage.set(STORAGE_KEY, data).catch(e => {
+        console.warn('Failed to save AI generation state to IndexedDB:', e);
+      });
     } catch (e) {
-      console.warn('Failed to save AI generation state (quota exceeded?):', e);
-      // fallback: save only essential queue
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ queue: queue.map(q => ({ ...q, payload: { ...q.payload, userImage: undefined, slots: undefined } })), active: null, completed: [] }));
-      } catch (e2) {
-        localStorage.removeItem(STORAGE_KEY);
-      }
+      console.warn('Sync wrapper failed:', e);
     }
   }, [queue, activeRequest, completedRequests]);
 
@@ -327,7 +339,7 @@ export function AIGenerationProvider({ children }: { children: React.ReactNode }
       switch (request.type) {
         case 'studio': {
           const payload = (request as StudioGenerationRequest).payload;
-          const requestedQuality = payload.quality ?? (payload.preset === 'editorial' ? 'pro' : 'flash');
+          const requestedQuality = payload.quality ?? 'pro';
           const apiResult = await runWithTimeout(
             generateVirtualTryOnWithSlots(
               payload.userImage,

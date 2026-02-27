@@ -1,5 +1,6 @@
-import React, { useCallback, useRef, useState, useEffect } from 'react';
+import React, { useCallback, useRef } from 'react';
 import { motion, useMotionValue, useTransform, useSpring } from 'framer-motion';
+import { useMatchMedia } from '../../src/hooks/useMatchMedia';
 
 interface Hero3DProps {
   displayName: string;
@@ -24,29 +25,8 @@ export function Hero3DImproved({
   daysActive
 }: Hero3DProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [isMobile, setIsMobile] = useState(false);
-  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
-
-  // Detectar móvil y preferencias de movimiento reducido
-  useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 768);
-    const checkMotion = () => {
-      const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
-      setPrefersReducedMotion(mediaQuery.matches);
-    };
-
-    checkMobile();
-    checkMotion();
-
-    window.addEventListener('resize', checkMobile);
-    const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
-    motionQuery.addEventListener('change', checkMotion);
-
-    return () => {
-      window.removeEventListener('resize', checkMobile);
-      motionQuery.removeEventListener('change', checkMotion);
-    };
-  }, []);
+  const isMobile = useMatchMedia('(max-width: 767px)');
+  const prefersReducedMotion = useMatchMedia('(prefers-reduced-motion: reduce)');
 
   const x = useMotionValue(0);
   const y = useMotionValue(0);

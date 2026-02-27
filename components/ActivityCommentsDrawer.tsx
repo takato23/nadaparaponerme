@@ -31,15 +31,6 @@ const ActivityCommentsDrawer = ({
   const [submitting, setSubmitting] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  // Load comments when drawer opens
-  useEffect(() => {
-    loadComments();
-    // Auto-focus input after drawer animation
-    setTimeout(() => {
-      inputRef.current?.focus();
-    }, 300);
-  }, [activity.id]);
-
   const loadComments = async () => {
     setLoading(true);
     try {
@@ -51,6 +42,17 @@ const ActivityCommentsDrawer = ({
     }
     setLoading(false);
   };
+
+  // Load comments when drawer opens
+  useEffect(() => {
+    loadComments();
+    // Auto-focus input after drawer animation
+    const focusTimer = setTimeout(() => {
+      inputRef.current?.focus();
+    }, 300);
+
+    return () => clearTimeout(focusTimer);
+  }, [activity.id]);
 
   const handleSubmitComment = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -262,7 +262,7 @@ function getErrorConfig(category: ErrorCategory, errorMessage: string): Omit<Err
       };
 
     case 'generic':
-    default:
+    {
       // Try to extract meaningful message from error
       const cleanMessage = errorMessage.replace(/^error:?\s*/i, '');
       return {
@@ -272,6 +272,18 @@ function getErrorConfig(category: ErrorCategory, errorMessage: string): Omit<Err
           : 'Ocurrió un error inesperado. Por favor intentá de nuevo.',
         severity: 'error',
       };
+    }
+    default:
+    {
+      const cleanMessage = errorMessage.replace(/^error:?\s*/i, '');
+      return {
+        title: 'Algo Salió Mal',
+        message: cleanMessage.length > 10 && cleanMessage.length < 200
+          ? cleanMessage.charAt(0).toUpperCase() + cleanMessage.slice(1) + (cleanMessage.endsWith('.') ? '' : '.')
+          : 'Ocurrió un error inesperado. Por favor intentá de nuevo.',
+        severity: 'error',
+      };
+    }
   }
 }
 

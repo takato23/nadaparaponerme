@@ -26,8 +26,8 @@ const TUTORIAL_STEPS = [
     {
         id: 'quality',
         target: 'studio-quality',
-        title: '⚡ Calidad',
-        description: 'Rápido (1 crédito) es más veloz. Ultra (4 créditos) tiene mejor calidad y detalle.',
+        title: '⚡ Modelo',
+        description: 'Usamos un único modo de alta calidad con Gemini 3.1 Flash Image Preview.',
         position: 'bottom',
     },
     {
@@ -47,8 +47,7 @@ const TERM_TOOLTIPS: Record<string, string> = {
     'Enterizo': 'Vestido o mono que reemplaza top + bottom',
     'Bottom': 'Pantalón, falda o short',
     'Overlay': 'Mantiene tu fondo original de la foto',
-    'Flash': 'Generación rápida, calidad estándar (1 crédito)',
-    'Ultra': 'Generación premium, máxima calidad (4 créditos)',
+    'Nano 3.1': 'Modo único de generación con Gemini 3.1 Flash Image Preview',
 };
 
 interface StudioTutorialProps {

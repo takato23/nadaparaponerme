@@ -11,7 +11,7 @@ import { useOptimistic } from './hooks/useOptimistic';
 import { useSubscription } from './hooks/useSubscription';
 import { useNavigateTransition } from './hooks/useNavigateTransition';
 import { useChatConversations } from './hooks/useChatConversations';
-import type { ClothingItem, FitResult, ClothingItemMetadata, SavedOutfit, CommunityUser, PackingListResult, SortOption, BrandRecognitionResult, OutfitSuggestionForEvent, ChatConversation, ChatMessage, CategoryFilter, ProfessionalProfile, ProfessionalFitResult } from './types';
+import type { ClothingItem, FitResult, ClothingItemMetadata, SavedOutfit, CommunityUser, PackingListResult, SortOption, BrandRecognitionResult, OutfitSuggestionForEvent, ChatConversation, ChatMessage, CategoryFilter, ProfessionalProfile, ProfessionalFitResult, ShoppingProduct } from './types';
 import * as aiService from './src/services/aiService';
 import { generateProfessionalOutfit } from './src/services/StylistService';
 import { dataUrlToFile } from './src/lib/supabase';
@@ -28,6 +28,8 @@ import { deleteAccount } from './src/services/accountService';
 import { usePullToRefresh } from './hooks/usePullToRefresh';
 import PullToRefreshIndicator from './components/ui/PullToRefreshIndicator';
 import { FloatingDock } from './components/ui/FloatingDock';
+import { claimBetaInviteViaEdge, createBetaInviteViaEdge, listBetaInviteClaimsViaEdge, proxyImageViaEdge } from './src/services/edgeFunctionClient';
+import { removeImageBackground } from './src/utils/backgroundRemoval';
 import { useFeatureAccess } from './hooks/useFeatureAccess';
 import { useShoppingAssistant } from './hooks/useShoppingAssistant';
 import { useOutfitGeneration } from './hooks/useOutfitGeneration';
@@ -138,6 +140,7 @@ const AppContent = () => {
     const navigate = useNavigateTransition();
     const consentPreferences = useConsentPreferences();
     const analyticsInitializedRef = useRef(false);
+    const betaClaimInFlightRef = useRef<string | null>(null);
     // Authentication
     const { user, signOut: authSignOut } = useAuth();
     const isAuthenticated = !!user;
@@ -163,6 +166,7 @@ const AppContent = () => {
     const useSupabaseOutfits = useFeatureFlag('useSupabaseOutfits');
     const useSupabasePreferences = useFeatureFlag('useSupabasePreferences');
     const useSupabaseAuth = useFeatureFlag('useSupabaseAuth');
+    const enableUnifiedStudioStylist = useFeatureFlag('enableUnifiedStudioStylist');
 
     // UX improvements: Toast notifications and optimistic UI
     const toast = useToast();
@@ -221,6 +225,90 @@ const AppContent = () => {
             }
         }
     }, [isAuthenticated, hasOnboarded, closet.length]);
+
+    useEffect(() => {
+        if (!isAuthenticated) return;
+
+        const params = new URLSearchParams(window.location.search);
+        const codeFromUrl = (params.get('beta') || '').trim().toUpperCase();
+        if (!codeFromUrl) return;
+        if (betaClaimInFlightRef.current === codeFromUrl) return;
+
+        const sessionGuardKey = `ojodeloca-beta-claimed-${codeFromUrl}`;
+        if (sessionStorage.getItem(sessionGuardKey) === '1') return;
+
+        betaClaimInFlightRef.current = codeFromUrl;
+        let cancelled = false;
+
+        const cleanupUrl = () => {
+            const cleanParams = new URLSearchParams(window.location.search);
+            cleanParams.delete('beta');
+            const cleanQuery = cleanParams.toString();
+            const cleanUrl = `${window.location.pathname}${cleanQuery ? `?${cleanQuery}` : ''}`;
+            window.history.replaceState({}, '', cleanUrl);
+        };
+
+        const claimInvite = async () => {
+            try {
+                const result = await claimBetaInviteViaEdge(codeFromUrl);
+                if (cancelled) return;
+                if (result.success) {
+                    sessionStorage.setItem(sessionGuardKey, '1');
+                    await subscription.refresh();
+                    toast.success(result.message || 'Acceso beta activado');
+                } else {
+                    toast.error(result.message || 'No se pudo activar el acceso beta');
+                }
+            } catch (error) {
+                if (cancelled) return;
+                toast.error(error instanceof Error ? error.message : 'No se pudo activar el acceso beta');
+            } finally {
+                if (!cancelled) cleanupUrl();
+                betaClaimInFlightRef.current = null;
+            }
+        };
+
+        claimInvite();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [isAuthenticated, location.pathname, location.search, subscription.refresh, toast]);
+
+    const handleCreateBetaInvite = useCallback(async () => {
+        try {
+            const invite = await createBetaInviteViaEdge({
+                maxUses: 10,
+                validDays: 30,
+                grantsPremium: true,
+                grantsUnlimitedAI: true,
+                note: 'creator-beta-share',
+            });
+
+            let copied = false;
+            try {
+                if (navigator?.clipboard?.writeText) {
+                    await navigator.clipboard.writeText(invite.shareLink);
+                    copied = true;
+                }
+            } catch {
+                copied = false;
+            }
+
+            if (!copied) {
+                window.prompt('Copiá este link beta y compartilo:', invite.shareLink);
+            }
+
+            toast.success(copied ? 'Link beta copiado al portapapeles' : 'Link beta generado');
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : 'No se pudo generar el link beta');
+        }
+    }, [toast]);
+
+    const handleListBetaInviteClaims = useCallback(async (code?: string) => {
+        const trace = await listBetaInviteClaimsViaEdge({ code, limit: 20 });
+        return trace;
+    }, []);
 
     // Handle payment callbacks (MercadoPago + Paddle)
     useEffect(() => {
@@ -551,6 +639,48 @@ const AppContent = () => {
         generateRecommendations: handleGenerateShoppingRecommendations,
         sendMessage: handleSendShoppingMessage
     } = useShoppingAssistant(closet);
+
+    const handleTryOnProduct = async (product: ShoppingProduct) => {
+        try {
+            toast.info(`Importando ${product.brand}...`);
+
+            // 1. Proxy the image to base64
+            const base64Image = await proxyImageViaEdge(product.image_url);
+
+            // 2. Remove Background locally
+            toast.info(`Recortando prenda...`);
+            const transparentImage = await removeImageBackground(base64Image);
+
+            // 3. AI Analysis
+            toast.info(`Analizando prenda...`);
+            const metadata = await aiService.analyzeClothingItem(transparentImage);
+
+            // 4. Overwrite brand/name
+            metadata.subcategory = product.title || metadata.subcategory;
+            if (!metadata.vibe_tags) metadata.vibe_tags = [];
+            metadata.vibe_tags.push('virtual-try-on', product.brand || 'Boutique');
+
+            // 5. Add to closet
+            const newItem: ClothingItem = {
+                id: `virtual_${Date.now()}`,
+                imageDataUrl: transparentImage,
+                metadata,
+                status: 'virtual' as any // Virtual item that acts as a fast-track try on
+            };
+
+            setCloset(prev => [newItem, ...prev]);
+            toast.success('¡Prenda lista para probar!');
+
+            // 6. Navigate to studio and close modal
+            modals.setShowVirtualShopping(false);
+            navigate(ROUTES.STUDIO);
+
+        } catch (error) {
+            console.error('Try-On Error:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
+            toast.error(`No se pudo importar la prenda: ${errorMessage}`);
+        }
+    };
 
     // Testing Playground state (dev tool for comparing outfit generation versions)
     const [showTestingPlayground, setShowTestingPlayground] = useState(false);
@@ -979,6 +1109,10 @@ const AppContent = () => {
     };
 
     const handleStylistClick = () => {
+        if (enableUnifiedStudioStylist) {
+            navigate(`${ROUTES.STUDIO}?assistant=stylist&entry=home`);
+            return;
+        }
         resetStylist();
         modals.setBorrowedItems([]);
         startTransition(() => {
@@ -1038,12 +1172,7 @@ const AppContent = () => {
         {
             key: 'g',
             modifiers: ['meta'],
-            action: () => {
-                resetStylist();
-                startTransition(() => {
-                    modals.setShowStylist(true);
-                });
-            },
+            action: handleStylistClick,
             description: 'Generar outfit'
         },
         // Shortcuts Help (Cmd+/)
@@ -1260,6 +1389,12 @@ const AppContent = () => {
     const isPublicRoute = PUBLIC_ROUTE_PATTERNS.some((pattern) =>
         Boolean(matchPath({ path: pattern, end: true }, location.pathname))
     );
+    const isStudioRoute =
+        (() => {
+            const path = location.pathname.replace(/\/+$/, '') || '/';
+            return [ROUTES.STUDIO, ROUTES.STUDIO_MIRROR, ROUTES.STUDIO_PHOTOSHOOT]
+                .some(route => path === route || path.startsWith(`${route}/`));
+        })();
 
     if (!isAuthenticated && !isPublicRoute) {
         if (showAuthView) {
@@ -1302,15 +1437,17 @@ const AppContent = () => {
         <>
             <SkipToMainContent />
             {!DISABLE_3D_BACKGROUND && <GlobalCanvas isAuth={!isAuthenticated && showAuthView} />}
-            <div className="relative z-10 w-full h-dvh p-2 md:p-3 lg:p-4 flex items-center justify-center">
-                <div className="w-full h-full max-w-7xl flex flex-col md:flex-row liquid-glass rounded-4xl overflow-hidden shadow-soft-lg">
+            <div className={`relative z-10 w-full h-dvh ${isStudioRoute ? 'flex items-stretch justify-stretch lg:p-4 lg:items-center lg:justify-center' : 'p-2 md:p-3 lg:p-4 flex items-center justify-center'}`}>
+                <div className={isStudioRoute
+                    ? 'w-full h-full overflow-hidden flex flex-col md:flex-row lg:max-w-7xl lg:liquid-glass lg:rounded-4xl lg:shadow-soft-lg'
+                    : 'w-full h-full max-w-7xl flex flex-col md:flex-row liquid-glass rounded-4xl overflow-hidden shadow-soft-lg'}>
 
 
                     <main
                         id="main-content"
                         role="main"
                         aria-label="Contenido principal"
-                        className={`relative flex-grow flex flex-col ${location.pathname === ROUTES.CLOSET ? 'overflow-hidden' : 'overflow-y-auto'}`}
+                        className={`relative flex-grow min-w-0 flex flex-col ${location.pathname === ROUTES.CLOSET ? 'overflow-hidden' : 'overflow-y-auto'}`}
                     >
                         <Suspense fallback={<LazyLoader type="view" />}>
                             {/* Main Content Area with Morphing Transitions */}
@@ -1391,9 +1528,11 @@ const AppContent = () => {
                                             <SavedOutfitsView savedOutfits={savedOutfits} closet={closet} onSelectOutfit={modals.setSelectedOutfitId} />
                                         } />
                                         <Route path={ROUTES.STYLIST} element={
-                                            <ClosetProvider items={closet}>
-                                                <InstantOutfitView />
-                                            </ClosetProvider>
+                                            enableUnifiedStudioStylist
+                                                ? <Navigate to={`${ROUTES.STUDIO}?assistant=stylist&entry=legacy_route`} replace />
+                                                : <ClosetProvider items={closet}>
+                                                    <InstantOutfitView />
+                                                </ClosetProvider>
                                         } />
                                         <Route path={ROUTES.PROFILE} element={
                                             <ProfileView
@@ -1414,10 +1553,17 @@ const AppContent = () => {
                                                 onOpenBorrowedItems={() => modals.setShowBorrowedItems(true)}
                                                 onDeleteAccount={handleDeleteAccount}
                                                 onLoadSampleData={handleLoadSampleData}
+                                                onCreateBetaInvite={handleCreateBetaInvite}
+                                                onListBetaInviteClaims={handleListBetaInviteClaims}
                                             />
                                         } />
-                                        {/* /prueba-virtual redirects to /studio */}
-                                        <Route path={ROUTES.VIRTUAL_TRY_ON} element={<Navigate to={ROUTES.STUDIO} replace />} />
+                                        <Route path={ROUTES.VIRTUAL_TRY_ON} element={
+                                            <VirtualMirrorView
+                                                closet={closet}
+                                                onOpenDigitalTwinSetup={() => modals.setShowDigitalTwinSetup(true)}
+                                                onOpenHistory={() => modals.setShowGenerationHistory(true)}
+                                            />
+                                        } />
                                         <Route path={ROUTES.SMART_PACKER} element={
                                             <SmartPackerView
                                                 closet={closet}
@@ -1504,7 +1650,10 @@ const AppContent = () => {
                             </AnimatePresence>
 
                             {/* Floating Dock Navigation */}
-                            <FloatingDock onCameraClick={() => modals.setShowQuickCamera(true)} />
+                            <FloatingDock
+                                onCameraClick={() => modals.setShowQuickCamera(true)}
+                                forceHidden={isStudioRoute}
+                            />
 
                         </Suspense>
                     </main>
@@ -1844,6 +1993,7 @@ const AppContent = () => {
                                 onMessagesUpdate={updateConversationMessages}
                                 onUpdateTitle={updateConversationTitle}
                                 userName={user?.user_metadata?.full_name || user?.email?.split('@')[0]}
+                                onUpgrade={() => setShowPricingModal(true)}
                                 onViewOutfit={(topId, bottomId, shoesId, aiGeneratedItems) => {
                                     console.log('App.tsx - Ver Outfit Completo handler called:', { topId, bottomId, shoesId, aiGeneratedItems });
 
@@ -2102,6 +2252,7 @@ const AppContent = () => {
                             onAnalyzeGaps={handleAnalyzeShoppingGaps}
                             onGenerateRecommendations={handleGenerateShoppingRecommendations}
                             onSendMessage={handleSendShoppingMessage}
+                            onTryOnProduct={handleTryOnProduct}
                             chatMessages={shoppingChatMessages}
                             currentGaps={shoppingGaps}
                             currentRecommendations={shoppingRecommendations}

@@ -126,9 +126,10 @@ export default defineConfig(({ mode, command }) => {
 
             // Split app services
             if (id.includes('/services/') && !id.includes('node_modules')) {
-              if (id.includes('gemini') || id.includes('aiService')) {
-                return 'app-ai-services';
-              }
+              // Keep AI-related service modules in the same app chunk as other services.
+              // Splitting them into a separate services chunk has caused production TDZ
+              // crashes (for example: "Cannot access 'Ve' before initialization")
+              // due circular chunk dependencies.
               return 'app-services';
             }
 

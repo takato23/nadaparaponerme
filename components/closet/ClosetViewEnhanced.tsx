@@ -505,6 +505,10 @@ export default function ClosetViewEnhanced({
           item={detailModal.item}
           isOpen={detailModal.isOpen}
           onClose={() => setDetailModal({ ...detailModal, isOpen: false })}
+          onItemUpdated={(updatedItem) => {
+            setDetailModal((prev) => ({ ...prev, item: updatedItem }));
+            onRefresh?.();
+          }}
         />
       </div>
     </div>

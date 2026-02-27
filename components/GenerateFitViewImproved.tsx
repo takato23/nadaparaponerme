@@ -223,8 +223,8 @@ const GenerateFitViewImproved: React.FC<GenerateFitViewImprovedProps> = ({
 
             {/* Credits */}
             <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl ${creditsStatus.remaining <= 2
-                ? 'bg-red-500/20 border border-red-500/30'
-                : 'bg-white/10'
+              ? 'bg-red-500/20 border border-red-500/30'
+              : 'bg-white/10'
               }`}>
               <span className={`material-symbols-rounded text-lg ${creditsStatus.remaining <= 2 ? 'text-red-400' : 'text-white/60'
                 }`}>toll</span>
@@ -267,8 +267,8 @@ const GenerateFitViewImproved: React.FC<GenerateFitViewImprovedProps> = ({
                 key={occasion.id}
                 onClick={() => setSelectedOccasion(selectedOccasion === occasion.id ? null : occasion.id)}
                 className={`p-3 rounded-xl border transition-all flex flex-col items-center gap-2 ${selectedOccasion === occasion.id
-                    ? 'bg-purple-500/20 border-purple-500/50 text-purple-300'
-                    : 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20 text-white/70'
+                  ? 'bg-purple-500/20 border-purple-500/50 text-purple-300'
+                  : 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20 text-white/70'
                   }`}
               >
                 <span className={`material-symbols-rounded text-2xl ${selectedOccasion === occasion.id ? 'text-purple-400' : 'text-white/50'
@@ -300,8 +300,8 @@ const GenerateFitViewImproved: React.FC<GenerateFitViewImprovedProps> = ({
                       key={ref.id}
                       onClick={() => setSelectedRefinement(selectedRefinement === ref.id ? null : ref.id)}
                       className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${selectedRefinement === ref.id
-                          ? 'bg-white text-gray-900'
-                          : 'bg-white/10 text-white/70 hover:bg-white/20'
+                        ? 'bg-white text-gray-900'
+                        : 'bg-white/10 text-white/70 hover:bg-white/20'
                         }`}
                     >
                       <span className="material-symbols-rounded text-sm">{ref.icon}</span>
@@ -385,26 +385,34 @@ const GenerateFitViewImproved: React.FC<GenerateFitViewImprovedProps> = ({
           <button
             onClick={handleGenerate}
             disabled={!canGenerate}
-            className={`w-full py-3.5 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 ${canGenerate
-                ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40'
-                : 'bg-white/10 text-white/40 cursor-not-allowed'
+            className={`w-full py-3.5 rounded-xl font-bold transition-all flex items-center justify-center gap-2 group relative overflow-hidden ${canGenerate
+              ? 'text-white shadow-[0_4px_15px_rgba(236,72,153,0.3)] hover:shadow-[0_6px_25px_rgba(236,72,153,0.5)] active:scale-95 border-0'
+              : 'bg-white/10 text-white/40 cursor-not-allowed'
               }`}
           >
-            {isGenerating ? (
+            {canGenerate && (
               <>
-                <motion.div
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                  className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full"
-                />
-                <span>{loadingMessages[loadingPhase]}</span>
-              </>
-            ) : (
-              <>
-                <span className="material-symbols-rounded">auto_awesome</span>
-                Crear Outfit
+                <div className="absolute inset-0 bg-[length:200%_200%] animate-gradient-xy bg-gradient-to-r from-purple-500 via-pink-500 to-[color:var(--studio-rose)]" />
+                <div className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
               </>
             )}
+            <div className="relative z-10 flex items-center justify-center gap-2 w-full">
+              {isGenerating ? (
+                <>
+                  <motion.div
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                    className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full"
+                  />
+                  <span>{loadingMessages[loadingPhase]}</span>
+                </>
+              ) : (
+                <>
+                  <span className="material-symbols-rounded">auto_awesome</span>
+                  Crear Outfit
+                </>
+              )}
+            </div>
           </button>
 
           {closet.length === 0 && (

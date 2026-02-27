@@ -4,7 +4,7 @@ import {
   getCreditStatus,
   resetCredits,
   setUserTier,
-  useCredit,
+  consumeCredit,
   useCredits,
 } from '../src/services/usageTrackingService';
 
@@ -63,10 +63,10 @@ describe('usageTrackingService', () => {
 
   it('consumes credits and stops at the limit', () => {
     for (let i = 0; i < CREDIT_LIMITS.free; i += 1) {
-      expect(useCredit()).toBe(true);
+      expect(consumeCredit()).toBe(true);
     }
 
-    expect(useCredit()).toBe(false);
+    expect(consumeCredit()).toBe(false);
 
     const status = getCreditStatus();
     expect(status.remaining).toBe(0);
@@ -90,7 +90,7 @@ describe('usageTrackingService', () => {
     expect(status.remaining).toBe(CREDIT_LIMITS.premium);
     expect(status.canUse).toBe(true);
 
-    expect(useCredit()).toBe(true);
+    expect(consumeCredit()).toBe(true);
     expect(getCreditStatus().remaining).toBe(CREDIT_LIMITS.premium - 1);
   });
 });

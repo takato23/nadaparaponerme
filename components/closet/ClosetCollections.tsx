@@ -128,40 +128,100 @@ export default function ClosetCollections({
           Colecciones
         </h3>
         <button
-          onClick={() => setShowCreateDialog(true)}
-          className="w-6 h-6 rounded-lg bg-primary/10 hover:bg-primary/20 flex items-center justify-center transition-all hover:scale-110 active:scale-95"
-          aria-label="Nueva colección"
+          onClick={() => {
+            if (showCreateDialog) {
+              setShowCreateDialog(false);
+              setNewCollectionName('');
+            } else {
+              setEditingCollection(null);
+              setNewCollectionName('');
+              setShowCreateDialog(true);
+            }
+          }}
+          className={`w-6 h-6 rounded-lg flex items-center justify-center transition-all hover:scale-110 active:scale-95 ${showCreateDialog ? 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300' : 'bg-primary/10 hover:bg-primary/20 text-primary'
+            }`}
+          aria-label={showCreateDialog ? 'Cancelar' : 'Nueva colección'}
         >
-          <span className="material-symbols-outlined text-primary text-sm font-bold">add</span>
+          <motion.span
+            animate={{ rotate: showCreateDialog ? 45 : 0 }}
+            className="material-symbols-outlined text-sm font-bold"
+          >
+            add
+          </motion.span>
         </button>
       </div>
 
+      {/* Inline Create/Edit Form */}
+      <AnimatePresence>
+        {(showCreateDialog || editingCollection) && (
+          <motion.div
+            initial={{ opacity: 0, height: 0, marginBottom: 0 }}
+            animate={{ opacity: 1, height: 'auto', marginBottom: 12 }}
+            exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="p-3 bg-white/60 dark:bg-gray-800/60 backdrop-blur-md rounded-xl border border-white/40 dark:border-white/10 shadow-sm relative overflow-hidden">
+              <input
+                type="text"
+                value={newCollectionName}
+                onChange={(e) => setNewCollectionName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && newCollectionName.trim()) {
+                    editingCollection ? handleUpdateCollection() : handleCreateCollection();
+                  }
+                  if (e.key === 'Escape') {
+                    setShowCreateDialog(false);
+                    setEditingCollection(null);
+                    setNewCollectionName('');
+                  }
+                }}
+                placeholder={editingCollection ? "Renombrar..." : "Nueva colección..."}
+                className="w-full px-3 py-2 text-sm rounded-lg bg-white/90 dark:bg-gray-900 border border-transparent focus:border-primary/30 focus:ring-2 focus:ring-primary/10 transition-all outline-none font-medium mb-3 relative z-10"
+                autoFocus
+              />
+              <div className="flex gap-2 relative z-10">
+                <button
+                  onClick={editingCollection ? handleUpdateCollection : handleCreateCollection}
+                  disabled={!newCollectionName.trim()}
+                  className="flex-1 py-1.5 text-xs font-bold rounded-lg bg-primary text-white shadow-glow-sm hover:shadow-glow-md disabled:opacity-50 disabled:shadow-none transition-all active:scale-95"
+                >
+                  {editingCollection ? 'Guardar' : 'Crear'}
+                </button>
+              </div>
+
+              {/* Subtle glass effect behind the form */}
+              <div className="absolute inset-0 bg-gradient-to-br from-white/40 to-transparent dark:from-gray-800/40 pointer-events-none z-0"></div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Collections List */}
-      <div className="space-y-2">
+      <div className="space-y-1 relative">
         {collections.map((collection) => {
           const isActive = collection.id === activeCollectionId;
           const itemCount = itemCounts[collection.id] || 0;
 
           return (
-            <div
-              key={collection.id}
-              className="group relative"
-            >
+            <div key={collection.id} className="group relative">
               <button
                 onClick={() => onSelectCollection(collection.id)}
-                className={`
-                  w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 border
-                  ${isActive
-                    ? 'bg-primary/10 border-primary/20 text-primary shadow-glow-sm'
-                    : 'bg-white/40 dark:bg-gray-800/40 border-transparent hover:bg-white/60 dark:hover:bg-gray-800/60 text-text-primary dark:text-gray-200 hover:shadow-sm'
-                  }
-                `}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors duration-200 relative z-10 ${isActive ? 'text-primary' : 'text-text-primary dark:text-gray-200 hover:bg-white/40 dark:hover:bg-gray-800/40'
+                  }`}
               >
+                {/* Active Indicator Background (Framer Motion) */}
+                {isActive && (
+                  <motion.div
+                    layoutId="activeCollectionBg"
+                    className="absolute inset-0 bg-primary/10 border border-primary/20 rounded-xl z-[-1] shadow-glow-sm"
+                    initial={false}
+                    transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                  />
+                )}
+
                 {/* Icon */}
-                <div className={`
-                  w-8 h-8 rounded-lg flex items-center justify-center transition-colors
-                  ${isActive ? 'bg-primary/20' : 'bg-gray-100 dark:bg-gray-700 group-hover:bg-white dark:group-hover:bg-gray-600'}
-                `}>
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors shadow-sm ${isActive ? 'bg-primary/20' : 'bg-white/80 dark:bg-gray-700/80 backdrop-blur-md group-hover:bg-white dark:group-hover:bg-gray-600'
+                  }`}>
                   <span
                     className="material-symbols-outlined text-lg"
                     style={{ color: isActive ? undefined : collection.color }}
@@ -172,38 +232,30 @@ export default function ClosetCollections({
 
                 {/* Name & Count */}
                 <div className="flex-grow text-left min-w-0">
-                  <div className={`font-bold text-sm truncate ${isActive ? 'text-primary' : ''}`}>
+                  <div className="font-bold text-sm truncate">
                     {collection.name}
                   </div>
-                  {collection.description && (
-                    <div className="text-xs text-text-secondary dark:text-gray-400 truncate">
-                      {collection.description}
-                    </div>
-                  )}
                 </div>
 
                 {/* Item Count Badge */}
-                <span className={`
-                  text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0 transition-colors
-                  ${isActive
-                    ? 'bg-primary text-white shadow-sm'
-                    : 'bg-gray-200 dark:bg-gray-700 text-text-secondary dark:text-gray-400 group-hover:bg-gray-300 dark:group-hover:bg-gray-600'
-                  }
-                `}>
+                <span className={`text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0 transition-colors ${isActive
+                    ? 'bg-primary text-white shadow-sm border border-primary-light/30'
+                    : 'bg-white/60 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 text-text-secondary dark:text-gray-400 group-hover:bg-white dark:group-hover:bg-gray-700'
+                  }`}>
                   {itemCount}
                 </span>
               </button>
 
-              {/* Edit/Delete Actions (only for custom collections) */}
+              {/* Edit/Delete Actions */}
               {!collection.isDefault && (
-                <div className="absolute right-2 top-1/2 -translate-y-1/2 hidden group-hover:flex gap-1 pl-4 bg-gradient-to-l from-white via-white to-transparent dark:from-gray-900 dark:via-gray-900 py-1 pr-1 rounded-r-xl">
+                <div className="absolute right-1 top-1/2 -translate-y-1/2 hidden group-hover:flex gap-1 pl-4 bg-gradient-to-l from-white via-white to-transparent dark:from-gray-900 dark:via-gray-900 py-1 pr-1 rounded-r-xl z-20">
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       openEditDialog(collection);
                     }}
-                    className="w-7 h-7 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-primary/10 hover:text-primary flex items-center justify-center transition-colors"
-                    aria-label="Editar colección"
+                    className="w-7 h-7 rounded-lg bg-gray-100/90 dark:bg-gray-800/90 backdrop-blur-md hover:bg-primary/10 hover:text-primary flex items-center justify-center transition-colors border border-gray-200/50 dark:border-gray-700/50 hover:border-primary/30"
+                    aria-label="Editar"
                   >
                     <span className="material-symbols-outlined text-sm">edit</span>
                   </button>
@@ -212,8 +264,8 @@ export default function ClosetCollections({
                       e.stopPropagation();
                       handleDeleteCollectionClick(collection);
                     }}
-                    className="w-7 h-7 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-500 flex items-center justify-center transition-colors"
-                    aria-label="Eliminar colección"
+                    className="w-7 h-7 rounded-lg bg-gray-100/90 dark:bg-gray-800/90 backdrop-blur-md hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-500 flex items-center justify-center transition-colors border border-gray-200/50 dark:border-gray-700/50 hover:border-red-500/30"
+                    aria-label="Eliminar"
                   >
                     <span className="material-symbols-outlined text-sm">delete</span>
                   </button>
@@ -223,105 +275,6 @@ export default function ClosetCollections({
           );
         })}
       </div>
-
-      {/* Create/Edit Collection Dialog */}
-      <AnimatePresence>
-        {(showCreateDialog || editingCollection) && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="bg-white dark:bg-gray-900 rounded-3xl p-6 max-w-md w-full shadow-2xl border border-white/10"
-            >
-              <h3 className="text-xl font-serif font-bold text-text-primary dark:text-gray-100 mb-6">
-                {editingCollection ? 'Editar Colección' : 'Nueva Colección'}
-              </h3>
-
-              {/* Name Input */}
-              <div className="mb-5">
-                <label className="block text-xs font-bold text-text-secondary dark:text-gray-400 uppercase tracking-wider mb-2">
-                  Nombre
-                </label>
-                <input
-                  type="text"
-                  value={newCollectionName}
-                  onChange={(e) => setNewCollectionName(e.target.value)}
-                  placeholder="ej: Verano 2025, Trabajo..."
-                  className="w-full px-4 py-3 rounded-xl bg-gray-50 dark:bg-gray-800 border border-transparent focus:border-primary/50 focus:bg-white dark:focus:bg-gray-900 focus:ring-4 focus:ring-primary/10 transition-all outline-none font-medium"
-                  autoFocus
-                />
-              </div>
-
-              {/* Color Picker */}
-              <div className="mb-5">
-                <label className="block text-xs font-bold text-text-secondary dark:text-gray-400 uppercase tracking-wider mb-2">
-                  Color
-                </label>
-                <div className="flex flex-wrap gap-3">
-                  {COLOR_OPTIONS.map((color) => (
-                    <button
-                      key={color.value}
-                      onClick={() => setSelectedColor(color.value)}
-                      className={`
-                        w-8 h-8 rounded-full transition-transform hover:scale-110
-                        ${selectedColor === color.value ? 'ring-2 ring-primary ring-offset-2 dark:ring-offset-gray-900 scale-110' : ''}
-                      `}
-                      style={{ backgroundColor: color.value }}
-                      aria-label={color.name}
-                    />
-                  ))}
-                </div>
-              </div>
-
-              {/* Icon Picker */}
-              <div className="mb-8">
-                <label className="block text-xs font-bold text-text-secondary dark:text-gray-400 uppercase tracking-wider mb-2">
-                  Icono
-                </label>
-                <div className="grid grid-cols-5 gap-3">
-                  {ICON_OPTIONS.map((icon) => (
-                    <button
-                      key={icon}
-                      onClick={() => setSelectedIcon(icon)}
-                      className={`
-                        p-2.5 rounded-xl transition-all flex items-center justify-center
-                        ${selectedIcon === icon
-                          ? 'bg-primary text-white shadow-glow-accent scale-105'
-                          : 'bg-gray-100 dark:bg-gray-800 text-text-secondary dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
-                        }
-                      `}
-                    >
-                      <span className="material-symbols-outlined text-xl">{icon}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Actions */}
-              <div className="flex gap-3">
-                <button
-                  onClick={() => {
-                    setShowCreateDialog(false);
-                    setEditingCollection(null);
-                    setNewCollectionName('');
-                  }}
-                  className="flex-1 px-4 py-3.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-text-primary dark:text-gray-200 font-bold hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={editingCollection ? handleUpdateCollection : handleCreateCollection}
-                  disabled={!newCollectionName.trim()}
-                  className="flex-1 px-4 py-3.5 rounded-xl bg-gradient-to-r from-primary to-secondary text-white font-bold shadow-glow-accent hover:shadow-glow-lg hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none disabled:scale-100 transition-all"
-                >
-                  {editingCollection ? 'Guardar Cambios' : 'Crear Colección'}
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
 
       {/* Delete Confirmation Modal */}
       <Suspense fallback={null}>

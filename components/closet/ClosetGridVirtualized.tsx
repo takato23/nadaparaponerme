@@ -17,6 +17,7 @@ import React, { useMemo, useRef, useCallback, useState, useEffect } from 'react'
 import ClosetItemCard from './ClosetItemCard';
 import ClosetQuickActions, { useContextMenu, QuickAction } from './ClosetQuickActions';
 import type { ClothingItem } from '../../types';
+import NanoBanana from './NanoBanana';
 
 // Type for Grid cell renderer props
 type GridCellProps = {
@@ -266,6 +267,10 @@ export default function ClosetGridVirtualized({
           <div className="absolute top-0 right-0 w-3 h-3 rounded-full bg-primary animate-bounce-small" style={{ animationDelay: '0s' }} />
           <div className="absolute bottom-0 left-0 w-2 h-2 rounded-full bg-secondary animate-bounce-small" style={{ animationDelay: '0.3s' }} />
           <div className="absolute top-1/2 right-0 w-2 h-2 rounded-full bg-accent animate-bounce-small" style={{ animationDelay: '0.6s' }} />
+
+          <div className="absolute -bottom-4 -right-10 z-20">
+            <NanoBanana className="scale-50 origin-bottom-right" />
+          </div>
         </div>
 
         <h2 className="text-3xl font-serif font-bold text-text-primary dark:text-gray-100 mb-3 tracking-tight">

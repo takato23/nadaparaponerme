@@ -21,12 +21,9 @@ const COLORS = ['#fbbf24', '#f59e0b', '#3b82f6', '#8b5cf6', '#ec4899', '#10b981'
 
 const ConfettiEffect: React.FC<ConfettiEffectProps> = ({ trigger, onComplete }) => {
   const [confetti, setConfetti] = useState<Confetti[]>([]);
-  const [isActive, setIsActive] = useState(false);
 
   useEffect(() => {
     if (!trigger) return;
-
-    setIsActive(true);
 
     // Generate confetti pieces
     const pieces: Confetti[] = Array.from({ length: 50 }, (_, i) => ({
@@ -45,7 +42,6 @@ const ConfettiEffect: React.FC<ConfettiEffectProps> = ({ trigger, onComplete }) 
 
     // Clear after animation
     const timer = setTimeout(() => {
-      setIsActive(false);
       setConfetti([]);
       onComplete?.();
     }, 3000);
@@ -53,7 +49,7 @@ const ConfettiEffect: React.FC<ConfettiEffectProps> = ({ trigger, onComplete }) 
     return () => clearTimeout(timer);
   }, [trigger, onComplete]);
 
-  if (!isActive) return null;
+  if (confetti.length === 0) return null;
 
   return (
     <div className="fixed inset-0 pointer-events-none z-[200] overflow-hidden">

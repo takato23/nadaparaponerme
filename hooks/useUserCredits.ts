@@ -10,7 +10,7 @@ import {
   getUserTier,
   setUserTier,
   canUseFeature,
-  recordUsage,
+  recordCreditUsage,
   getAllFeatureStatuses,
   getUsageSummary,
   getFeatureDisplayName,
@@ -110,7 +110,7 @@ export function useUserCredits(): UseUserCreditsReturn {
     }
 
     // Record usage
-    const success = recordUsage(feature);
+    const success = recordCreditUsage(feature);
 
     // Refresh statuses after recording
     if (success) {

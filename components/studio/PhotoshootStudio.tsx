@@ -1,79 +1,86 @@
-import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import type { Variants } from 'framer-motion';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { ROUTES } from '../../src/routes';
-import type { ClothingItem, ClothingSlot, GenerationPreset, SlotSelection, GenerationFit } from '../../types';
-import { SLOT_CONFIGS, GENERATION_PRESETS, MAX_SLOTS_PER_GENERATION, CATEGORY_TO_SLOT } from '../../types';
-import ClosetItemCard from '../closet/ClosetItemCard';
-import { saveGeneratedLook, canUserSaveLook } from '../../src/services/generatedLooksService';
+import { useLocation, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import type {
+  ClothingItem,
+  ClothingSlot,
+  GenerationPreset,
+  SlotSelection,
+  StructuredOutfitSuggestion,
+} from '../../types';
+import { GENERATION_PRESETS, MAX_SLOTS_PER_GENERATION } from '../../types';
+import { ROUTES } from '../../src/routes';
 import Loader from '../Loader';
-import { validateImageDataUri } from '../../utils/imageValidation';
-import { analyzeTryOnPhotoQuality } from '../../utils/photoQualityValidation';
 import ClothingCompatibilityWarning from './ClothingCompatibilityWarning';
-import { getFaceReferences, FaceReference } from '../../src/services/faceReferenceService';
+import { GenerationLoader } from './GenerationLoader';
+import { StudioHeader } from './StudioHeader';
+import { StudioToolbar } from './StudioToolbar';
+import { StudioTutorial, useStudioTutorial } from './StudioTutorial';
 import { useStudioGeneration } from '../../contexts/AIGenerationContext';
 import { useSubscription } from '../../hooks/useSubscription';
 import { useAuth } from '../../hooks/useAuth';
-import { StudioHeader } from './StudioHeader';
-import { StudioToolbar } from './StudioToolbar';
-import { GenerationLoader } from './GenerationLoader';
-import { StudioTutorial, useStudioTutorial } from './StudioTutorial';
+import { useConsentPreferences } from '../../hooks/useConsentPreferences';
+import { useFeatureFlag } from '../../hooks/useFeatureFlag';
+import { getFaceReferences, type FaceReference } from '../../src/services/faceReferenceService';
+import * as analytics from '../../src/services/analyticsService';
+import { saveGeneratedLook, canUserSaveLook } from '../../src/services/generatedLooksService';
+import {
+  DEFAULT_VIRTUAL_MODEL_IMAGE,
+  DIGITAL_TWIN_SOURCE_IMAGE_KEY,
+  DIGITAL_TWIN_STORAGE_KEY,
+  FILTERS,
+  QUICK_CATEGORIES,
+  STUDIO_GENERATION_STATE_KEY,
+  getValidSlotsForItem,
+  hasMinimumCoverage,
+  type GeneratedImageRecord,
+  type PhotoshootStudioProps,
+  type StudioGenerationPayload,
+  type StudioLocationState,
+} from './photoshootStudio.types';
+import { useSlotManager } from './hooks/useSlotManager';
+import { useQuickTryOn } from './hooks/useQuickTryOn';
+import { useStudioCache } from './hooks/useStudioCache';
+import { usePendingResults } from './hooks/usePendingResults';
+import { useStudioUIState } from './hooks/useStudioUIState';
+import { SelectedGarmentsTray } from './components/SelectedGarmentsTray';
+import { StudioClosetGrid } from './components/StudioClosetGrid';
+import { StudioResultViewer } from './components/StudioResultViewer';
+import { StylistAssistantPanel } from './components/StylistAssistantPanel';
+import { flushPendingStylistEvents, recordStylistEvent } from '../../src/services/stylistMemoryService';
 
-// Extended type for generation history with full metadata
-interface GeneratedImageRecord {
-  image: string;
-  slots: string[];
-  model: string;
-  preset: GenerationPreset;
-  keepPose: boolean;
-  faceRefsUsed: number;
-  customScene?: string;
-  selfieUsed: string; // The selfie that was used
-  timestamp: number;
-  itemIds: Record<string, string>;
-}
-
-interface PhotoshootStudioProps {
-  closet: ClothingItem[];
-}
-
-type FilterStatus = 'all' | 'owned' | 'virtual';
-
-type StudioLocationState = {
-  tab?: 'owned' | 'virtual';
-  selectedItemId?: string;
-  preselectedItemIds?: string[];
-} | null;
-
-const FILTERS: Array<{ id: FilterStatus; label: string }> = [
-  { id: 'all', label: 'Todo' },
-  { id: 'owned', label: 'Mi armario' },
-  { id: 'virtual', label: 'Prestadas' }
-];
-
-// Quick categories for items from screenshots
-const QUICK_CATEGORIES: Array<{ id: string; label: string; icon: string }> = [
-  { id: 'top', label: 'Remera/Top', icon: '👕' },
-  { id: 'bottom', label: 'Pantalón/Falda', icon: '👖' },
-  { id: 'one_piece', label: 'Vestido/Enterito', icon: '👗' },
-  { id: 'outerwear', label: 'Campera/Abrigo', icon: '🧥' },
-  { id: 'shoes', label: 'Zapatos', icon: '👟' },
-];
 const EASE_STANDARD: [number, number, number, number] = [0.22, 1, 0.36, 1];
 
 const containerVariants: Variants = {
   hidden: { opacity: 0 },
   show: {
     opacity: 1,
-    transition: { staggerChildren: 0.08, delayChildren: 0.1 }
-  }
+    transition: { staggerChildren: 0.08, delayChildren: 0.1 },
+  },
 };
 
 const itemVariants: Variants = {
   hidden: { opacity: 0, y: 12 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: EASE_STANDARD } }
+  show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: EASE_STANDARD } },
+};
+
+const parseTwinProfile = (rawProfile: string | null): { sourceImages: string[] } | null => {
+  if (!rawProfile) return null;
+  try {
+    const parsed = JSON.parse(rawProfile) as { sourceImages?: unknown; sourceImage?: unknown };
+    const sourceImages = Array.isArray(parsed.sourceImages)
+      ? parsed.sourceImages.filter((value): value is string => typeof value === 'string')
+      : [];
+    const fallbackImage = typeof parsed.sourceImage === 'string' ? parsed.sourceImage : null;
+
+    return {
+      sourceImages: sourceImages.length > 0 ? sourceImages : fallbackImage ? [fallbackImage] : [],
+    };
+  } catch {
+    return null;
+  }
 };
 
 const studioTheme = {
@@ -86,39 +93,74 @@ const studioTheme = {
   '--studio-gold': '#f6c681',
   '--studio-shadow': 'rgba(17, 24, 39, 0.18)',
   '--studio-font-display': '"Playfair Display", serif',
-  '--studio-font-body': '"Poppins", sans-serif'
+  '--studio-font-body': '"Poppins", sans-serif',
 } as React.CSSProperties;
-
-// Get the valid slot for an item based on its category
-function getValidSlotsForItem(item: ClothingItem): ClothingSlot[] {
-  const category = item.metadata?.category || 'top';
-  return CATEGORY_TO_SLOT[category] || ['top_base'];
-}
-
-// Check if the current slot selection has minimum required coverage
-function hasMinimumCoverage(slots: Map<ClothingSlot, SlotSelection>): boolean {
-  // Relaxed: At least one item is enough
-  return slots.size > 0;
-}
 
 export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
   const navigate = useNavigate();
   const location = useLocation();
-  const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
-  const [slotSelections, setSlotSelections] = useState<Map<ClothingSlot, SlotSelection>>(new Map());
+  const studioLocationState = location.state as StudioLocationState;
+
+  const mirroredEntryHandled = useRef(false);
+  const sessionGenerationIds = useRef<Set<string>>(new Set());
+  const studioRootRef = useRef<HTMLDivElement>(null);
+
+  const {
+    filterStatus,
+    setFilterStatus,
+    isMobile,
+    showResultsHint,
+    setShowResultsHint,
+    customScene,
+    setCustomScene,
+    keepPose,
+    setKeepPose,
+    selectedImage,
+    setSelectedImage,
+    compareMode,
+    setCompareMode,
+    comparePosition,
+    setComparePosition,
+    activeSlotPicker,
+    setActiveSlotPicker,
+    activeFitPicker,
+    setActiveFitPicker,
+    showCompatibilityWarning,
+    setShowCompatibilityWarning,
+    shakeButton,
+    triggerShake,
+    isNewSessionResult,
+    setIsNewSessionResult,
+  } = useStudioUIState();
+
   const [presetId, setPresetId] = useState<GenerationPreset>('overlay');
   const [generationProvider] = useState<'google' | 'openai'>('google');
-  const [generationQuality, setGenerationQuality] = useState<'flash' | 'pro'>('flash');
+  const generationQuality: 'pro' = 'pro';
   const [generationFit, setGenerationFit] = useState<'tight' | 'regular' | 'oversized'>('regular');
   const [generationView, setGenerationView] = useState<'front' | 'back' | 'side'>('front');
   const [isSaving, setIsSaving] = useState(false);
-
   const [generatedImages, setGeneratedImages] = useState<GeneratedImageRecord[]>([]);
+  const [userBaseImage, setUserBaseImage] = useState<string | null>(null);
+  const [virtualModelImage, setVirtualModelImage] = useState<string | null>(null);
+  const [useVirtualModel, setUseVirtualModel] = useState<boolean>(() => {
+    if (typeof studioLocationState?.useVirtualModel === 'boolean') {
+      return studioLocationState.useVirtualModel;
+    }
+    return !localStorage.getItem('studio-user-selfie');
+  });
+  const [autoSave, setAutoSave] = useState(false);
+  const [uploadBaseRequestSignal, setUploadBaseRequestSignal] = useState(0);
+  const [useFaceRefs, setUseFaceRefs] = useState(true);
+  const [faceRefs, setFaceRefs] = useState<FaceReference[]>([]);
 
   const subscription = useSubscription();
   const { user } = useAuth();
+  const consentPreferences = useConsentPreferences();
+  const enableHybridTryOn = useFeatureFlag('enableHybridTryOn');
+  const enableUnifiedStudioStylist = useFeatureFlag('enableUnifiedStudioStylist');
+  const [showStylistAssistant, setShowStylistAssistant] = useState(false);
+  const latestStylistContextRef = useRef<{ threadId?: string | null; prompt?: string | null }>({});
 
-  // Use global generation context for persistence across navigation
   const {
     enqueue: enqueueGeneration,
     results: pendingResults,
@@ -131,121 +173,172 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
   } = useStudioGeneration();
   const hasPendingResults = pendingResults.length > 0;
 
-  // Failsafe: Reset generation state if it gets stuck for too long (> 60s)
+  const safeCloset = closet || [];
+
+  const {
+    slotSelections,
+    setSlotSelections,
+    isItemSelected,
+    addItemToSlot,
+    updateSlotFit,
+    removeFromSlot,
+    handleItemClick,
+    relevantSlots,
+  } = useSlotManager({
+    closet: safeCloset,
+    maxSlotsPerGeneration: MAX_SLOTS_PER_GENERATION,
+  });
+
+  const {
+    quickItems,
+    isUploadingQuickItem,
+    showQuickItemCategoryPicker,
+    setShowQuickItemCategoryPicker,
+    quickItemInputRef,
+    backItemInputRef,
+    setUploadingBackForItemId,
+    handleQuickItemUpload,
+    handleBackItemUpload,
+    confirmQuickItemCategory,
+    removeQuickItem,
+  } = useQuickTryOn({ setSlotSelections });
+
+  const { executeStudioCachePrecheck, persistStudioCacheEntry, buildStudioCacheInput } = useStudioCache({
+    enableHybridTryOn,
+    userId: user?.id,
+    setGeneratedImages,
+  });
+
+  usePendingResults({
+    hasPendingResults,
+    pendingResults,
+    clearPendingResult,
+    activeGeneration,
+    cancelGeneration,
+    sessionGenerationIds,
+    faceRefs,
+    setGeneratedImages,
+    setSelectedImage,
+    setShowResultsHint,
+    setIsNewSessionResult,
+    persistStudioCacheEntry,
+  });
+
   useEffect(() => {
     let timeout: NodeJS.Timeout;
     if (isGenerating) {
       timeout = setTimeout(() => {
-        // We can't force reset isGenerating from here since it lives in context
-        // But we can notify the user
         toast.error('La generación está tardando más de lo esperado. Por favor recarga la página.');
       }, 60000);
     }
     return () => clearTimeout(timeout);
   }, [isGenerating]);
 
-  // Handle generation failures
   useEffect(() => {
-    if (lastFailure) {
-      toast.error(`Error: ${lastFailure.error || 'Falló la generación'}`);
-      // Optional: Clear the failure from context if we had a method, 
-      // but for now we just show the toast. 
-      // Ideally we should auto-clear it so it doesn't show again on nav.
+    if (lastFailure?.error) {
+      toast.error(`No se pudo generar el look. ${lastFailure.error}`);
     }
   }, [lastFailure]);
 
-  const [userBaseImage, setUserBaseImage] = useState<string | null>(null);
-  const [autoSave, setAutoSave] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
-  const [showResultsHint, setShowResultsHint] = useState(false);
-  const [customScene, setCustomScene] = useState('');
-  const [keepPose, setKeepPose] = useState(false);
-  const [selectedImage, setSelectedImage] = useState<GeneratedImageRecord | null>(null);
-  const [compareMode, setCompareMode] = useState(false);
-  const [comparePosition, setComparePosition] = useState(50);
-  const [activeSlotPicker, setActiveSlotPicker] = useState<string | null>(null);
-  const [activeFitPicker, setActiveFitPicker] = useState<string | null>(null);
-
-  // Quick Try-On
-  const [quickItems, setQuickItems] = useState<ClothingItem[]>([]);
-  const [isUploadingQuickItem, setIsUploadingQuickItem] = useState(false);
-  const [showQuickItemCategoryPicker, setShowQuickItemCategoryPicker] = useState<string | null>(null);
-  const quickItemInputRef = useRef<HTMLInputElement>(null);
-  const backItemInputRef = useRef<HTMLInputElement>(null);
-  const [uploadingBackForItemId, setUploadingBackForItemId] = useState<string | null>(null);
-
-  // UX State
-  const [shakeButton, setShakeButton] = useState(false);
-
-
-
-
-
-
-  // Dynamic Loading
-  const [loadingMsg, setLoadingMsg] = useState('Generando...');
-  const LOADING_MESSAGES = ['Analizando pose...', 'Ajustando prendas...', 'Renderizando luces...', 'Mejorando detalles...', 'Finalizando...'];
-
   useEffect(() => {
-    if (!isGenerating) {
-      setLoadingMsg('Generando...');
-      return;
-    }
-    let i = 0;
-    const interval = setInterval(() => {
-      setLoadingMsg(LOADING_MESSAGES[i % LOADING_MESSAGES.length]);
-      i++;
-    }, 2500);
-    return () => clearInterval(interval);
-  }, [isGenerating]);
-
-  const [useFaceRefs, setUseFaceRefs] = useState(true);
-  const [faceRefs, setFaceRefs] = useState<FaceReference[]>([]);
-  const [showCompatibilityWarning, setShowCompatibilityWarning] = useState(false);
-  const resultsRef = useRef<HTMLDivElement>(null);
-
-  // Load saved selfies logic moved to StudioToolbar
-  // Base image upload logic moved to StudioToolbar
-
-  // Fetch face references
-  useEffect(() => {
-    getFaceReferences().then(refs => {
-      setFaceRefs(refs);
-    }).catch(() => setFaceRefs([]));
+    getFaceReferences()
+      .then((refs) => setFaceRefs(refs))
+      .catch(() => setFaceRefs([]));
   }, []);
 
-  // Load persisted selfie on mount
   useEffect(() => {
     const savedSelfie = localStorage.getItem('studio-user-selfie');
     if (savedSelfie && !userBaseImage) {
       setUserBaseImage(savedSelfie);
     }
+  }, [userBaseImage]);
+
+  useEffect(() => {
+    const profile = parseTwinProfile(localStorage.getItem(DIGITAL_TWIN_STORAGE_KEY));
+    if (profile?.sourceImages?.[0]) {
+      setVirtualModelImage(profile.sourceImages[0]);
+      return;
+    }
+
+    const fallbackImage = localStorage.getItem(DIGITAL_TWIN_SOURCE_IMAGE_KEY);
+    if (fallbackImage) {
+      setVirtualModelImage(fallbackImage);
+    }
   }, []);
 
-  // Persist selfie when changed
   useEffect(() => {
     if (userBaseImage) {
       localStorage.setItem('studio-user-selfie', userBaseImage);
     }
   }, [userBaseImage]);
 
-  // Remove restriction: All users can use Ultra (it just costs more credits)
-  // No longer force flash for non-premium users
   useEffect(() => {
-    // Server enforces Ultra (pro model) as Premium-only. Keep UI aligned.
-    if (!subscription.isPremium && generationQuality === 'pro') {
-      setGenerationQuality('flash');
-    }
-  }, [subscription.isPremium, generationQuality]);
+    const isDev = (() => {
+      try {
+        return !!(import.meta.env as any)?.DEV;
+      } catch {
+        return false;
+      }
+    })();
 
-  useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 1024);
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
+    if (!isDev) return;
 
-  // Handle location state for preselection
+    const raf = window.requestAnimationFrame(() => {
+      const root = studioRootRef.current;
+      if (!root) return;
+      if (root.scrollWidth - root.clientWidth <= 1) return;
+
+      const rootRect = root.getBoundingClientRect();
+      const maxRight = rootRect.right;
+      const minLeft = rootRect.left;
+      const offenders: Array<{ node: string; right: number; width: number }> = [];
+
+      const hasHorizontalClippingAncestor = (element: HTMLElement): boolean => {
+        let current: HTMLElement | null = element.parentElement;
+        while (current && current !== root) {
+          const style = window.getComputedStyle(current);
+          if (
+            style.overflowX === 'hidden' ||
+            style.overflowX === 'clip' ||
+            style.overflowX === 'auto' ||
+            style.overflowX === 'scroll'
+          ) {
+            return true;
+          }
+          current = current.parentElement;
+        }
+        return false;
+      };
+
+      root.querySelectorAll<HTMLElement>('*').forEach((element) => {
+        const rect = element.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) return;
+        if (
+          element.classList.contains('material-symbols-outlined') ||
+          element.classList.contains('material-symbols-rounded')
+        ) {
+          return;
+        }
+        if (hasHorizontalClippingAncestor(element)) return;
+
+        if (rect.right - maxRight > 1 && rect.left < maxRight && rect.right > minLeft) {
+          offenders.push({
+            node: `${element.tagName.toLowerCase()}${element.className ? `.${String(element.className).split(' ').join('.')}` : ''
+              }`,
+            right: Math.round(rect.right),
+            width: Math.round(rect.width),
+          });
+        }
+      });
+
+      if (offenders.length > 0) {
+        console.warn(`[studio][overflow-detected] ${JSON.stringify(offenders.slice(0, 8))}`);
+      }
+    });
+
+    return () => window.cancelAnimationFrame(raf);
+  }, [filterStatus, slotSelections, generatedImages.length, isGenerating, showQuickItemCategoryPicker]);
+
   useEffect(() => {
     const state = location.state as StudioLocationState;
     if (!state) return;
@@ -253,17 +346,18 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
     if (state.tab) {
       setFilterStatus(state.tab === 'virtual' ? 'virtual' : 'owned');
     }
+    if (typeof state.useVirtualModel === 'boolean') {
+      setUseVirtualModel(state.useVirtualModel);
+    }
 
-    // Pre-load items from preselectedItemIds (e.g., from outfit generation)
-    if (state.preselectedItemIds && state.preselectedItemIds.length > 0 && closet.length > 0) {
+    if (state.preselectedItemIds && state.preselectedItemIds.length > 0 && safeCloset.length > 0) {
       const newSelections = new Map<ClothingSlot, SlotSelection>();
 
       for (const itemId of state.preselectedItemIds) {
-        const item = closet.find(i => i.id === itemId);
+        const item = safeCloset.find((closetItem) => closetItem.id === itemId);
         if (item) {
           const validSlots = getValidSlotsForItem(item);
-          // Find first slot that's not already taken
-          const availableSlot = validSlots.find(s => !newSelections.has(s));
+          const availableSlot = validSlots.find((slot) => !newSelections.has(slot));
           if (availableSlot) {
             newSelections.set(availableSlot, { slot: availableSlot, itemId, item });
           }
@@ -273,30 +367,47 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
       if (newSelections.size > 0) {
         setSlotSelections(newSelections);
         toast.success(`${newSelections.size} prendas cargadas del outfit`);
+        if (state.fromMirror && !mirroredEntryHandled.current) {
+          toast.success('Look recibido desde Espejo. Ajustá y genera el resultado final.');
+          mirroredEntryHandled.current = true;
+        }
       }
 
-      // Clear the state to prevent re-loading on navigation
       window.history.replaceState({}, document.title);
     }
-  }, [location.state, closet]);
+  }, [location.state, safeCloset, setFilterStatus, setSlotSelections]);
 
-  // Recover state from failed generation
   useEffect(() => {
-    const savedState = localStorage.getItem('studio-generation-state');
-    if (!savedState || closet.length === 0) return;
+    if (!enableUnifiedStudioStylist) return;
+    const query = new URLSearchParams(location.search);
+    const shouldOpen = query.get('assistant') === 'stylist';
+    if (!shouldOpen) return;
+    setShowStylistAssistant(true);
+
+    if (query.get('entry') === 'legacy_route') {
+      toast.success('Estilista IA ahora vive dentro de Studio');
+    }
+  }, [enableUnifiedStudioStylist, location.search]);
+
+  useEffect(() => {
+    if (!enableUnifiedStudioStylist) return;
+    void flushPendingStylistEvents();
+  }, [enableUnifiedStudioStylist]);
+
+  useEffect(() => {
+    const savedState = localStorage.getItem(STUDIO_GENERATION_STATE_KEY);
+    if (!savedState || safeCloset.length === 0) return;
 
     try {
       const backup = JSON.parse(savedState);
-      // Only recover if less than 10 minutes old
       if (Date.now() - backup.timestamp > 10 * 60 * 1000) {
-        localStorage.removeItem('studio-generation-state');
+        localStorage.removeItem(STUDIO_GENERATION_STATE_KEY);
         return;
       }
 
-      // Restore slot selections
       const newSelections = new Map<ClothingSlot, SlotSelection>();
       for (const { slot, itemId } of backup.slotSelections) {
-        const item = closet.find(i => i.id === itemId);
+        const item = safeCloset.find((closetItem) => closetItem.id === itemId);
         if (item) {
           newSelections.set(slot as ClothingSlot, { slot: slot as ClothingSlot, itemId, item });
         }
@@ -309,83 +420,24 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
         toast('Se restauró tu selección anterior', { icon: '🔄', duration: 3000 });
       }
 
-      localStorage.removeItem('studio-generation-state');
-    } catch (err) {
-      console.error('Error recovering state:', err);
-      localStorage.removeItem('studio-generation-state');
+      localStorage.removeItem(STUDIO_GENERATION_STATE_KEY);
+    } catch (error) {
+      console.error('Error recovering state:', error);
+      localStorage.removeItem(STUDIO_GENERATION_STATE_KEY);
     }
-  }, [closet]);
+  }, [safeCloset, setSlotSelections]);
 
-  // Load pending results from context when returning to studio
-  useEffect(() => {
-    if (!hasPendingResults || pendingResults.length === 0) return;
-
-    // Convert pending results to local format and add to images
-    const newImages: GeneratedImageRecord[] = pendingResults
-      .filter(result => result.result) // Only completed results with data
-      .map(result => ({
-        image: result.result!.image,
-        slots: result.result!.slotsUsed,
-        model: result.result!.model,
-        preset: result.payload.preset,
-        keepPose: result.payload.keepPose,
-        faceRefsUsed: result.result!.faceRefsUsed,
-        customScene: result.payload.customScene,
-        selfieUsed: result.payload.userImage,
-
-        timestamp: result.completedAt || Date.now(),
-        itemIds: result.payload.slotItems.reduce((acc: any, curr: any) => ({ ...acc, [curr.slot]: curr.item.id }), {}),
-      }));
-
-    setGeneratedImages(prev => {
-      // Avoid duplicates by checking timestamps
-      const existingTimestamps = new Set(prev.map(p => p.timestamp));
-      const uniqueNew = newImages.filter(n => !existingTimestamps.has(n.timestamp));
-      return [...uniqueNew, ...prev];
-    });
-
-    // Clear the pending results since we've loaded them
-    pendingResults.forEach(r => clearPendingResult(r.id));
-
-    // Failsafe: if the active request already has a completed result, clear it
-    if (activeGeneration && pendingResults.some(r => r.id === activeGeneration.id)) {
-      cancelGeneration(activeGeneration.id);
-    }
-
-    // Notify user if there were pending results
-    if (newImages.length > 0) {
-      toast.success(
-        `${newImages.length} look${newImages.length > 1 ? 's' : ''} generado${newImages.length > 1 ? 's' : ''} mientras navegabas`,
-        { icon: '✨', duration: 4000 }
-      );
-    }
-  }, [hasPendingResults, pendingResults, clearPendingResult, activeGeneration, cancelGeneration]);
-
-  // Show indicator when generation is in progress (even if user navigated away and returned)
   useEffect(() => {
     if (isGenerating && activeGeneration) {
-      // User returned while generation is in progress
       toast('Generación en progreso...', { icon: '⏳', duration: 2000 });
     }
-  }, []); // Only on mount
+  }, []);
 
-  useEffect(() => {
-    if (lastFailure?.error) {
-      toast.error(`No se pudo generar el look. ${lastFailure.error}`);
-    }
-  }, [lastFailure]);
-
-  const safeCloset = closet || [];
-
-  // Merge closet with quick items for display
-  const allItems = useMemo(() => {
-    return [...quickItems, ...safeCloset];
-  }, [quickItems, safeCloset]);
+  const allItems = useMemo(() => [...quickItems, ...safeCloset], [quickItems, safeCloset]);
 
   const filteredCloset = useMemo(() => {
-    return allItems.filter(item => {
+    return allItems.filter((item) => {
       const status = item.status || 'owned';
-      // Quick items always show
       if (status === 'quick') return true;
       if (filterStatus === 'owned') return status === 'owned';
       if (filterStatus === 'virtual') return status === 'virtual' || status === 'wishlist';
@@ -393,289 +445,283 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
     });
   }, [allItems, filterStatus]);
 
-  const activePreset = useMemo(() => {
-    return GENERATION_PRESETS.find(preset => preset.id === presetId) || GENERATION_PRESETS[0];
-  }, [presetId]);
-
   const slotCount = slotSelections.size;
   const hasCoverage = hasMinimumCoverage(slotSelections);
-  const hasSelfie = Boolean(userBaseImage);
-  const creditsNeeded = generationQuality === 'pro' ? 4 : 1;
-  const hasCredits = subscription.aiGenerationsLimit === -1
-    || (subscription.aiGenerationsUsed + creditsNeeded) <= subscription.aiGenerationsLimit;
+  const activeBaseImage = useVirtualModel ? virtualModelImage || DEFAULT_VIRTUAL_MODEL_IMAGE : userBaseImage;
+  const hasSelfie = Boolean(activeBaseImage);
+  const creditsNeeded = 4;
+  const hasCredits =
+    subscription.aiGenerationsLimit === -1 ||
+    subscription.aiGenerationsUsed + creditsNeeded <= subscription.aiGenerationsLimit;
   const canGenerate = hasCoverage && hasSelfie && slotCount <= MAX_SLOTS_PER_GENERATION && hasCredits;
+  const relevantSlotCount = relevantSlots.length;
 
   const helperText = useMemo(() => {
     if (slotCount === 0) return 'Seleccioná al menos 1 prenda para probar.';
     if (slotCount > MAX_SLOTS_PER_GENERATION) return `Máximo ${MAX_SLOTS_PER_GENERATION} prendas.`;
-    if (!userBaseImage) return 'Subí tu selfie para generar.';
+    if (!hasSelfie) return 'Subí una foto o activá el cuerpo virtual para generar.';
     if (!hasCredits) return `Necesitás ${creditsNeeded} crédito${creditsNeeded > 1 ? 's' : ''} para generar.`;
     return 'Listo para generar tu look.';
-  }, [slotCount, userBaseImage, hasCredits, creditsNeeded]);
+  }, [slotCount, hasSelfie, hasCredits, creditsNeeded]);
 
-  // Add item to a specific slot
-  const addItemToSlot = (item: ClothingItem, slot: ClothingSlot) => {
-    if (slotSelections.size >= MAX_SLOTS_PER_GENERATION && !slotSelections.has(slot)) {
-      toast.error(`Máximo ${MAX_SLOTS_PER_GENERATION} prendas`);
-      return;
-    }
-
-    setSlotSelections(prev => {
-      const newMap = new Map(prev);
-      newMap.set(slot, { slot, itemId: item.id, item, fit: 'regular' });
-      return newMap;
-    });
-    setActiveSlotPicker(null);
-  };
-
-  // Update fit for a specific slot
-  const updateSlotFit = (slot: ClothingSlot, newFit: GenerationFit) => {
-    setSlotSelections(prev => {
-      const newMap = new Map(prev);
-      const current = newMap.get(slot);
-      if (current) {
-        newMap.set(slot, { ...current, fit: newFit });
-      }
-      return newMap;
-    });
-  };
-
-  // Cycle through fit options
-  const cycleFit = (slot: ClothingSlot) => {
-    const current = slotSelections.get(slot);
-    const currentFit = current?.fit || 'regular';
-    const fitOrder: GenerationFit[] = ['tight', 'regular', 'oversized'];
-    const currentIndex = fitOrder.indexOf(currentFit);
-    const nextFit = fitOrder[(currentIndex + 1) % fitOrder.length];
-    updateSlotFit(slot, nextFit);
-  };
-
-  // Remove item from slot
-  const removeFromSlot = (slot: ClothingSlot) => {
-    setSlotSelections(prev => {
-      const newMap = new Map(prev);
-      newMap.delete(slot);
-      return newMap;
-    });
-  };
-
-  // Quick Try-On: Upload an item from screenshot
-  const handleQuickItemUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setIsUploadingQuickItem(true);
-    try {
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onerror = () => reject(new Error('No se pudo leer la imagen.'));
-        reader.onload = () => resolve(String(reader.result));
-        reader.readAsDataURL(file);
-      });
-
-      // Create temporary ID for this quick item
-      const tempId = `quick_${Date.now()}`;
-      setShowQuickItemCategoryPicker(tempId);
-
-      // Store the image temporarily until category is selected
-      sessionStorage.setItem(`quick-item-${tempId}`, dataUrl);
-    } catch (err) {
-      toast.error('Error al cargar la imagen');
-    } finally {
-      setIsUploadingQuickItem(false);
-      if (quickItemInputRef.current) {
-        quickItemInputRef.current.value = '';
-      }
-    }
-  };
-
-  const handleBackItemUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file || !uploadingBackForItemId) return;
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const result = e.target?.result as string;
-
-      // Update the item in the closet (filteredCloset isn't state directly, need to update closet/quickItems)
-      // Actually, we usually have `closet` from props and `quickItems` local state.
-      // We need to check where the item is. 
-      // Simplified: Update `quickItems` if it's there.
-      // If it's a prop item, we can't easily mutate it here without a callback to update closet.
-      // For now, let's assume it's primarily for 'quick' items which are local state.
-      // HACK: Start with quickItems updating.
-      setQuickItems(prev => prev.map(item => {
-        if (item.id === uploadingBackForItemId) {
-          return { ...item, backImageDataUrl: result };
-        }
-        return item;
-      }));
-
-      toast.success('Vista trasera agregada');
-      setUploadingBackForItemId(null);
-
-      // Clear input
-      if (backItemInputRef.current) {
-        backItemInputRef.current.value = '';
-      }
-    };
-    reader.readAsDataURL(file);
-  };
-
-  // Confirm quick item with category
-  const confirmQuickItemCategory = (tempId: string, category: string) => {
-    const dataUrl = sessionStorage.getItem(`quick-item-${tempId}`);
-    if (!dataUrl) return;
-
-    const newQuickItem: ClothingItem = {
-      id: tempId,
-      imageDataUrl: dataUrl,
-      status: 'quick' as any, // Mark as quick item
-      metadata: {
-        category: category as any,
-        subcategory: 'Prenda de internet',
-        color_primary: 'desconocido',
-        vibe_tags: ['quick-try-on'],
-        seasons: ['all'],
-      },
-    };
-
-    setQuickItems(prev => [newQuickItem, ...prev]);
-    setShowQuickItemCategoryPicker(null);
-    sessionStorage.removeItem(`quick-item-${tempId}`);
-    toast.success('Prenda agregada para probar', { icon: '✨' });
-  };
-
-  // Remove quick item
-  const removeQuickItem = (itemId: string) => {
-    setQuickItems(prev => prev.filter(i => i.id !== itemId));
-    // Also remove from slot selections if selected
-    setSlotSelections(prev => {
-      const newMap = new Map(prev);
-      for (const [slot, selection] of newMap) {
-        if (selection.itemId === itemId) {
-          newMap.delete(slot);
-        }
-      }
-      return newMap;
-    });
-  };
-
-  // Handle item click - show slot picker or auto-assign
-  const handleItemClick = (item: ClothingItem) => {
-    const validSlots = getValidSlotsForItem(item);
-
-    // Check if item is already in a slot
-    for (const [slot, selection] of slotSelections) {
-      if (selection.itemId === item.id) {
-        removeFromSlot(slot);
-        return;
-      }
-    }
-
-    // If only one valid slot, auto-assign
-    if (validSlots.length === 1) {
-      addItemToSlot(item, validSlots[0]);
-    } else {
-      // Show slot picker
-      setActiveSlotPicker(item.id);
-    }
-  };
-
-  // Check if item is selected
-  const isItemSelected = (itemId: string): boolean => {
-    for (const selection of slotSelections.values()) {
-      if (selection.itemId === itemId) return true;
-    }
-    return false;
-  };
-
-  // Check if user might be selecting clothes that don't match their selfie framing
   const hasBottomOrShoes = slotSelections.has('bottom') || slotSelections.has('shoes');
   const needsCompatibilityCheck = presetId === 'overlay' && hasBottomOrShoes;
 
-  const handleGenerateWithWarningCheck = () => {
+  const handleRequestBaseUpload = useCallback(() => {
+    if (useVirtualModel) {
+      setUseVirtualModel(false);
+    }
+    setUploadBaseRequestSignal((prev) => prev + 1);
+  }, [useVirtualModel]);
+
+  const handleStudioItemClick = useCallback(
+    (item: ClothingItem) => {
+      setActiveSlotPicker(null);
+      handleItemClick(item, setActiveSlotPicker);
+    },
+    [handleItemClick, setActiveSlotPicker],
+  );
+
+  const handleRequestBackUpload = useCallback(
+    (item: ClothingItem) => {
+      if (item.backImageDataUrl) {
+        toast('Vista trasera disponible', { icon: '🔄' });
+        return;
+      }
+
+      setUploadingBackForItemId(item.id);
+      backItemInputRef.current?.click();
+    },
+    [setUploadingBackForItemId, backItemInputRef],
+  );
+
+  const validateGenerationReadiness = useCallback(() => {
+    if (!canGenerate) {
+      return { isValid: false, message: helperText };
+    }
+    if (!activeBaseImage) {
+      return {
+        isValid: false,
+        message: 'No hay una imagen base para generar. Cargá una selfie o activá el cuerpo virtual.',
+      };
+    }
+    return { isValid: true, message: '' };
+  }, [canGenerate, helperText, activeBaseImage]);
+
+  const buildGenerationPayload = useCallback((): StudioGenerationPayload => {
+    const stateBackup = {
+      slotSelections: Array.from(slotSelections.entries()).map(([slot, selection]) => ({
+        slot,
+        itemId: selection.itemId,
+      })),
+      presetId,
+      autoSave,
+      timestamp: Date.now(),
+    };
+    localStorage.setItem(STUDIO_GENERATION_STATE_KEY, JSON.stringify(stateBackup));
+
+    const slots: Record<string, string> = {};
+    const slotFits: Record<string, 'tight' | 'regular' | 'oversized'> = {};
+
+    for (const [slot, selection] of slotSelections) {
+      const useBackImage =
+        (generationView === 'back' || generationView === 'side') && selection.item.backImageDataUrl;
+      slots[slot] = useBackImage ? selection.item.backImageDataUrl! : selection.item.imageDataUrl;
+      slotFits[slot] = selection.fit || 'regular';
+    }
+
+    const slotItems = Array.from(slotSelections.entries()).map(([slot, selection]) => ({
+      slot,
+      item: selection.item,
+      fit: selection.fit || 'regular',
+    }));
+
+    const slotItemIds = Array.from(slotSelections.entries()).reduce((acc, [slot, selection]) => {
+      acc[slot] = selection.item.id;
+      return acc;
+    }, {} as Record<string, string>);
+
+    return {
+      activeBaseImage: activeBaseImage!,
+      slots,
+      slotItems,
+      slotFits,
+      slotItemIds,
+    };
+  }, [slotSelections, presetId, autoSave, generationView, activeBaseImage]);
+
+  const executeCachePrecheck = useCallback(
+    async (payload: StudioGenerationPayload): Promise<{ cacheHit: boolean; renderHash?: string }> => {
+      const cacheInput = buildStudioCacheInput(payload, {
+        faceRefs,
+        presetId,
+        customScene,
+        generationQuality,
+        generationView,
+        keepPose,
+        useFaceRefs,
+      });
+
+      return executeStudioCachePrecheck(cacheInput);
+    },
+    [
+      buildStudioCacheInput,
+      faceRefs,
+      presetId,
+      customScene,
+      generationQuality,
+      generationView,
+      keepPose,
+      useFaceRefs,
+      executeStudioCachePrecheck,
+    ],
+  );
+
+  const enqueueStudioGenerationRequest = useCallback(
+    (payload: StudioGenerationPayload, renderHash?: string) => {
+      const genId = enqueueGeneration({
+        userImage: payload.activeBaseImage,
+        slots: payload.slots,
+        slotItems: payload.slotItems,
+        slotFits: payload.slotFits,
+        preset: presetId,
+        customScene: presetId === 'custom' ? customScene : undefined,
+        keepPose,
+        useFaceRefs,
+        faceRefsCount: faceRefs.length,
+        provider: generationProvider,
+        quality: generationQuality,
+        view: generationView,
+        renderHash,
+        surface: 'studio',
+        cachePolicyVersion: 1,
+      });
+
+      if (genId) {
+        sessionGenerationIds.current.add(genId);
+      }
+
+      if (enableHybridTryOn && renderHash) {
+        analytics.trackTryOnHdRequested({
+          surface: 'studio',
+          quality: generationQuality,
+          preset: presetId,
+          slot_count: payload.slotItems.length,
+        });
+      }
+
+      toast('Generando look...', { icon: '✨', duration: 2000 });
+      localStorage.removeItem(STUDIO_GENERATION_STATE_KEY);
+    },
+    [
+      enqueueGeneration,
+      presetId,
+      customScene,
+      keepPose,
+      useFaceRefs,
+      faceRefs.length,
+      generationProvider,
+      generationQuality,
+      generationView,
+      enableHybridTryOn,
+    ],
+  );
+
+  const handleGenerateNow = useCallback(async () => {
+    setShowCompatibilityWarning(false);
+
+    const readiness = validateGenerationReadiness();
+    if (!readiness.isValid) {
+      toast.error(readiness.message);
+      return;
+    }
+
+    const payload = buildGenerationPayload();
+    const cacheResult = await executeCachePrecheck(payload);
+    if (cacheResult.cacheHit) {
+      return;
+    }
+
+    enqueueStudioGenerationRequest(payload, cacheResult.renderHash);
+
+    if (latestStylistContextRef.current.prompt || latestStylistContextRef.current.threadId) {
+      void recordStylistEvent({
+        action: 'generated',
+        surface: 'studio',
+        thread_id: latestStylistContextRef.current.threadId || null,
+        prompt: latestStylistContextRef.current.prompt || null,
+        suggestion_json: payload.slotItemIds as Record<string, any>,
+      });
+      analytics.trackEvent('stylist_tryon_generated', { surface: 'studio' });
+    }
+  }, [
+    setShowCompatibilityWarning,
+    validateGenerationReadiness,
+    buildGenerationPayload,
+    executeCachePrecheck,
+    enqueueStudioGenerationRequest,
+  ]);
+
+  const handleApplyStylistSuggestion = useCallback(
+    (
+      suggestion: StructuredOutfitSuggestion,
+      context: { threadId?: string | null; prompt?: string | null } = {},
+    ) => {
+      const entries: Array<[ClothingSlot, SlotSelection]> = [];
+      const selectedIds = [suggestion.top_id, suggestion.bottom_id, suggestion.shoes_id].filter(Boolean);
+
+      selectedIds.forEach((itemId) => {
+        const item = safeCloset.find((closetItem) => closetItem.id === itemId);
+        if (!item) return;
+
+        const validSlots = getValidSlotsForItem(item);
+        const availableSlot = validSlots.find((slot) => !entries.some(([existingSlot]) => existingSlot === slot));
+        if (!availableSlot) return;
+
+        entries.push([availableSlot, { slot: availableSlot, itemId, item }]);
+      });
+
+      if (entries.length === 0) {
+        toast.error('No pude aplicar el look sugerido con las prendas actuales.');
+        return;
+      }
+
+      setSlotSelections(new Map(entries));
+      setShowStylistAssistant(false);
+      latestStylistContextRef.current = {
+        threadId: context.threadId || null,
+        prompt: context.prompt || null,
+      };
+
+      toast.success(`Look aplicado (${entries.length} prendas)`);
+      analytics.trackEvent('stylist_outfit_applied', { surface: 'studio' });
+    },
+    [safeCloset, setSlotSelections],
+  );
+
+  const handleGenerateWithWarningCheck = useCallback(() => {
     if (!canGenerate) {
       triggerShake();
       toast.error(helperText);
       return;
     }
 
-    // In overlay mode, warn about potential framing mismatch
     if (needsCompatibilityCheck) {
       setShowCompatibilityWarning(true);
       return;
     }
 
-    handleGenerateNow();
-  };
+    void handleGenerateNow();
+  }, [
+    canGenerate,
+    triggerShake,
+    helperText,
+    needsCompatibilityCheck,
+    setShowCompatibilityWarning,
+    handleGenerateNow,
+  ]);
 
-  const handleGenerateNow = () => {
-    setShowCompatibilityWarning(false);
-    if (!canGenerate) {
-      toast.error(helperText);
-      return;
-    }
-
-    // Save state to localStorage for recovery
-    const stateBackup = {
-      slotSelections: Array.from(slotSelections.entries()).map(([slot, sel]) => ({
-        slot,
-        itemId: sel.itemId,
-      })),
-      presetId,
-      autoSave,
-      timestamp: Date.now(),
-    };
-    localStorage.setItem('studio-generation-state', JSON.stringify(stateBackup));
-
-    // Build slots object for images
-    const slots: Record<string, string> = {};
-    for (const [slot, selection] of slotSelections) {
-      // Use back image if available and generation view is 'back' or 'side' (assuming side might benefit or just back)
-      // Actually strictly 'back' view usually needs back image.
-      const useBackImage = (generationView === 'back' || generationView === 'side') && selection.item.backImageDataUrl;
-      slots[slot] = useBackImage ? selection.item.backImageDataUrl! : selection.item.imageDataUrl;
-    }
-
-    // Build slot items array for context tracking (with per-item fit)
-    const slotItems = Array.from(slotSelections.entries()).map(([slot, sel]) => ({
-      slot,
-      item: sel.item,
-      fit: sel.fit || 'regular',
-    }));
-
-    // Build per-slot fits object for the AI
-    const slotFits: Record<string, 'tight' | 'regular' | 'oversized'> = {};
-    for (const [slot, selection] of slotSelections) {
-      slotFits[slot] = selection.fit || 'regular';
-    }
-
-    // Enqueue generation (runs in background, persists across navigation)
-    // The result will come through pendingResults when completed
-    enqueueGeneration({
-      userImage: userBaseImage!,
-      slots,
-      slotItems,
-      slotFits, // Per-garment fits
-      preset: presetId,
-      customScene: presetId === 'custom' ? customScene : undefined,
-      keepPose,
-      useFaceRefs,
-      faceRefsCount: faceRefs.length,
-      provider: generationProvider,
-      quality: generationQuality,
-      // fit: generationFit, // Removed global fit - now using slotFits
-      view: generationView,
-    });
-
-    toast('Generando look...', { icon: '✨', duration: 2000 });
-
-    // Clear backup since generation is queued
-    localStorage.removeItem('studio-generation-state');
-  };
-
-  const handleSaveLook = async (image: GeneratedImageRecord) => {
+  const handleSaveLook = useCallback(async (image: GeneratedImageRecord) => {
     setIsSaving(true);
     try {
       const canSave = await canUserSaveLook();
@@ -689,80 +735,73 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
         return;
       }
 
-      await saveGeneratedLook(
-        image.image,
-        image.itemIds,
-        {
-          selfieUsed: Boolean(image.selfieUsed),
-          selfieUrl: image.selfieUsed,
-          preset: image.preset,
-          model: image.model,
-          keepPose: image.keepPose,
-          faceRefsUsed: image.faceRefsUsed,
-        }
-      );
+      await saveGeneratedLook(image.image, image.itemIds, {
+        selfieUsed: Boolean(image.selfieUrl),
+        selfieUrl: image.selfieUrl,
+        preset: image.preset,
+        model: image.model,
+        keepPose: image.keepPose,
+        faceRefsUsed: image.faceRefsUsed,
+      });
       toast.success('Look guardado en tu armario');
+
+      if (latestStylistContextRef.current.prompt || latestStylistContextRef.current.threadId) {
+        void recordStylistEvent({
+          action: 'saved',
+          surface: 'studio',
+          thread_id: latestStylistContextRef.current.threadId || null,
+          prompt: latestStylistContextRef.current.prompt || null,
+          suggestion_json: image.itemIds as Record<string, any>,
+        });
+        analytics.trackEvent('stylist_suggestion_saved', { surface: 'studio' });
+      }
     } catch (error) {
       console.error('Error saving look:', error);
       toast.error('Error al guardar el look');
     } finally {
       setIsSaving(false);
     }
-  };
+  }, []);
 
-  // Get slot configs that are relevant (have items or are required)
-  const relevantSlots = SLOT_CONFIGS.filter(config => {
-    // Always show slots that have items
-    if (slotSelections.has(config.id)) return true;
-    // Show required slots
-    if (config.required) return true;
-    // Show slots that have matching items in closet
-    return safeCloset.some(item => {
-      const validSlots = getValidSlotsForItem(item);
-      return validSlots.includes(config.id);
-    });
-  });
-
-  const handleOpenLatestResult = () => {
+  const handleOpenLatestResult = useCallback(() => {
     if (!generatedImages[0]) return;
     setSelectedImage(generatedImages[0]);
     setShowResultsHint(false);
-  };
+  }, [generatedImages, setSelectedImage, setShowResultsHint]);
 
-  const handleCloseSelectedImage = () => {
+  const handleCloseSelectedImage = useCallback(() => {
     setSelectedImage(null);
     setCompareMode(false);
     setComparePosition(50);
+    setIsNewSessionResult(false);
     if (isMobile && generatedImages.length > 0) {
       setShowResultsHint(true);
     }
-  };
-
-  // Keyboard Shortcuts (Moved here for scope access)
-  const triggerShake = () => {
-    setShakeButton(true);
-    if (navigator.vibrate) navigator.vibrate([50, 50, 50]);
-    setTimeout(() => setShakeButton(false), 500);
-  };
+  }, [
+    setSelectedImage,
+    setCompareMode,
+    setComparePosition,
+    setIsNewSessionResult,
+    isMobile,
+    generatedImages.length,
+    setShowResultsHint,
+  ]);
 
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignore if input is focused
+    const handleKeyDown = (event: KeyboardEvent) => {
       if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
 
-      // Ctrl/Cmd + Enter -> Generate
-      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-        e.preventDefault();
+      if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+        event.preventDefault();
         if (canGenerate && !isGenerating) {
-          handleGenerateNow();
+          void handleGenerateNow();
         } else if (!canGenerate && !isGenerating) {
           triggerShake();
           toast.error(helperText, { id: 'shortcut-error' });
         }
       }
 
-      // Esc -> Cancel/Close
-      if (e.key === 'Escape') {
+      if (event.key === 'Escape') {
         if (selectedImage) {
           setSelectedImage(null);
         } else if (activeSlotPicker) {
@@ -777,38 +816,45 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isGenerating, canGenerate, selectedImage, activeSlotPicker, activeFitPicker, activeGeneration, helperText]);
+  }, [
+    isGenerating,
+    canGenerate,
+    selectedImage,
+    activeSlotPicker,
+    activeFitPicker,
+    activeGeneration,
+    helperText,
+    triggerShake,
+    handleGenerateNow,
+    cancelGeneration,
+    setSelectedImage,
+    setActiveSlotPicker,
+    setActiveFitPicker,
+  ]);
 
-  // Tutorial hook
   const { showTutorial, completeTutorial, skipTutorial, resetTutorial } = useStudioTutorial();
+  const shouldShowTutorial = showTutorial && Boolean(consentPreferences);
 
   return (
     <div
-      className="relative min-h-screen w-full overflow-x-hidden text-[color:var(--studio-ink)]"
+      ref={studioRootRef}
+      data-testid="studio-root"
+      data-relevant-slots={relevantSlotCount}
+      className="relative min-h-screen w-full min-w-0-safe max-w-full-safe overflow-x-hidden contain-overflow-x text-[color:var(--studio-ink)]"
       style={{ ...studioTheme, fontFamily: 'var(--studio-font-body)' }}
     >
-      {/* Tutorial overlay */}
-      {showTutorial && (
-        <StudioTutorial
-          onComplete={completeTutorial}
-          onSkip={skipTutorial}
-        />
-      )}
+      {shouldShowTutorial && <StudioTutorial onComplete={completeTutorial} onSkip={skipTutorial} />}
 
-      {/* Background */}
       <div
         className="fixed inset-0 -z-10"
         style={{
           background:
-            'radial-gradient(circle at 15% 10%, rgba(245, 167, 163, 0.35), transparent 45%), radial-gradient(circle at 85% 0%, rgba(154, 212, 192, 0.35), transparent 40%), linear-gradient(180deg, #f8f3ee 0%, #f0e7dd 50%, #f6f1ea 100%)'
+            'radial-gradient(circle at 15% 10%, rgba(245, 167, 163, 0.35), transparent 45%), radial-gradient(circle at 85% 0%, rgba(154, 212, 192, 0.35), transparent 40%), linear-gradient(180deg, #f8f3ee 0%, #f0e7dd 50%, #f6f1ea 100%)',
         }}
       />
 
-      {/* SPLIT LAYOUT: Main content + Inspector sidebar */}
-      <div className="flex min-h-screen">
-        {/* LEFT COLUMN: Options + Closet (scrollable) */}
-        <div className="flex-1 flex flex-col lg:pr-96">
-          {/* Header */}
+      <div className="flex min-h-screen min-w-0">
+        <div className="flex-1 min-w-0 flex flex-col lg:pr-96">
           <StudioHeader
             generatedImagesCount={generatedImages.length}
             onOpenLatestResult={handleOpenLatestResult}
@@ -820,19 +866,37 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
             variants={containerVariants}
             initial="hidden"
             animate="show"
-            className="px-4 pb-[calc(18rem+env(safe-area-inset-bottom))] lg:pb-[calc(12rem+env(safe-area-inset-bottom))]"
+            className="w-full min-w-0-safe overflow-x-hidden contain-overflow-x px-3 pt-3 pb-[calc(5.5rem+env(safe-area-inset-bottom))] lg:pb-[calc(6rem+env(safe-area-inset-bottom))]"
           >
-            {/* ═══════════════════════════════════════════════════════════════════
-            COMPACT TOOLBAR - All options in 2 rows for maximum grid visibility
-            ═══════════════════════════════════════════════════════════════════ */}
+            {!activeBaseImage && (
+              <motion.section variants={itemVariants} className="mb-1">
+                <div
+                  data-testid="studio-base-preview"
+                  className="rounded-2xl border border-white/70 bg-white/55 p-3 shadow-sm flex flex-col items-center justify-center text-center"
+                >
+                  <span className="material-symbols-outlined text-[40px] text-[color:var(--studio-ink-muted)] mb-2">
+                    add_a_photo
+                  </span>
+                  <p className="px-4 text-xs font-medium text-[color:var(--studio-ink-muted)] mb-3">
+                    Subí tu selfie para empezar a crear el look.
+                  </p>
+                  <button
+                    onClick={handleRequestBaseUpload}
+                    className="rounded-full bg-[color:var(--studio-ink)] px-5 py-2.5 text-xs font-semibold text-white shadow-md active:scale-95 transition-transform"
+                  >
+                    Cargar selfie
+                  </button>
+                </div>
+              </motion.section>
+            )}
 
-            {/* ROW 1: Selfie + Presets + Slot Counter */}
-            {/* ═══════════════════════════════════════════════════════════════════
-            COMPACT TOOLBAR - Using Extracted Component
-            ═══════════════════════════════════════════════════════════════════ */}
             <StudioToolbar
               userBaseImage={userBaseImage}
               setUserBaseImage={setUserBaseImage}
+              uploadBaseRequestSignal={uploadBaseRequestSignal}
+              virtualModelImage={virtualModelImage || DEFAULT_VIRTUAL_MODEL_IMAGE}
+              useVirtualModel={useVirtualModel}
+              setUseVirtualModel={setUseVirtualModel}
               presetId={presetId}
               setPresetId={setPresetId}
               customScene={customScene}
@@ -845,8 +909,6 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
               slotCount={slotCount}
               hasCoverage={hasCoverage}
               onClearSelections={() => setSlotSelections(new Map())}
-              generationQuality={generationQuality}
-              setGenerationQuality={setGenerationQuality}
               isPremium={subscription.isPremium}
               generationFit={generationFit}
               setGenerationFit={setGenerationFit}
@@ -854,526 +916,214 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
               setGenerationView={setGenerationView}
             />
 
-            {/* ROW 2: Filters + Selected Slot Chips */}
-            <motion.section variants={itemVariants} className="mb-3">
-              <div className="flex items-center gap-2 flex-wrap">
-                {/* Filter tabs */}
-                {FILTERS.map(filter => (
+            {enableUnifiedStudioStylist && (
+              <motion.section variants={itemVariants} className="mb-2 px-1">
+                <div className="mb-2 flex items-center justify-between">
                   <button
-                    key={filter.id}
-                    onClick={() => setFilterStatus(filter.id)}
-                    className={`px-2.5 py-1 rounded-full text-xs font-semibold transition ${filterStatus === filter.id
-                      ? 'bg-[color:var(--studio-ink)] text-white shadow-sm'
-                      : 'bg-white/60 text-[color:var(--studio-ink-muted)] border border-white/70'
-                      }`}
+                    onClick={() => setShowStylistAssistant((prev) => !prev)}
+                    className="inline-flex items-center gap-2 rounded-full border border-white/70 bg-white/70 px-3 py-1.5 text-xs font-semibold text-[color:var(--studio-ink)] shadow-sm transition hover:bg-white"
                   >
-                    {filter.label}
+                    <span className="material-symbols-outlined text-sm">auto_awesome</span>
+                    Estilista IA
+                    <span className="material-symbols-outlined text-sm">
+                      {showStylistAssistant ? 'expand_less' : 'expand_more'}
+                    </span>
                   </button>
-                ))}
-
-                {/* Divider */}
-                <div className="w-px h-5 bg-gray-300 mx-1" />
-
-                {/* Selected slot mini-chips with fit selector */}
-                {Array.from(slotSelections.entries()).map(([slot, selection]) => {
-                  const config = SLOT_CONFIGS.find(c => c.id === slot);
-                  const currentFit = selection.fit || 'regular';
-                  const fitIcon = currentFit === 'tight' ? 'compress' : currentFit === 'oversized' ? 'expand' : 'drag_handle';
-                  const fitLabel = currentFit === 'tight' ? 'Aj' : currentFit === 'oversized' ? 'Ho' : 'Rg';
-                  const fitTooltip = currentFit === 'tight' ? 'Ajustado' : currentFit === 'oversized' ? 'Holgado' : 'Regular';
-
-                  return (
-                    <div
-                      key={slot}
-                      className="flex items-center gap-1 pl-1 pr-1.5 py-0.5 rounded-full bg-white/80 border border-[color:var(--studio-ink)]/30 shadow-sm"
-                    >
-                      <img
-                        src={selection.item.imageDataUrl}
-                        alt={config?.labelShort}
-                        className="w-5 h-5 rounded-full object-cover"
-                      />
-                      <span className="text-xs font-medium text-[color:var(--studio-ink)]">
-                        {config?.labelShort}
-                      </span>
-
-                      {/* Fit toggle button - Hide for shoes */}
-                      {slot !== 'shoes' && (
-                        <div className="relative">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setActiveFitPicker(activeFitPicker === slot ? null : slot);
-                            }}
-                            className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded transition-colors ${activeFitPicker === slot
-                              ? 'bg-purple-100 text-purple-700'
-                              : 'bg-gray-100 hover:bg-gray-200 text-gray-600'
-                              }`}
-                          >
-                            <span className="material-symbols-outlined text-xs">{fitIcon}</span>
-                            <span className="text-xs font-semibold min-w-[3ch] text-center">{fitLabel}</span>
-                          </button>
-
-                          {/* Fit Selection Menu */}
-                          <AnimatePresence>
-                            {activeFitPicker === slot && (
-                              <>
-                                {/* Backdrop to close */}
-                                <div
-                                  className="fixed inset-0 z-40 cursor-default"
-                                  onClick={(e) => { e.stopPropagation(); setActiveFitPicker(null); }}
-                                />
-                                {/* Menu */}
-                                <motion.div
-                                  initial={{ opacity: 0, y: -5, scale: 0.95 }}
-                                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                                  exit={{ opacity: 0, y: -5, scale: 0.95 }}
-                                  className="absolute top-full mt-1.5 left-1/2 -translate-x-1/2 z-50 bg-white rounded-xl shadow-xl border border-gray-100 p-1 min-w-[110px] flex flex-col gap-0.5"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  {(['tight', 'regular', 'oversized'] as const).map((fitOption) => (
-                                    <button
-                                      key={fitOption}
-                                      onClick={() => {
-                                        setSlotSelections(prev => {
-                                          const next = new Map(prev);
-                                          const updated = next.get(slot);
-                                          if (updated) {
-                                            if (navigator.vibrate) navigator.vibrate(5);
-                                            next.set(slot, { ...updated, fit: fitOption });
-                                          }
-                                          return next;
-                                        });
-                                        setActiveFitPicker(null);
-                                      }}
-                                      className={`flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-medium transition w-full text-left ${currentFit === fitOption
-                                        ? 'bg-purple-50 text-purple-700'
-                                        : 'hover:bg-gray-50 text-gray-600'
-                                        }`}
-                                    >
-                                      <span className="material-symbols-outlined text-sm shrink-0">
-                                        {fitOption === 'tight' ? 'compress' : fitOption === 'oversized' ? 'expand' : 'drag_handle'}
-                                      </span>
-                                      {fitOption === 'tight' ? 'Ajustado' : fitOption === 'oversized' ? 'Holgado' : 'Regular'}
-                                    </button>
-                                  ))}
-                                </motion.div>
-                              </>
-                            )}
-                          </AnimatePresence>
-                        </div>
-                      )}
-
-                      {/* Back View Toggle/Upload */}
-                      {slot !== 'shoes' && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (selection.item.backImageDataUrl) {
-                              // Toggle view functionality could go here, for now just indicates presence
-                              toast('Vista trasera disponible', { icon: '🔄' });
-                            } else {
-                              setUploadingBackForItemId(selection.item.id);
-                              backItemInputRef.current?.click();
-                            }
-                          }}
-                          className={`w-4 h-4 rounded-full flex items-center justify-center text-[8px] transition ${selection.item.backImageDataUrl
-                            ? 'bg-purple-100 text-purple-600 hover:bg-purple-200'
-                            : 'bg-gray-100 text-gray-400 hover:bg-gray-200 hover:text-gray-600'
-                            }`}
-                          title={selection.item.backImageDataUrl ? "Vista trasera disponible" : "Agregar vista trasera"}
-                        >
-                          <span className="material-symbols-outlined text-xs">
-                            {selection.item.backImageDataUrl ? '360' : 'add_a_photo'}
-                          </span>
-                        </button>
-                      )}
-
-                      <button
-                        onClick={() => { if (navigator.vibrate) navigator.vibrate(5); removeFromSlot(slot); }}
-                        className="w-3 h-3 rounded-full bg-gray-200 hover:bg-gray-300 flex items-center justify-center text-[8px]"
-                        title="Quitar prenda"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  );
-                })}
-
-                {/* Empty slot hints (only show required if nothing selected) */}
-                {slotCount === 0 && (
-                  <span className="text-xs text-[color:var(--studio-ink-muted)] italic">
-                    Tocá una prenda para agregarla
+                  <span className="text-[11px] font-medium text-[color:var(--studio-ink-muted)]">
+                    Copiloto para armar look
                   </span>
-                )}
+                </div>
 
-                {/* Auto-save toggle (compact) */}
-                <label className="ml-auto flex items-center gap-1 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={autoSave}
-                    onChange={(e) => setAutoSave(e.target.checked)}
-                    className="w-3 h-3 rounded border-gray-300"
-                  />
-                  <span className="text-xs text-[color:var(--studio-ink-muted)]">Auto-guardar</span>
-                </label>
-              </div>
-            </motion.section>
+                <StylistAssistantPanel
+                  isOpen={showStylistAssistant}
+                  closet={safeCloset}
+                  onClose={() => setShowStylistAssistant(false)}
+                  onApplySuggestion={handleApplyStylistSuggestion}
+                />
+              </motion.section>
+            )}
 
-            {/* Closet grid */}
-            <motion.section variants={itemVariants} className="mb-6">
-              {/* Hidden input for quick item upload */}
-              <input
-                type="file"
-                ref={quickItemInputRef}
-                className="hidden"
-                accept="image/*"
-                onChange={handleQuickItemUpload}
-              />
-
-              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-2">
-                {/* Quick Try-On upload button - always first */}
-                <button
-                  onClick={() => quickItemInputRef.current?.click()}
-                  disabled={isUploadingQuickItem}
-                  className="aspect-[3/4] rounded-xl border-2 border-dashed border-purple-300 hover:border-purple-400
-                             bg-gradient-to-br from-purple-50 to-pink-50 hover:from-purple-100 hover:to-pink-100
-                             flex flex-col items-center justify-center gap-2 transition-all group"
-                >
-                  {isUploadingQuickItem ? (
-                    <div className="animate-spin w-6 h-6 border-2 border-purple-400 border-t-transparent rounded-full" />
-                  ) : (
-                    <>
-                      <div className="w-10 h-10 rounded-full bg-purple-100 group-hover:bg-purple-200 flex items-center justify-center transition">
-                        <span className="material-symbols-rounded text-purple-600 text-xl">add_photo_alternate</span>
-                      </div>
-                      <div className="text-center px-2">
-                        <p className="text-xs font-semibold text-purple-700">Quick Try-On</p>
-                        <p className="text-[8px] text-purple-500">Subí captura de Instagram</p>
-                      </div>
-                    </>
-                  )}
-                </button>
-
-                {filteredCloset.length === 0 ? (
-                  <div className="col-span-2 sm:col-span-3 rounded-2xl border border-white/60 bg-white/40 p-6 text-center flex flex-col items-center gap-3">
-                    <p className="text-sm text-[color:var(--studio-ink-muted)]">No hay prendas en esta sección.</p>
+            <motion.section variants={itemVariants} className="mb-2 px-1">
+              <div className="flex p-1 bg-white/40 backdrop-blur-md border border-[color:var(--studio-ink)]/5 rounded-full shadow-inner overflow-x-auto no-scrollbar max-w-full">
+                {FILTERS.map((filter) => {
+                  const isActive = filterStatus === filter.id;
+                  return (
                     <button
+                      key={filter.id}
                       onClick={() => {
                         if (navigator.vibrate) navigator.vibrate(5);
-                        toast("Próximamente: Cargar ropa de demo 🚧", { icon: '👕' });
+                        setFilterStatus(filter.id);
                       }}
-                      className="px-4 py-2 rounded-lg bg-white/50 border border-[color:var(--studio-ink)]/10 text-xs font-medium text-[color:var(--studio-ink)] hover:bg-white transition"
+                      className="relative shrink-0 px-4 py-1.5 rounded-full text-[11px] font-bold transition-colors focus:outline-none"
                     >
-                      Probar con Ropa de Ejemplo
+                      {isActive && (
+                        <motion.div
+                          layoutId="activeFilter"
+                          className="absolute inset-0 bg-white rounded-full shadow-[0_2px_8px_rgba(33,37,41,0.08)] border border-white/80"
+                          transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                        />
+                      )}
+                      <span
+                        className={`relative z-10 transition-colors duration-300 ${isActive
+                          ? 'text-[color:var(--studio-ink)]'
+                          : 'text-[color:var(--studio-ink-muted)] hover:text-[color:var(--studio-ink)]'
+                          }`}
+                      >
+                        {filter.label}
+                      </span>
                     </button>
-                  </div>
-                ) : (
-                  filteredCloset.map(item => {
-                    const isSelected = isItemSelected(item.id);
-                    const validSlots = getValidSlotsForItem(item);
-                    const showSlotPicker = activeSlotPicker === item.id;
-                    const isQuickItem = item.status === 'quick';
-
-                    return (
-                      <div key={item.id} className="relative">
-                        <button
-                          onClick={() => { if (navigator.vibrate) navigator.vibrate(5); handleItemClick(item); }}
-                          className={`w-full aspect-[3/4] rounded-xl overflow-hidden border-2 transition ${isSelected
-                            ? 'border-[color:var(--studio-ink)] ring-2 ring-[color:var(--studio-ink)]/20'
-                            : isQuickItem
-                              ? 'border-purple-300 hover:border-purple-400'
-                              : 'border-transparent hover:border-white/80'
-                            }`}
-                        >
-                          {item.imageDataUrl ? (
-                            <img
-                              src={item.imageDataUrl}
-                              alt={item.metadata?.subcategory || 'Prenda'}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <div className="w-full h-full bg-gray-100 flex flex-col items-center justify-center text-gray-400">
-                              <span className="material-symbols-outlined text-2xl">image_not_supported</span>
-                              <span className="text-xs mt-1">{item.metadata?.subcategory || 'Sin imagen'}</span>
-                            </div>
-                          )}
-                          {isSelected && (
-                            <div className="absolute top-1 right-1 w-5 h-5 rounded-full bg-[color:var(--studio-ink)] text-white flex items-center justify-center text-xs">
-                              ✓
-                            </div>
-                          )}
-                          {/* Quick item badge */}
-                          {isQuickItem && !isSelected && (
-                            <div className="absolute top-1 left-1 px-1.5 py-0.5 rounded-full bg-purple-500 text-white text-[8px] font-bold">
-                              QUICK
-                            </div>
-                          )}
-                        </button>
-
-                        {/* Remove quick item button */}
-                        {isQuickItem && (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); removeQuickItem(item.id); }}
-                            className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 text-white
-                                       flex items-center justify-center text-xs shadow-md hover:bg-red-600 z-10"
-                          >
-                            ×
-                          </button>
-                        )}
-
-                        {/* Slot picker dropdown */}
-                        {showSlotPicker && validSlots.length > 1 && (
-                          <div className="absolute bottom-full mb-1 sm:bottom-auto sm:mb-0 sm:top-full sm:mt-1 left-0 right-0 z-50 bg-white rounded-xl shadow-xl border border-gray-100 p-2">
-                            <p className="text-xs uppercase text-gray-500 mb-1 px-1">Elegir slot:</p>
-                            {validSlots.map(slot => {
-                              const config = SLOT_CONFIGS.find(c => c.id === slot);
-                              const isOccupied = slotSelections.has(slot);
-                              return (
-                                <button
-                                  key={slot}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (navigator.vibrate) navigator.vibrate(5);
-                                    addItemToSlot(item, slot);
-                                  }}
-                                  disabled={isOccupied}
-                                  className={`w-full text-left px-2 py-1.5 rounded-lg text-xs flex items-center gap-2 ${isOccupied
-                                    ? 'text-gray-400 cursor-not-allowed'
-                                    : 'hover:bg-gray-100'
-                                    }`}
-                                >
-                                  <span className="material-symbols-outlined text-sm">{config?.icon}</span>
-                                  {config?.label}
-                                  {isOccupied && ' (ocupado)'}
-                                </button>
-                              );
-                            })}
-                            <button
-                              onClick={() => setActiveSlotPicker(null)}
-                              className="w-full text-center text-xs text-gray-500 mt-1 py-1"
-                            >
-                              Cancelar
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })
-                )}
+                  );
+                })}
               </div>
             </motion.section>
 
+            {/* Mobile inline diffusion loader — only visible on mobile when generating */}
+            <AnimatePresence>
+              {isGenerating && (
+                <motion.section
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                  className="mb-3 overflow-hidden lg:hidden"
+                >
+                  <div className="relative w-full rounded-2xl overflow-hidden" style={{ height: '200px' }}>
+                    <GenerationLoader userImage={activeBaseImage} />
+                    <div className="absolute bottom-3 left-0 right-0 flex justify-center z-40">
+                      {activeGeneration && (
+                        <button
+                          onClick={() => cancelGeneration(activeGeneration.id)}
+                          className="px-4 py-1.5 rounded-full bg-white/90 backdrop-blur-sm text-xs font-bold text-gray-700 shadow-lg border border-white/50 hover:bg-white transition-all active:scale-95"
+                        >
+                          Cancelar
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </motion.section>
+              )}
+            </AnimatePresence>
+
+            <SelectedGarmentsTray
+              slotSelections={slotSelections}
+              activeFitPicker={activeFitPicker}
+              setActiveFitPicker={setActiveFitPicker}
+              onUpdateSlotFit={updateSlotFit}
+              onRequestBackUpload={handleRequestBackUpload}
+              onRemoveFromSlot={removeFromSlot}
+            />
+
+            <StudioClosetGrid
+              itemVariants={itemVariants}
+              filteredCloset={filteredCloset}
+              slotSelections={slotSelections}
+              activeSlotPicker={activeSlotPicker}
+              setActiveSlotPicker={setActiveSlotPicker}
+              isItemSelected={isItemSelected}
+              isUploadingQuickItem={isUploadingQuickItem}
+              quickItemInputRef={quickItemInputRef}
+              onQuickItemUpload={handleQuickItemUpload}
+              onItemClick={handleStudioItemClick}
+              onAddItemToSlot={addItemToSlot}
+              onRemoveQuickItem={removeQuickItem}
+            />
+
+            <motion.section
+              variants={itemVariants}
+              data-testid="studio-generate-bar"
+              className="sticky bottom-[calc(1rem+env(safe-area-inset-bottom))] z-30 w-full flex justify-center pointer-events-none px-4"
+            >
+              <div className="rounded-full bg-white/85 backdrop-blur-xl border border-white/60 shadow-[0_8px_30px_rgb(0,0,0,0.12)] p-1.5 pointer-events-auto w-full sm:w-auto min-w-[min(100%,320px)] flex flex-col transition-all">
+                <div className="flex min-w-0 flex-1 items-center gap-2">
+                  {isGenerating && activeGeneration && (
+                    <button
+                      onClick={() => cancelGeneration(activeGeneration.id)}
+                      className="px-3 py-2 rounded-xl text-xs font-bold text-[color:var(--studio-ink)] bg-white/80 border border-[color:var(--studio-ink-muted)]/30 shadow-sm hover:bg-gray-50 transition"
+                    >
+                      Cancelar
+                    </button>
+                  )}
+                  <button
+                    onClick={handleGenerateWithWarningCheck}
+                    disabled={isGenerating && !canGenerate}
+                    className={`flex-1 sm:flex-none px-6 py-3 rounded-full font-bold text-[14px] text-white flex items-center justify-center gap-2 transition-all relative overflow-hidden group border-0 ${isGenerating
+                      ? 'shadow-[0_0_20px_rgba(236,72,153,0.4)] scale-[0.98]'
+                      : canGenerate
+                        ? 'bg-[color:var(--studio-ink)] hover:scale-105 active:scale-95 shadow-[0_0_15px_rgba(33,37,41,0.3)]'
+                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      } ${shakeButton ? 'animate-shake ring-2 ring-red-500 shadow-red-500/50' : ''}`}
+                    style={canGenerate && !isGenerating ? {
+                      backgroundImage: 'linear-gradient(110deg, var(--studio-ink) 0%, var(--studio-ink) 40%, rgba(245,167,163,0.3) 50%, var(--studio-ink) 60%, var(--studio-ink) 100%)',
+                      backgroundSize: '200% 100%',
+                      animation: 'shimmer-btn 3s ease-in-out infinite',
+                    } : undefined}
+                  >
+                    {isGenerating && (
+                      <div className="absolute inset-0 bg-[length:200%_200%] animate-gradient-xy bg-gradient-to-r from-purple-500 via-pink-500 to-[color:var(--studio-rose)]" />
+                    )}
+
+                    {canGenerate && !isGenerating && (
+                      <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/20 to-white/0 opacity-0 group-hover:opacity-100 transition duration-700 pointer-events-none" />
+                    )}
+
+                    <div className="relative z-10 flex items-center justify-center gap-2">
+                      {isGenerating ? (
+                        <>
+                          <Loader size="small" /> <span className="animate-pulse">La IA está cosiendo...</span>
+                        </>
+                      ) : (
+                        <>
+                          <span className={`material-symbols-outlined text-[18px] ${canGenerate ? 'animate-pulse' : ''}`}>
+                            magic_button
+                          </span>
+                          Generar
+                        </>
+                      )}
+                    </div>
+                  </button>
+                </div>
+
+                {lastFailure && (
+                  <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 flex items-center justify-between gap-3">
+                    <span className="truncate">Error: {lastFailure.error || 'No se pudo generar el look.'}</span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => retryGeneration(lastFailure.id)}
+                        className="px-2 py-1 rounded-lg bg-white text-red-700 font-semibold border border-red-200 hover:bg-red-100 transition"
+                      >
+                        Reintentar
+                      </button>
+                      <button
+                        onClick={() => clearPendingResult(lastFailure.id)}
+                        className="px-2 py-1 rounded-lg text-red-500 hover:text-red-700 transition"
+                      >
+                        Cerrar
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </motion.section>
           </motion.main>
         </div>
 
-        {/* RIGHT SIDEBAR: Inspector/Preview (hidden on mobile, fixed on desktop) */}
-        <aside className="hidden lg:flex flex-col fixed right-0 top-0 bottom-0 w-96 bg-white/80 backdrop-blur-xl border-l border-white/60 z-20">
-          {/* Preview Header */}
-          <div className="p-4 border-b border-white/60">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-[color:var(--studio-ink-muted)]">
-              Preview
-            </h2>
-          </div>
-
-          {/* Generated Image Preview */}
-          <div className="flex-1 p-4 overflow-y-auto custom-scrollbar">
-            {isGenerating ? (
-              <div className="h-full flex items-center justify-center min-h-[400px]">
-                <div className="w-full max-w-[280px]">
-                  <GenerationLoader userImage={userBaseImage} />
-                </div>
-              </div>
-            ) : generatedImages.length > 0 ? (
-              <div className="space-y-4">
-                {/* Latest result */}
-                <div className="relative rounded-xl overflow-hidden shadow-lg">
-                  <img
-                    src={generatedImages[0].image}
-                    alt="Último look"
-                    className="w-full aspect-[3/4] object-cover cursor-pointer"
-                    onClick={() => setSelectedImage(generatedImages[0])}
-                  />
-                  {/* Badges overlay */}
-                  <div className="absolute top-2 left-2 right-2 flex flex-wrap gap-1">
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${generatedImages[0].model?.includes('3-pro')
-                      ? 'bg-purple-500/90 text-white'
-                      : 'bg-white/90 text-gray-700'
-                      }`}>
-                      {generatedImages[0].model?.includes('3-pro') ? 'Ultra' : 'Rápido'}
-                    </span>
-                    <span className="px-2 py-0.5 rounded-full bg-white/90 text-gray-700 text-xs font-semibold">
-                      {GENERATION_PRESETS.find(p => p.id === generatedImages[0].preset)?.label || generatedImages[0].preset}
-                    </span>
-                  </div>
-                  {/* Bottom badges */}
-                  <div className="absolute bottom-2 left-2 flex gap-1">
-                    {generatedImages[0].keepPose && (
-                      <span className="px-1.5 py-0.5 rounded-full bg-blue-500/90 text-white text-xs font-semibold flex items-center gap-0.5">
-                        <span className="material-symbols-outlined text-xs">person_pin</span>
-                        Pose
-                      </span>
-                    )}
-                    {generatedImages[0].faceRefsUsed > 0 && (
-                      <span className="px-1.5 py-0.5 rounded-full bg-green-500/90 text-white text-xs font-semibold flex items-center gap-0.5">
-                        <span className="material-symbols-outlined text-xs">face</span>
-                        {generatedImages[0].faceRefsUsed}
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Action buttons */}
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleGenerateNow}
-                    disabled={isGenerating || !canGenerate}
-                    className="py-2 px-3 rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs font-semibold flex items-center justify-center gap-1 disabled:opacity-50"
-                    title="Generar otra versión"
-                  >
-                    <span className="material-symbols-outlined text-sm">autorenew</span>
-                  </button>
-                  <button
-                    onClick={() => setSelectedImage(generatedImages[0])}
-                    className="py-2 px-3 rounded-lg bg-white border border-gray-200 text-xs font-semibold flex items-center justify-center gap-1"
-                  >
-                    <span className="material-symbols-outlined text-sm">compare</span>
-                  </button>
-                  <button
-                    onClick={() => handleSaveLook(generatedImages[0])}
-                    disabled={isSaving}
-                    className="flex-1 py-2 rounded-lg bg-[color:var(--studio-ink)] text-white text-xs font-semibold flex items-center justify-center gap-1"
-                  >
-                    <span className="material-symbols-outlined text-sm">save</span>
-                    {isSaving ? '...' : 'Guardar'}
-                  </button>
-                </div>
-
-                {/* Previous results with metadata */}
-                {generatedImages.length > 1 && (
-                  <div>
-                    <p className="text-xs uppercase tracking-wider text-[color:var(--studio-ink-muted)] mb-2">
-                      Anteriores ({generatedImages.length - 1})
-                    </p>
-                    <div className="grid grid-cols-3 gap-2">
-                      {generatedImages.slice(1, 7).map((gen, idx) => (
-                        <button
-                          key={idx}
-                          onClick={() => setSelectedImage(gen)}
-                          className="aspect-[3/4] rounded-lg overflow-hidden border border-white/50 relative group"
-                        >
-                          <img src={gen.image} alt={`Look ${idx + 2}`} className="w-full h-full object-cover" />
-                          {/* Mini metadata overlay on hover */}
-                          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition flex flex-col items-center justify-center gap-1 p-1">
-                            <span className="text-[8px] text-white font-semibold">
-                              {GENERATION_PRESETS.find(p => p.id === gen.preset)?.label || gen.preset}
-                            </span>
-                            <div className="flex gap-1">
-                              {gen.keepPose && (
-                                <span className="material-symbols-outlined text-blue-300 text-xs">person_pin</span>
-                              )}
-                              {gen.faceRefsUsed > 0 && (
-                                <span className="material-symbols-outlined text-green-300 text-xs">face</span>
-                              )}
-                            </div>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="h-full flex flex-col items-center justify-center text-center text-[color:var(--studio-ink-muted)]">
-                <span className="material-symbols-outlined text-4xl mb-2 opacity-30">image</span>
-                <p className="text-sm">Tu look generado<br />aparecerá aquí</p>
-              </div>
-            )}
-          </div>
-
-          {/* Saved looks link */}
-          <div className="p-4 border-t border-white/60">
-            <button
-              onClick={() => navigate(ROUTES.SAVED_LOOKS)}
-              className="w-full py-2.5 rounded-lg border border-[color:var(--studio-ink-muted)]/30 text-sm font-medium text-[color:var(--studio-ink-muted)] hover:bg-white/50 transition flex items-center justify-center gap-2"
-            >
-              <span className="material-symbols-outlined text-lg">photo_library</span>
-              Ver armario de looks
-            </button>
-          </div>
-        </aside>
+        <StudioResultViewer
+          isGenerating={isGenerating}
+          activeBaseImage={activeBaseImage}
+          generatedImages={generatedImages}
+          onSelectImage={setSelectedImage}
+          onGenerateNow={() => {
+            void handleGenerateNow();
+          }}
+          canGenerate={canGenerate}
+          isSaving={isSaving}
+          onSaveLook={(image) => {
+            void handleSaveLook(image);
+          }}
+          onOpenSavedLooks={() => navigate(ROUTES.SAVED_LOOKS)}
+        />
       </div>
 
-      {/* Bottom action bar - adjusted for sidebar */}
-      <div className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] left-0 lg:right-96 right-0 z-40 px-4">
-        <div className="mx-auto max-w-xl rounded-2xl bg-white/95 backdrop-blur-xl border border-white/70 shadow-lg p-3 sm:p-4">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex-1 min-w-0">
-              <p className="text-xs sm:text-sm font-medium truncate">{helperText}</p>
-              <div className="flex flex-wrap gap-1 mt-1">
-                <span className={`text-xs px-2 py-0.5 rounded-full border ${hasCoverage ? 'border-green-500 text-green-700' : 'border-gray-300 text-gray-500'}`}>
-                  {hasCoverage ? '✓' : '○'} Prenda
-                </span>
-                <span className={`text-xs px-2 py-0.5 rounded-full border ${hasSelfie ? 'border-green-500 text-green-700' : 'border-gray-300 text-gray-500'}`}>
-                  {hasSelfie ? '✓' : '○'} Selfie
-                </span>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              {isGenerating && activeGeneration && (
-                <button
-                  onClick={() => cancelGeneration(activeGeneration.id)}
-                  className="px-3 py-2 rounded-lg text-xs font-semibold text-[color:var(--studio-ink)] bg-white/80 border border-[color:var(--studio-ink)]/20 hover:bg-white transition"
-                >
-                  Cancelar
-                </button>
-              )}
-              <button
-                onClick={handleGenerateWithWarningCheck}
-                // Removed disabled to allow click for shake feedback, handling check in function
-                className={`px-5 py-3 rounded-xl font-semibold text-sm text-white flex items-center gap-2 transition ${isGenerating
-                  ? 'bg-gray-400 cursor-not-allowed'
-                  : canGenerate
-                    ? 'bg-[color:var(--studio-ink)] hover:scale-[1.02] active:scale-[0.98]'
-                    : 'bg-gray-400 cursor-pointer hover:bg-gray-500' // Visual cue it's clickable for feedback
-                  } ${shakeButton ? 'animate-shake ring-2 ring-red-500' : ''}`}
-              >
-                {isGenerating ? (
-                  <>
-                    <Loader size="small" /> {loadingMsg}
-                  </>
-                ) : (
-                  <>
-                    <span className="material-symbols-outlined text-base">auto_awesome</span>
-                    Generar ({generatedImages.length > 0 && !subscription.isPremium ? '1⚡' : 'Go'})
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-
-          {lastFailure && (
-            <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 flex items-center justify-between gap-3">
-              <span className="truncate">Error: {lastFailure.error || 'No se pudo generar el look.'}</span>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => retryGeneration(lastFailure.id)}
-                  className="px-2 py-1 rounded-lg bg-white text-red-700 font-semibold border border-red-200 hover:bg-red-100 transition"
-                >
-                  Reintentar
-                </button>
-                <button
-                  onClick={() => clearPendingResult(lastFailure.id)}
-                  className="px-2 py-1 rounded-lg text-red-500 hover:text-red-700 transition"
-                >
-                  Cerrar
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Full-screen image modal with comparison */}
       <AnimatePresence>
         {selectedImage && (
           <motion.div
@@ -1387,10 +1137,9 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="relative max-w-lg w-full max-h-[85vh] flex flex-col"
-              onClick={(e) => e.stopPropagation()}
+              className="relative w-full max-w-[min(95vw,32rem)] max-h-[85vh] flex flex-col"
+              onClick={(event) => event.stopPropagation()}
             >
-              {/* Close button */}
               <button
                 onClick={handleCloseSelectedImage}
                 className="absolute -top-12 right-0 w-10 h-10 rounded-full bg-white/20 text-white flex items-center justify-center"
@@ -1398,34 +1147,30 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
                 <span className="material-symbols-outlined">close</span>
               </button>
 
-              {/* Image with comparison slider */}
               <div className="rounded-2xl overflow-hidden bg-black relative">
-                {compareMode && selectedImage.selfieUsed ? (
-                  // Comparison mode - before/after slider
+                {compareMode && selectedImage.selfieUrl ? (
                   <div
                     className="relative w-full aspect-[3/4] select-none"
-                    onMouseMove={(e) => {
-                      if (e.buttons === 1) {
-                        const rect = e.currentTarget.getBoundingClientRect();
-                        const x = ((e.clientX - rect.left) / rect.width) * 100;
+                    onMouseMove={(event) => {
+                      if (event.buttons === 1) {
+                        const rect = event.currentTarget.getBoundingClientRect();
+                        const x = ((event.clientX - rect.left) / rect.width) * 100;
                         setComparePosition(Math.max(0, Math.min(100, x)));
                       }
                     }}
-                    onTouchMove={(e) => {
-                      const touch = e.touches[0];
-                      const rect = e.currentTarget.getBoundingClientRect();
+                    onTouchMove={(event) => {
+                      const touch = event.touches[0];
+                      const rect = event.currentTarget.getBoundingClientRect();
                       const x = ((touch.clientX - rect.left) / rect.width) * 100;
                       setComparePosition(Math.max(0, Math.min(100, x)));
                     }}
                   >
-                    {/* Before (selfie) - full width background */}
                     <img
-                      src={selectedImage.selfieUsed}
+                      src={selectedImage.selfieUrl}
                       alt="Antes"
                       className="absolute inset-0 w-full h-full object-cover"
                       draggable={false}
                     />
-                    {/* After (generated) - clipped */}
                     <div
                       className="absolute inset-0 overflow-hidden"
                       style={{ clipPath: `inset(0 ${100 - comparePosition}% 0 0)` }}
@@ -1437,7 +1182,6 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
                         draggable={false}
                       />
                     </div>
-                    {/* Slider line */}
                     <div
                       className="absolute top-0 bottom-0 w-0.5 bg-white shadow-lg cursor-ew-resize"
                       style={{ left: `${comparePosition}%` }}
@@ -1446,7 +1190,6 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
                         <span className="material-symbols-outlined text-gray-700 text-sm">drag_handle</span>
                       </div>
                     </div>
-                    {/* Labels */}
                     <div className="absolute top-3 left-3 px-2 py-1 rounded bg-black/50 text-white text-xs font-semibold">
                       Antes
                     </div>
@@ -1455,43 +1198,47 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
                     </div>
                   </div>
                 ) : (
-                  // Normal mode - just the result
-                  <img
-                    src={selectedImage.image}
-                    alt="Look generado"
-                    className="w-full h-auto max-h-[60vh] object-contain"
-                  />
+                  <div className="relative">
+                    <img
+                      src={selectedImage.image}
+                      alt="Look generado"
+                      className="w-full h-auto max-h-[60vh] object-contain"
+                    />
+
+                    {isNewSessionResult && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -20, scale: 0.8 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        className="absolute top-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded-full bg-gradient-to-r from-purple-600 to-pink-600 text-white text-xs font-bold shadow-2xl border border-white/20 flex items-center gap-2 whitespace-nowrap"
+                      >
+                        <span className="material-symbols-outlined text-sm animate-pulse">auto_awesome</span>
+                        ¡Tu nuevo look está listo!
+                      </motion.div>
+                    )}
+                  </div>
                 )}
               </div>
 
-              {/* Generation metadata */}
               <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
-                {/* Model */}
-                <span className={`px-2 py-1 rounded-full text-xs font-semibold ${selectedImage.model?.includes('3-pro')
-                  ? 'bg-purple-500 text-white'
-                  : 'bg-white/20 text-white'
-                  }`}>
-                  {selectedImage.model?.includes('3-pro') ? 'Ultra' : 'Rápido'}
+                <span className="px-2 py-1 rounded-full text-xs font-semibold bg-purple-500 text-white">
+                  Nano 3.1
                 </span>
-                {/* Preset */}
                 <span className="px-2 py-1 rounded-full bg-white/20 text-white text-xs font-semibold">
-                  {GENERATION_PRESETS.find(p => p.id === selectedImage.preset)?.label || selectedImage.preset}
+                  {GENERATION_PRESETS.find((preset) => preset.id === selectedImage.preset)?.label ||
+                    selectedImage.preset}
                 </span>
-                {/* Keep pose */}
                 {selectedImage.keepPose && (
                   <span className="px-2 py-1 rounded-full bg-blue-500/80 text-white text-xs font-semibold flex items-center gap-1">
                     <span className="material-symbols-outlined text-xs">person_pin</span>
                     Pose fija
                   </span>
                 )}
-                {/* Face refs */}
                 {selectedImage.faceRefsUsed > 0 && (
                   <span className="px-2 py-1 rounded-full bg-green-500/80 text-white text-xs font-semibold flex items-center gap-1">
                     <span className="material-symbols-outlined text-xs">face</span>
                     {selectedImage.faceRefsUsed} ref
                   </span>
                 )}
-                {/* Custom scene */}
                 {selectedImage.customScene && (
                   <span className="px-2 py-1 rounded-full bg-orange-500/80 text-white text-xs font-semibold max-w-[150px] truncate">
                     "{selectedImage.customScene}"
@@ -1499,15 +1246,12 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
                 )}
               </div>
 
-              {/* Action buttons */}
               <div className="mt-4 flex gap-2">
-                {/* Regenerate with same config */}
                 <button
                   onClick={() => {
                     handleCloseSelectedImage();
-                    // Small delay to let modal close before regenerating
                     setTimeout(() => {
-                      handleGenerateNow();
+                      void handleGenerateNow();
                     }, 150);
                   }}
                   disabled={isGenerating || !canGenerate}
@@ -1516,22 +1260,18 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
                 >
                   <span className="material-symbols-outlined text-lg">autorenew</span>
                 </button>
-                {/* Compare toggle */}
-                {selectedImage.selfieUsed && (
+                {selectedImage.selfieUrl && (
                   <button
                     onClick={() => setCompareMode(!compareMode)}
-                    className={`py-3 px-4 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition ${compareMode
-                      ? 'bg-yellow-500 text-black'
-                      : 'bg-white/20 text-white hover:bg-white/30'
+                    className={`py-3 px-4 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition ${compareMode ? 'bg-yellow-500 text-black' : 'bg-white/20 text-white hover:bg-white/30'
                       }`}
                   >
                     <span className="material-symbols-outlined text-lg">compare</span>
                   </button>
                 )}
-                {/* Save */}
                 <button
                   onClick={() => {
-                    handleSaveLook(selectedImage);
+                    void handleSaveLook(selectedImage);
                     handleCloseSelectedImage();
                   }}
                   disabled={isSaving}
@@ -1540,7 +1280,6 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
                   <span className="material-symbols-outlined text-lg">save</span>
                   {isSaving ? 'Guardando...' : 'Guardar'}
                 </button>
-                {/* Download */}
                 <a
                   href={selectedImage.image}
                   download={`look-${Date.now()}.png`}
@@ -1554,16 +1293,16 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
         )}
       </AnimatePresence>
 
-      {/* Clothing Compatibility Warning Modal */}
       <ClothingCompatibilityWarning
         hasBottomSelected={slotSelections.has('bottom')}
         hasShoesSelected={slotSelections.has('shoes')}
         isVisible={showCompatibilityWarning}
-        onProceed={handleGenerateNow}
+        onProceed={() => {
+          void handleGenerateNow();
+        }}
         onCancel={() => setShowCompatibilityWarning(false)}
       />
 
-      {/* Quick Item Category Picker Modal */}
       <AnimatePresence>
         {showQuickItemCategoryPicker && (
           <motion.div
@@ -1582,17 +1321,14 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              onClick={(e) => e.stopPropagation()}
+              onClick={(event) => event.stopPropagation()}
               className="bg-white rounded-2xl shadow-2xl p-5 w-full max-w-sm"
             >
-              <h3 className="text-lg font-bold text-gray-900 mb-1">
-                ¿Qué tipo de prenda es?
-              </h3>
+              <h3 className="text-lg font-bold text-gray-900 mb-1">¿Qué tipo de prenda es?</h3>
               <p className="text-sm text-gray-500 mb-4">
                 Seleccioná la categoría para poder usarla en tu look
               </p>
 
-              {/* Preview of the uploaded image */}
               {showQuickItemCategoryPicker && (
                 <div className="mb-4 flex justify-center">
                   <img
@@ -1604,15 +1340,15 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
               )}
 
               <div className="grid grid-cols-2 gap-2">
-                {QUICK_CATEGORIES.map(cat => (
+                {QUICK_CATEGORIES.map((category) => (
                   <button
-                    key={cat.id}
-                    onClick={() => confirmQuickItemCategory(showQuickItemCategoryPicker!, cat.id)}
+                    key={category.id}
+                    onClick={() => confirmQuickItemCategory(showQuickItemCategoryPicker!, category.id)}
                     className="flex items-center gap-2 p-3 rounded-xl border border-gray-200
                                hover:border-purple-400 hover:bg-purple-50 transition-all text-left"
                   >
-                    <span className="text-2xl">{cat.icon}</span>
-                    <span className="text-sm font-medium text-gray-700">{cat.label}</span>
+                    <span className="text-2xl">{category.icon}</span>
+                    <span className="text-sm font-medium text-gray-700">{category.label}</span>
                   </button>
                 ))}
               </div>
@@ -1633,7 +1369,6 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
         )}
       </AnimatePresence>
 
-      {/* Hidden input for back view upload */}
       <input
         type="file"
         ref={backItemInputRef}

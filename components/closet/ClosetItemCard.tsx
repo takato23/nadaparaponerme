@@ -80,6 +80,27 @@ export default function ClosetItemCard({
     return null;
   }, [item.status]);
 
+  const aiStatusBadge = useMemo(() => {
+    if (typeof item.aiStatus === 'undefined') return null;
+    if (item.aiStatus === 'ready') return null;
+    if (item.aiStatus === 'processing') {
+      return {
+        label: 'Analizando IA',
+        className: 'bg-sky-100/90 text-sky-700 border-sky-200/70',
+      };
+    }
+    if (item.aiStatus === 'failed') {
+      return {
+        label: 'Error IA',
+        className: 'bg-red-100/90 text-red-700 border-red-200/70',
+      };
+    }
+    return {
+      label: 'Sin analizar',
+      className: 'bg-indigo-100/90 text-indigo-700 border-indigo-200/70',
+    };
+  }, [item.aiStatus]);
+
   // Handle click
   const handleClick = (e: React.MouseEvent) => {
     if (isSelectionMode && onToggleSelection) {
@@ -192,6 +213,13 @@ export default function ClosetItemCard({
               {statusBadge.label}
             </span>
           )}
+          {aiStatusBadge && (
+            <span
+              className={`mt-1 ml-1 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${aiStatusBadge.className}`}
+            >
+              {aiStatusBadge.label}
+            </span>
+          )}
           {item.metadata?.vibe_tags && item.metadata.vibe_tags.length > 0 && (
             <div className="flex gap-1 mt-1.5">
               {item.metadata.vibe_tags.slice(0, 2).map((tag, i) => (
@@ -293,6 +321,24 @@ export default function ClosetItemCard({
         {/* Gradient Overlay */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-60 group-hover:opacity-80 transition-opacity duration-300" />
 
+        {/* Prominent Center CTA for Grid */}
+        {!isSelectionMode && (
+          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (navigator.vibrate) navigator.vibrate(5);
+                navigate(ROUTES.STUDIO, { state: { preselectedItemIds: [item.id] } });
+              }}
+              className="pointer-events-auto bg-[length:200%_200%] animate-gradient-xy bg-gradient-to-r from-purple-500 via-pink-500 to-[color:var(--studio-rose)] text-white shadow-[0_8px_25px_rgba(236,72,153,0.5)] hover:shadow-[0_12px_35px_rgba(236,72,153,0.7)] active:scale-95 px-6 py-3 rounded-2xl flex items-center justify-center gap-2 transition-transform hover:-translate-y-1"
+              title="Probar Ahora"
+            >
+              <span className="material-symbols-outlined text-2xl drop-shadow-sm">auto_fix_high</span>
+              <span className="font-bold tracking-wide uppercase drop-shadow-sm">Probar</span>
+            </button>
+          </div>
+        )}
+
         {/* Selection checkbox (top-left) */}
         {isSelectionMode && (
           <motion.div
@@ -310,13 +356,18 @@ export default function ClosetItemCard({
           </motion.div>
         )}
 
-        {statusBadge && (
-          <div className={`absolute top-3 ${isSelectionMode ? 'left-12' : 'left-3'} z-20`}>
+        <div className={`absolute top-3 ${isSelectionMode ? 'left-12' : 'left-3'} z-20 flex flex-col gap-1`}>
+          {statusBadge && (
             <span className={`px-2 py-1 rounded-full text-xs font-semibold border backdrop-blur-sm ${statusBadge.className}`}>
               {statusBadge.label}
             </span>
-          </div>
-        )}
+          )}
+          {aiStatusBadge && (
+            <span className={`px-2 py-1 rounded-full text-xs font-semibold border backdrop-blur-sm ${aiStatusBadge.className}`}>
+              {aiStatusBadge.label}
+            </span>
+          )}
+        </div>
 
         {/* Versatility badge (top-right) */}
         {showVersatilityScore && versatilityScore > 0 && (
@@ -341,24 +392,13 @@ export default function ClosetItemCard({
                      Let's put actions at top-right, and versatility slightly left of it or below.
                      Simplest: Actions at top-right. Versatility at top-left (next to checkbox) or ensure they don't collision.
                      
-                     Let's put Actions at Top Right.
+                     Let's put Actions Top Right.
                      If Versatility exists, let's move it to Bottom Right or Top Left?
                      Looking at previous code, versatility was Top Right.
                      Let's put Actions Top Right, and push Versatility to Top Left (if no checkbox) or just below Actions.
                  */}
 
             <div className="flex items-center gap-1">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (navigator.vibrate) navigator.vibrate(5);
-                  navigate(ROUTES.STUDIO, { state: { preselectedItemIds: [item.id] } });
-                }}
-                className="bg-white/80 dark:bg-black/50 hover:bg-white dark:hover:bg-black/70 backdrop-blur-md w-8 h-8 rounded-full flex items-center justify-center shadow-sm transition-all group/btn"
-                title="Probar Ahora"
-              >
-                <span className="material-symbols-outlined text-[18px] text-gray-700 dark:text-gray-200 group-hover/btn:text-primary">auto_fix_high</span>
-              </button>
               {onDelete && (
                 <button
                   onClick={(e) => {

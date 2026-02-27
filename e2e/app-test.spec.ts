@@ -15,15 +15,40 @@ async function ensureLoggedIn(page: Page) {
   await page.goto(BASE_URL);
   await waitForAppLoad(page);
 
-  // Si hay botón de login, hacer login
-  const loginButton = page.locator('button:has-text("Iniciar"), button:has-text("Login"), button:has-text("Continuar")');
-  if (await loginButton.isVisible({ timeout: 2000 }).catch(() => false)) {
-    // Buscar opción de continuar sin cuenta o demo
-    const demoButton = page.locator('button:has-text("Continuar sin cuenta"), button:has-text("Demo"), button:has-text("Probar")');
-    if (await demoButton.isVisible({ timeout: 1000 }).catch(() => false)) {
-      await demoButton.click();
-      await waitForAppLoad(page);
+  // 1. Revisar si estamos en Landing (buscar botón 'Ya tengo cuenta')
+  const loginLink = page.locator('button:has-text("Ya tengo cuenta")').first();
+  if (await loginLink.isVisible({ timeout: 2000 }).catch(() => false)) {
+    console.log('🔄 En Landing: Clickeando "Ya tengo cuenta"...');
+    await loginLink.click();
+    await page.waitForTimeout(1000);
+  }
+
+  // 2. Revisar si estamos en Onboarding (buscar botón 'Ya tengo cuenta' de nuevo)
+  const onboardingLoginLink = page.locator('button:has-text("Ya tengo cuenta")').first();
+  if (await onboardingLoginLink.isVisible({ timeout: 2000 }).catch(() => false)) {
+    console.log('🔄 En Onboarding: Clickeando "Ya tengo cuenta" to Auth...');
+    await onboardingLoginLink.click();
+    await page.waitForTimeout(1000);
+  }
+
+  // 3. Revisar si estamos en Auth View (Formulario de login)
+  const emailInput = page.locator('input[type="email"]').first();
+  if (await emailInput.isVisible({ timeout: 10000 }).catch(() => false)) {
+    console.log('🔐 En Auth View: Intentando login con credenciales de prueba...');
+
+    // Check if we need to switch to Login mode (if "Crear Cuenta" is shown)
+    const switchModeBtn = page.locator('button:has-text("¿Ya tienes cuenta? Inicia sesión")');
+    if (await switchModeBtn.isVisible().catch(() => false)) {
+      await switchModeBtn.click();
+      await page.waitForTimeout(500);
     }
+
+    await emailInput.fill('test@example.com');
+    await page.locator('input[type="password"]').fill('password123');
+    await page.locator('button[type="submit"]').click();
+
+    // Esperar navegación o error
+    await page.waitForTimeout(2000);
   }
 }
 
@@ -40,7 +65,8 @@ test.describe('App General Tests', () => {
   });
 
   test('2. Home View se muestra', async ({ page }) => {
-    await ensureLoggedIn(page);
+    await page.goto(BASE_URL);
+    await waitForAppLoad(page);
 
     // Validar landing real de producto (launch mode)
     const homeContent = page.locator('main[aria-label="Landing"] h1, h1:has-text("No Tengo Nada"), button:has-text("Probar gratis ahora")').first();
@@ -51,7 +77,8 @@ test.describe('App General Tests', () => {
   });
 
   test('3. Navegación funciona', async ({ page }) => {
-    await ensureLoggedIn(page);
+    await page.goto(BASE_URL);
+    await waitForAppLoad(page);
 
     // En launch mode la navegación primaria vive en links del landing/footer
     const navButtons = page.locator('a[href="/pricing"], a[href="/stylist-onboarding"], a[href="/legal/privacidad"], a[href="/legal/terminos"]');

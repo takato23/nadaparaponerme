@@ -7,7 +7,7 @@
 
 import { supabase, uploadImage, compressImage, createThumbnail } from '../lib/supabase';
 import { logger } from '../utils/logger';
-import type { ClothingItem as LegacyClothingItem, ClothingItemMetadata } from '../../types';
+import type { ClothingItem as LegacyClothingItem, ClothingItemMetadata, ItemAIStatus } from '../../types';
 import type { Database, ClothingCategory, Season } from '../types/api';
 
 type ClothingItemRow = Database['public']['Tables']['clothing_items']['Row'];
@@ -49,6 +49,13 @@ function safeParseSeasons(seasons: unknown): string[] {
   return [];
 }
 
+function safeParseAIStatus(status: unknown): ItemAIStatus {
+  if (status === 'pending' || status === 'processing' || status === 'ready' || status === 'failed') {
+    return status;
+  }
+  return 'pending';
+}
+
 /**
  * Convert Supabase ClothingItem to legacy format
  */
@@ -68,6 +75,10 @@ function convertToLegacyFormat(item: ClothingItemRow): LegacyClothingItem {
     },
     backImageDataUrl: item.back_image_url || undefined,
     status: (item.status as LegacyClothingItem['status']) || 'owned',
+    aiStatus: safeParseAIStatus(item.ai_status),
+    aiAnalyzedAt: item.ai_analyzed_at,
+    aiMetadataVersion: item.ai_metadata_version ?? 0,
+    aiLastError: item.ai_last_error,
   };
 }
 
@@ -130,7 +141,8 @@ export async function addClothingItem(
   imageFile: File,
   metadata: ClothingItemMetadata,
   backImageFile?: File, // Optional back view image
-  status: PersistedItemStatus = 'owned'
+  status: PersistedItemStatus = 'owned',
+  aiStatus: ItemAIStatus = 'pending'
 ): Promise<LegacyClothingItem> {
   try {
     const { data: { user } } = await supabase.auth.getUser();
@@ -192,6 +204,10 @@ export async function addClothingItem(
       },
       tags: metadata.vibe_tags || [],
       notes: metadata.description || null,
+      ai_status: aiStatus,
+      ai_analyzed_at: aiStatus === 'ready' ? new Date().toISOString() : null,
+      ai_metadata_version: aiStatus === 'ready' ? 1 : 0,
+      ai_last_error: null,
       status,
     };
 
@@ -223,7 +239,8 @@ export async function addClothingItem(
 export async function addGeneratedClothingItem(
   imageUrl: string,
   metadata: ClothingItemMetadata,
-  status: PersistedItemStatus = 'owned'
+  status: PersistedItemStatus = 'owned',
+  aiStatus: ItemAIStatus = 'pending'
 ): Promise<LegacyClothingItem> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated');
@@ -245,6 +262,10 @@ export async function addGeneratedClothingItem(
     },
     tags: metadata.vibe_tags || ['ai-generated'],
     notes: metadata.description || null,
+    ai_status: aiStatus,
+    ai_analyzed_at: aiStatus === 'ready' ? new Date().toISOString() : null,
+    ai_metadata_version: aiStatus === 'ready' ? 1 : 0,
+    ai_last_error: null,
     status,
   };
 
@@ -286,6 +307,10 @@ export async function updateClothingItem(
       },
       tags: metadata.vibe_tags || [],
       notes: metadata.description || null,
+      ai_status: 'ready',
+      ai_analyzed_at: new Date().toISOString(),
+      ai_metadata_version: 1,
+      ai_last_error: null,
     };
 
     // Handle new back image if provided
@@ -317,6 +342,51 @@ export async function updateClothingItem(
     return convertToLegacyFormat(data);
   } catch (error) {
     logger.error('Failed to update closet item:', error);
+    throw error;
+  }
+}
+
+/**
+ * Analyze an existing clothing item on-demand and persist enriched metadata.
+ */
+export async function analyzeClothingItemOnDemand(id: string): Promise<LegacyClothingItem> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
+    const { error: markProcessingError } = await (supabase.from('clothing_items') as any)
+      .update({ ai_status: 'processing', ai_last_error: null })
+      .eq('id', id)
+      .eq('user_id', user.id);
+
+    if (markProcessingError) throw markProcessingError;
+
+    const { data, error } = await supabase.functions.invoke('prepare-closet-insights', {
+      body: {
+        insightType: 'report',
+        closetItemIds: [id],
+      },
+    });
+
+    if (error) {
+      await (supabase.from('clothing_items') as any)
+        .update({
+          ai_status: 'failed',
+          ai_last_error: error.message || 'prepare_failed',
+        })
+        .eq('id', id)
+        .eq('user_id', user.id);
+      throw error;
+    }
+
+    const updated = await getClothingItem(id);
+    if (!updated) {
+      throw new Error('No se pudo recuperar la prenda luego del análisis');
+    }
+
+    return updated;
+  } catch (error) {
+    logger.error('Failed to analyze clothing item on-demand:', error);
     throw error;
   }
 }

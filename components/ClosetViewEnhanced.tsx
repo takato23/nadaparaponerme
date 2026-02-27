@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import type { ClothingItem, SortOption } from '../types';
 import ClosetGrid from './ClosetGrid';
 import { usePullToRefresh } from '../hooks/usePullToRefresh';
@@ -85,10 +86,14 @@ const ClosetViewEnhanced = ({
                 <TooltipWrapper content="Agregá una prenda sacando una foto o subiendo una imagen" position="left">
                     <button
                         onClick={onAddItemClick}
-                        className="w-12 h-12 min-w-[48px] min-h-[48px] rounded-full bg-primary flex items-center justify-center transition-all active:scale-95 shadow-soft shadow-primary/30 hover:shadow-lg hover:shadow-primary/40 touch-manipulation"
+                        className="w-12 h-12 min-w-[48px] min-h-[48px] rounded-full flex items-center justify-center transition-all active:scale-95 shadow-[0_0_15px_rgba(236,72,153,0.3)] hover:shadow-[0_0_20px_rgba(236,72,153,0.5)] hover:scale-105 touch-manipulation relative overflow-hidden group border-0"
                         aria-label="Agregar prenda nueva"
                     >
-                        <span className="material-symbols-outlined text-white text-2xl" aria-hidden="true">add</span>
+                        {/* Animated gradient background to match Studio */}
+                        <div className="absolute inset-0 bg-[length:200%_200%] animate-gradient-xy bg-gradient-to-r from-purple-500 via-pink-500 to-[color:var(--studio-rose)]" />
+                        <div className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+
+                        <span className="material-symbols-outlined text-white text-3xl font-bold relative z-10" aria-hidden="true">add</span>
                     </button>
                 </TooltipWrapper>
             </header>
@@ -105,37 +110,49 @@ const ClosetViewEnhanced = ({
                             className="w-full p-3 pr-10 min-h-[48px] bg-white/50 dark:bg-black/20 rounded-xl border-none focus:ring-2 focus:ring-primary transition-all placeholder:text-gray-400 dark:placeholder:text-gray-500"
                             aria-label="Buscar prendas"
                         />
-                    {searchTerm && (
-                        <button
-                            onClick={() => setSearchTerm('')}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 p-1 min-w-[24px] min-h-[24px] hover:bg-gray-200/50 dark:hover:bg-gray-700/50 rounded-full transition-colors touch-manipulation"
-                            aria-label="Limpiar búsqueda"
-                        >
-                            <span className="material-symbols-outlined text-gray-500 text-xl" aria-hidden="true">close</span>
-                        </button>
-                    )}
+                        {searchTerm && (
+                            <button
+                                onClick={() => setSearchTerm('')}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 min-w-[24px] min-h-[24px] hover:bg-gray-200/50 dark:hover:bg-gray-700/50 rounded-full transition-colors touch-manipulation"
+                                aria-label="Limpiar búsqueda"
+                            >
+                                <span className="material-symbols-outlined text-gray-500 text-xl" aria-hidden="true">close</span>
+                            </button>
+                        )}
                     </div>
                 </TooltipWrapper>
                 <div className="flex gap-2 justify-between items-center flex-wrap">
-                    <div className="flex gap-2 flex-wrap">
+
+                    {/* Filters (iOS Segmented Control style - matches Studio) */}
+                    <div className="flex p-1 bg-white/40 dark:bg-black/20 backdrop-blur-md border border-gray-200/50 dark:border-white/5 rounded-full shadow-inner overflow-x-auto no-scrollbar">
                         {(['top', 'bottom', 'shoes'] as CategoryFilter[]).map(cat => {
+                            const isActive = activeCategory === cat;
                             const tooltips = {
-                                top: 'Mostrá solo remeras, camisas, sweaters y prendas superiores',
-                                bottom: 'Mostrá solo pantalones, shorts, polleras y prendas inferiores',
-                                shoes: 'Mostrá solo zapatillas, zapatos, sandalias y calzado'
+                                top: 'Remeras, camisas, sweaters...',
+                                bottom: 'Pantalones, shorts, polleras...',
+                                shoes: 'Zapatillas, zapatos, sandalias...'
                             };
                             return (
-                                <TooltipWrapper key={cat} content={tooltips[cat]} position="bottom">
+                                <TooltipWrapper key={cat} content={tooltips[cat]} position="top">
                                     <button
-                                        onClick={() => handleCategoryToggle(cat)}
-                                        className={`px-3 sm:px-4 py-2 min-h-[44px] rounded-full text-sm font-semibold transition-all touch-manipulation ${activeCategory === cat
-                                            ? 'bg-primary text-white shadow-md scale-105'
-                                            : 'bg-gray-200/60 dark:bg-gray-700/60 hover:bg-gray-300/60 dark:hover:bg-gray-600/60'
-                                            }`}
+                                        onClick={() => {
+                                            if (navigator.vibrate) navigator.vibrate(5);
+                                            handleCategoryToggle(cat);
+                                        }}
+                                        className="relative shrink-0 px-4 sm:px-5 py-1.5 rounded-full text-[13px] font-bold transition-colors focus:outline-none touch-manipulation"
                                         aria-label={`Filtrar por ${cat}`}
-                                        aria-pressed={activeCategory === cat}
+                                        aria-pressed={isActive}
                                     >
-                                        {cat.charAt(0).toUpperCase() + cat.slice(1)}s
+                                        {isActive && (
+                                            <motion.div
+                                                layoutId="activeFilterMain"
+                                                className="absolute inset-0 bg-white dark:bg-gray-700 rounded-full shadow-[0_2px_8px_rgba(33,37,41,0.08)] border border-white/80 dark:border-gray-600"
+                                                transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                                            />
+                                        )}
+                                        <span className={`relative z-10 transition-colors duration-300 ${isActive ? 'text-[color:var(--studio-ink)] dark:text-white' : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'}`}>
+                                            {cat.charAt(0).toUpperCase() + cat.slice(1)}s
+                                        </span>
                                     </button>
                                 </TooltipWrapper>
                             );

@@ -2,36 +2,33 @@ import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import Eye3D from './Eye3D';
 import { useThemeContext } from '../contexts/ThemeContext';
+import { useMatchMedia } from '../src/hooks/useMatchMedia';
 
-function useMediaQuery(query: string) {
-    const [matches, setMatches] = useState(false);
+const createSeededRandom = (seed: number) => {
+    let value = seed >>> 0;
+    return () => {
+        value ^= value << 13;
+        value ^= value >>> 17;
+        value ^= value << 5;
+        return ((value >>> 0) / 0x100000000);
+    };
+};
 
-    useEffect(() => {
-        if (typeof window === 'undefined' || typeof window.matchMedia === 'undefined') return;
-        const mql = window.matchMedia(query);
-        const onChange = (e: MediaQueryListEvent) => setMatches(e.matches);
-        setMatches(mql.matches);
-        if (typeof mql.addEventListener === 'function') mql.addEventListener('change', onChange);
-        else mql.addListener(onChange);
-        return () => {
-            if (typeof mql.removeEventListener === 'function') mql.removeEventListener('change', onChange);
-            else mql.removeListener(onChange);
-        };
-    }, [query]);
-
-    return matches;
-}
+const PARTICLE_SEED = 173489;
 
 // Floating particles component
 const FloatingParticles = ({ count = 20, isDark = true }: { count?: number; isDark?: boolean }) => {
-    const particles = Array.from({ length: count }, (_, i) => ({
+    const particles = React.useMemo(() => {
+        const random = createSeededRandom(PARTICLE_SEED + (isDark ? 13 : 17) + count);
+        return Array.from({ length: count }, (_, i) => ({
         id: i,
-        x: Math.random() * 100,
-        y: Math.random() * 100,
-        size: Math.random() * 3 + 1,
-        duration: Math.random() * 20 + 15,
-        delay: Math.random() * 5,
-    }));
+            x: random() * 100,
+            y: random() * 100,
+            size: random() * 3 + 1,
+            duration: random() * 20 + 15,
+            delay: random() * 5,
+        }));
+    }, [count, isDark]);
 
     return (
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -68,8 +65,8 @@ interface LandingHeroEyeProps {
 }
 
 export default function LandingHeroEye({ onGetStarted, onLogin }: LandingHeroEyeProps) {
-    const prefersReducedMotion = useReducedMotion() || useMediaQuery('(prefers-reduced-motion: reduce)');
-    const isSmallScreen = useMediaQuery('(max-width: 640px)');
+    const prefersReducedMotion = useReducedMotion() || useMatchMedia('(prefers-reduced-motion: reduce)');
+    const isSmallScreen = useMatchMedia('(max-width: 640px)');
     const [transitioningTo, setTransitioningTo] = useState<null | 'login' | 'signup'>(null);
     const [isLoaded, setIsLoaded] = useState(false);
     const { theme } = useThemeContext();

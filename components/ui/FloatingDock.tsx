@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion, useMotionValue } from 'framer-motion';
 import { useLocation } from 'react-router-dom';
 import { ROUTES } from '../../src/routes';
@@ -11,9 +11,10 @@ interface DockItemProps {
     isActive: boolean;
     onClick: () => void;
     isCamera?: boolean;
+    compact?: boolean;
 }
 
-function DockItem({ icon, label, isActive, onClick, isCamera }: DockItemProps) {
+function DockItem({ icon, label, isActive, onClick, isCamera, compact = false }: DockItemProps) {
     const mouseX = useMotionValue(Infinity);
     const [isHovered, setIsHovered] = useState(false);
 
@@ -26,7 +27,7 @@ function DockItem({ icon, label, isActive, onClick, isCamera }: DockItemProps) {
                 onHoverStart={() => setIsHovered(true)}
                 onHoverEnd={() => setIsHovered(false)}
                 onClick={onClick}
-                className="relative group flex flex-col items-center justify-end -mt-4"
+                className={`relative group flex flex-col items-center justify-end ${compact ? '-mt-2.5' : '-mt-4'}`}
             >
                 <motion.div
                     animate={{
@@ -35,47 +36,46 @@ function DockItem({ icon, label, isActive, onClick, isCamera }: DockItemProps) {
                     }}
                     transition={{ type: "spring", stiffness: 400, damping: 25, mass: 0.8 }}
                     className="
-                        w-16 h-16 rounded-full
+                        rounded-full
                         flex items-center justify-center
-                        bg-gradient-to-br from-primary via-primary to-secondary
-                        shadow-lg
-                        group-hover:shadow-xl
+                        bg-[length:200%_200%] animate-gradient-xy bg-gradient-to-r from-purple-500 via-pink-500 to-[color:var(--studio-rose)]
+                        shadow-[0_0_15px_rgba(236,72,153,0.4)]
+                        group-hover:shadow-[0_0_25px_rgba(236,72,153,0.6)]
                         transition-shadow duration-300
                         cursor-pointer
                         border-4 border-white/20
                         relative overflow-hidden
                     "
+                    style={{
+                        width: compact ? 52 : 64,
+                        height: compact ? 52 : 64,
+                    }}
                 >
-                    {/* Shine effect */}
                     <div className="absolute inset-0 bg-gradient-to-tr from-white/30 via-transparent to-transparent opacity-40" />
+                    <div className="absolute inset-0 rounded-full animate-pulse-glow" />
 
-                    {/* Pulsing ring */}
-                    <div className="absolute inset-0 rounded-full animate-ping bg-primary/30 opacity-0 group-hover:opacity-100" style={{ animationDuration: '2s' }} />
-
-                    <span className="material-symbols-outlined text-3xl text-white relative z-10 drop-shadow-sm">
+                    <span className={`material-symbols-outlined text-white relative z-10 drop-shadow-md group-hover:scale-110 transition-transform ${compact ? 'text-2xl' : 'text-3xl'}`}>
                         {icon}
                     </span>
                 </motion.div>
 
-                {/* Tooltip */}
                 <div className={`
                     absolute -top-14
                     px-3 py-1.5
-                    bg-gradient-to-r from-primary to-secondary text-white
+                    bg-gradient-to-r from-purple-500 to-pink-500 text-white
                     text-xs font-bold rounded-lg
                     opacity-0 group-hover:opacity-100
                     transition-all duration-200 transform translate-y-2 group-hover:translate-y-0
                     pointer-events-none whitespace-nowrap backdrop-blur-sm
-                    shadow-lg
+                    shadow-[0_4px_12px_rgba(236,72,153,0.3)]
                 `}>
                     {label}
-                    <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-secondary rotate-45" />
+                    <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-pink-500 rotate-45" />
                 </div>
             </motion.div>
         );
     }
 
-    // Regular dock item
     return (
         <motion.div
             onMouseMove={(e) => mouseX.set(e.pageX)}
@@ -92,7 +92,7 @@ function DockItem({ icon, label, isActive, onClick, isCamera }: DockItemProps) {
                 }}
                 transition={{ type: "spring", stiffness: 400, damping: 25, mass: 0.8 }}
                 className={`
-          w-14 h-14 rounded-2xl
+          rounded-2xl
           flex items-center justify-center
           glass-card
           shadow-md
@@ -100,25 +100,26 @@ function DockItem({ icon, label, isActive, onClick, isCamera }: DockItemProps) {
           cursor-pointer
           ${isActive ? 'bg-white/90 dark:bg-white/20 border-primary/50' : ''}
         `}
+                style={{
+                    width: compact ? 46 : 56,
+                    height: compact ? 46 : 56,
+                }}
             >
                 <span className={`
-          material-symbols-outlined text-3xl
+          material-symbols-outlined ${compact ? 'text-2xl' : 'text-3xl'}
           ${isActive ? 'text-primary' : 'text-gray-700 dark:text-gray-200'}
           group-hover:text-primary transition-colors duration-300
         `}>
                     {icon}
                 </span>
 
-                {/* Reflection */}
                 <div className="absolute inset-0 rounded-2xl bg-gradient-to-tr from-white/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
             </motion.div>
 
-            {/* Dot Indicator for active state */}
             {isActive && (
                 <div className="absolute -bottom-2 w-1.5 h-1.5 rounded-full bg-primary/80"></div>
             )}
 
-            {/* Tooltip */}
             <div className={`
         absolute -top-12
         px-3 py-1.5
@@ -134,11 +135,28 @@ function DockItem({ icon, label, isActive, onClick, isCamera }: DockItemProps) {
     );
 }
 
-export function FloatingDock({ onCameraClick }: { onCameraClick?: () => void }) {
+interface FloatingDockProps {
+    onCameraClick?: () => void;
+    forceHidden?: boolean;
+}
+
+export function FloatingDock({ onCameraClick, forceHidden = false }: FloatingDockProps) {
     const navigate = useNavigateTransition();
     const location = useLocation();
+    const [compactDock, setCompactDock] = useState(() => {
+        if (typeof window === 'undefined') return false;
+        return window.innerWidth < 430;
+    });
 
-    // Hide dock on fullscreen/immersive routes
+    useEffect(() => {
+        const handleResize = () => {
+            setCompactDock(window.innerWidth < 430);
+        };
+
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
     const fullscreenRoutes = [
         ROUTES.ONBOARDING_STYLIST,
         '/stylist-onboarding',
@@ -149,15 +167,14 @@ export function FloatingDock({ onCameraClick }: { onCameraClick?: () => void }) 
         location.pathname === route || location.pathname.startsWith(route + '/')
     );
 
-    if (shouldHideDock) {
+    if (forceHidden || shouldHideDock) {
         return null;
     }
 
     const items = [
         { id: 'home', icon: 'home', label: 'Inicio', path: ROUTES.HOME },
         { id: 'closet', icon: 'checkroom', label: 'Armario', path: ROUTES.CLOSET },
-        { id: 'camera', icon: 'photo_camera', label: 'Escanear', path: ROUTES.CLOSET, isCamera: true },
-        { id: 'community', icon: 'group', label: 'Comunidad', path: ROUTES.COMMUNITY },
+        { id: 'studio', icon: 'auto_fix_high', label: 'Studio', path: ROUTES.STUDIO },
         { id: 'profile', icon: 'person', label: 'Perfil', path: ROUTES.PROFILE },
     ];
 
@@ -171,11 +188,12 @@ export function FloatingDock({ onCameraClick }: { onCameraClick?: () => void }) 
 
     return (
         <div
+            data-testid="floating-dock"
             className="fixed left-0 right-0 z-50 flex justify-center pointer-events-none px-4"
             style={{ bottom: 'calc(1rem + env(safe-area-inset-bottom))' }}
         >
             <div className="
-    flex items-end gap-2 sm:gap-3 px-4 sm:px-6 py-3 sm:py-4
+    flex w-auto max-w-[min(36rem,calc(100vw-0.75rem))] items-end justify-center gap-1.5 sm:gap-3 px-2.5 sm:px-6 py-2.5 sm:py-4
     backdrop-blur-2xl bg-white/80 dark:bg-gray-900/80 border border-white/20 dark:border-white/10 rounded-2xl
     !overflow-visible
     shadow-lg
@@ -189,9 +207,10 @@ export function FloatingDock({ onCameraClick }: { onCameraClick?: () => void }) 
                         id={item.id}
                         icon={item.icon}
                         label={item.label}
-                        isActive={location.pathname === item.path && item.id !== 'camera'}
+                        isActive={location.pathname === item.path}
                         onClick={() => handleItemClick(item)}
                         isCamera={item.isCamera}
+                        compact={compactDock}
                     />
                 ))}
             </div>

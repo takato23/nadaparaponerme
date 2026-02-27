@@ -715,7 +715,6 @@ function Eyeball({ colors, mousePos }: { colors: EyeColorScheme; mousePos: Point
 
 function FaceSocket({ enabled }: { enabled: boolean }) {
     // Landing-page friendly socket backdrop (avoids the big grey "oval sphere" look).
-    if (!enabled) return null;
     const alphaMap = useSocketVignetteAlpha();
     const colorMap = useSocketVignetteMap();
     const geo = useMemo(() => {
@@ -735,6 +734,8 @@ function FaceSocket({ enabled }: { enabled: boolean }) {
             geo.dispose();
         };
     }, [geo]);
+
+    if (!enabled) return null;
 
     return (
         <group>

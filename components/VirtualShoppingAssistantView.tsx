@@ -11,6 +11,7 @@ interface VirtualShoppingAssistantViewProps {
   onAnalyzeGaps: () => Promise<void>;
   onGenerateRecommendations: () => Promise<void>;
   onSendMessage: (message: string) => Promise<void>;
+  onTryOnProduct?: (product: ShoppingProduct) => Promise<void>;
   chatMessages: ShoppingChatMessage[];
   currentGaps?: ShoppingGap[];
   currentRecommendations?: ShoppingRecommendation[];
@@ -24,6 +25,7 @@ export default function VirtualShoppingAssistantView({
   onAnalyzeGaps,
   onGenerateRecommendations,
   onSendMessage,
+  onTryOnProduct,
   chatMessages,
   currentGaps,
   currentRecommendations,
@@ -101,8 +103,8 @@ export default function VirtualShoppingAssistantView({
           <button
             onClick={() => setSelectedView('chat')}
             className={`px-4 py-2 rounded-t-xl font-medium transition-all ${selectedView === 'chat'
-                ? 'bg-white/10 text-white'
-                : 'text-white/60 hover:text-white hover:bg-white/5'
+              ? 'bg-white/10 text-white'
+              : 'text-white/60 hover:text-white hover:bg-white/5'
               }`}
           >
             💬 Chat
@@ -110,8 +112,8 @@ export default function VirtualShoppingAssistantView({
           <button
             onClick={() => setSelectedView('gaps')}
             className={`px-4 py-2 rounded-t-xl font-medium transition-all ${selectedView === 'gaps'
-                ? 'bg-white/10 text-white'
-                : 'text-white/60 hover:text-white hover:bg-white/5'
+              ? 'bg-white/10 text-white'
+              : 'text-white/60 hover:text-white hover:bg-white/5'
               }`}
           >
             🔍 Gaps ({currentGaps?.length || 0})
@@ -119,8 +121,8 @@ export default function VirtualShoppingAssistantView({
           <button
             onClick={() => setSelectedView('recommendations')}
             className={`px-4 py-2 rounded-t-xl font-medium transition-all ${selectedView === 'recommendations'
-                ? 'bg-white/10 text-white'
-                : 'text-white/60 hover:text-white hover:bg-white/5'
+              ? 'bg-white/10 text-white'
+              : 'text-white/60 hover:text-white hover:bg-white/5'
               }`}
           >
             ⭐ Recomendaciones ({allProducts.length})
@@ -170,8 +172,8 @@ export default function VirtualShoppingAssistantView({
                     >
                       <div
                         className={`max-w-[80%] md:max-w-[70%] p-4 rounded-2xl ${msg.role === 'user'
-                            ? 'bg-purple-500/20 border border-purple-400/30'
-                            : 'bg-white/5 border border-white/10'
+                          ? 'bg-purple-500/20 border border-purple-400/30'
+                          : 'bg-white/5 border border-white/10'
                           }`}
                       >
                         {msg.role === 'assistant' && (
@@ -199,8 +201,20 @@ export default function VirtualShoppingAssistantView({
                                 <div className="font-semibold truncate">{product.title}</div>
                                 <div className="text-white/60">{product.brand}</div>
                                 <div className="text-purple-400 font-semibold">
-                                  ${product.price.toLocaleString('es-AR')}
+                                  ${product.price ? product.price.toLocaleString('es-AR') : '???'}
                                 </div>
+                                {onTryOnProduct && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      onTryOnProduct(product);
+                                    }}
+                                    className="mt-2 w-full py-1.5 px-2 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-400 hover:to-pink-400 text-white rounded-lg text-xs font-semibold shadow-md transition-all flex items-center justify-center gap-1"
+                                  >
+                                    <span className="material-symbols-outlined text-sm">magic_button</span>
+                                    Probar
+                                  </button>
+                                )}
                               </a>
                             ))}
                           </div>
@@ -414,6 +428,20 @@ export default function VirtualShoppingAssistantView({
                                     Comprar ↗
                                   </span>
                                 </div>
+
+                                {onTryOnProduct && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.preventDefault(); // Prevent navigating to the URL
+                                      onTryOnProduct(product);
+                                    }}
+                                    className="mt-3 w-full py-2 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-400 hover:to-pink-400 text-white rounded-xl text-sm font-semibold shadow-lg shadow-purple-500/20 transition-all flex items-center justify-center gap-2"
+                                  >
+                                    <span className="material-symbols-outlined text-[18px]">magic_button</span>
+                                    Probar con mi ropa
+                                  </button>
+                                )}
+
                                 <p className="text-xs text-white/50 mt-2 line-clamp-2">
                                   {product.match_reasoning}
                                 </p>

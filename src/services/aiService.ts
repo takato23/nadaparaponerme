@@ -25,6 +25,30 @@ function assertFeatureAvailable(featureLabel: string): never {
   throw new Error(`${featureLabel} está temporalmente desactivado en la V1.`);
 }
 
+function buildIdempotencyKey(prefix: string): string {
+  return `${prefix}-${Date.now()}-${crypto.randomUUID()}`;
+}
+
+async function prepareClosetIfNeeded(
+  insightType: 'mix' | 'chat' | 'report',
+  prompt: string,
+  closet: ClothingItem[],
+): Promise<void> {
+  if (!getFeatureFlag('enableOnDemandClosetAI')) return;
+  if (!getFeatureFlag('useSupabaseAI')) return;
+  if (!closet || closet.length === 0) return;
+
+  try {
+    await edgeClient.prepareClosetInsightsViaEdge(insightType, {
+      prompt,
+      closetItemIds: closet.map((item) => item.id),
+    });
+  } catch (error) {
+    // Non-blocking: insight generation can still proceed with available metadata.
+    console.warn('prepareClosetIfNeeded failed, continuing with best effort:', error);
+  }
+}
+
 async function mapWithConcurrency<TIn, TOut>(
   items: TIn[],
   concurrency: number,
@@ -121,12 +145,15 @@ export async function generateOutfit(
   // ✅ STEP 2: Generate outfit (with retry)
   const useSupabaseAI = getFeatureFlag('useSupabaseAI');
   let result: FitResult;
+  const idempotencyKey = buildIdempotencyKey('mix');
+
+  await prepareClosetIfNeeded('mix', prompt, closet);
 
   result = await retryAIOperation(async () => {
     if (useSupabaseAI) {
       // Extract IDs for Edge Function
       const closetItemIds = closet.map(item => item.id);
-      return await edgeClient.generateOutfitViaEdge(prompt, closetItemIds);
+      return await edgeClient.generateOutfitViaEdge(prompt, closetItemIds, { idempotencyKey });
     } else {
       // Use direct Gemini API (legacy)
       return await geminiServiceFull.generateOutfit(prompt, closet);
@@ -466,6 +493,9 @@ export async function chatWithFashionAssistant(...args: Parameters<typeof gemini
       id: item.id,
       metadata: item.metadata,
     }));
+    const idempotencyKey = buildIdempotencyKey('chat');
+
+    await prepareClosetIfNeeded('chat', userMessage, inventory);
 
     // Add timeout to prevent hanging indefinitely
     const timeoutPromise = new Promise((resolve) =>
@@ -474,7 +504,11 @@ export async function chatWithFashionAssistant(...args: Parameters<typeof gemini
 
     try {
       const response: any = await Promise.race([
-        edgeClient.chatWithStylistViaEdge(userMessage, chatHistoryForEdge, closetContext),
+        edgeClient.chatWithStylistViaEdge(userMessage, chatHistoryForEdge, closetContext, {
+          responseMode: 'text',
+          surface: 'closet',
+          idempotencyKey,
+        }),
         timeoutPromise
       ]);
       return response.content;
@@ -484,6 +518,130 @@ export async function chatWithFashionAssistant(...args: Parameters<typeof gemini
     }
   }
   return await geminiServiceFull.chatWithFashionAssistant(...args);
+}
+
+export async function chatWithFashionAssistantWorkflow(
+  message: string,
+  inventory: ClothingItem[],
+  chatHistory: Array<{ role: 'user' | 'assistant'; content: string }>,
+  workflow: import('../../types').GuidedLookWorkflowRequest,
+): Promise<import('../../types').ChatStylistResponse & { workflow?: import('../../types').GuidedLookWorkflowResponse }> {
+  if (V1_SAFE_MODE) {
+    return {
+      role: 'assistant',
+      content: 'Safe Mode enabled.',
+      model: 'safe-mode',
+      workflow: {
+        mode: 'guided_look_creation',
+        sessionId: workflow.sessionId || crypto.randomUUID(),
+        status: 'idle',
+        missingFields: ['occasion', 'style', 'category'],
+        collected: {},
+        estimatedCostCredits: 2,
+        requiresConfirmation: false,
+        autosaveEnabled: false,
+        errorCode: null,
+      },
+      credits_used: 0,
+      cache_hit: false,
+    };
+  }
+
+  const useSupabaseAI = getFeatureFlag('useSupabaseAI');
+  if (!useSupabaseAI) {
+    throw new Error('El flujo guiado requiere Edge Functions habilitadas');
+  }
+
+  const chatHistoryForEdge = (chatHistory || []).map((msg) => ({
+    role: msg.role as 'user' | 'assistant',
+    content: msg.content,
+  }));
+  const closetContext = inventory.map((item) => ({
+    id: item.id,
+    metadata: item.metadata,
+  }));
+  const idempotencyKey = buildIdempotencyKey('chat-guided');
+
+  await prepareClosetIfNeeded('chat', message, inventory);
+
+  return edgeClient.chatWithStylistViaEdge(message, chatHistoryForEdge, closetContext, {
+    responseMode: 'structured',
+    surface: 'closet',
+    idempotencyKey,
+    workflow,
+  });
+}
+
+export async function chatWithStudioStylist(
+  message: string,
+  inventory: ClothingItem[],
+  chatHistory: Array<{ role: 'user' | 'assistant'; content: string }>,
+  options: { threadId?: string | null; surface?: 'studio' | 'closet' } = {}
+): Promise<{
+  role: 'assistant';
+  content: string;
+  outfitSuggestion?: {
+    top_id: string;
+    bottom_id: string;
+    shoes_id: string;
+    explanation: string;
+    confidence?: number;
+    missing_piece_suggestion?: { item_name: string; reason: string };
+  } | null;
+  threadId?: string | null;
+  model: string;
+}> {
+  if (V1_SAFE_MODE) {
+    return {
+      role: 'assistant',
+      content: 'Safe Mode enabled.',
+      outfitSuggestion: null,
+      threadId: options.threadId || null,
+      model: 'safe-mode',
+    };
+  }
+
+  const useSupabaseAI = getFeatureFlag('useSupabaseAI');
+  const chatHistoryForEdge = (chatHistory || []).map((msg) => ({
+    role: msg.role as 'user' | 'assistant',
+    content: msg.content,
+  }));
+  const closetContext = inventory.map((item) => ({
+    id: item.id,
+    metadata: item.metadata,
+  }));
+  const idempotencyKey = buildIdempotencyKey('chat');
+
+  await prepareClosetIfNeeded('chat', message, inventory);
+
+  if (useSupabaseAI) {
+    return edgeClient.chatWithStylistViaEdge(message, chatHistoryForEdge, closetContext, {
+      responseMode: 'structured',
+      surface: options.surface || 'studio',
+      threadId: options.threadId || null,
+      idempotencyKey,
+    });
+  }
+
+  const content = await geminiServiceFull.chatWithFashionAssistant(
+    message,
+    inventory,
+    chatHistory as any,
+  );
+  const outfitSuggestion = await geminiServiceFull.parseOutfitFromChat(content, inventory);
+
+  return {
+    role: 'assistant',
+    content,
+    outfitSuggestion: outfitSuggestion
+      ? {
+        ...outfitSuggestion,
+        explanation: 'Sugerencia parseada desde respuesta legacy.',
+      }
+      : null,
+    threadId: options.threadId || null,
+    model: 'gemini-2.5-flash',
+  };
 }
 
 export async function parseOutfitFromChat(...args: Parameters<typeof geminiServiceFull.parseOutfitFromChat>) {
@@ -628,6 +786,7 @@ export async function analyzeStyleDNA(...args: Parameters<typeof geminiServiceFu
   if (useSupabaseAI) {
     // Simplify closet object for transport
     const closet = args[0]; // first arg is closet
+    await prepareClosetIfNeeded('report', 'style_dna_report', closet);
     const simplifiedCloset = closet.map(item => ({
       id: item.id,
       metadata: item.metadata

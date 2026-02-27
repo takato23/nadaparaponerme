@@ -2,10 +2,12 @@ import type { User } from '@supabase/supabase-js';
 
 const ADMIN_ROLES = new Set(['admin', 'owner', 'superadmin']);
 
-const ADMIN_EMAILS_FROM_ENV = String(import.meta.env.VITE_ADMIN_EMAILS || '')
-  .split(',')
-  .map((email) => email.trim().toLowerCase())
-  .filter(Boolean);
+const ADMIN_EMAILS_FROM_ENV = [
+  ...String(import.meta.env.VITE_ADMIN_EMAILS || '')
+    .split(',')
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean),
+];
 
 /**
  * Centralized admin access check.

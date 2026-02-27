@@ -53,7 +53,7 @@ export function matchesFilters(
       } else {
         // Similar color matching (basic implementation)
         return itemColor.includes(normalizedFilterColor) ||
-               normalizedFilterColor.includes(itemColor);
+          normalizedFilterColor.includes(itemColor);
       }
     });
 
@@ -117,6 +117,14 @@ export function matchesFilters(
     // if (item.is_favorite !== filters.isFavorite) return false;
   }
 
+  // Status Filter
+  if (filters.status && filters.status.length > 0) {
+    const itemStatus = item.status || 'owned';
+    if (!filters.status.includes(itemStatus)) {
+      return false;
+    }
+  }
+
   // Collection filter
   if (filters.isInCollection) {
     // Note: This requires collection membership data
@@ -153,6 +161,7 @@ export function countActiveFilters(filters: AdvancedFilters): number {
   if (filters.price) count++;
   if (filters.isFavorite !== undefined) count++;
   if (filters.isInCollection) count++;
+  if (filters.status && filters.status.length > 0) count++;
   if (filters.searchText && filters.searchText.trim() !== '') count++;
 
   return count;
@@ -283,7 +292,7 @@ export function searchItemsByText(
     );
 
     return subcategoryMatch || colorMatch || categoryMatch ||
-           descriptionMatch || tagsMatch || seasonsMatch;
+      descriptionMatch || tagsMatch || seasonsMatch;
   });
 }
 
@@ -528,8 +537,8 @@ export function validateFilters(filters: AdvancedFilters): {
       errors.push('Price max cannot be negative');
     }
     if (filters.price.min !== undefined &&
-        filters.price.max !== undefined &&
-        filters.price.min > filters.price.max) {
+      filters.price.max !== undefined &&
+      filters.price.min > filters.price.max) {
       errors.push('Price min cannot be greater than max');
     }
   }

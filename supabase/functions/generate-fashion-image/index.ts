@@ -3,12 +3,15 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { GoogleGenerativeAI } from 'npm:@google/generative-ai@0.21.0';
 import { enforceRateLimit, recordRequestResult } from '../_shared/antiAbuse.ts';
+import { enforceAIBudgetGuard, getBudgetLimitMessage, recordAIBudgetSuccess } from '../_shared/aiBudgetGuard.ts';
 import { withRetry } from '../_shared/retry.ts';
+import { isFailClosedHighCostEnabled } from '../_shared/security.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-application-name',
 };
+const BUDGET_CREDIT_COST = 2;
 
 // Enhanced prompt with style requirements
 function enhancePrompt(userPrompt: string, stylePreferences?: Record<string, unknown>): string {
@@ -120,6 +123,12 @@ serve(async (req) => {
       maxRequests: 4,
       windowSeconds: 120,
     });
+    if (rateLimit.guardError && isFailClosedHighCostEnabled()) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Security guard unavailable. Try again shortly.', error_code: 'SECURITY_GUARD_UNAVAILABLE' }),
+        { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
     if (!rateLimit.allowed) {
       const retryAfter = rateLimit.retryAfterSeconds || 60;
       const message = rateLimit.reason === 'blocked'
@@ -139,7 +148,7 @@ serve(async (req) => {
     }
 
     // Parse request body
-    const { prompt, model_type = 'flash', style_preferences } = await req.json();
+    const { prompt, style_preferences } = await req.json();
 
     if (!prompt || typeof prompt !== 'string') {
       return new Response(
@@ -152,12 +161,33 @@ serve(async (req) => {
       );
     }
 
+    const budgetGuard = await enforceAIBudgetGuard(supabase, user.id, 'generate-fashion-image', BUDGET_CREDIT_COST);
+    if (budgetGuard.guardError && isFailClosedHighCostEnabled()) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Budget guard unavailable. Try again shortly.', error_code: 'SECURITY_GUARD_UNAVAILABLE' }),
+        { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    if (!budgetGuard.allowed) {
+      return new Response(
+        JSON.stringify({ success: false, error: getBudgetLimitMessage(budgetGuard.reason), error_code: 'DAILY_BUDGET_LIMIT' }),
+        {
+          status: 429,
+          headers: {
+            ...corsHeaders,
+            'Content-Type': 'application/json',
+            'Retry-After': String(budgetGuard.retryAfterSeconds || 60),
+          },
+        }
+      );
+    }
+
     console.log('Generating image with prompt:', prompt.substring(0, 100));
 
     // Generate image with Gemini image models
     const genAI = new GoogleGenerativeAI(geminiApiKey);
-    // Usar los nombres correctos según la API
-    const modelName = model_type === 'pro' ? 'models/gemini-3-pro-image-preview' : 'models/gemini-2.5-flash-image';
+    // Single-model mode: always use Gemini 3.1 Flash Image Preview
+    const modelName = 'models/gemini-3.1-flash-image-preview';
     const model = genAI.getGenerativeModel({ model: modelName });
 
     const enhancedPromptText = enhancePrompt(prompt, style_preferences);
@@ -196,6 +226,7 @@ serve(async (req) => {
     console.log('Recording request result in Supabase...');
     try {
       await recordRequestResult(supabase, user.id, 'generate-fashion-image', true);
+      await recordAIBudgetSuccess(supabase, user.id, 'generate-fashion-image', BUDGET_CREDIT_COST);
       console.log('Request result recorded successfully.');
     } catch (dbError) {
       console.error('Error recording request result to Supabase (non-fatal):', dbError);
@@ -210,7 +241,7 @@ serve(async (req) => {
         image_url: imageUrl, // Base64 data URL instead of storage URL
         generation_time_ms: generationTimeMs,
         remaining_quota: 9, // Hardcoded for testing
-        model_used: model_type,
+        model_used: modelName.replace('models/', ''),
         current_tier: 'free', // Hardcoded for testing
         message: 'Image generated successfully (testing mode - not saved to database)',
       }),

@@ -3,6 +3,7 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { GoogleGenAI, Type } from 'npm:@google/genai@1.27.0';
 import { enforceRateLimit, recordRequestResult } from '../_shared/antiAbuse.ts';
+import { enforceAIBudgetGuard, getBudgetLimitMessage, recordAIBudgetSuccess } from '../_shared/aiBudgetGuard.ts';
 import { withRetry } from '../_shared/retry.ts';
 
 const MONTH_SECONDS = 60 * 60 * 24 * 30;
@@ -133,6 +134,40 @@ serve(async (req) => {
       );
     }
 
+    const creditCost = 1;
+    const budgetGuard = await enforceAIBudgetGuard(supabase, user.id, 'analyze-clothing', creditCost);
+    if (!budgetGuard.allowed) {
+      return new Response(
+        JSON.stringify({ error: getBudgetLimitMessage(budgetGuard.reason) }),
+        {
+          status: 429,
+          headers: {
+            ...corsHeaders,
+            'Content-Type': 'application/json',
+            'Retry-After': String(budgetGuard.retryAfterSeconds || 60),
+          },
+        }
+      );
+    }
+
+    const { data: canUseCredits, error: canUseCreditsError } = await supabase.rpc('can_user_generate_outfit', {
+      p_user_id: user.id,
+      p_amount: creditCost,
+    });
+    if (canUseCreditsError) {
+      console.error('Error checking credits for analyze-clothing:', canUseCreditsError);
+      return new Response(
+        JSON.stringify({ error: 'No se pudo validar la cuota. Intentá de nuevo.' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    if (!canUseCredits) {
+      return new Response(
+        JSON.stringify({ error: 'No tenés créditos suficientes. Upgradeá tu plan para continuar.' }),
+        { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // Extract base64 and mime type from data URL
     const [mimeTypePart, base64Data] = imageDataUrl.split(';base64,');
     const mimeType = mimeTypePart.split(':')[1];
@@ -214,13 +249,25 @@ serve(async (req) => {
       })
     );
 
-    const analysis = JSON.parse(response.text);
+    const analysis = JSON.parse(response.text || '{}');
 
     // Return the analysis directly (client expects ClothingItemMetadata format)
+    const { data: incremented, error: incrementError } = await supabase.rpc('increment_ai_generation_usage', {
+      p_user_id: user.id,
+      p_amount: creditCost,
+    });
+    if (incrementError) {
+      console.error('Error incrementing analyze-clothing credits:', incrementError);
+    }
+    await recordAIBudgetSuccess(supabase, user.id, 'analyze-clothing', incremented ? creditCost : 0);
+
     await recordRequestResult(supabase, user.id, 'analyze-clothing', true);
 
     return new Response(
-      JSON.stringify(analysis),
+      JSON.stringify({
+        ...analysis,
+        credits_used: incremented ? creditCost : 0,
+      }),
       {
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

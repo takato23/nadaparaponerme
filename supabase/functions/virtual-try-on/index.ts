@@ -1,11 +1,13 @@
-// Supabase Edge Function: Virtual Try-On with Nano Banana Pro (Gemini 3 Pro Image)
+// Supabase Edge Function: Virtual Try-On with Nano Banana Pro (Gemini 3.1 Flash Image Preview)
 // Supports flexible slot system for layered outfits
-// Uses gemini-3-pro-image-preview for superior identity preservation and quality
+// Uses gemini-3.1-flash-image-preview for superior identity preservation and quality
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { GoogleGenAI } from 'npm:@google/genai@1.27.0';
 import { enforceRateLimit, recordRequestResult } from '../_shared/antiAbuse.ts';
+import { enforceAIBudgetGuard, getBudgetLimitMessage, recordAIBudgetSuccess } from '../_shared/aiBudgetGuard.ts';
 import { withRetry } from '../_shared/retry.ts';
+import { isFailClosedHighCostEnabled } from '../_shared/security.ts';
 
 const MONTH_SECONDS = 60 * 60 * 24 * 30;
 const getMonthlyLimit = (envName: string, fallback: number) => {
@@ -34,7 +36,7 @@ const SLOT_CONFIG: Record<string, { label: string; layerOrder: number; bodyPart:
     'hand_acc': { label: 'reloj/pulsera', layerOrder: 9, bodyPart: 'muñeca' },
 };
 
-// V13: Nano Banana Pro (gemini-3-pro-image-preview)
+// V13: Nano Banana Pro (gemini-3.1-flash-image-preview)
 // Capabilities: Up to 14 reference images, maintains consistency of up to 5 people
 // Best practices: Concise technical instructions, leverage "Thinking" for composition
 
@@ -67,7 +69,7 @@ function getSceneInstruction(preset: string, customScene?: string): string {
 type PromptSlotInfo = { slot: string; config: { label: string; bodyPart: string } };
 
 /**
- * V13: Nano Banana Pro (Gemini 3 Pro Image Preview)
+ * V13: Nano Banana Pro (Gemini 3.1 Flash Image Preview)
  *
  * Key capabilities:
  * - Supports up to 14 reference images
@@ -116,17 +118,17 @@ function buildTryOnPrompt(
         : `Image 1 shows the person. Focus on their FACE for identity.`;
 
     // When keepPose is ON: preserve exact pose for better face consistency
-    // When keepPose is OFF: allow natural poses for more variety
+    // When keepPose is OFF: keep pose by default, allow only subtle adjustments
     const poseInstructions = keepPose
         ? `BODY & POSE (PRESERVE ORIGINAL):
 - KEEP THE EXACT SAME POSE from the reference photo
 - Same body position, same arm placement, same angle
 - Only change the clothing, NOT the pose or framing
 - This maximizes face consistency`
-        : `BODY & POSE:
-- Use a natural standing pose suitable for showing the outfit
-- Body pose does NOT need to match the original photo
-- The person should look relaxed and natural`;
+        : `BODY & POSE (DEFAULT):
+- Keep the original pose and framing as much as possible
+- Minor natural adjustments are allowed only if needed for realistic garment fit
+- Do NOT force a different pose unless the user explicitly asks for it`;
 
     return `Virtual try-on: Dress this person in the clothing shown.
 
@@ -182,7 +184,8 @@ async function toBase64DataUrl(src: string): Promise<string> {
         const chunkSize = 0x8000; // 32KB chunks
         for (let i = 0; i < uint8Array.length; i += chunkSize) {
             const chunk = uint8Array.subarray(i, i + chunkSize);
-            binary += String.fromCharCode.apply(null, chunk as any);
+            const chunkChars = Array.from(chunk);
+            binary += String.fromCharCode.apply(null, chunkChars);
         }
         const base64 = btoa(binary);
         return `data:${contentType};base64,${base64}`;
@@ -251,6 +254,12 @@ serve(async (req) => {
             maxRequests: 4,
             windowSeconds: 120, // 2 minutes
         });
+        if (rateLimit.guardError && isFailClosedHighCostEnabled()) {
+            return new Response(
+                JSON.stringify({ error: 'Security guard unavailable. Try again shortly.' }),
+                { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+        }
         if (!rateLimit.allowed) {
             const retryAfter = rateLimit.retryAfterSeconds || 60;
             const message = rateLimit.reason === 'blocked'
@@ -278,21 +287,10 @@ serve(async (req) => {
             );
         }
 
-        // Get subscription tier
-        const { data: subscriptionRow } = await supabase
-            .from('subscriptions')
-            .select('tier, status')
-            .eq('user_id', user.id)
-            .maybeSingle();
-
-        const tier = (subscriptionRow?.tier ?? 'free') as string;
-        const status = (subscriptionRow?.status ?? 'active') as string;
-        const isSubscriptionActive = status === 'active' || status === 'trialing' || status === 'past_due';
-
         // Parse request body
         // Supports both legacy format (topImage, bottomImage, shoesImage) and new slot format
         const body = await req.json();
-        const { userImage, slots, preset, quality, customScene, keepPose, useFaceReferences, view, slotFits } = body;
+        const { userImage, slots, preset, customScene, keepPose, useFaceReferences, view, slotFits } = body;
 
         // Legacy support: convert old format to slots
         let slotImages: Record<string, string> = {};
@@ -348,7 +346,7 @@ serve(async (req) => {
                 .order('is_primary', { ascending: false })
                 .limit(3);
 
-            faceReferenceUrls = (faceRefs || []).map(r => r.image_url).filter(Boolean);
+            faceReferenceUrls = (faceRefs || []).map((r: { image_url: string }) => r.image_url).filter(Boolean);
         }
         console.log(`Face references: enabled=${shouldUseFaceRefs}, found=${faceReferenceUrls.length}`);
 
@@ -365,20 +363,12 @@ serve(async (req) => {
 
         const ai = new GoogleGenAI({ apiKey: geminiApiKey });
 
-        // Model selection
-        // Pro: gemini-3-pro-image-preview (Nano Banana Pro)
-        // Flash: gemini-2.5-flash-image (cheaper/faster)
-        const wantsProQuality = typeof quality === 'string' && quality.toLowerCase() === 'pro';
-        const canUseProModel = isSubscriptionActive && tier === 'premium';
-        const useProModel = wantsProQuality && canUseProModel;
-        const modelId = useProModel ? 'gemini-3-pro-image-preview' : 'gemini-2.5-flash-image';
+        // Single-model mode: always use Gemini 3.1 Flash Image Preview
+        const modelId = 'gemini-3.1-flash-image-preview';
 
-        const flashMonthlyLimit = getMonthlyLimit('BETA_MONTHLY_TRYON_FLASH_LIMIT', 150);
-        const proMonthlyLimit = getMonthlyLimit('BETA_MONTHLY_TRYON_PRO_LIMIT', 10);
-        const monthlyLimit = useProModel ? proMonthlyLimit : flashMonthlyLimit;
+        const monthlyLimit = getMonthlyLimit('BETA_MONTHLY_TRYON_PRO_LIMIT', 10);
         if (monthlyLimit > 0) {
-            const featureKey = useProModel ? 'beta-tryon-pro-monthly' : 'beta-tryon-flash-monthly';
-            const monthlyCap = await enforceRateLimit(supabase, user.id, featureKey, {
+            const monthlyCap = await enforceRateLimit(supabase, user.id, 'beta-tryon-pro-monthly', {
                 windowSeconds: MONTH_SECONDS,
                 maxRequests: monthlyLimit,
             });
@@ -390,8 +380,29 @@ serve(async (req) => {
             }
         }
 
-        // Credit cost based on actual model used
-        const creditCost = useProModel ? 4 : 1;
+        // Credit cost for the unified high-quality model
+        const creditCost = 4;
+
+        const budgetGuard = await enforceAIBudgetGuard(supabase, user.id, 'virtual-try-on', creditCost);
+        if (budgetGuard.guardError && isFailClosedHighCostEnabled()) {
+            return new Response(
+                JSON.stringify({ error: 'Budget guard unavailable. Try again shortly.' }),
+                { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+        }
+        if (!budgetGuard.allowed) {
+            return new Response(
+                JSON.stringify({ error: getBudgetLimitMessage(budgetGuard.reason) }),
+                {
+                    status: 429,
+                    headers: {
+                        ...corsHeaders,
+                        'Content-Type': 'application/json',
+                        'Retry-After': String(budgetGuard.retryAfterSeconds || 60),
+                    },
+                }
+            );
+        }
 
         // Quota check (credits)
         const { data: canUse, error: canUseError } = await supabase.rpc('can_user_generate_outfit', {
@@ -412,8 +423,8 @@ serve(async (req) => {
             );
         }
 
-        // Resolution based on subscription tier (Pro model only)
-        const imageSize = useProModel ? '2K' : undefined;
+        // Resolution for the unified high-quality model
+        const imageSize = '2K';
 
         // Build image parts - Order: Face refs (identity) -> User photo (pose) -> Clothing
         const imageParts: Array<{ inlineData: { data: string; mimeType: string } }> = [];
@@ -464,6 +475,10 @@ serve(async (req) => {
         const fits = (slotFits as Record<string, string>) || {};
 
         const prompt = buildTryOnPrompt(validSlots, presetName, modelId, hasFaceRefs, customSceneText, shouldKeepPose, viewAngle, fits);
+        const generationConfig: { [key: string]: unknown } = {
+          responseModalities: ['IMAGE'],
+          ...(imageSize ? { imageSize } : {}),
+        };
 
         const response = await withRetry(() =>
             ai.models.generateContent({
@@ -475,10 +490,7 @@ serve(async (req) => {
                     ],
                 },
                 config: {
-                    // @ts-ignore - image response
-                    responseModalities: ["IMAGE"],
-                    // @ts-ignore - Resolution only supported on Nano Banana Pro
-                    ...(imageSize ? { imageSize } : {}),
+                    ...generationConfig,
                 },
             })
         );
@@ -492,13 +504,14 @@ serve(async (req) => {
         }
 
         // Increment usage
-        const { error: incError } = await supabase.rpc('increment_ai_generation_usage', {
+        const { data: incremented, error: incError } = await supabase.rpc('increment_ai_generation_usage', {
             p_user_id: user.id,
             p_amount: creditCost,
         });
         if (incError) {
             console.error('Usage increment failed:', incError);
         }
+        await recordAIBudgetSuccess(supabase, user.id, 'virtual-try-on', incremented ? creditCost : 0);
 
         const resultImage = `data:image/png;base64,${imagePart.inlineData.data}`;
 
@@ -509,6 +522,7 @@ serve(async (req) => {
             model: modelId,
             slotsUsed: validSlots.map(s => s.slot),
             faceReferencesUsed: faceRefBase64.length,
+            credits_used: incremented ? creditCost : 0,
         }), {
             status: 200,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },

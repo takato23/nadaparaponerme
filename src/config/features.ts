@@ -23,6 +23,18 @@ export interface FeatureFlags {
 
   // Migration
   autoMigration: boolean;
+
+  // Try-On hybrid cache pipeline (preview + async HD)
+  enableHybridTryOn: boolean;
+
+  // Unified Studio Stylist assistant experience
+  enableUnifiedStudioStylist: boolean;
+
+  // Closet-first flow: run AI insights only on-demand
+  enableOnDemandClosetAI: boolean;
+
+  // Guided look creation orchestrated by backend workflow
+  enableGuidedLookCreationBackend: boolean;
 }
 
 // Default feature flags - tuned for local/dev. Production enforcement happens below.
@@ -34,6 +46,10 @@ const defaultFlags: FeatureFlags = {
   useSupabaseAI: true, // ✅ SECURITY: Must be true - routes AI through Edge Functions (no exposed API key)
   useSupabasePreferences: false,
   autoMigration: false,
+  enableHybridTryOn: false,
+  enableUnifiedStudioStylist: false,
+  enableOnDemandClosetAI: false,
+  enableGuidedLookCreationBackend: false,
 };
 
 const enforceProductionFlags = (flags: FeatureFlags): FeatureFlags => {
@@ -127,5 +143,9 @@ export const enableAllFeatures = (): void => {
     useSupabaseAI: true,
     useSupabasePreferences: true,
     autoMigration: true,
+    enableHybridTryOn: true,
+    enableUnifiedStudioStylist: true,
+    enableOnDemandClosetAI: true,
+    enableGuidedLookCreationBackend: true,
   });
 };

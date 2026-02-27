@@ -14,9 +14,10 @@ interface LiquidDetailModalProps {
     item: ClothingItem | null;
     isOpen: boolean;
     onClose: () => void;
+    onItemUpdated?: (item: ClothingItem) => void;
 }
 
-export default function LiquidDetailModal({ item, isOpen, onClose }: LiquidDetailModalProps) {
+export default function LiquidDetailModal({ item, isOpen, onClose, onItemUpdated }: LiquidDetailModalProps) {
     const navigate = useNavigate();
     const [imageSide, setImageSide] = useState<'front' | 'back'>('front');
     const [isUploadingBack, setIsUploadingBack] = useState(false);
@@ -25,6 +26,7 @@ export default function LiquidDetailModal({ item, isOpen, onClose }: LiquidDetai
     const [localItem, setLocalItem] = useState(item);
     const [activeTab, setActiveTab] = useState<'details' | 'brand' | 'dupes'>('details');
     const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [isOnDemandAnalyzing, setIsOnDemandAnalyzing] = useState(false);
     const [brandResult, setBrandResult] = useState<BrandRecognitionResult | null>(null);
     const [dupeResult, setDupeResult] = useState<DupeFinderResult | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -115,6 +117,27 @@ export default function LiquidDetailModal({ item, isOpen, onClose }: LiquidDetai
         }
     };
 
+    const handleAnalyzeItemAI = async () => {
+        if (!localItem || isOnDemandAnalyzing) return;
+
+        setIsOnDemandAnalyzing(true);
+        setError(null);
+        try {
+            const { analyzeClothingItemOnDemand } = await import('../../src/services/closetService');
+            const updatedItem = await analyzeClothingItemOnDemand(localItem.id);
+            setLocalItem(updatedItem);
+            onItemUpdated?.(updatedItem);
+            toast.success('Metadata IA actualizada');
+        } catch (analyzeError) {
+            console.error('Error analyzing item on-demand:', analyzeError);
+            const message = analyzeError instanceof Error ? analyzeError.message : 'No se pudo analizar la prenda';
+            setError(message);
+            toast.error('No se pudo completar el análisis');
+        } finally {
+            setIsOnDemandAnalyzing(false);
+        }
+    };
+
     // Use portal to ensure modal is always on top of other elements (like FloatingDock)
     if (typeof document === 'undefined') return null;
 
@@ -134,14 +157,14 @@ export default function LiquidDetailModal({ item, isOpen, onClose }: LiquidDetai
                     {/* Modal Content - Peep-hole effect */}
                     <motion.div
                         layoutId={`item-${localItem.id}`}
-                        className="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-[3rem] overflow-hidden shadow-2xl z-[110] max-h-[90vh] overflow-y-auto"
-                        initial={{ scale: 0.9, opacity: 0, borderRadius: "3rem" }}
-                        animate={{ scale: 1, opacity: 1, borderRadius: "3rem" }}
-                        exit={{ scale: 0.9, opacity: 0, borderRadius: "3rem" }}
+                        className="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-[2.5rem] overflow-hidden shadow-2xl z-[110] max-h-[90vh] overflow-y-auto"
+                        initial={{ scale: 0.9, opacity: 0, borderRadius: "2.5rem" }}
+                        animate={{ scale: 1, opacity: 1, borderRadius: "2.5rem" }}
+                        exit={{ scale: 0.9, opacity: 0, borderRadius: "2.5rem" }}
                         transition={{ type: "spring", damping: 25, stiffness: 300 }}
                     >
                         {/* Image Section */}
-                        <div className="relative h-96 w-full bg-gray-100 dark:bg-gray-800">
+                        <div className="relative h-[28rem] w-full bg-gray-100 dark:bg-gray-800">
                             {imageSide === 'front' ? (
                                 <img
                                     src={localItem.imageDataUrl}
@@ -263,6 +286,23 @@ export default function LiquidDetailModal({ item, isOpen, onClose }: LiquidDetai
                                     </h2>
 
                                     <div className="flex flex-wrap gap-2 mb-4">
+                                        <span className={`px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1 ${localItem.aiStatus === 'ready'
+                                            ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300'
+                                            : localItem.aiStatus === 'processing'
+                                                ? 'bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300'
+                                                : localItem.aiStatus === 'failed'
+                                                    ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
+                                                    : 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300'
+                                            }`}>
+                                            <span className="material-symbols-outlined text-sm">auto_awesome</span>
+                                            {localItem.aiStatus === 'ready'
+                                                ? 'IA lista'
+                                                : localItem.aiStatus === 'processing'
+                                                    ? 'Analizando IA'
+                                                    : localItem.aiStatus === 'failed'
+                                                        ? 'Error IA'
+                                                        : 'Sin analizar'}
+                                        </span>
                                         <span className="px-3 py-1 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 text-sm font-medium capitalize flex items-center gap-1">
                                             <span className="material-symbols-outlined text-sm">palette</span>
                                             {item.metadata?.color_primary}
@@ -277,6 +317,24 @@ export default function LiquidDetailModal({ item, isOpen, onClose }: LiquidDetai
                                                 {season}
                                             </span>
                                         ))}
+                                    </div>
+
+                                    <div className="mb-5 flex items-center justify-between gap-3 rounded-2xl border border-indigo-200/60 bg-indigo-50/60 px-4 py-3 dark:border-indigo-800/50 dark:bg-indigo-900/20">
+                                        <div>
+                                            <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                                                Análisis IA on-demand
+                                            </p>
+                                            <p className="text-xs text-slate-600 dark:text-slate-300">
+                                                Guardás rápido y analizás sólo cuando lo necesitás.
+                                            </p>
+                                        </div>
+                                        <button
+                                            onClick={handleAnalyzeItemAI}
+                                            disabled={isOnDemandAnalyzing || localItem.aiStatus === 'processing'}
+                                            className="rounded-xl bg-indigo-600 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+                                        >
+                                            {isOnDemandAnalyzing ? 'Analizando...' : localItem.aiStatus === 'ready' ? 'Re-analizar' : 'Analizar ahora'}
+                                        </button>
                                     </div>
 
                                     {/* Vibe Tags */}
@@ -484,40 +542,44 @@ export default function LiquidDetailModal({ item, isOpen, onClose }: LiquidDetai
 
                         <div className="sticky bottom-0 left-0 right-0 z-20 px-8 pt-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))] bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-t border-gray-200/60 dark:border-gray-700/60">
                             <div className="flex flex-col gap-3">
+                                {/* PRIMARY HERO ACTION: Probar Look */}
                                 <button
                                     onClick={() => {
                                         onClose();
                                         navigate(ROUTES.STUDIO, { state: { preselectedItemIds: [item.id] } });
                                     }}
-                                    className="w-full py-4 rounded-xl bg-black dark:bg-white text-white dark:text-black font-bold text-lg shadow-xl hover:shadow-2xl hover:scale-[1.02] transition-all flex items-center justify-center gap-2 group"
+                                    className="relative overflow-hidden w-full py-4 rounded-2xl text-white font-bold text-lg shadow-[0_8px_30px_rgba(236,72,153,0.3)] hover:shadow-[0_10px_40px_rgba(236,72,153,0.5)] active:scale-95 transition-all flex items-center justify-center gap-2 group border border-white/20"
                                 >
-                                    <span className="material-symbols-outlined group-hover:rotate-12 transition-transform">auto_fix_high</span>
-                                    Probar look
+                                    <div className="absolute inset-0 bg-[length:200%_200%] animate-gradient-xy bg-gradient-to-r from-purple-500 via-pink-500 to-[color:var(--studio-rose)]" />
+                                    <div className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                                    <span className="relative z-10 material-symbols-outlined group-hover:rotate-12 transition-transform drop-shadow-sm">auto_fix_high</span>
+                                    <span className="relative z-10 drop-shadow-sm">Probar look</span>
                                 </button>
 
+                                {/* SECONDARY ACTIONS: Muted Glassmorphism */}
                                 <div className="flex gap-3">
                                     <button
                                         onClick={handleAnalyzeBrand}
                                         disabled={!hasRealImage}
                                         title={!hasRealImage ? 'Necesitás una foto real de la prenda para analizar la marca' : ''}
-                                        className={`flex-1 py-3 rounded-xl text-white font-bold shadow-sm transition-all flex items-center justify-center gap-2 ${hasRealImage
-                                            ? 'bg-gradient-to-r from-purple-500 to-pink-500 hover:scale-[1.02]'
-                                            : 'bg-gray-400 cursor-not-allowed opacity-60'
+                                        className={`flex-1 py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2 border ${hasRealImage
+                                            ? 'bg-white/50 dark:bg-black/30 backdrop-blur-md text-slate-800 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:bg-white dark:hover:bg-black/50 hover:border-purple-300 dark:hover:border-purple-500/50 hover:text-purple-600 dark:hover:text-purple-400 focus:ring-2 focus:ring-purple-500/20 active:scale-95'
+                                            : 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 border-gray-200 dark:border-gray-700 cursor-not-allowed'
                                             }`}
                                     >
-                                        <span className="material-symbols-outlined">label</span>
+                                        <span className="material-symbols-outlined text-[18px]">label</span>
                                         Marca
                                     </button>
                                     <button
                                         onClick={handleFindDupes}
                                         disabled={!hasRealImage}
                                         title={!hasRealImage ? 'Necesitás una foto real de la prenda para buscar alternativas' : ''}
-                                        className={`flex-1 py-3 rounded-xl text-white font-bold transition-all flex items-center justify-center gap-2 ${hasRealImage
-                                            ? 'bg-gradient-to-r from-blue-500 to-cyan-500 hover:scale-[1.02]'
-                                            : 'bg-gray-400 cursor-not-allowed opacity-60'
+                                        className={`flex-1 py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2 border ${hasRealImage
+                                            ? 'bg-white/50 dark:bg-black/30 backdrop-blur-md text-slate-800 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:bg-white dark:hover:bg-black/50 hover:border-blue-300 dark:hover:border-blue-500/50 hover:text-blue-600 dark:hover:text-blue-400 focus:ring-2 focus:ring-blue-500/20 active:scale-95'
+                                            : 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 border-gray-200 dark:border-gray-700 cursor-not-allowed'
                                             }`}
                                     >
-                                        <span className="material-symbols-outlined">shopping_bag</span>
+                                        <span className="material-symbols-outlined text-[18px]">shopping_bag</span>
                                         Alternativas
                                     </button>
                                 </div>

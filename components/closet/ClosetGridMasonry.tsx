@@ -17,6 +17,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import ClosetItemCard from './ClosetItemCard';
 import ClosetQuickActions, { useContextMenu, QuickAction } from './ClosetQuickActions';
 import type { ClothingItem } from '../../types';
+import NanoBanana from './NanoBanana';
 
 interface ClosetGridMasonryProps {
   items: ClothingItem[];
@@ -141,6 +142,9 @@ export default function ClosetGridMasonry({
             alt="Empty Closet"
             className="relative w-full h-full object-contain drop-shadow-2xl z-10"
           />
+          <div className="absolute -bottom-8 -right-8 z-20">
+            <NanoBanana className="scale-75 origin-bottom-right" />
+          </div>
         </div>
 
         <h2 className="text-3xl font-serif font-bold text-text-primary dark:text-gray-100 mb-3 tracking-tight">

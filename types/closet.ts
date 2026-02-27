@@ -93,6 +93,7 @@ export interface AdvancedFilters {
   isFavorite?: boolean;                 // Favorites only
   isInCollection?: string;              // Filter by collection ID
   searchText?: string;                  // Text search (subcategory, color, description)
+  status?: Array<'owned' | 'wishlist' | 'virtual' | 'quick'>; // Item status filter
 }
 
 export interface FilterState extends AdvancedFilters {

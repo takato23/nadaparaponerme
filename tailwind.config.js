@@ -135,6 +135,16 @@ export default {
           '0%, 100%': { backgroundPosition: '0% 50%' },
           '50%': { backgroundPosition: '100% 50%' },
         },
+        'gradient-xy': {
+          '0%, 100%': {
+            'background-size': '400% 400%',
+            'background-position': 'left center'
+          },
+          '50%': {
+            'background-size': '200% 200%',
+            'background-position': 'right center'
+          },
+        },
       },
       animation: {
         shimmer: 'shimmer 2s infinite linear',
@@ -151,6 +161,7 @@ export default {
         'fade-in-up': 'fade-in-up 0.8s ease-out forwards',
         'pulse-slow': 'pulse-slow 4s ease-in-out infinite',
         'gradient-shift': 'gradient-shift 8s ease-in-out infinite',
+        'gradient-xy': 'gradient-xy 3s ease infinite',
       },
       // Smooth transitions
       transitionTimingFunction: {

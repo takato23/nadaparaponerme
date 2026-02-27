@@ -12,6 +12,7 @@ import type {
   ChatConversation,
   ChatMessage,
   OutfitSuggestionForEvent,
+  DigitalTwinProfile,
   ProfessionalProfile
 } from '../types';
 import { useInventoryMap } from '../hooks/useInventoryMap';
@@ -67,6 +68,57 @@ const OutfitGenerationTestingPlayground = lazy(() => import('./OutfitGenerationT
 const AestheticPlayground = lazy(() => import('./AestheticPlayground'));
 const LiquidMorphDemo = lazy(() => import('./LiquidMorphDemo'));
 const DigitalTwinSetup = lazy(() => import('./digital-twin/DigitalTwinSetup'));
+
+const STORAGE_KEY = 'ojodeloca-digital-twin';
+const STORAGE_KEY_SOURCE_IMAGE = 'ojodeloca-digital-twin-source-image';
+
+const getCompactDigitalTwinProfile = (profile: DigitalTwinProfile & { bodyType?: string }) => {
+  const { id, userId, createdAt, modelId, modelStatus, bodyType, sourceImages } = profile;
+  return {
+    id,
+    userId,
+    createdAt,
+    modelId,
+    modelStatus,
+    bodyType,
+    sourceImages: sourceImages.slice(0, 1),
+    sourceImageCount: sourceImages.length,
+    hasSourceImages: sourceImages.length > 0,
+  };
+};
+
+const persistDigitalTwinProfile = (profile: DigitalTwinProfile & { bodyType?: string }) => {
+  const compact = getCompactDigitalTwinProfile(profile);
+  const sourceImage = compact.sourceImages?.[0];
+
+  const attempts = [
+    () => {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
+      if (sourceImage) {
+        localStorage.setItem(STORAGE_KEY_SOURCE_IMAGE, sourceImage);
+      }
+    },
+    () => {
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(STORAGE_KEY_SOURCE_IMAGE);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(compact));
+      if (sourceImage) {
+        localStorage.setItem(STORAGE_KEY_SOURCE_IMAGE, sourceImage);
+      }
+    },
+  ];
+
+  for (const attempt of attempts) {
+    try {
+      attempt();
+      return true;
+    } catch {
+      // continue
+    }
+  }
+
+  return false;
+};
 
 interface AppModalsProps {
   // Core data
@@ -662,7 +714,9 @@ export const AppModals: React.FC<AppModalsProps> = ({
         <Suspense fallback={<LazyLoader type="modal" />}>
           <DigitalTwinSetup
             onComplete={(profile) => {
-              localStorage.setItem('ojodeloca-digital-twin', JSON.stringify(profile));
+              if (!persistDigitalTwinProfile(profile)) {
+                console.warn('No se pudo guardar el gemelo digital en localStorage.');
+              }
               modals.setShowDigitalTwinSetup(false);
             }}
             onClose={() => modals.setShowDigitalTwinSetup(false)}

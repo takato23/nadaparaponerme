@@ -180,6 +180,35 @@ export function trackAIFeatureUsed(feature: string): void {
   trackEvent('ai_feature_used', { feature });
 }
 
+interface TryOnAnalyticsParams extends Record<string, string | number | boolean> {
+  surface: 'mirror' | 'studio';
+  quality: 'flash' | 'pro';
+  preset: string;
+  slot_count: number;
+  latency_ms?: number;
+  model?: string;
+}
+
+export function trackTryOnCacheHit(params: TryOnAnalyticsParams): void {
+  trackEvent('tryon_cache_hit', params);
+}
+
+export function trackTryOnCacheMiss(params: TryOnAnalyticsParams): void {
+  trackEvent('tryon_cache_miss', params);
+}
+
+export function trackTryOnHdRequested(params: TryOnAnalyticsParams): void {
+  trackEvent('tryon_hd_requested', params);
+}
+
+export function trackTryOnHdCompleted(params: TryOnAnalyticsParams): void {
+  trackEvent('tryon_hd_completed', params);
+}
+
+export function trackTryOnStaleResultDiscarded(params: TryOnAnalyticsParams): void {
+  trackEvent('tryon_stale_result_discarded', params);
+}
+
 /**
  * User clicked rewarded ad CTA
  */
@@ -192,6 +221,52 @@ export function trackRewardedAdClick(provider: string): void {
  */
 export function trackRewardedAdReward(provider: string, credits: number): void {
   trackEvent('rewarded_ad_reward', { provider, credits });
+}
+
+type GuidedLookAnalyticsParams = {
+  session_id: string;
+  category?: string;
+  occasion?: string;
+  style?: string;
+  error_code?: string;
+  latency_ms?: number;
+  credits_charged?: number;
+};
+
+export function trackGuidedLookStart(params: GuidedLookAnalyticsParams): void {
+  trackEvent('guided_look_start', params);
+}
+
+export function trackGuidedLookFieldCompleted(params: GuidedLookAnalyticsParams & { field: string }): void {
+  trackEvent('guided_look_field_completed', params);
+}
+
+export function trackGuidedLookCostShown(params: GuidedLookAnalyticsParams): void {
+  trackEvent('guided_look_cost_shown', params);
+}
+
+export function trackGuidedLookConfirmed(params: GuidedLookAnalyticsParams): void {
+  trackEvent('guided_look_confirmed', params);
+}
+
+export function trackGuidedLookGenerationSuccess(params: GuidedLookAnalyticsParams): void {
+  trackEvent('guided_look_generation_success', params);
+}
+
+export function trackGuidedLookGenerationError(params: GuidedLookAnalyticsParams): void {
+  trackEvent('guided_look_generation_error', params);
+}
+
+export function trackGuidedLookSaved(params: GuidedLookAnalyticsParams): void {
+  trackEvent('guided_look_saved', params);
+}
+
+export function trackGuidedLookOutfitRequested(params: GuidedLookAnalyticsParams): void {
+  trackEvent('guided_look_outfit_requested', params);
+}
+
+export function trackGuidedLookUpgradeCTAClick(params: GuidedLookAnalyticsParams): void {
+  trackEvent('guided_look_upgrade_cta_click', params);
 }
 
 // ============================================================================

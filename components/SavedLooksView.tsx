@@ -17,6 +17,7 @@ import {
 import Loader from './Loader';
 import EditLookModal from './EditLookModal';
 import ShopTheLookPanel from './ShopTheLookPanel';
+import LiquidMorphBackground from './LiquidMorphBackground';
 
 interface SavedLooksViewProps {
   closet: ClothingItem[];
@@ -153,13 +154,26 @@ export default function SavedLooksView({ closet }: SavedLooksViewProps) {
         if (selectedLook?.id === look.id) {
           setSelectedLook(prev => prev ? { ...prev, is_public: true, share_token: token } : null);
         }
-        toast.success('Link de compartir copiado');
         // Copy to clipboard
         const shareUrl = `${window.location.origin}/look/${token}`;
-        await navigator.clipboard.writeText(shareUrl);
+        try {
+          await navigator.clipboard.writeText(shareUrl);
+          toast.success('Link de compartir copiado');
+        } catch {
+          toast.success('Link habilitado. Copialo manualmente desde el detalle.');
+        }
       }
     } catch (error) {
-      toast.error('Error al actualizar compartir');
+      const message = error instanceof Error ? error.message : 'Error al actualizar compartir';
+      if (message.includes('No autenticado')) {
+        toast.error('Tenés que iniciar sesión para compartir.');
+      } else if (message.includes('plan')) {
+        toast.error('Tu plan actual no permite compartir looks.');
+      } else if (message.includes('permite') || message.includes('límite')) {
+        toast.error(message);
+      } else {
+        toast.error(message || 'Error al actualizar compartir');
+      }
     } finally {
       setActionLoading(null);
     }
@@ -192,6 +206,9 @@ export default function SavedLooksView({ closet }: SavedLooksViewProps) {
   const handleDownload = async (look: GeneratedLook) => {
     try {
       const response = await fetch(look.image_url);
+      if (!response.ok) {
+        throw new Error('No se pudo descargar la imagen del look.');
+      }
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -260,29 +277,30 @@ export default function SavedLooksView({ closet }: SavedLooksViewProps) {
       className="relative min-h-screen overflow-hidden text-[color:var(--studio-ink)]"
       style={{ ...studioTheme, fontFamily: '"Poppins", sans-serif' }}
     >
-      {/* Background */}
-      <div
-        className="absolute inset-0 -z-10"
-        style={{
-          background:
-            'radial-gradient(circle at 15% 10%, rgba(245, 167, 163, 0.35), transparent 45%), radial-gradient(circle at 85% 0%, rgba(154, 212, 192, 0.35), transparent 40%), linear-gradient(180deg, #f8f3ee 0%, #f0e7dd 50%, #f6f1ea 100%)'
-        }}
-      />
+      {/* Background - Liquid Glass */}
+      <div className="fixed inset-0 -z-10 pointer-events-none">
+        <LiquidMorphBackground />
+        {/* Capa extra de unificación para dark mode si es necesario */}
+        <div className="absolute inset-0 bg-white/20 dark:bg-black/40 backdrop-blur-[2px]"></div>
+      </div>
 
       {/* Header */}
-      <header className="px-4 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-4">
+      <header className="px-5 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-4 sticky top-0 z-40 bg-white/40 dark:bg-black/20 backdrop-blur-xl border-b border-white/20 dark:border-white/5">
         <div className="flex items-center justify-between">
           <button
             onClick={() => navigate(-1)}
-            className="w-11 h-11 rounded-full bg-white/70 backdrop-blur-md border border-white/60 flex items-center justify-center shadow-sm hover:shadow-md transition"
+            className="w-11 h-11 rounded-[1.15rem] bg-white/50 dark:bg-white/5 backdrop-blur-md border border-white/60 dark:border-white/10 flex items-center justify-center shadow-sm hover:shadow-md hover:scale-105 active:scale-95 transition-all text-gray-800 dark:text-gray-200"
             aria-label="Volver"
           >
-            <span className="material-symbols-outlined text-[color:var(--studio-ink)]">arrow_back</span>
+            <span className="material-symbols-rounded">arrow_back</span>
           </button>
-          <div className="text-right">
-            <p className="text-xs uppercase tracking-[0.35em] text-[color:var(--studio-ink-muted)]">Armario de looks</p>
-            <h1 className="text-2xl font-semibold" style={{ fontFamily: '"Playfair Display", serif' }}>
-              Armario de looks
+          <div className="text-right flex flex-col items-end">
+            <div className="flex items-center gap-1.5 mb-0.5">
+              <span className="material-symbols-rounded text-sm text-fuchsia-500 drop-shadow-sm">auto_awesome</span>
+              <p className="text-[10px] uppercase tracking-[0.2em] font-bold text-gray-500 dark:text-gray-400">Armario de looks</p>
+            </div>
+            <h1 className="text-2xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 dark:from-white dark:via-gray-200 dark:to-white">
+              Digital Wardrobe
             </h1>
           </div>
         </div>
@@ -321,86 +339,120 @@ export default function SavedLooksView({ closet }: SavedLooksViewProps) {
           </motion.section>
         )}
 
-        {/* Filters */}
-        <motion.section variants={itemVariants} className="mb-4">
-          <div className="flex gap-2">
+        {/* Filters - Pill Selectors */}
+        <motion.section variants={itemVariants} className="mb-6 mt-4">
+          <div className="flex gap-2 p-1 bg-white/40 dark:bg-black/20 backdrop-blur-md border border-white/50 dark:border-white/10 rounded-2xl w-fit shadow-sm overflow-x-auto hide-scrollbar">
             {[
-              { id: 'all' as FilterMode, label: 'Todos', count: stats?.total },
-              { id: 'favorites' as FilterMode, label: 'Favoritos', count: stats?.favorites },
-              { id: 'shared' as FilterMode, label: 'Compartidos', count: stats?.shared },
-            ].map(f => (
-              <button
-                key={f.id}
-                onClick={() => setFilter(f.id)}
-                className={`px-3 py-1.5 rounded-full text-xs font-semibold transition ${filter === f.id
-                  ? 'bg-[color:var(--studio-ink)] text-white shadow-sm'
-                  : 'bg-white/60 text-[color:var(--studio-ink-muted)] border border-white/70'
-                  }`}
-              >
-                {f.label} ({f.count || 0})
-              </button>
-            ))}
+              { id: 'all' as FilterMode, label: 'Todos', count: stats?.total, icon: 'grid_view' },
+              { id: 'favorites' as FilterMode, label: 'Favoritos', count: stats?.favorites, icon: 'favorite' },
+              { id: 'shared' as FilterMode, label: 'Compartidos', count: stats?.shared, icon: 'link' },
+            ].map(f => {
+              const isActive = filter === f.id;
+              return (
+                <button
+                  key={f.id}
+                  onClick={() => setFilter(f.id)}
+                  className={`relative px-4 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-1.5 whitespace-nowrap ${isActive
+                    ? 'text-white'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                    }`}
+                >
+                  {isActive && (
+                    <motion.div
+                      layoutId="saved-looks-filter"
+                      className="absolute inset-0 bg-gray-900 dark:bg-white rounded-xl shadow-md"
+                      transition={{ type: "spring", bounce: 0.2, duration: 0.5 }}
+                    />
+                  )}
+                  <span className="relative z-10 flex items-center gap-1.5">
+                    <span className={`material-symbols-rounded text-[16px] ${isActive ? (f.id === 'favorites' ? 'text-rose-400' : f.id === 'shared' ? 'text-blue-400' : '') : ''}`}>
+                      {f.icon}
+                    </span>
+                    {f.label}
+                    <span className={`ml-1 px-1.5 py-0.5 rounded-md text-[10px] ${isActive ? 'bg-white/20 dark:bg-black/20 text-white dark:text-gray-900' : 'bg-gray-200 dark:bg-gray-800 text-gray-500'}`}>
+                      {f.count || 0}
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </motion.section>
 
-        {/* Looks grid */}
+        {/* Looks Grid - Masonry */}
         <motion.section variants={itemVariants}>
           {looks.length === 0 ? (
-            <div className="rounded-2xl bg-white/50 border border-white/60 p-8 text-center">
-              <span className="material-symbols-outlined text-4xl text-[color:var(--studio-ink-muted)] mb-3 block">
-                photo_library
-              </span>
-              <p className="text-sm text-[color:var(--studio-ink-muted)]">
+            <div className="rounded-3xl bg-white/40 dark:bg-black/20 backdrop-blur-xl border border-white/50 dark:border-white/10 p-10 text-center shadow-sm">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 flex items-center justify-center">
+                <span className="material-symbols-rounded text-4xl text-violet-500 drop-shadow-sm">
+                  photo_library
+                </span>
+              </div>
+              <p className="text-sm font-bold text-gray-700 dark:text-gray-300">
                 {filter === 'all'
-                  ? 'Todavía no tenés looks en tu armario. Generá uno en el Studio.'
+                  ? 'Tu armario digital está vacío.'
                   : filter === 'favorites'
-                    ? 'No tenés looks favoritos.'
-                    : 'No tenés looks compartidos.'}
+                    ? 'Aún no marcaste ningún look como favorito.'
+                    : 'No compartiste ningún look todavía.'}
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                Generá nuevos looks en el Studio para llenar esta galería.
               </p>
               {filter === 'all' && (
                 <button
                   onClick={() => navigate('/studio')}
-                  className="mt-4 px-4 py-2 rounded-xl bg-[color:var(--studio-ink)] text-white text-sm font-semibold"
+                  className="mt-6 px-6 py-2.5 rounded-full bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-sm font-bold shadow-md hover:shadow-lg transition-all hover:-translate-y-0.5"
                 >
                   Ir al Studio
                 </button>
               )}
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <div className="columns-2 sm:columns-3 gap-3 space-y-3 pb-8">
               <AnimatePresence>
                 {looks.map(look => (
                   <motion.div
                     key={look.id}
-                    layout
-                    initial={{ opacity: 0, scale: 0.9 }}
+                    layoutId={`look-${look.id}`}
+                    initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.9 }}
-                    className="relative rounded-2xl overflow-hidden shadow-lg group cursor-pointer"
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    className="relative rounded-[20px] overflow-hidden shadow-sm hover:shadow-xl group cursor-pointer border border-white/30 dark:border-white/10 bg-white/20 dark:bg-black/20 backdrop-blur-sm transition-all duration-300 hover:-translate-y-1 block break-inside-avoid"
                     onClick={() => openDetail(look)}
                   >
                     <img
                       src={look.image_url}
                       alt={look.title || 'Look generado'}
-                      className="w-full aspect-[3/4] object-cover"
+                      loading="lazy"
+                      className="w-full h-auto object-cover"
                     />
 
-                    {/* Overlay */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                    {/* Premium Hover Glow */}
+                    <div className="absolute inset-0 bg-gradient-to-br from-violet-500/10 to-fuchsia-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
 
-                    {/* Badges */}
-                    <div className="absolute top-2 right-2 flex gap-1">
+                    {/* Gradient Overlay for Text */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent opacity-60 group-hover:opacity-80 transition-opacity pointer-events-none" />
+
+                    {/* Glass Badges */}
+                    <div className="absolute top-2.5 right-2.5 flex flex-col gap-1.5 z-10">
                       {look.is_favorite && (
-                        <span className="w-6 h-6 rounded-full bg-white/90 flex items-center justify-center"><span className="material-symbols-rounded text-red-500 text-sm">favorite</span></span>
+                        <span className="w-7 h-7 rounded-full bg-white/80 dark:bg-black/60 backdrop-blur-md flex items-center justify-center shadow-sm border border-white/40 dark:border-white/10">
+                          <span className="material-symbols-rounded text-rose-500 text-[15px] drop-shadow-sm">heart_check</span>
+                        </span>
                       )}
                       {look.is_public && (
-                        <span className="w-6 h-6 rounded-full bg-white/90 flex items-center justify-center"><span className="material-symbols-rounded text-blue-500 text-sm">link</span></span>
+                        <span className="w-7 h-7 rounded-full bg-white/80 dark:bg-black/60 backdrop-blur-md flex items-center justify-center shadow-sm border border-white/40 dark:border-white/10">
+                          <span className="material-symbols-rounded text-blue-500 text-[15px] drop-shadow-sm">link</span>
+                        </span>
                       )}
                     </div>
 
-                    {/* Date */}
-                    <div className="absolute bottom-2 left-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <p className="text-xs text-white/80 truncate">
+                    {/* Date & Title */}
+                    <div className="absolute bottom-3 left-3 right-3 z-10 transform translate-y-1 group-hover:translate-y-0 transition-transform">
+                      <p className="text-xs font-bold text-white drop-shadow-sm truncate mb-0.5">
+                        {look.title || "Outfit Diario"}
+                      </p>
+                      <p className="text-[10px] text-white/80 truncate font-medium uppercase tracking-wide">
                         {new Date(look.created_at).toLocaleDateString('es-AR', {
                           day: 'numeric',
                           month: 'short'
@@ -423,15 +475,15 @@ export default function SavedLooksView({ closet }: SavedLooksViewProps) {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+              className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6"
               onClick={() => setIsDetailOpen(false)}
             >
               <motion.div
-                initial={{ scale: 0.9, opacity: 0 }}
+                initial={{ scale: 0.95, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.9, opacity: 0 }}
+                exit={{ scale: 0.95, opacity: 0 }}
                 transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-                className="w-full max-w-lg bg-white rounded-3xl overflow-hidden shadow-2xl max-h-[90vh] flex flex-col"
+                className="w-full max-w-lg bg-white/85 dark:bg-[#05060a]/80 backdrop-blur-3xl border border-white/50 dark:border-white/10 rounded-[32px] overflow-hidden shadow-2xl max-h-[90vh] flex flex-col"
                 onClick={e => e.stopPropagation()}
               >
                 <div className="overflow-y-auto custom-scrollbar w-full flex-1">
@@ -474,58 +526,61 @@ export default function SavedLooksView({ closet }: SavedLooksViewProps) {
                             draggable={false}
                           />
                         </div>
-                        {/* Slider line */}
+                        {/* Slider line - Refined */}
                         <div
-                          className="absolute top-0 bottom-0 w-0.5 bg-white shadow-lg cursor-ew-resize"
+                          className="absolute top-0 bottom-0 w-0.5 bg-gradient-to-b from-white/0 via-white/80 to-white/0 shadow-[0_0_10px_rgba(255,255,255,0.5)] cursor-ew-resize"
                           style={{ left: `${comparePosition}%` }}
                         >
-                          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white shadow-lg flex items-center justify-center">
-                            <span className="material-symbols-outlined text-gray-700 text-sm">drag_handle</span>
+                          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/90 backdrop-blur-md shadow-lg border border-white/50 flex items-center justify-center hover:scale-110 transition-transform">
+                            <span className="material-symbols-rounded text-gray-700 text-sm">drag_handle</span>
                           </div>
                         </div>
-                        {/* Labels */}
-                        <div className="absolute top-3 left-3 px-2 py-1 rounded bg-black/50 text-white text-xs font-semibold">
+                        {/* Labels - Refined */}
+                        <div className="absolute top-4 left-4 px-3 py-1.5 rounded-xl bg-black/40 backdrop-blur-md text-white text-[10px] font-bold tracking-wide uppercase border border-white/20">
                           Antes
                         </div>
-                        <div className="absolute top-3 right-12 px-2 py-1 rounded bg-black/50 text-white text-xs font-semibold">
+                        <div className="absolute top-4 right-4 px-3 py-1.5 rounded-xl bg-black/40 backdrop-blur-md text-white text-[10px] font-bold tracking-wide uppercase border border-white/20">
                           Después
                         </div>
                       </div>
                     ) : (
-                      <img
-                        src={selectedLook.image_url}
-                        alt={selectedLook.title || 'Look'}
-                        className="w-full aspect-[4/5] object-cover"
-                      />
+                      <div className="relative group">
+                        <img
+                          src={selectedLook.image_url}
+                          alt={selectedLook.title || 'Look'}
+                          className="w-full aspect-[4/5] object-cover"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+                      </div>
                     )}
-                    {/* Close button */}
+                    {/* Close button - Refined */}
                     <button
                       onClick={() => setIsDetailOpen(false)}
-                      className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/90 flex items-center justify-center shadow-lg"
+                      className="absolute top-4 right-4 w-10 h-10 rounded-full bg-black/30 backdrop-blur-md border border-white/20 flex items-center justify-center shadow-lg hover:bg-black/50 transition-colors z-10"
                     >
-                      <span className="material-symbols-outlined">close</span>
+                      <span className="material-symbols-rounded text-white">close</span>
                     </button>
-                    {/* Compare toggle */}
+                    {/* Compare toggle - Refined */}
                     {selectedLook.selfie_url && (
                       <button
                         onClick={() => setCompareMode(!compareMode)}
-                        className={`absolute top-4 left-4 w-10 h-10 rounded-full flex items-center justify-center shadow-lg transition ${compareMode ? 'bg-yellow-500 text-black' : 'bg-white/90 text-gray-700'
+                        className={`absolute top-4 left-4 w-10 h-10 rounded-full flex items-center justify-center shadow-lg transition-all border z-10 ${compareMode ? 'bg-fuchsia-500 text-white border-fuchsia-400' : 'bg-black/30 backdrop-blur-md text-white border-white/20 hover:bg-black/50'
                           }`}
                       >
-                        <span className="material-symbols-outlined">compare</span>
+                        <span className="material-symbols-rounded text-[20px]">compare</span>
                       </button>
                     )}
                   </div>
 
                   {/* Info */}
-                  <div className="p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+                  <div className="p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
                     {/* Title & date */}
-                    <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-start justify-between mb-4">
                       <div>
-                        <h2 className="text-lg font-semibold">
-                          {selectedLook.title || 'Look generado'}
+                        <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">
+                          {selectedLook.title || 'Outfit Diario'}
                         </h2>
-                        <p className="text-xs text-gray-500">
+                        <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
                           {new Date(selectedLook.created_at).toLocaleDateString('es-AR', {
                             day: 'numeric',
                             month: 'long',
@@ -538,11 +593,8 @@ export default function SavedLooksView({ closet }: SavedLooksViewProps) {
                     {/* Generation metadata badges */}
                     <div className="flex flex-wrap gap-1.5 mb-4">
                       {/* Model */}
-                      <span className={`px-2 py-1 rounded-full text-xs font-semibold ${selectedLook.generation_model?.includes('3-pro')
-                          ? 'bg-purple-100 text-purple-700'
-                          : 'bg-gray-100 text-gray-700'
-                        }`}>
-                        {selectedLook.generation_model?.includes('3-pro') ? 'Ultra' : 'Rápido'}
+                      <span className="px-2 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-700">
+                        Nano 3.1
                       </span>
                       {/* Preset */}
                       <span className="px-2 py-1 rounded-full bg-gray-100 text-gray-700 text-xs font-semibold">
@@ -586,35 +638,38 @@ export default function SavedLooksView({ closet }: SavedLooksViewProps) {
                     </div>
 
                     {shopLookItems.length > 0 && (
-                      <div className="mb-4">
+                      <div className="mb-6">
                         <ShopTheLookPanel
                           items={shopLookItems}
                           title="Comprar este look"
                           variant="default"
-                          className="bg-white/70 border border-white/60 shadow-none"
+                          className="bg-white/50 dark:bg-black/20 backdrop-blur-md border border-white/60 dark:border-white/10 shadow-sm rounded-2xl"
                         />
                       </div>
                     )}
 
-                    {/* Share link */}
+                    {/* Share link - Refined */}
                     {selectedLook.is_public && selectedLook.share_token && (
-                      <div className="mb-4 p-3 rounded-xl bg-gray-50 border border-gray-100">
-                        <p className="text-xs text-gray-500 mb-1">Link para compartir:</p>
+                      <div className="mb-6 p-4 rounded-2xl bg-white/40 dark:bg-white/5 backdrop-blur-md border border-white/50 dark:border-white/10 shadow-sm">
+                        <p className="text-xs font-bold text-gray-600 dark:text-gray-400 mb-2">Enlace compartido:</p>
                         <div className="flex items-center gap-2">
                           <input
                             type="text"
                             readOnly
                             value={`${window.location.origin}/look/${selectedLook.share_token}`}
-                            className="flex-1 text-xs bg-white rounded px-2 py-1.5 border border-gray-200"
+                            className="flex-1 text-xs bg-white/60 dark:bg-black/40 rounded-xl px-3 py-2 border border-white/50 dark:border-white/10 text-gray-900 dark:text-white font-medium focus:outline-none"
                           />
                           <button
                             onClick={async () => {
-                              await navigator.clipboard.writeText(
-                                `${window.location.origin}/look/${selectedLook.share_token}`
-                              );
-                              toast.success('Link copiado');
+                              const shareUrl = `${window.location.origin}/look/${selectedLook.share_token}`;
+                              try {
+                                await navigator.clipboard.writeText(shareUrl);
+                                toast.success('Link copiado');
+                              } catch {
+                                toast.error('No se pudo copiar. Mantené el texto seleccionado manualmente.');
+                              }
                             }}
-                            className="px-3 py-1.5 rounded-lg bg-gray-900 text-white text-xs font-semibold"
+                            className="px-4 py-2 rounded-xl bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-xs font-bold shadow-md hover:scale-105 active:scale-95 transition-all"
                           >
                             Copiar
                           </button>
@@ -622,22 +677,22 @@ export default function SavedLooksView({ closet }: SavedLooksViewProps) {
                       </div>
                     )}
 
-                    {/* Actions Row 1 */}
-                    <div className="flex gap-2 mb-2">
+                    {/* Actions Row 1 - Primary & Secondary */}
+                    <div className="flex gap-3 mb-3">
                       <button
                         onClick={() => handleToggleFavorite(selectedLook)}
                         disabled={actionLoading === selectedLook.id}
-                        className={`flex-1 py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition ${selectedLook.is_favorite
-                          ? 'bg-[color:var(--studio-rose)] text-white'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        className={`flex-1 py-3.5 rounded-[1.25rem] font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-sm ${selectedLook.is_favorite
+                          ? 'bg-rose-500 text-white shadow-rose-500/20 shadow-lg'
+                          : 'bg-white/50 dark:bg-white/5 backdrop-blur-md border border-white/60 dark:border-white/10 text-gray-800 dark:text-gray-200 hover:bg-white/80 dark:hover:bg-white/10'
                           }`}
                       >
                         {actionLoading === selectedLook.id ? (
                           <Loader size="small" />
                         ) : (
                           <>
-                            <span className="material-symbols-rounded text-lg">{selectedLook.is_favorite ? 'favorite' : 'favorite_border'}</span>
-                            {selectedLook.is_favorite ? 'Favorito' : 'Agregar'}
+                            <span className="material-symbols-rounded text-[20px]">{selectedLook.is_favorite ? 'heart_check' : 'favorite'}</span>
+                            {selectedLook.is_favorite ? 'Guardado' : 'Favorito'}
                           </>
                         )}
                       </button>
@@ -645,32 +700,32 @@ export default function SavedLooksView({ closet }: SavedLooksViewProps) {
                       <button
                         onClick={() => handleToggleShare(selectedLook)}
                         disabled={actionLoading === selectedLook.id}
-                        className={`flex-1 py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition ${selectedLook.is_public
-                          ? 'bg-[color:var(--studio-mint)] text-white'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        className={`flex-1 py-3.5 rounded-[1.25rem] font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-sm ${selectedLook.is_public
+                          ? 'bg-blue-500 text-white shadow-blue-500/20 shadow-lg'
+                          : 'bg-white/50 dark:bg-white/5 backdrop-blur-md border border-white/60 dark:border-white/10 text-gray-800 dark:text-gray-200 hover:bg-white/80 dark:hover:bg-white/10'
                           }`}
                       >
                         {actionLoading === selectedLook.id ? (
                           <Loader size="small" />
                         ) : (
                           <>
-                            <span className="material-symbols-outlined text-base">
-                              {selectedLook.is_public ? 'link' : 'link_off'}
+                            <span className="material-symbols-rounded text-[20px]">
+                              {selectedLook.is_public ? 'link' : 'ios_share'}
                             </span>
-                            {selectedLook.is_public ? 'Compartido' : 'Compartir'}
+                            {selectedLook.is_public ? 'Compartitdo' : 'Compartir'}
                           </>
                         )}
                       </button>
                     </div>
 
-                    {/* Actions Row 2 */}
-                    <div className="flex gap-2">
+                    {/* Actions Row 2 - Tertiary */}
+                    <div className="flex gap-3">
                       <button
                         onClick={() => handleDownload(selectedLook)}
-                        className="flex-1 py-3 rounded-xl bg-gray-100 font-semibold text-sm text-gray-700 flex items-center justify-center gap-2 hover:bg-gray-200 transition"
+                        className="flex-1 py-3.5 rounded-[1.25rem] bg-transparent border border-gray-200 dark:border-gray-800 font-bold text-sm text-gray-600 dark:text-gray-400 flex items-center justify-center gap-2 hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors"
                       >
-                        <span className="material-symbols-outlined text-base">download</span>
-                        Descargar
+                        <span className="material-symbols-rounded text-[18px]">download</span>
+                        Guardar
                       </button>
 
                       <button
@@ -678,21 +733,22 @@ export default function SavedLooksView({ closet }: SavedLooksViewProps) {
                           setIsDetailOpen(false);
                           openEditModal(selectedLook);
                         }}
-                        className="flex-1 py-3 rounded-xl bg-gray-100 font-semibold text-sm text-gray-700 flex items-center justify-center gap-2 hover:bg-gray-200 transition"
+                        className="flex-1 py-3.5 rounded-[1.25rem] bg-transparent border border-gray-200 dark:border-gray-800 font-bold text-sm text-gray-600 dark:text-gray-400 flex items-center justify-center gap-2 hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors"
                       >
-                        <span className="material-symbols-outlined text-base">edit</span>
+                        <span className="material-symbols-rounded text-[18px]">edit</span>
                         Editar
                       </button>
 
                       <button
                         onClick={() => handleDelete(selectedLook)}
                         disabled={actionLoading === selectedLook.id}
-                        className="w-12 h-12 rounded-xl bg-red-50 text-red-600 flex items-center justify-center hover:bg-red-100 transition"
+                        className="w-[52px] h-[52px] shrink-0 rounded-[1.25rem] bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 flex items-center justify-center hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors"
+                        title="Eliminar Look"
                       >
                         {actionLoading === selectedLook.id ? (
                           <Loader size="small" />
                         ) : (
-                          <span className="material-symbols-outlined">delete</span>
+                          <span className="material-symbols-rounded text-[20px]">delete</span>
                         )}
                       </button>
                     </div>

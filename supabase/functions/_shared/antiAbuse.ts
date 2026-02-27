@@ -3,6 +3,7 @@ type RateLimitResult = {
   reason?: 'blocked' | 'rate_limited';
   retryAfterSeconds?: number;
   blockedUntil?: string | null;
+  guardError?: boolean;
 };
 
 const DEFAULT_LIMITS = {
@@ -31,7 +32,7 @@ export async function enforceRateLimit(
 
     if (error) {
       console.error('Rate limit check failed:', error);
-      return { allowed: true };
+      return { allowed: true, guardError: true };
     }
 
     const result = Array.isArray(data) ? data[0] : data;
@@ -49,7 +50,7 @@ export async function enforceRateLimit(
     return { allowed: true };
   } catch (error) {
     console.error('Rate limit check error:', error);
-    return { allowed: true };
+    return { allowed: true, guardError: true };
   }
 }
 

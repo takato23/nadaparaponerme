@@ -26,19 +26,19 @@ const CameraCaptureButton: React.FC<CameraCaptureButtonProps> = ({ onCapture, on
     setIsAndroid(/android/.test(ua));
   }, []);
 
-  // Cleanup stream on unmount
-  useEffect(() => {
-    return () => {
-      stopCamera();
-    };
-  }, []);
-
   const stopCamera = () => {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
       streamRef.current = null;
     }
   };
+
+  // Cleanup stream on unmount
+  useEffect(() => {
+    return () => {
+      stopCamera();
+    };
+  }, []);
 
   const startCamera = async () => {
     setCameraState('requesting');

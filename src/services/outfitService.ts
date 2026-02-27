@@ -111,7 +111,7 @@ export async function saveOutfit(
 
     const { data, error } = await retryNetworkOperation(async () => await supabase
       .from('outfits')
-      .insert(newOutfit as any) // Cast to any to avoid complex type inference issues
+      .insert(newOutfit)
       .select()
       .single());
 
@@ -147,7 +147,6 @@ export async function updateOutfit(
 
     const { data, error } = await supabase
       .from('outfits')
-      // @ts-ignore - Type inference failing for update payload
       .update(update)
       .eq('id', id)
       .eq('user_id', user.id)
@@ -171,10 +170,13 @@ export async function deleteOutfit(id: string): Promise<void> {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Not authenticated');
 
+    const deletePayload: OutfitUpdate = {
+      deleted_at: new Date().toISOString(),
+    };
+
     const { error } = await supabase
       .from('outfits')
-      // @ts-ignore - Type inference failing for update payload
-      .update({ deleted_at: new Date().toISOString() })
+      .update(deletePayload)
       .eq('id', id)
       .eq('user_id', user.id);
 
@@ -204,14 +206,16 @@ export async function toggleOutfitVisibility(id: string): Promise<boolean> {
     if (fetchError) throw fetchError;
     if (!outfit) throw new Error('Outfit not found');
 
-    const outfitData = outfit as any;
+    const outfitData = outfit as { is_public: boolean };
     const newVisibility = !outfitData.is_public;
+    const visibilityPayload: OutfitUpdate = {
+      is_public: newVisibility,
+    };
 
     // Toggle
     const { error } = await supabase
       .from('outfits')
-      // @ts-ignore - Type inference failing for update payload
-      .update({ is_public: newVisibility })
+      .update(visibilityPayload)
       .eq('id', id)
       .eq('user_id', user.id);
 

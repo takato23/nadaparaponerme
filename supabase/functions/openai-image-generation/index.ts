@@ -2,6 +2,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { enforceRateLimit, recordRequestResult } from '../_shared/antiAbuse.ts';
+import { enforceAIBudgetGuard, getBudgetLimitMessage, recordAIBudgetSuccess } from '../_shared/aiBudgetGuard.ts';
 import { withRetry } from '../_shared/retry.ts';
 
 const corsHeaders = {
@@ -11,6 +12,7 @@ const corsHeaders = {
 
 // OpenAI API URL
 const OPENAI_API_URL = 'https://api.openai.com/v1/images/generations';
+const BUDGET_CREDIT_COST = 3;
 
 serve(async (req) => {
     // 1. Handle CORS Preflight
@@ -84,6 +86,21 @@ serve(async (req) => {
             return new Response(
                 JSON.stringify({ error: 'Missing prompt' }),
                 { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+        }
+
+        const budgetGuard = await enforceAIBudgetGuard(supabase, user.id, 'openai-image-generation', BUDGET_CREDIT_COST);
+        if (!budgetGuard.allowed) {
+            return new Response(
+                JSON.stringify({ error: getBudgetLimitMessage(budgetGuard.reason) }),
+                {
+                    status: 429,
+                    headers: {
+                        ...corsHeaders,
+                        'Content-Type': 'application/json',
+                        'Retry-After': String(budgetGuard.retryAfterSeconds || 60),
+                    },
+                }
             );
         }
 
@@ -182,6 +199,7 @@ serve(async (req) => {
 
         // Return the image
         const resultImage = `data:image/png;base64,${imageBase64}`;
+        await recordAIBudgetSuccess(supabase, user.id, 'openai-image-generation', BUDGET_CREDIT_COST);
         await recordRequestResult(supabase, user.id, 'openai-image-generation', true);
 
         return new Response(JSON.stringify({

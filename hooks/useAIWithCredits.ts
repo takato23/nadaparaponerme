@@ -8,7 +8,7 @@
 import { useState, useCallback } from 'react';
 import {
   canUseFeature,
-  recordUsage,
+  recordCreditUsage,
   type FeatureType,
 } from '../src/services/usageTrackingService';
 
@@ -72,7 +72,7 @@ export function useAIWithCredits(): UseAIWithCreditsReturn {
       const data = await aiCall();
 
       // Record usage after successful call
-      recordUsage(feature);
+      recordCreditUsage(feature);
 
       return {
         success: true,

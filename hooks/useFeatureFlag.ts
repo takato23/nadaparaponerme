@@ -58,6 +58,9 @@ export const useFeatureFlags = (): FeatureFlags => {
   const useSupabaseAI = useFeatureFlag('useSupabaseAI');
   const useSupabasePreferences = useFeatureFlag('useSupabasePreferences');
   const autoMigration = useFeatureFlag('autoMigration');
+  const enableHybridTryOn = useFeatureFlag('enableHybridTryOn');
+  const enableUnifiedStudioStylist = useFeatureFlag('enableUnifiedStudioStylist');
+  const enableOnDemandClosetAI = useFeatureFlag('enableOnDemandClosetAI');
 
   return {
     useSupabaseAuth,
@@ -66,5 +69,8 @@ export const useFeatureFlags = (): FeatureFlags => {
     useSupabaseAI,
     useSupabasePreferences,
     autoMigration,
+    enableHybridTryOn,
+    enableUnifiedStudioStylist,
+    enableOnDemandClosetAI,
   };
 };

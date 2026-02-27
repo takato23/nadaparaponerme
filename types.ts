@@ -26,11 +26,17 @@ export interface ClothingItemMetadata {
   fabric_composition?: string;
 }
 
+export type ItemAIStatus = 'pending' | 'processing' | 'ready' | 'failed';
+
 export interface ClothingItem {
   id: string;
   imageDataUrl: string;
   backImageDataUrl?: string; // Optional back view image
   metadata: ClothingItemMetadata;
+  aiStatus?: ItemAIStatus;
+  aiAnalyzedAt?: string | null;
+  aiMetadataVersion?: number;
+  aiLastError?: string | null;
   // Status tracking: 'owned' (default), 'wishlist' (store/external), 'virtual' (try-on draft)
   status?: 'owned' | 'wishlist' | 'virtual' | 'quick';
   // Legacy flat color field still consumed in some enhanced closet flows.
@@ -60,6 +66,99 @@ export interface FitResult {
     bottom?: ClothingItem;
     shoes?: ClothingItem;
   }; // AI-generated items to fill missing pieces
+}
+
+export interface StructuredOutfitSuggestion {
+  top_id: string;
+  bottom_id: string;
+  shoes_id: string;
+  explanation?: string;
+  missing_piece_suggestion?: MissingPieceSuggestion;
+  aiGeneratedItems?: {
+    top?: ClothingItem;
+    bottom?: ClothingItem;
+    shoes?: ClothingItem;
+  };
+  confidence?: number;
+}
+
+export interface ChatStylistRequest {
+  message: string;
+  chatHistory: Array<{ role: 'user' | 'assistant'; content: string }>;
+  closetContext: Array<{ id: string; metadata: any }>;
+  responseMode?: 'text' | 'structured';
+  surface?: 'studio' | 'closet';
+  threadId?: string | null;
+  idempotencyKey?: string;
+  workflow?: GuidedLookWorkflowRequest;
+}
+
+export interface ChatStylistResponse {
+  role: 'assistant';
+  content: string;
+  outfitSuggestion?: StructuredOutfitSuggestion | null;
+  threadId?: string | null;
+  model: string;
+  credits_used?: number;
+  cache_hit?: boolean;
+  workflow?: GuidedLookWorkflowResponse;
+}
+
+export type GuidedLookStatus =
+  | 'idle'
+  | 'collecting'
+  | 'confirming'
+  | 'generating'
+  | 'generated'
+  | 'cancelled'
+  | 'error';
+
+export type GuidedLookErrorCode =
+  | 'INSUFFICIENT_CREDITS'
+  | 'GENERATION_TIMEOUT'
+  | 'GENERATION_FAILED'
+  | 'SESSION_EXPIRED'
+  | 'INVALID_CONFIRMATION';
+
+export type GuidedLookMissingField = 'occasion' | 'style' | 'category';
+
+export interface GuidedLookCollected {
+  occasion?: string;
+  style?: string;
+  category?: 'top' | 'bottom' | 'shoes';
+  requestText?: string;
+}
+
+export interface GuidedLookGeneratedItem extends ClothingItem {
+  saved_to_closet?: boolean;
+}
+
+export interface GuidedLookWorkflowRequest {
+  mode: 'guided_look_creation';
+  sessionId?: string | null;
+  action?: 'start' | 'submit' | 'confirm_generate' | 'cancel' | 'toggle_autosave' | 'request_outfit';
+  payload?: {
+    message?: string;
+    occasion?: string;
+    style?: string;
+    category?: 'top' | 'bottom' | 'shoes';
+    confirmationToken?: string;
+    autosaveEnabled?: boolean;
+  };
+}
+
+export interface GuidedLookWorkflowResponse {
+  mode: 'guided_look_creation';
+  sessionId: string;
+  status: GuidedLookStatus;
+  missingFields: GuidedLookMissingField[];
+  collected: GuidedLookCollected;
+  estimatedCostCredits: number;
+  requiresConfirmation: boolean;
+  confirmationToken?: string | null;
+  generatedItem?: GuidedLookGeneratedItem | null;
+  autosaveEnabled: boolean;
+  errorCode?: GuidedLookErrorCode | null;
 }
 
 export interface SavedOutfit {
@@ -128,16 +227,7 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   timestamp: number;
-  outfitSuggestion?: {
-    top_id: string;
-    bottom_id: string;
-    shoes_id: string;
-    aiGeneratedItems?: {
-      top?: ClothingItem;
-      bottom?: ClothingItem;
-      shoes?: ClothingItem;
-    };
-  };
+  outfitSuggestion?: StructuredOutfitSuggestion;
 }
 
 export interface ChatState {
@@ -1239,6 +1329,50 @@ export type GenerationPreset =
 export type GenerationFit = 'tight' | 'regular' | 'oversized';
 export type GenerationView = 'front' | 'back' | 'side';
 
+export type TryOnSurface = 'mirror' | 'studio';
+
+export interface TryOnRenderHashInput {
+  version?: number;
+  surface: TryOnSurface;
+  userFingerprint: string;
+  slotItemIds: Record<string, string>;
+  preset: GenerationPreset;
+  customScene?: string;
+  quality: 'flash' | 'pro';
+  view: GenerationView;
+  keepPose: boolean;
+  useFaceRefs: boolean;
+  slotFits?: Record<string, GenerationFit>;
+  faceRefsSignature?: string | null;
+}
+
+export interface TryOnCacheEntry {
+  id: string;
+  user_id: string;
+  render_hash: string;
+  storage_path: string;
+  image_url: string;
+  source_surface: TryOnSurface;
+  quality: 'flash' | 'pro';
+  preset: string;
+  view: GenerationView;
+  keep_pose: boolean;
+  use_face_refs: boolean;
+  slot_signature: Record<string, string>;
+  face_refs_signature?: string | null;
+  model: string;
+  hit_count: number;
+  last_hit_at: string;
+  expires_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TryOnCacheLookupResult {
+  hit: boolean;
+  entry: TryOnCacheEntry | null;
+}
+
 export interface GenerationPresetConfig {
   id: GenerationPreset;
   label: string;
@@ -1341,6 +1475,7 @@ export interface GeneratedLook {
   // Storage
   image_url: string;
   thumbnail_url?: string;
+  storage_path?: string;
 
   // Source items by slot
   source_items: Partial<Record<ClothingSlot, string>>; // slot -> item ID

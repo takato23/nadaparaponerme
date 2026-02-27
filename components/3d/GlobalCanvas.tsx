@@ -1,9 +1,10 @@
-import React, { Suspense, lazy, useEffect, useState } from 'react';
+import React, { Suspense, lazy } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { Preload, PerformanceMonitor, AdaptiveDpr } from '@react-three/drei';
 import { SceneOrchestrator } from './SceneOrchestrator';
 import { useLocation } from 'react-router-dom';
 import { useThemeContext } from '../../contexts/ThemeContext';
+import { useMatchMedia } from '../../src/hooks/useMatchMedia';
 
 interface GlobalCanvasProps {
     children?: React.ReactNode;
@@ -12,30 +13,11 @@ interface GlobalCanvasProps {
 
 const Eye3D = lazy(() => import('../Eye3D'));
 
-function useMediaQuery(query: string) {
-    const [matches, setMatches] = useState(false);
-
-    useEffect(() => {
-        if (typeof window === 'undefined' || typeof window.matchMedia === 'undefined') return;
-        const mql = window.matchMedia(query);
-        const onChange = (e: MediaQueryListEvent) => setMatches(e.matches);
-        setMatches(mql.matches);
-        if (typeof mql.addEventListener === 'function') mql.addEventListener('change', onChange);
-        else mql.addListener(onChange);
-        return () => {
-            if (typeof mql.removeEventListener === 'function') mql.removeEventListener('change', onChange);
-            else mql.removeListener(onChange);
-        };
-    }, [query]);
-
-    return matches;
-}
-
 export const GlobalCanvas: React.FC<GlobalCanvasProps> = ({ isAuth }) => {
     const [dpr, setDpr] = React.useState(1); // Start conservative at 1
     const location = useLocation();
-    const prefersReducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
-    const isSmallScreen = useMediaQuery('(max-width: 640px)');
+    const prefersReducedMotion = useMatchMedia('(prefers-reduced-motion: reduce)');
+    const isSmallScreen = useMatchMedia('(max-width: 640px)');
     const { theme } = useThemeContext();
     const isDark = theme === 'dark';
 

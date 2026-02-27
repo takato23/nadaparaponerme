@@ -8,16 +8,18 @@ import Loader from './Loader';
 import { validateImageDataUri } from '../utils/imageValidation';
 import CameraCaptureButton from './CameraCaptureButton';
 import PhotoGuidanceModal from './PhotoGuidanceModal';
-import PhotoPreview from './PhotoPreview';
 import { analyzePhotoQuality } from '../utils/photoQualityValidation';
+import { removeImageBackground } from '../src/utils/backgroundRemoval';
 import useLocalStorage from '../hooks/useLocalStorage';
 import { getErrorMessage } from '../utils/errorMessages';
 import { TooltipWrapper } from './ui/TooltipWrapper';
 import { useSubscription } from '../hooks/useSubscription';
+import { useFeatureFlag } from '../hooks/useFeatureFlag';
 import { LimitReachedModal } from './QuotaIndicator';
 import { CreditsIndicator } from './CreditsIndicator';
 import { SuccessFeedback, useSuccessFeedback } from './ui/SuccessFeedback';
 import { ROUTES } from '../src/routes';
+import QuickEraserModal from './QuickEraserModal';
 
 interface AddItemViewProps {
   onAddLocalItem: (item: ClothingItem) => void;
@@ -57,11 +59,15 @@ const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }
   const [error, setError] = useState<string | null>(null);
   const [prompt, setPrompt] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [showQuickEraser, setShowQuickEraser] = useState(false);
+  const [wasAnalyzedByAI, setWasAnalyzedByAI] = useState(false);
+  const [analysisLabel, setAnalysisLabel] = useState<'auto' | 'manual'>('auto');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showLimitModal, setShowLimitModal] = useState(false);
 
   // Subscription hook for tracking usage
   const subscription = useSubscription();
+  const enableOnDemandClosetAI = useFeatureFlag('enableOnDemandClosetAI');
 
   // Success feedback for save confirmation
   const successFeedback = useSuccessFeedback();
@@ -70,10 +76,20 @@ const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }
   const [hasSeenGuidance, setHasSeenGuidance] = useLocalStorage('ojodeloca-photo-guidance-seen', false);
   const [showGuidance, setShowGuidance] = useState(false);
   const [photoQualityWarnings, setPhotoQualityWarnings] = useState<string[]>([]);
+  const imageUploadCounter = useRef(0);
+  const localItemCounter = useRef(0);
 
   // Predefined options for chips
   const SEASONS = ['Verano', 'Invierno', 'Otoño', 'Primavera', 'Todo el año'];
   const VIBES = ['Casual', 'Formal', 'Deportivo', 'Fiesta', 'Trabajo', 'Streetwear', 'Vintage', 'Minimalista', 'Boho', 'Chic'];
+
+  const createDraftMetadata = (seed?: string): ClothingItemMetadata => ({
+    category: 'top',
+    subcategory: (seed || 'Prenda sin analizar').slice(0, 50),
+    color_primary: 'por definir',
+    vibe_tags: [],
+    seasons: [],
+  });
 
   // Show guidance modal on first visit
   useEffect(() => {
@@ -81,6 +97,12 @@ const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }
       setShowGuidance(true);
     }
   }, [hasSeenGuidance]);
+
+  useEffect(() => {
+    if (viewState !== 'editing') {
+      setShowQuickEraser(false);
+    }
+  }, [viewState]);
 
   const processImageDataUrl = async (url: string, file?: File) => {
     const validationResult = validateImageDataUri(url);
@@ -108,14 +130,21 @@ const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }
     } else {
       setImageDataUrl(url);
       setImageFile(file || null);
-      setViewState('preview'); // Show preview before analysis
+      setWasAnalyzedByAI(false);
+      if (enableOnDemandClosetAI) {
+        setMetadata(createDraftMetadata());
+        setViewState('editing');
+      } else {
+        // Skip preview and go straight to analyzing
+        setAnalysisLabel('auto');
+        setViewState('analyzing');
+        handleAnalysisProcess(url);
+      }
     }
     setError(null);
   };
 
-  const handleConfirmPhoto = async () => {
-    if (!imageDataUrl) return;
-
+  const handleAnalysisProcess = async (initialUrl: string, onErrorView: ViewState = 'capture') => {
     // Check if user can use AI feature before proceeding
     const canUseStatus = subscription.canUseAIFeature('clothing_analysis');
     if (!canUseStatus.canUse) {
@@ -123,25 +152,33 @@ const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }
       return;
     }
 
-    setViewState('analyzing');
     try {
-      const result = await aiService.analyzeClothingItem(imageDataUrl);
-      setMetadata(result);
+      // Run background removal and tagging in parallel for speed
+      const [aiMetadata, transparentImageUrl] = await Promise.all([
+        aiService.analyzeClothingItem(initialUrl),
+        removeImageBackground(initialUrl).catch(err => {
+          console.error('Non-fatal BG removal error:', err);
+          return initialUrl; // Fallback to original if bg removal fails
+        })
+      ]);
+
+      setImageDataUrl(transparentImageUrl);
+      setMetadata(aiMetadata);
+      setWasAnalyzedByAI(true);
       setViewState('editing');
 
-      // Record usage after successful analysis
-      await subscription.incrementUsage('clothing_analysis');
+      // Source of truth is backend credits; refresh local counters.
+      await subscription.refresh();
     } catch (err) {
       console.error('Analysis error:', err);
 
-      // Use comprehensive error message system
       const errorInfo = getErrorMessage(err, undefined, {
         retakePhoto: handleRetakePhoto,
         showPhotoGuide: () => setShowGuidance(true)
       });
 
       setError(errorInfo.message);
-      setViewState('capture');
+      setViewState(onErrorView);
     }
   };
 
@@ -153,6 +190,7 @@ const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }
       setImageDataUrl(null);
       setImageFile(null);
     }
+    setWasAnalyzedByAI(false);
     setPhotoQualityWarnings([]);
     setViewState('capture');
   };
@@ -186,10 +224,18 @@ const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }
         setViewState('generate');
         return;
       }
-      setImageDataUrl(generatedImageUrl);
-      const result = await aiService.analyzeClothingItem(generatedImageUrl);
-      setMetadata(result);
-      setViewState('editing');
+      if (enableOnDemandClosetAI) {
+        setImageDataUrl(generatedImageUrl);
+        setImageFile(null);
+        setBackImageDataUrl(null);
+        setBackImageFile(null);
+        setMetadata(createDraftMetadata(prompt));
+        setWasAnalyzedByAI(false);
+        setViewState('editing');
+      } else {
+        setAnalysisLabel('auto');
+        handleAnalysisProcess(generatedImageUrl);
+      }
     } catch (err) {
       setError('Error al generar imagen. Intenta otro prompt.');
       setViewState('generate');
@@ -205,17 +251,23 @@ const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }
       if (useSupabaseCloset) {
         const response = await fetch(imageDataUrl);
         const blob = await response.blob();
-        const fileName = imageFile?.name || `${Date.now()}.jpg`;
+        const fileName = imageFile?.name || `item_${++imageUploadCounter.current}.jpg`;
         const file = new File([blob], fileName, { type: blob.type || 'image/jpeg' });
 
-        const savedItem = await addClothingItem(file, metadata, backImageFile || undefined, itemStatus);
+        const savedItem = await addClothingItem(
+          file,
+          metadata,
+          backImageFile || undefined,
+          itemStatus,
+          wasAnalyzedByAI ? 'ready' : 'pending',
+        );
         newItemId = savedItem.id;
 
         const updatedCloset = await getClothingItems();
         onClosetSync(updatedCloset);
       } else {
         const newItem: ClothingItem = {
-          id: `item_${Date.now()}`,
+          id: `${++localItemCounter.current}`,
           imageDataUrl,
           metadata,
           status: itemStatus
@@ -287,17 +339,6 @@ const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }
               setViewState(capturingBack ? 'editing' : 'capture');
               setCapturingBack(false);
             }}
-          />
-        );
-
-      case 'preview':
-        if (!imageDataUrl) return null;
-        return (
-          <PhotoPreview
-            imageDataUrl={imageDataUrl}
-            onConfirm={handleConfirmPhoto}
-            onRetake={handleRetakePhoto}
-            qualityWarnings={photoQualityWarnings}
           />
         );
 
@@ -375,8 +416,8 @@ const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }
               </div>
 
               <TooltipWrapper content="Describí una prenda y la IA la creará desde cero con imagen realista" position="bottom">
-                <button
-                  onClick={() => setViewState('generate')}
+        <button
+          onClick={() => setViewState('generate')}
                   className="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-text-primary dark:text-gray-200 font-bold py-4 px-6 rounded-2xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-all transform hover:scale-[1.02] flex items-center justify-center gap-2"
                 >
                   <span className="material-symbols-outlined text-secondary">auto_awesome</span>
@@ -438,10 +479,12 @@ const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }
               )}
             </div>
             <h3 className="text-xl font-bold text-text-primary dark:text-gray-100 mb-2 animate-pulse">
-              Analizando estilo...
+              {analysisLabel === 'manual' ? 'Analizando prenda...' : 'Analizando y eliminando fondo...'}
             </h3>
             <p className="text-text-secondary dark:text-gray-400 text-sm max-w-xs">
-              Nuestra IA está detectando colores, categoría y estilo de tu prenda.
+              {analysisLabel === 'manual'
+                ? 'La IA está completando categoría, color y tags de estilo.'
+                : 'Nuestra IA está preparando la prenda, detectando colores, categoría y estilo. ¡Casi listo!'}
             </p>
           </div>
         );
@@ -482,6 +525,13 @@ const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }
                   <p className="text-white/80 text-sm capitalize">
                     {metadata.color_primary} • {metadata.category}
                   </p>
+                  <button
+                    onClick={() => setShowQuickEraser(true)}
+                    className="mt-3 px-3 py-1.5 rounded-lg bg-white/20 hover:bg-white/30 backdrop-blur-md text-white text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-sm">brush</span>
+                    Retoque rápido
+                  </button>
                 </div>
                 {!backImageDataUrl && (
                   <button
@@ -517,6 +567,32 @@ const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }
                       Tomar foto de espalda <span className="material-symbols-outlined text-sm">arrow_forward</span>
                     </button>
                   </div>
+                </div>
+              )}
+
+              {enableOnDemandClosetAI && (
+                <div className="bg-indigo-50/70 dark:bg-indigo-900/20 border border-indigo-200/60 dark:border-indigo-800/60 rounded-2xl p-4 flex items-center justify-between gap-3">
+                  <div className="space-y-1">
+                    <p className="text-sm font-bold text-gray-800 dark:text-white">
+                      IA opcional para autocompletar metadata
+                    </p>
+                    <p className="text-xs text-text-secondary dark:text-gray-400">
+                      {wasAnalyzedByAI
+                        ? 'Esta prenda ya fue analizada. Podés re-analizar si cambiaste la foto.'
+                        : 'Podés guardar rápido ahora y analizar después desde tu armario.'}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (!imageDataUrl) return;
+                      setAnalysisLabel('manual');
+                      setViewState('analyzing');
+                      void handleAnalysisProcess(imageDataUrl, 'editing');
+                    }}
+                    className="px-3 py-2 rounded-xl bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 transition-colors"
+                  >
+                    {wasAnalyzedByAI ? 'Re-analizar' : 'Analizar ahora'}
+                  </button>
                 </div>
               )}
 
@@ -744,6 +820,20 @@ const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }
         icon={successFeedback.icon}
         onComplete={successFeedback.hide}
       />
+
+      <AnimatePresence>
+        {showQuickEraser && (
+          <QuickEraserModal
+            isOpen={showQuickEraser}
+            imageDataUrl={imageDataUrl}
+            onClose={() => setShowQuickEraser(false)}
+            onApply={(editedImageDataUrl) => {
+              setImageDataUrl(editedImageDataUrl);
+              setShowQuickEraser(false);
+            }}
+          />
+        )}
+      </AnimatePresence>
     </>
   );
 };

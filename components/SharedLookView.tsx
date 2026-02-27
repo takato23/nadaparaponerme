@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import type { GeneratedLook } from '../types';
+import type { SharedGeneratedLook } from '../src/services/generatedLooksService';
 import { getGeneratedLookByShareToken } from '../src/services/generatedLooksService';
 import Loader from './Loader';
 
@@ -16,9 +16,23 @@ const studioTheme = {
 export default function SharedLookView() {
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
-  const [look, setLook] = useState<GeneratedLook | null>(null);
+  const [look, setLook] = useState<SharedGeneratedLook | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const getShareErrorMessage = (message: string) => {
+    const normalized = message.toLowerCase();
+    if (normalized.includes('inválido') || normalized.includes('inv') || normalized.includes('válido')) {
+      return 'El link de compartido no es válido.';
+    }
+    if (normalized.includes('expir') || normalized.includes('expiró') || normalized.includes('disponible')) {
+      return 'Este link ya no está disponible.';
+    }
+    if (normalized.includes('no autenticado')) {
+      return 'No se pudo validar el acceso.';
+    }
+    return 'No se pudo cargar el look compartido.';
+  };
 
   useEffect(() => {
     async function loadLook() {
@@ -31,13 +45,14 @@ export default function SharedLookView() {
       try {
         const data = await getGeneratedLookByShareToken(token);
         if (!data) {
-          setError('Este look no existe o ya no está disponible');
+          setError('Este look no existe, fue desactivado o el enlace expiró.');
         } else {
           setLook(data);
         }
       } catch (err) {
         console.error('Error loading shared look:', err);
-        setError('Error al cargar el look');
+        const message = err instanceof Error ? err.message : 'Error al cargar el look';
+        setError(getShareErrorMessage(message));
       } finally {
         setIsLoading(false);
       }
@@ -51,6 +66,9 @@ export default function SharedLookView() {
 
     try {
       const response = await fetch(look.image_url);
+      if (!response.ok) {
+        throw new Error('No se pudo descargar la imagen compartida.');
+      }
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -108,7 +126,7 @@ export default function SharedLookView() {
           {error || 'Look no encontrado'}
         </h1>
         <p className="text-sm text-[color:var(--studio-ink-muted)] mb-6 text-center">
-          El look que buscás no existe o el link expiró.
+          {error || 'El look que buscás no existe o el link expiró.'}
         </p>
         <button
           onClick={() => navigate('/')}

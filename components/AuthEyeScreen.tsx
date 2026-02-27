@@ -1,26 +1,8 @@
-import React, { Suspense, lazy, useEffect, useState } from 'react';
+import React, { Suspense, lazy } from 'react';
 import AuthView from './AuthView';
+import { useMatchMedia } from '../src/hooks/useMatchMedia';
 
 const Eye3D = lazy(() => import('./Eye3D'));
-
-function useMediaQuery(query: string) {
-    const [matches, setMatches] = useState(false);
-
-    useEffect(() => {
-        if (typeof window === 'undefined' || typeof window.matchMedia === 'undefined') return;
-        const mql = window.matchMedia(query);
-        const onChange = (e: MediaQueryListEvent) => setMatches(e.matches);
-        setMatches(mql.matches);
-        if (typeof mql.addEventListener === 'function') mql.addEventListener('change', onChange);
-        else mql.addListener(onChange);
-        return () => {
-            if (typeof mql.removeEventListener === 'function') mql.removeEventListener('change', onChange);
-            else mql.removeListener(onChange);
-        };
-    }, [query]);
-
-    return matches;
-}
 
 export default function AuthEyeScreen({
     initialMode,
@@ -29,8 +11,8 @@ export default function AuthEyeScreen({
     initialMode: 'login' | 'signup';
     onLoggedIn: () => void;
 }) {
-    const prefersReducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
-    const isSmallScreen = useMediaQuery('(max-width: 640px)');
+    const prefersReducedMotion = useMatchMedia('(prefers-reduced-motion: reduce)');
+    const isSmallScreen = useMatchMedia('(max-width: 640px)');
 
     const dpr: number | [number, number] = isSmallScreen ? [1, 1.35] : [1, 1.75];
     const blinkInterval = prefersReducedMotion ? 7000 : 4200;

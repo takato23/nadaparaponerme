@@ -14,7 +14,7 @@ import {
   type SubscriptionPlan,
 } from '../types-payment';
 import {
-  recordUsage as recordLocalUsage,
+  recordCreditUsage as recordLocalUsage,
   canUseFeature as canUseLocalFeature,
   setUserTier,
   type FeatureType,
@@ -122,18 +122,34 @@ export function useSubscription(): UseSubscriptionReturn {
         .eq('user_id', user.id)
         .single();
 
+      const { data: betaAccess, error: betaError } = await supabase
+        .from('beta_access')
+        .select('premium_override, unlimited_ai, expires_at, revoked_at')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
       if (subError && subError.code !== 'PGRST116') {
         throw subError;
       }
+      if (betaError && betaError.code !== 'PGRST116') {
+        console.warn('Beta access lookup failed, continuing without beta overrides:', betaError);
+      }
+
+      const betaIsActive = !!betaAccess
+        && !betaAccess.revoked_at
+        && (!betaAccess.expires_at || new Date(betaAccess.expires_at).getTime() > Date.now());
+      const betaPremium = betaIsActive && betaAccess?.premium_override === true;
+      const betaUnlimitedAI = betaIsActive && betaAccess?.unlimited_ai === true;
 
       // If no subscription, use defaults
       if (!subscription) {
-        setUserTier('free');
+        const tierFromBeta = betaPremium ? 'premium' : 'free';
+        setUserTier(tierFromBeta);
         setState({
-          tier: 'free',
+          tier: tierFromBeta,
           status: 'active',
           aiGenerationsUsed: 0,
-          aiGenerationsLimit: FREE_PLAN.limits.ai_generations_per_month,
+          aiGenerationsLimit: betaUnlimitedAI ? -1 : (PLANS.find((plan) => plan.id === tierFromBeta)?.limits.ai_generations_per_month ?? FREE_PLAN.limits.ai_generations_per_month),
           currentPeriodEnd: null,
           isLoading: false,
           error: null,
@@ -143,7 +159,8 @@ export function useSubscription(): UseSubscriptionReturn {
 
       // Get plan limits
       const isPaidActive = subscription.status === 'active' || subscription.status === 'trialing';
-      const effectiveTier = (isPaidActive ? subscription.tier : 'free') as SubscriptionTier;
+      const baseTier = (isPaidActive ? subscription.tier : 'free') as SubscriptionTier;
+      const effectiveTier = (betaPremium ? 'premium' : baseTier) as SubscriptionTier;
       const plan = PLANS.find(p => p.id === effectiveTier) || PLANS[0];
       setUserTier(effectiveTier);
 
@@ -151,7 +168,7 @@ export function useSubscription(): UseSubscriptionReturn {
         tier: effectiveTier,
         status: subscription.status,
         aiGenerationsUsed: subscription.ai_generations_used || 0,
-        aiGenerationsLimit: plan.limits.ai_generations_per_month,
+        aiGenerationsLimit: betaUnlimitedAI ? -1 : plan.limits.ai_generations_per_month,
         currentPeriodEnd: subscription.current_period_end
           ? new Date(subscription.current_period_end)
           : null,

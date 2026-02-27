@@ -5,7 +5,7 @@
  * Implements the "right time, right ask" pattern.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Star, X, Send, Heart } from 'lucide-react';
 import {
@@ -25,18 +25,20 @@ interface AppRatingPromptProps {
 }
 
 export function AppRatingPrompt({ forceShow = false, onClose }: AppRatingPromptProps) {
-    const [isVisible, setIsVisible] = useState(false);
+    const shouldShowNow = useMemo(() => forceShow || shouldShowRatingPrompt(), [forceShow]);
+    const [isVisible, setIsVisible] = useState(shouldShowNow);
     const [rating, setRating] = useState(0);
     const [hoveredStar, setHoveredStar] = useState(0);
     const [step, setStep] = useState<'rating' | 'feedback' | 'thanks'>('rating');
     const [feedback, setFeedback] = useState('');
+    const hasMarkedPrompt = useRef(false);
 
     useEffect(() => {
-        if (forceShow || shouldShowRatingPrompt()) {
-            setIsVisible(true);
+        if (isVisible && !hasMarkedPrompt.current) {
             markPromptShown();
+            hasMarkedPrompt.current = true;
         }
-    }, [forceShow]);
+    }, [isVisible]);
 
     const handleClose = () => {
         setIsVisible(false);

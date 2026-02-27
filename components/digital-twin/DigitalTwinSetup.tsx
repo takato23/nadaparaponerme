@@ -16,14 +16,85 @@ const createDigitalTwin = async (images: string[]): Promise<DigitalTwinProfile> 
                 createdAt: new Date().toISOString(),
                 modelId: `nano_banana_${Date.now()}`
             });
-        }, 3000);
+    }, 3000);
     });
 };
+
+const STORAGE_KEY = 'ojodeloca-digital-twin';
+const STORAGE_KEY_SOURCE_IMAGE = 'ojodeloca-digital-twin-source-image';
+const MAX_IMAGE_BYTES = 12 * 1024 * 1024;
+const SUPPORTED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+
+const isSupportedImageType = (type: string) => SUPPORTED_IMAGE_TYPES.has(type);
+
+const readFileAsDataURL = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const result = event.target?.result;
+            if (typeof result !== 'string') {
+                reject(new Error('No se pudo leer la imagen seleccionada.'));
+                return;
+            }
+            resolve(result);
+        };
+        reader.onerror = () => reject(new Error('No se pudo leer la imagen seleccionada.'));
+        reader.readAsDataURL(file);
+    });
 
 interface DigitalTwinSetupProps {
     onClose: () => void;
     onComplete: (profile: DigitalTwinProfile) => void;
 }
+
+const getCompactDigitalTwinProfile = (profile: DigitalTwinProfile & { bodyType?: string }) => {
+    const { id, userId, createdAt, modelId, modelStatus, bodyType, sourceImages } = profile;
+    return {
+        id,
+        userId,
+        createdAt,
+        modelId,
+        modelStatus,
+        bodyType,
+        sourceImages: sourceImages.slice(0, 1),
+        sourceImageCount: sourceImages.length,
+        hasSourceImages: sourceImages.length > 0
+    };
+};
+
+const persistDigitalTwinProfile = (profile: DigitalTwinProfile & { bodyType?: string }) => {
+    const compact = getCompactDigitalTwinProfile(profile);
+    const sourceImage = compact.sourceImages?.[0];
+
+    const saveProfile = (payload: string) => {
+        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(STORAGE_KEY_SOURCE_IMAGE);
+        localStorage.setItem(STORAGE_KEY, payload);
+        if (sourceImage) {
+            localStorage.setItem(STORAGE_KEY_SOURCE_IMAGE, sourceImage);
+        }
+    };
+
+    try {
+        saveProfile(JSON.stringify(compact));
+        return true;
+    } catch (error) {
+        console.warn('Persist compact twin profile failed:', error);
+        try {
+            const fallbackPayload = JSON.stringify({
+                sourceImages: sourceImage ? [sourceImage] : [],
+                sourceImageCount: sourceImage ? 1 : 0,
+                hasSourceImages: Boolean(sourceImage),
+            });
+            saveProfile(fallbackPayload);
+            return true;
+        } catch (retryError) {
+            console.error('Failed to persist twin profile:', retryError);
+        }
+    }
+
+    return false;
+};
 
 const DigitalTwinSetup: React.FC<DigitalTwinSetupProps> = ({ onClose, onComplete }) => {
     const [step, setStep] = useState(0);
@@ -62,36 +133,57 @@ const DigitalTwinSetup: React.FC<DigitalTwinSetupProps> = ({ onClose, onComplete
 
     const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
-            setProcessing(true); // Reuse processing state or add a local loading state for image
-            const reader = new FileReader();
-            reader.onload = async (event) => {
-                if (event.target?.result) {
-                    try {
-                        const rawBase64 = event.target.result as string;
-                        // Compress before storing
-                        const compressed = await compressDataUrl(rawBase64, {
-                            maxWidth: 1024,
-                            maxHeight: 1024,
-                            quality: 0.8
-                        });
+            const file = e.target.files[0];
+            if (!isSupportedImageType(file.type)) {
+                alert('Formato de imagen no soportado. Usa JPG, PNG, WEBP o GIF.');
+                e.target.value = '';
+                return;
+            }
+            if (file.size > MAX_IMAGE_BYTES) {
+                alert('La imagen es demasiado pesada. Sube una foto de menor tamaño.');
+                e.target.value = '';
+                return;
+            }
 
-                        const newImages = [...images];
-                        newImages[step - 1] = compressed.compressedDataUrl;
-                        setImages(newImages);
-                        setStep(step + 1);
-                    } catch (error) {
-                        console.error("Compression ended with error:", error);
-                        // Fallback to raw if compression fails (though risky for quota)
-                        const newImages = [...images];
-                        newImages[step - 1] = event.target?.result as string;
-                        setImages(newImages);
-                        setStep(step + 1);
-                    } finally {
-                        setProcessing(false);
+            setProcessing(true); // Reuse processing state or add a local loading state for image
+            (async () => {
+                try {
+                    const rawBase64 = await readFileAsDataURL(file);
+                    const compressionOptions = [
+                        { maxWidth: 1024, maxHeight: 1024, quality: 0.8, format: 'jpeg' as const },
+                        { maxWidth: 900, maxHeight: 900, quality: 0.65, format: 'jpeg' as const },
+                        { maxWidth: 768, maxHeight: 768, quality: 0.55, format: 'jpeg' as const },
+                        { maxWidth: 640, maxHeight: 640, quality: 0.45, format: 'jpeg' as const },
+                        { maxWidth: 480, maxHeight: 480, quality: 0.4, format: 'webp' as const }
+                    ];
+
+                    let compressed: Awaited<ReturnType<typeof compressDataUrl>> | null = null;
+                    let lastError: unknown;
+                    for (const options of compressionOptions) {
+                        try {
+                            compressed = await compressDataUrl(rawBase64, options);
+                            break;
+                        } catch (error) {
+                            lastError = error;
+                        }
                     }
+
+                    if (!compressed) {
+                        throw lastError ?? new Error('No se pudo comprimir la imagen.');
+                    }
+
+                    const newImages = [...images];
+                    newImages[step - 1] = compressed.compressedDataUrl;
+                    setImages(newImages);
+                    setStep(step + 1);
+                } catch (error) {
+                    console.error("Compression ended with error:", error);
+                    alert('No se pudo procesar la imagen. Intenta con otra foto (JPG/PNG, menos de 12MB).');
+                } finally {
+                    setProcessing(false);
+                    e.target.value = '';
                 }
-            };
-            reader.readAsDataURL(e.target.files[0]);
+            })();
         }
     };
 
@@ -107,12 +199,8 @@ const DigitalTwinSetup: React.FC<DigitalTwinSetupProps> = ({ onClose, onComplete
             const profile = await createDigitalTwin(finalImages);
             const fullProfile = { ...profile, bodyType };
 
-            try {
-                localStorage.setItem('ojodeloca-digital-twin', JSON.stringify(fullProfile));
-            } catch (storageError) {
-                console.error("LocalStorage Limit Exceeded:", storageError);
+            if (!persistDigitalTwinProfile(fullProfile)) {
                 alert("Tu navegador no tiene suficiente espacio para guardar el modelo 3D localmente. Intenta borrar datos o usar un modo privado.");
-                // We might still want to proceed with the in-memory profile for this session
             }
 
             onComplete(fullProfile);
