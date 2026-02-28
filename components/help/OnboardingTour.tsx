@@ -256,7 +256,7 @@ const OnboardingTour: React.FC<OnboardingTourProps> = ({
       </div>
 
       {/* Keyboard hint */}
-      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 hidden md:flex items-center gap-2 px-4 py-2 bg-black/50 backdrop-blur-sm rounded-full text-white/70 text-sm">
+      <div className="fixed bottom-safe-4 left-1/2 -translate-x-1/2 hidden md:flex items-center gap-2 px-4 py-2 bg-black/50 backdrop-blur-sm rounded-full text-white/70 text-sm">
         <span>Usá</span>
         <kbd className="px-2 py-0.5 bg-white/20 rounded text-xs">←</kbd>
         <kbd className="px-2 py-0.5 bg-white/20 rounded text-xs">→</kbd>

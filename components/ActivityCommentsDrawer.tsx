@@ -190,7 +190,7 @@ const ActivityCommentsDrawer = ({
         {/* Comment input */}
         <form
           onSubmit={handleSubmitComment}
-          className="px-6 py-4 border-t border-gray-200 dark:border-gray-700"
+          className="px-6 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] border-t border-gray-200 dark:border-gray-700"
         >
           <div className="flex gap-3">
             {/* User avatar */}

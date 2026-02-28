@@ -89,6 +89,7 @@ export default function ClosetToolbar({
   compact = false
 }: ClosetToolbarProps) {
   const [showSortMenu, setShowSortMenu] = useState(false);
+  const showWardrobeGenerator = import.meta.env.DEV && import.meta.env.VITE_SHOW_WARDROBE_GENERATOR === 'true';
 
   const handleSortChange = (property: SortProperty) => {
     // Toggle direction if same property, otherwise use desc
@@ -114,7 +115,7 @@ export default function ClosetToolbar({
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -20 }}
-        className="flex items-center gap-3 px-4 py-3 bg-primary/10 border-b border-primary/20 backdrop-blur-md sticky top-0 z-20"
+        className="flex items-center gap-3 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] md:py-3 bg-primary/10 border-b border-primary/20 backdrop-blur-md sticky top-0 z-20"
       >
         <button
           onClick={onToggleSelection}
@@ -146,7 +147,7 @@ export default function ClosetToolbar({
   // Normal Toolbar
   return (
     <div
-      className="space-y-3 px-4 py-3 sticky top-0 z-20 border-b border-white/10 dark:border-white/5 transition-all duration-300 bg-white/70 dark:bg-gray-900/80 backdrop-blur-xl"
+      className="space-y-3 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] md:py-3 sticky top-0 z-20 border-b border-white/10 dark:border-white/5 transition-all duration-300 bg-white/70 dark:bg-gray-900/80 backdrop-blur-xl"
     >
       {/* Top Row: Search + Actions */}
       <div className="flex items-center gap-3">
@@ -379,9 +380,11 @@ export default function ClosetToolbar({
         )}
 
         {/* Wardrobe Generator (Dev/Test) */}
-        <div className="block">
-          <WardrobeGeneratorButton onGenerationComplete={onRefresh} />
-        </div>
+        {showWardrobeGenerator && (
+          <div className="block">
+            <WardrobeGeneratorButton onGenerationComplete={onRefresh} />
+          </div>
+        )}
 
         {/* Item Count */}
         <div className="text-xs font-medium text-text-secondary/70 dark:text-gray-500 ml-auto md:ml-0 px-2">

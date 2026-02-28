@@ -764,7 +764,7 @@ export default function SavedLooksView({ closet }: SavedLooksViewProps) {
       {/* FAB to Studio */}
       <button
         onClick={() => navigate('/studio')}
-        className="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] right-4 w-14 h-14 rounded-full bg-[color:var(--studio-ink)] text-white shadow-lg flex items-center justify-center hover:scale-105 active:scale-95 transition z-30"
+        className="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] right-safe-4 w-14 h-14 rounded-full bg-[color:var(--studio-ink)] text-white shadow-lg flex items-center justify-center hover:scale-105 active:scale-95 transition z-30"
         aria-label="Ir al Studio"
       >
         <span className="material-symbols-outlined">add_photo_alternate</span>

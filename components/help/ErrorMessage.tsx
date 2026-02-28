@@ -27,7 +27,7 @@ const ErrorMessage: React.FC<ErrorMessageProps> = ({
   // Toast variant (floating notification)
   if (variant === 'toast') {
     return (
-      <div className="fixed top-4 left-4 right-4 z-50 max-w-md mx-auto animate-slide-down">
+      <div className="fixed top-safe-4 left-safe-4 right-safe-4 z-50 max-w-md mx-auto animate-slide-down">
         <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl p-4 shadow-lg">
           <div className="flex items-start gap-3">
             <div className="flex-shrink-0">

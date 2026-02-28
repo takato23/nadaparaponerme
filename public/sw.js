@@ -48,9 +48,18 @@ self.addEventListener('fetch', (event) => {
     // Skip chrome-extension and other non-http requests
     if (!event.request.url.startsWith('http')) return;
 
-    // Skip API calls (always network)
-    if (event.request.url.includes('/api/') ||
-        event.request.url.includes('supabase') ||
+    const requestUrl = new URL(event.request.url);
+    const hasAuthHeaders = event.request.headers.has('authorization') || event.request.headers.has('apikey');
+    const isSupabaseRequest = requestUrl.hostname.includes('supabase')
+        || requestUrl.pathname.includes('/auth/v1/')
+        || requestUrl.pathname.includes('/rest/v1/')
+        || requestUrl.pathname.includes('/functions/v1/')
+        || requestUrl.pathname.includes('/storage/v1/');
+
+    // Never intercept authenticated/API/Supabase requests.
+    if (hasAuthHeaders ||
+        event.request.url.includes('/api/') ||
+        isSupabaseRequest ||
         event.request.url.includes('googleapis')) {
         return;
     }

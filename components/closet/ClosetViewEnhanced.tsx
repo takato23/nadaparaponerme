@@ -29,7 +29,7 @@ import { CoverFlowCarousel } from './CoverFlowCarousel';
 import LoadDemoDataButton from './LoadDemoDataButton';
 import { useCloset } from '../../contexts/ClosetContext';
 import { getUniqueColors, getUniqueTags, getUniqueSeasons } from '../../utils/closetUtils';
-import { findSimilarByImage } from '../../src/services/geminiService';
+import { findSimilarByImage } from '../../src/services/aiService';
 import type { ClothingItem } from '../../types';
 import { useNavigateTransition } from '../../hooks/useNavigateTransition';
 import { ROUTES } from '../../src/routes';
@@ -417,7 +417,7 @@ export default function ClosetViewEnhanced({
           {onAddItem && viewPreferences.isMobile && viewPreferences.preferences.mobile.fabEnabled && (
             <button
               onClick={onAddItem}
-              className="fixed bottom-20 right-6 w-14 h-14 rounded-full bg-primary text-white flex items-center justify-center shadow-lg hover:bg-primary-dark transition-all hover:scale-110 active:scale-95 z-30"
+              className="fixed bottom-safe-20 right-safe-6 w-14 h-14 rounded-full bg-primary text-white flex items-center justify-center shadow-lg hover:bg-primary-dark transition-all hover:scale-110 active:scale-95 z-30"
               aria-label="Agregar prenda"
             >
               <span className="material-symbols-outlined text-2xl">add</span>

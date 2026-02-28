@@ -4,10 +4,14 @@ import {
   assertStringIncludes,
 } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import {
+  buildEditCostMessage,
   buildGeneratedItemFromImage,
   buildGuidedWorkflowResponse,
   buildLookCostMessage,
   buildLookCreationPrompt,
+  buildModeChoiceMessage,
+  buildTryOnCostMessage,
+  getDirectMissingLookFields,
   buildOutfitSuggestionWithGeneratedItem,
   getMissingLookFields,
   isAffirmative,
@@ -15,6 +19,8 @@ import {
   normalizeCollected,
   parseLookCreationCategory,
   parseLookCreationFields,
+  parseLookStrategy,
+  shouldChargeChatCreditsForWorkflowAction,
 } from './workflow.ts';
 
 Deno.test('parseLookCreationCategory identifies top/bottom/shoes', () => {
@@ -29,6 +35,12 @@ Deno.test('parseLookCreationFields extracts style, occasion and category', () =>
   assertEquals(parsed.style, 'formal');
   assertEquals(parsed.occasion, 'oficina');
   assertEquals(parsed.category, 'top');
+});
+
+Deno.test('parseLookStrategy identifies direct and guided choices', () => {
+  assertEquals(parseLookStrategy('hagámoslo directo'), 'direct');
+  assertEquals(parseLookStrategy('prefiero guiado paso a paso'), 'guided');
+  assertEquals(parseLookStrategy('no sé todavía'), null);
 });
 
 Deno.test('normalizeCollected keeps previous values and request text fallback', () => {
@@ -46,11 +58,14 @@ Deno.test('workflow response reflects missing fields and confirmation state', ()
   const response = buildGuidedWorkflowResponse({
     sessionId: 'session-1',
     status: 'confirming',
+    strategy: 'guided',
+    pendingAction: 'generate',
     collected: {
       occasion: 'oficina',
       style: 'formal',
       category: 'top',
     },
+    pendingCostCredits: 2,
     confirmationToken: 'token-1',
     autosaveEnabled: true,
   });
@@ -59,6 +74,8 @@ Deno.test('workflow response reflects missing fields and confirmation state', ()
   assertEquals(response.requiresConfirmation, true);
   assertEquals(response.missingFields.length, 0);
   assertEquals(response.confirmationToken, 'token-1');
+  assertEquals(response.strategy, 'guided');
+  assertEquals(response.pendingAction, 'generate');
   assertEquals(response.autosaveEnabled, true);
 });
 
@@ -68,6 +85,29 @@ Deno.test('build look copy and prompt includes canonical credit wording', () => 
   const prompt = buildLookCreationPrompt(collected);
   assertStringIncludes(costMessage, 'cuesta 2 créditos');
   assertStringIncludes(prompt, 'Ocasión: fiesta');
+});
+
+Deno.test('direct mode only requires category as critical field', () => {
+  assertEquals(getDirectMissingLookFields({ style: 'casual', occasion: 'oficina' }), ['category']);
+  assertEquals(getDirectMissingLookFields({ category: 'top' }), []);
+});
+
+Deno.test('mode chooser and action costs render spanish UX copy', () => {
+  assertStringIncludes(buildModeChoiceMessage(), 'directo');
+  assertStringIncludes(buildEditCostMessage('cambiar color a negro'), 'cuesta 2 créditos');
+  assertStringIncludes(buildTryOnCostMessage(), 'cuesta 4 créditos');
+});
+
+Deno.test('workflow action billing keeps chat policy for conversational turns', () => {
+  assertEquals(shouldChargeChatCreditsForWorkflowAction('start'), true);
+  assertEquals(shouldChargeChatCreditsForWorkflowAction('submit'), true);
+  assertEquals(shouldChargeChatCreditsForWorkflowAction('select_strategy'), true);
+  assertEquals(shouldChargeChatCreditsForWorkflowAction('request_edit'), true);
+  assertEquals(shouldChargeChatCreditsForWorkflowAction('confirm_generate'), false);
+  assertEquals(shouldChargeChatCreditsForWorkflowAction('confirm_edit'), false);
+  assertEquals(shouldChargeChatCreditsForWorkflowAction('confirm_tryon'), false);
+  assertEquals(shouldChargeChatCreditsForWorkflowAction('request_tryon'), false);
+  assertEquals(shouldChargeChatCreditsForWorkflowAction('save_generated_item'), false);
 });
 
 Deno.test('affirmative and negative confirmations are detected', () => {

@@ -144,7 +144,7 @@ export default function LiquidDetailModal({ item, isOpen, onClose, onItemUpdated
     return createPortal(
         <AnimatePresence>
             {isOpen && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center px-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-4">
                     {/* Backdrop with blur */}
                     <motion.div
                         initial={{ opacity: 0, backdropFilter: "blur(0px)" }}
@@ -157,14 +157,14 @@ export default function LiquidDetailModal({ item, isOpen, onClose, onItemUpdated
                     {/* Modal Content - Peep-hole effect */}
                     <motion.div
                         layoutId={`item-${localItem.id}`}
-                        className="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-[2.5rem] overflow-hidden shadow-2xl z-[110] max-h-[90vh] overflow-y-auto"
+                        className="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-[1.75rem] sm:rounded-[2.5rem] overflow-hidden shadow-2xl z-[110] max-h-[calc(100dvh-max(0.75rem,env(safe-area-inset-top))-max(0.75rem,env(safe-area-inset-bottom)))] overflow-y-auto"
                         initial={{ scale: 0.9, opacity: 0, borderRadius: "2.5rem" }}
                         animate={{ scale: 1, opacity: 1, borderRadius: "2.5rem" }}
                         exit={{ scale: 0.9, opacity: 0, borderRadius: "2.5rem" }}
                         transition={{ type: "spring", damping: 25, stiffness: 300 }}
                     >
                         {/* Image Section */}
-                        <div className="relative h-[28rem] w-full bg-gray-100 dark:bg-gray-800">
+                        <div className="relative h-[min(42dvh,28rem)] sm:h-[28rem] w-full bg-gray-100 dark:bg-gray-800">
                             {imageSide === 'front' ? (
                                 <img
                                     src={localItem.imageDataUrl}
@@ -214,7 +214,7 @@ export default function LiquidDetailModal({ item, isOpen, onClose, onItemUpdated
                                 <div className="bg-white/20 backdrop-blur-md rounded-full p-1 flex border border-white/20">
                                     <button
                                         onClick={() => setImageSide('front')}
-                                        className={`px-4 py-1.5 rounded-full text-sm font-bold transition-all ${imageSide === 'front'
+                                        className={`px-3.5 py-1 rounded-full text-xs sm:text-sm font-semibold transition-all ${imageSide === 'front'
                                             ? 'bg-white text-black shadow-sm'
                                             : 'text-white hover:bg-white/10'
                                             }`}
@@ -223,7 +223,7 @@ export default function LiquidDetailModal({ item, isOpen, onClose, onItemUpdated
                                     </button>
                                     <button
                                         onClick={() => setImageSide('back')}
-                                        className={`px-4 py-1.5 rounded-full text-sm font-bold transition-all ${imageSide === 'back'
+                                        className={`px-3.5 py-1 rounded-full text-xs sm:text-sm font-semibold transition-all ${imageSide === 'back'
                                             ? 'bg-white text-black shadow-sm'
                                             : 'text-white hover:bg-white/10'
                                             }`}
@@ -242,10 +242,10 @@ export default function LiquidDetailModal({ item, isOpen, onClose, onItemUpdated
                         </div>
 
                         {/* Tab Navigation */}
-                        <div className="flex border-b border-gray-200 dark:border-gray-700 px-8 pt-6">
+                        <div className="flex overflow-x-auto no-scrollbar border-b border-gray-200 dark:border-gray-700 px-4 pt-3 sm:px-8 sm:pt-6">
                             <button
                                 onClick={() => setActiveTab('details')}
-                                className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${activeTab === 'details'
+                                className={`px-3 sm:px-4 py-2 font-medium text-sm whitespace-nowrap border-b-2 transition-colors ${activeTab === 'details'
                                     ? 'border-primary text-primary'
                                     : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
                                     }`}
@@ -254,7 +254,7 @@ export default function LiquidDetailModal({ item, isOpen, onClose, onItemUpdated
                             </button>
                             <button
                                 onClick={handleAnalyzeBrand}
-                                className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${activeTab === 'brand'
+                                className={`px-3 sm:px-4 py-2 font-medium text-sm whitespace-nowrap border-b-2 transition-colors ${activeTab === 'brand'
                                     ? 'border-purple-500 text-purple-500'
                                     : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
                                     }`}
@@ -263,7 +263,7 @@ export default function LiquidDetailModal({ item, isOpen, onClose, onItemUpdated
                             </button>
                             <button
                                 onClick={handleFindDupes}
-                                className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${activeTab === 'dupes'
+                                className={`px-3 sm:px-4 py-2 font-medium text-sm whitespace-nowrap border-b-2 transition-colors ${activeTab === 'dupes'
                                     ? 'border-blue-500 text-blue-500'
                                     : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
                                     }`}
@@ -273,7 +273,7 @@ export default function LiquidDetailModal({ item, isOpen, onClose, onItemUpdated
                         </div>
 
                         {/* Tab Content */}
-                        <div className="p-8 pb-[calc(8rem+env(safe-area-inset-bottom))]">
+                        <div className="p-5 pb-[calc(8rem+env(safe-area-inset-bottom))] sm:p-8 sm:pb-[calc(8rem+env(safe-area-inset-bottom))]">
                             {/* Details Tab */}
                             {activeTab === 'details' && (
                                 <motion.div
@@ -281,18 +281,18 @@ export default function LiquidDetailModal({ item, isOpen, onClose, onItemUpdated
                                     animate={{ opacity: 1, y: 0 }}
                                     exit={{ opacity: 0, y: -10 }}
                                 >
-                                    <h2 className="text-3xl font-serif font-bold text-slate-900 dark:text-white mb-2 capitalize">
+                                    <h2 className="text-2xl sm:text-[2rem] leading-tight font-serif font-bold text-slate-900 dark:text-white mb-2 capitalize">
                                         {item.metadata?.subcategory || 'Prenda'}
                                     </h2>
 
                                     <div className="flex flex-wrap gap-2 mb-4">
-                                        <span className={`px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1 ${localItem.aiStatus === 'ready'
+                                        <span className={`px-2.5 py-1 rounded-full text-xs font-medium flex items-center gap-1 border ${localItem.aiStatus === 'ready'
                                             ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300'
                                             : localItem.aiStatus === 'processing'
                                                 ? 'bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300'
                                                 : localItem.aiStatus === 'failed'
                                                     ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
-                                                    : 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300'
+                                                    : 'bg-slate-100/80 dark:bg-slate-800/70 text-slate-500 dark:text-slate-400 border-slate-200/80 dark:border-slate-700/70'
                                             }`}>
                                             <span className="material-symbols-outlined text-sm">auto_awesome</span>
                                             {localItem.aiStatus === 'ready'
@@ -540,7 +540,7 @@ export default function LiquidDetailModal({ item, isOpen, onClose, onItemUpdated
                             )}
                         </div>
 
-                        <div className="sticky bottom-0 left-0 right-0 z-20 px-8 pt-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))] bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-t border-gray-200/60 dark:border-gray-700/60">
+                        <div className="sticky bottom-0 left-0 right-0 z-20 px-4 pt-3 pb-[calc(1.25rem+env(safe-area-inset-bottom))] sm:px-8 sm:pt-4 sm:pb-[calc(1.5rem+env(safe-area-inset-bottom))] bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-t border-gray-200/60 dark:border-gray-700/60">
                             <div className="flex flex-col gap-3">
                                 {/* PRIMARY HERO ACTION: Probar Look */}
                                 <button
@@ -548,7 +548,7 @@ export default function LiquidDetailModal({ item, isOpen, onClose, onItemUpdated
                                         onClose();
                                         navigate(ROUTES.STUDIO, { state: { preselectedItemIds: [item.id] } });
                                     }}
-                                    className="relative overflow-hidden w-full py-4 rounded-2xl text-white font-bold text-lg shadow-[0_8px_30px_rgba(236,72,153,0.3)] hover:shadow-[0_10px_40px_rgba(236,72,153,0.5)] active:scale-95 transition-all flex items-center justify-center gap-2 group border border-white/20"
+                                    className="relative overflow-hidden w-full py-3 sm:py-3.5 rounded-xl sm:rounded-2xl text-white font-semibold text-base shadow-[0_8px_30px_rgba(236,72,153,0.3)] hover:shadow-[0_10px_40px_rgba(236,72,153,0.5)] active:scale-95 transition-all flex items-center justify-center gap-2 group border border-white/20"
                                 >
                                     <div className="absolute inset-0 bg-[length:200%_200%] animate-gradient-xy bg-gradient-to-r from-purple-500 via-pink-500 to-[color:var(--studio-rose)]" />
                                     <div className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
@@ -562,7 +562,7 @@ export default function LiquidDetailModal({ item, isOpen, onClose, onItemUpdated
                                         onClick={handleAnalyzeBrand}
                                         disabled={!hasRealImage}
                                         title={!hasRealImage ? 'Necesitás una foto real de la prenda para analizar la marca' : ''}
-                                        className={`flex-1 py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2 border ${hasRealImage
+                                        className={`flex-1 py-2.5 rounded-xl font-semibold text-sm transition-all flex items-center justify-center gap-2 border ${hasRealImage
                                             ? 'bg-white/50 dark:bg-black/30 backdrop-blur-md text-slate-800 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:bg-white dark:hover:bg-black/50 hover:border-purple-300 dark:hover:border-purple-500/50 hover:text-purple-600 dark:hover:text-purple-400 focus:ring-2 focus:ring-purple-500/20 active:scale-95'
                                             : 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 border-gray-200 dark:border-gray-700 cursor-not-allowed'
                                             }`}
@@ -574,7 +574,7 @@ export default function LiquidDetailModal({ item, isOpen, onClose, onItemUpdated
                                         onClick={handleFindDupes}
                                         disabled={!hasRealImage}
                                         title={!hasRealImage ? 'Necesitás una foto real de la prenda para buscar alternativas' : ''}
-                                        className={`flex-1 py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2 border ${hasRealImage
+                                        className={`flex-1 py-2.5 rounded-xl font-semibold text-sm transition-all flex items-center justify-center gap-2 border ${hasRealImage
                                             ? 'bg-white/50 dark:bg-black/30 backdrop-blur-md text-slate-800 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:bg-white dark:hover:bg-black/50 hover:border-blue-300 dark:hover:border-blue-500/50 hover:text-blue-600 dark:hover:text-blue-400 focus:ring-2 focus:ring-blue-500/20 active:scale-95'
                                             : 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 border-gray-200 dark:border-gray-700 cursor-not-allowed'
                                             }`}

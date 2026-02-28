@@ -74,6 +74,11 @@ function enrichError(error: unknown, operation: string, context?: Record<string,
     return err;
 }
 
+function isGeminiConfigurationError(error: unknown): boolean {
+    const message = error instanceof Error ? error.message : String(error ?? '');
+    return message.includes('Gemini API not configured') || message.includes('VITE_GEMINI_API_KEY');
+}
+
 // --- Analyze Item Service ---
 
 const clothingItemSchema = {
@@ -2220,6 +2225,11 @@ IMPORTANTE:
         return result;
 
     } catch (error) {
+        if (isGeminiConfigurationError(error)) {
+            console.warn('Brand recognition unavailable: Gemini API key is not configured.');
+            throw new Error('El análisis de marca no está disponible: falta configurar VITE_GEMINI_API_KEY en .env.local.');
+        }
+
         console.error("Error recognizing brand and price:", error);
         throw new Error("No se pudo analizar la marca y precio. Inténtalo con otra foto más clara.");
     }

@@ -17,7 +17,7 @@ import type {
 } from '../../types';
 import { Type } from '@google/genai';
 import { getToneInstructions } from './aiToneHelper';
-import * as geminiService from './geminiService';
+import * as aiService from './aiService';
 
 // =====================================================
 // REGLAS DE MORFOLOGÍA
@@ -436,7 +436,7 @@ export async function generateProfessionalOutfit(
   // ⛔ SECURITY: API key must be configured server-side via Edge Functions, not passed from client-side env
 
   // Usar el servicio con el system prompt profesional y schema extendido
-  const parsed = await geminiService.generateOutfitWithCustomPrompt(
+  const parsed = await aiService.generateOutfitWithCustomPrompt(
     occasion,
     filteredCloset,
     systemPrompt,

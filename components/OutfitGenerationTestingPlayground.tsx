@@ -19,7 +19,8 @@ import {
   type EnhancedFitResult,
   type MultiStageFitResult
 } from '../src/services/generateOutfit-enhanced';
-import { generateOutfit, getAIClient, retryWithBackoff } from '../src/services/geminiService';
+import { generateOutfit } from '../src/services/aiService';
+import { getFeatureFlag } from '../src/config/features';
 import { sampleData } from '../data/sampleData';
 
 interface TestResult {
@@ -38,6 +39,7 @@ export default function OutfitGenerationTestingPlayground({
   closet,
   onClose
 }: OutfitGenerationTestingPlaygroundProps) {
+  const useSupabaseAI = useMemo(() => getFeatureFlag('useSupabaseAI'), []);
   const [userPrompt, setUserPrompt] = useState('Primera cita casual en un café');
   const [testResults, setTestResults] = useState<TestResult[]>([]);
   const [isRunning, setIsRunning] = useState(false);
@@ -77,7 +79,11 @@ export default function OutfitGenerationTestingPlayground({
           result = await generateOutfit(userPrompt, activeCloset);
           break;
 
-        case 'v1':
+        case 'v1': {
+          if (useSupabaseAI) {
+            throw new Error('v1 Enhanced requiere modo legacy (useSupabaseAI=false).');
+          }
+          const { getAIClient, retryWithBackoff } = await import('../src/services/geminiService');
           result = await generateOutfitEnhancedV1(
             userPrompt,
             activeCloset,
@@ -85,8 +91,13 @@ export default function OutfitGenerationTestingPlayground({
             retryWithBackoff
           );
           break;
+        }
 
-        case 'v2':
+        case 'v2': {
+          if (useSupabaseAI) {
+            throw new Error('v2 Multi-Stage requiere modo legacy (useSupabaseAI=false).');
+          }
+          const { getAIClient, retryWithBackoff } = await import('../src/services/geminiService');
           result = await generateOutfitEnhancedV2(
             userPrompt,
             activeCloset,
@@ -94,8 +105,13 @@ export default function OutfitGenerationTestingPlayground({
             retryWithBackoff
           );
           break;
+        }
 
-        case 'v3':
+        case 'v3': {
+          if (useSupabaseAI) {
+            throw new Error('v3 Template requiere modo legacy (useSupabaseAI=false).');
+          }
+          const { getAIClient, retryWithBackoff } = await import('../src/services/geminiService');
           result = await generateOutfitEnhancedV3(
             userPrompt,
             activeCloset,
@@ -103,6 +119,7 @@ export default function OutfitGenerationTestingPlayground({
             retryWithBackoff
           );
           break;
+        }
       }
 
       const duration = performance.now() - startTime;
@@ -360,9 +377,9 @@ export default function OutfitGenerationTestingPlayground({
                     ...selectedVersions,
                     v1: e.target.checked
                   })}
-                  disabled={isRunning}
+                  disabled={isRunning || useSupabaseAI}
                 />
-                <span>v1: Enhanced Basic (~2.5K tokens)</span>
+                <span>v1: Enhanced Basic (~2.5K tokens){useSupabaseAI ? ' [Legacy only]' : ''}</span>
               </label>
               <label className="checkbox-label">
                 <input
@@ -372,9 +389,9 @@ export default function OutfitGenerationTestingPlayground({
                     ...selectedVersions,
                     v2: e.target.checked
                   })}
-                  disabled={isRunning}
+                  disabled={isRunning || useSupabaseAI}
                 />
-                <span>v2: Multi-Stage (~5K tokens) ⚠️ 2x cost</span>
+                <span>v2: Multi-Stage (~5K tokens) ⚠️ 2x cost{useSupabaseAI ? ' [Legacy only]' : ''}</span>
               </label>
               <label className="checkbox-label">
                 <input
@@ -384,11 +401,16 @@ export default function OutfitGenerationTestingPlayground({
                     ...selectedVersions,
                     v3: e.target.checked
                   })}
-                  disabled={isRunning}
+                  disabled={isRunning || useSupabaseAI}
                 />
-                <span>v3: Template System (~2.6K tokens)</span>
+                <span>v3: Template System (~2.6K tokens){useSupabaseAI ? ' [Legacy only]' : ''}</span>
               </label>
             </div>
+            {useSupabaseAI && (
+              <p className="info-text">
+                Modo Supabase AI activo: las variantes enhanced legacy (v1/v2/v3) están deshabilitadas.
+              </p>
+            )}
           </div>
 
           {/* Data Source Info */}

@@ -45,7 +45,7 @@ export default function BugReportButton() {
       {/* Floating Button */}
       <motion.button
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-6 right-6 bg-red-500 hover:bg-red-600 text-white rounded-full p-4 shadow-lg z-50 flex items-center gap-2"
+        className="fixed bottom-safe-6 right-safe-6 bg-red-500 hover:bg-red-600 text-white rounded-full p-4 shadow-lg z-50 flex items-center gap-2"
         whileHover={{ scale: 1.1 }}
         whileTap={{ scale: 0.9 }}
       >

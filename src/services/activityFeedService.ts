@@ -13,6 +13,13 @@ import type {
 
 import { supabase } from '../lib/supabase';
 
+export function normalizeActivityType(activityType: string): ActivityType {
+  if (activityType === 'borrow_requested') {
+    return 'borrow_request';
+  }
+  return activityType as ActivityType;
+}
+
 /**
  * Fetches the activity feed from Supabase
  */
@@ -48,7 +55,7 @@ export async function fetchActivityFeed(
       user_id: item.actor_id,
       user_name: item.actor_display_name || item.actor_username || 'Usuario',
       user_avatar: item.actor_avatar,
-      activity_type: item.activity_type as ActivityType,
+      activity_type: normalizeActivityType(item.activity_type),
       timestamp: item.created_at,
       caption: item.metadata?.caption,
       tags: item.metadata?.tags,
@@ -76,6 +83,7 @@ export async function fetchActivityFeed(
  * Returns the appropriate Material Symbols icon for an activity type
  */
 export function getActivityIcon(activityType: ActivityType): string {
+  const normalizedType = normalizeActivityType(activityType);
   const iconMap: Record<ActivityType, string> = {
     outfit_shared: 'checkroom',
     item_added: 'add_shopping_cart',
@@ -85,19 +93,20 @@ export function getActivityIcon(activityType: ActivityType): string {
     style_milestone: 'stars',
     lookbook_created: 'photo_library',
     rating_given: 'star',
-    borrow_requested: 'swap_horiz',
+    borrow_request: 'swap_horiz',
     borrow_approved: 'check_circle',
     borrow_declined: 'cancel',
     item_returned: 'assignment_return'
   };
 
-  return iconMap[activityType] || 'notifications';
+  return iconMap[normalizedType] || 'notifications';
 }
 
 /**
  * Generates a human-readable description for an activity
  */
 export function getActivityDescription(activity: ActivityFeedItem): string {
+  const normalizedType = normalizeActivityType(activity.activity_type);
   const descriptionMap: Record<ActivityType, string> = {
     outfit_shared: 'compartió un outfit',
     item_added: 'agregó una prenda nueva',
@@ -107,13 +116,13 @@ export function getActivityDescription(activity: ActivityFeedItem): string {
     style_milestone: 'alcanzó un hito de estilo',
     lookbook_created: 'creó un lookbook',
     rating_given: 'calificó un outfit',
-    borrow_requested: 'te pidió prestada una prenda',
+    borrow_request: 'te pidió prestada una prenda',
     borrow_approved: 'aprobó tu solicitud de préstamo',
     borrow_declined: 'rechazó tu solicitud de préstamo',
     item_returned: 'devolvió una prenda prestada'
   };
 
-  return descriptionMap[activity.activity_type] || 'realizó una actividad';
+  return descriptionMap[normalizedType] || 'realizó una actividad';
 }
 
 /**

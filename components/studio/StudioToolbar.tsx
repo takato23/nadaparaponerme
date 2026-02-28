@@ -184,210 +184,249 @@ export const StudioToolbar: React.FC<StudioToolbarProps> = ({
     const baseImageSource = useVirtualModel ? (virtualModelImage || '/images/demo/before.svg') : userBaseImage;
     const hasVirtualModel = Boolean(virtualModelImage || !userBaseImage);
 
-    // Summary line for collapsed advanced panel
-    const advancedSummary = [
-        'Nano 3.1',
-        generationView === 'front' ? 'Frente' : generationView === 'back' ? 'Espalda' : 'Perfil',
-        keepPose ? 'Pose' : null,
-        useFaceRefs && faceRefs.length > 0 ? 'Cara' : null,
-    ].filter(Boolean).join(' · ');
     const selectedPreset = GENERATION_PRESETS.find(preset => preset.id === presetId);
-    const selectedPresetLabel = selectedPreset?.label ?? 'Fondo';
+    const selectedPresetLabel = selectedPreset?.id === 'overlay' ? 'Fondo original' : (selectedPreset?.label ?? 'Fondo');
     const hasSelfieSource = Boolean(userBaseImage);
     const hasVirtualSource = Boolean(virtualModelImage);
     const canUseVirtualSource = hasVirtualSource || !hasSelfieSource;
-    const baseSourceLabel = useVirtualModel ? 'Espejo' : 'Original';
+    const baseSourceLabel = useVirtualModel ? 'Avatar IA' : 'Tu selfie';
 
     return (
         <motion.section variants={itemVariants} className="mb-1 flex flex-col gap-1">
 
-            {/* ROW 1: Selfie thumbnail + controls */}
-            <div className="flex items-start gap-2 sm:items-center">
-                {/* Selfie thumbnail */}
-                {baseImageSource ? (
-                    <div
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => setShowSelfiePreviewModal(true)}
-                        onKeyDown={(e) => {
-                            if (e.key === 'Enter' || e.key === ' ') {
-                                setShowSelfiePreviewModal(true);
-                            }
-                        }}
-                        className="relative h-16 w-16 shrink-0 rounded-full border-2 border-[color:var(--studio-ink)] p-[2px] shadow-md cursor-pointer group sm:h-14 sm:w-14"
-                    >
-                        <div className="w-full h-full relative rounded-full overflow-hidden">
-                            <img src={baseImageSource} alt="Selfie" className="w-full h-full object-cover" />
-                            <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
-                                <span className="material-symbols-outlined text-white text-sm">zoom_in</span>
+            <div className="rounded-2xl border border-white/70 bg-white/45 p-2.5 shadow-sm sm:p-3">
+                <div className="mb-2 flex items-center justify-between px-0.5">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--studio-ink-muted)]">
+                        Imagen Base
+                    </p>
+                    <p className="text-[10px] font-medium text-[color:var(--studio-ink-muted)]">
+                        Fuente activa
+                    </p>
+                </div>
+                <div className="grid grid-cols-[minmax(6.5rem,30vw)_minmax(0,1fr)] items-start gap-3 sm:grid-cols-[8.75rem_minmax(0,1fr)]">
+                    {/* Selfie preview */}
+                    {baseImageSource ? (
+                        <div
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => setShowSelfiePreviewModal(true)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                    setShowSelfiePreviewModal(true);
+                                }
+                            }}
+                            className="relative aspect-[3/4] w-full max-w-[8.75rem] shrink-0 rounded-2xl border border-[color:var(--studio-ink)]/25 bg-white p-1 shadow-md cursor-pointer group"
+                        >
+                            <div className="relative h-full w-full overflow-hidden rounded-xl">
+                                <img src={baseImageSource} alt="Selfie" className="h-full w-full object-cover" />
+                                <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 transition group-hover:opacity-100">
+                                    <span className="material-symbols-outlined text-white text-sm">zoom_in</span>
+                                </div>
                             </div>
+                            {!useVirtualModel && (
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setUserBaseImage(null);
+                                    }}
+                                    className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-red-500 text-white flex items-center justify-center text-[10px] shadow-md z-20 hover:bg-red-600 transition"
+                                >
+                                    ×
+                                </button>
+                            )}
                         </div>
-                        {!useVirtualModel && (
-                            <button
-                                onClick={(e) => { e.stopPropagation(); setUserBaseImage(null); }}
-                                className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center text-[10px] shadow-md z-20 hover:bg-red-600 transition"
-                            >
-                                ×
-                            </button>
-                        )}
-                    </div>
-                ) : (
-                    <button
-                        onClick={() => fileInputRef.current?.click()}
-                        className="h-16 w-16 shrink-0 rounded-full border border-white/60 bg-gradient-to-br from-white/80 to-[color:var(--studio-rose)]/10 flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-sm sm:h-14 sm:w-14"
-                    >
-                        {isUploadingBase ? (
-                            <Loader size="small" />
-                        ) : (
-                            <span className="material-symbols-outlined text-[24px] text-[color:var(--studio-ink)]">add_a_photo</span>
-                        )}
-                    </button>
-                )}
+                    ) : (
+                        <button
+                            onClick={() => fileInputRef.current?.click()}
+                            className="aspect-[3/4] w-full max-w-[8.75rem] shrink-0 rounded-2xl border border-white/60 bg-gradient-to-br from-white/85 to-[color:var(--studio-rose)]/20 flex items-center justify-center hover:scale-[1.02] active:scale-95 transition-all shadow-sm"
+                        >
+                            {isUploadingBase ? (
+                                <Loader size="small" />
+                            ) : (
+                                <span className="material-symbols-outlined text-[30px] text-[color:var(--studio-ink)]">add_a_photo</span>
+                            )}
+                        </button>
+                    )}
 
-                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-                    {/* Slot counter badge */}
-                    <div className={`shrink-0 px-2.5 py-1.5 rounded-lg text-xs font-bold border ${hasCoverage ? 'bg-green-50 border-green-200 text-green-700' : 'bg-amber-50 border-amber-200 text-amber-700'}`}>
-                        {slotCount}/{MAX_SLOTS_PER_GENERATION}
-                        {slotCount > 0 && (
-                            <button
-                                onClick={() => { if (navigator.vibrate) navigator.vibrate(5); onClearSelections(); }}
-                                className="ml-1 text-gray-400 hover:text-red-500"
-                                title="Limpiar"
-                            >
-                                ×
-                            </button>
-                        )}
-                    </div>
-
-                    {setUseVirtualModel && (
-                        <div ref={baseSourcePickerRef} className="relative">
-                            <button
-                                onClick={() => setShowBaseSourcePicker((prev) => !prev)}
-                                className="flex h-7 shrink-0 items-center gap-1 rounded-lg bg-white/70 border border-white/80 px-2.5 py-1.5 text-[10px] font-medium text-[color:var(--studio-ink-muted)]"
-                            >
-                                <span>{baseSourceLabel}</span>
-                                <span className="material-symbols-outlined text-[12px]">arrow_drop_down</span>
-                            </button>
-
-                            {showBaseSourcePicker && (
-                                <div className="absolute left-0 top-full z-50 mt-1 w-40 rounded-lg border border-white bg-white shadow-lg overflow-hidden">
+                    <div className="min-w-0 space-y-2">
+                        <div className="flex min-w-0 flex-wrap items-center gap-1.5 sm:gap-2">
+                            {/* Slot counter badge */}
+                            <div className={`shrink-0 px-2.5 py-1.5 rounded-lg text-xs font-bold border ${hasCoverage ? 'bg-green-50 border-green-200 text-green-700' : 'bg-amber-50 border-amber-200 text-amber-700'}`}>
+                                {slotCount}/{MAX_SLOTS_PER_GENERATION}
+                                {slotCount > 0 && (
                                     <button
                                         onClick={() => {
-                                            setShowBaseSourcePicker(false);
-                                            if (hasSelfieSource) {
-                                                setUseVirtualModel(false);
-                                            } else {
-                                                fileInputRef.current?.click();
-                                            }
+                                            if (navigator.vibrate) navigator.vibrate(5);
+                                            onClearSelections();
                                         }}
-                                        className={`w-full px-3 py-2 text-left text-xs font-semibold ${!useVirtualModel
-                                            ? 'bg-[color:var(--studio-ink)] text-white'
-                                            : 'text-[color:var(--studio-ink)] hover:bg-gray-100'
-                                            }`}
+                                        className="ml-1 text-gray-400 hover:text-red-500"
+                                        title="Limpiar"
                                     >
-                                        Original
+                                        ×
                                     </button>
-                                    {canUseVirtualSource ? (
-                                        <button
-                                            onClick={() => {
-                                                setShowBaseSourcePicker(false);
-                                                setUseVirtualModel(true);
-                                            }}
-                                            className={`w-full px-3 py-2 text-left text-xs font-semibold ${useVirtualModel
-                                                ? 'bg-[color:var(--studio-ink)] text-white'
-                                                : 'text-[color:var(--studio-ink)] hover:bg-gray-100'
-                                                }`}
-                                        >
-                                            Espejo
-                                        </button>
-                                    ) : (
-                                        <button
-                                            onClick={() => {
-                                                setShowBaseSourcePicker(false);
-                                                fileInputRef.current?.click();
-                                            }}
-                                            className="w-full px-3 py-2 text-left text-[color:var(--studio-ink)] text-xs font-semibold hover:bg-gray-100"
-                                        >
-                                            Cargar selfie
-                                        </button>
+                                )}
+                            </div>
+
+                            {setUseVirtualModel && (
+                                <div ref={baseSourcePickerRef} className="relative">
+                                    <button
+                                        onClick={() => setShowBaseSourcePicker((prev) => !prev)}
+                                        className="flex h-8 shrink-0 items-center gap-1 rounded-lg bg-white/80 border border-white px-2.5 text-[11px] font-medium text-[color:var(--studio-ink-muted)]"
+                                    >
+                                        <span className="material-symbols-outlined text-[12px]">switch_account</span>
+                                        <span>{baseSourceLabel}</span>
+                                        <span className="material-symbols-outlined text-[13px]">arrow_drop_down</span>
+                                    </button>
+
+                                    {showBaseSourcePicker && (
+                                        <div className="absolute left-0 top-full z-50 mt-1 w-40 rounded-lg border border-white bg-white shadow-lg overflow-hidden">
+                                            <button
+                                                onClick={() => {
+                                                    setShowBaseSourcePicker(false);
+                                                    if (hasSelfieSource) {
+                                                        setUseVirtualModel(false);
+                                                    } else {
+                                                        fileInputRef.current?.click();
+                                                    }
+                                                }}
+                                                className={`w-full px-3 py-2 text-left text-xs font-semibold ${!useVirtualModel
+                                                    ? 'bg-[color:var(--studio-ink)] text-white'
+                                                    : 'text-[color:var(--studio-ink)] hover:bg-gray-100'
+                                                    }`}
+                                            >
+                                                Tu selfie
+                                            </button>
+                                            {canUseVirtualSource ? (
+                                                <button
+                                                    onClick={() => {
+                                                        setShowBaseSourcePicker(false);
+                                                        setUseVirtualModel(true);
+                                                    }}
+                                                    className={`w-full px-3 py-2 text-left text-xs font-semibold ${useVirtualModel
+                                                        ? 'bg-[color:var(--studio-ink)] text-white'
+                                                        : 'text-[color:var(--studio-ink)] hover:bg-gray-100'
+                                                        }`}
+                                                >
+                                                    Avatar IA
+                                                </button>
+                                            ) : (
+                                                <button
+                                                    onClick={() => {
+                                                        setShowBaseSourcePicker(false);
+                                                        fileInputRef.current?.click();
+                                                    }}
+                                                    className="w-full px-3 py-2 text-left text-[color:var(--studio-ink)] text-xs font-semibold hover:bg-gray-100"
+                                                >
+                                                    Cargar selfie
+                                                </button>
+                                            )}
+                                        </div>
                                     )}
                                 </div>
                             )}
+
+                            <button
+                                onClick={() => setShowSelfieManager(!showSelfieManager)}
+                                className={`flex h-8 items-center gap-1.5 px-2.5 rounded-lg border text-[11px] font-medium transition ${showSelfieManager
+                                    ? 'bg-[color:var(--studio-ink)] text-white border-[color:var(--studio-ink)]'
+                                    : 'bg-white/80 border-white text-[color:var(--studio-ink-muted)] hover:bg-white'} `}
+                                title="Abrir fotos guardadas"
+                            >
+                                <span className="material-symbols-outlined text-[14px]">photo_library</span>
+                                <span>Mis fotos</span>
+                                {savedSelfies.length > 0 && (
+                                    <span className={`inline-flex min-w-[1rem] justify-center rounded-full px-1 text-[10px] ${showSelfieManager ? 'bg-white/25' : 'bg-black/10'}`}>
+                                        {savedSelfies.length}
+                                    </span>
+                                )}
+                            </button>
                         </div>
-                    )}
 
-                    {/* Saved selfies button (always visible) */}
-                    <button
-                        onClick={() => setShowSelfieManager(!showSelfieManager)}
-                        className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition ${showSelfieManager
-                            ? 'bg-[color:var(--studio-ink)] text-white border-[color:var(--studio-ink)]'
-                            : 'bg-white/70 border-white/80 text-[color:var(--studio-ink-muted)] hover:bg-white'} `}
-                    >
-                        <span className="material-symbols-outlined text-[14px]">photo_library</span>
-                        {savedSelfies.length > 0 ? savedSelfies.length : ''}
-                    </button>
-                </div>
-            </div>
-
-            {/* ROW 2: Preset & Advanced (Side-by-side) */}
-            <div className="flex items-center gap-1.5 w-full">
-                {/* Preset Dropdown */}
-                <div ref={presetPickerRef} className="relative flex-1">
-                    <button
-                        type="button"
-                        onClick={() => setShowPresetPicker(!showPresetPicker)}
-                        className="flex w-full items-center justify-between rounded-xl bg-white/60 border border-white/80 px-3 py-1.5 text-xs shadow-sm focus:outline-none transition hover:bg-white/80"
-                    >
-                        <span className="flex items-center gap-1.5 min-w-0">
-                            <span className="material-symbols-outlined text-[14px] text-[color:var(--studio-ink-muted)]">landscape</span>
-                            <span className="font-semibold text-[color:var(--studio-ink)] truncate">{selectedPresetLabel}</span>
-                        </span>
-                        <span className="text-[14px] text-[color:var(--studio-ink-muted)] material-symbols-outlined">
-                            unfold_more
-                        </span>
-                    </button>
-
-                    {showPresetPicker && (
-                        <div className="absolute left-0 right-0 top-full z-50 mt-1.5 rounded-2xl border border-white/60 bg-white/80 backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] overflow-hidden ring-1 ring-black/5">
-                            {GENERATION_PRESETS.map((preset) => (
+                        <div className="grid grid-cols-1 gap-1.5">
+                            {/* Preset Dropdown */}
+                            <div ref={presetPickerRef} className="relative min-w-0">
                                 <button
-                                    key={preset.id}
                                     type="button"
-                                    onClick={() => {
-                                        if (navigator.vibrate) navigator.vibrate(5);
-                                        setPresetId(preset.id);
-                                        setShowPresetPicker(false);
-                                    }}
-                                    className={`w-full text-left px-4 py-2.5 text-xs font-semibold transition-colors ${presetId === preset.id
-                                        ? 'bg-[color:var(--studio-ink)] text-white'
-                                        : 'text-[color:var(--studio-ink)] hover:bg-white/60'
-                                        }`}
+                                    onClick={() => setShowPresetPicker(!showPresetPicker)}
+                                    className="flex h-9 w-full items-center justify-between rounded-xl bg-white/70 border border-white/90 px-3 text-xs shadow-sm focus:outline-none transition hover:bg-white"
                                 >
-                                    {preset.label}
+                                    <span className="flex items-center gap-1.5 min-w-0">
+                                        <span className="material-symbols-outlined text-[14px] text-[color:var(--studio-ink-muted)]">landscape</span>
+                                        <span className="font-semibold text-[color:var(--studio-ink)] truncate">{selectedPresetLabel}</span>
+                                    </span>
+                                    <span className="text-[14px] text-[color:var(--studio-ink-muted)] material-symbols-outlined">
+                                        unfold_more
+                                    </span>
                                 </button>
-                            ))}
+
+                                {showPresetPicker && (
+                                    <div className="absolute left-0 right-0 top-full z-50 mt-1.5 rounded-2xl border border-white/60 bg-white/85 backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] overflow-hidden ring-1 ring-black/5">
+                                        {GENERATION_PRESETS.map((preset) => (
+                                            <button
+                                                key={preset.id}
+                                                type="button"
+                                                onClick={() => {
+                                                    if (navigator.vibrate) navigator.vibrate(5);
+                                                    setPresetId(preset.id);
+                                                    setShowPresetPicker(false);
+                                                }}
+                                                className={`w-full text-left px-4 py-2.5 text-xs font-semibold transition-colors ${presetId === preset.id
+                                                    ? 'bg-[color:var(--studio-ink)] text-white'
+                                                    : 'text-[color:var(--studio-ink)] hover:bg-white/60'
+                                                    }`}
+                                            >
+                                                {preset.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {presetId === 'custom' && (
+                                    <input
+                                        type="text"
+                                        value={customScene}
+                                        onChange={(e) => setCustomScene(e.target.value)}
+                                        placeholder="Describí la escena..."
+                                        className="absolute top-full left-0 z-40 mt-1 w-full px-3 py-1.5 rounded-xl bg-white border border-white shadow-lg text-xs placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[color:var(--studio-ink)]/20"
+                                    />
+                                )}
+                            </div>
+
+                            <div className="flex min-w-0 flex-col gap-1.5">
+                                {setGenerationFit && (
+                                    <div className="grid w-full grid-cols-3 gap-1 rounded-xl border border-white/90 bg-white/70 p-1 shadow-sm">
+                                        {([
+                                            { value: 'tight', label: 'Ajustado', title: 'Ajustado' },
+                                            { value: 'regular', label: 'Regular', title: 'Regular' },
+                                            { value: 'oversized', label: 'Holgado', title: 'Holgado' },
+                                        ] as const).map((fitOption) => (
+                                            <button
+                                                key={fitOption.value}
+                                                onClick={() => setGenerationFit(fitOption.value)}
+                                                className={`flex h-8 w-full items-center justify-center rounded-lg px-1.5 text-[10px] font-semibold transition ${generationFit === fitOption.value
+                                                    ? 'bg-[color:var(--studio-ink)] text-white shadow-sm'
+                                                    : 'text-[color:var(--studio-ink-muted)] hover:bg-white'
+                                                    }`}
+                                                title={fitOption.title}
+                                                aria-label={fitOption.title}
+                                            >
+                                                <span className="truncate">{fitOption.label}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+
+                                <button
+                                    onClick={() => setShowAdvanced(!showAdvanced)}
+                                    className="shrink-0 flex h-9 w-full sm:w-auto items-center justify-center gap-1 px-2.5 rounded-xl bg-white/70 border border-white/90 text-xs shadow-sm transition hover:bg-white whitespace-nowrap"
+                                >
+                                    <span className="material-symbols-outlined text-[14px] text-[color:var(--studio-ink-muted)]">tune</span>
+                                    <span className="font-medium text-[color:var(--studio-ink)]">Ajustes</span>
+                                </button>
+                            </div>
                         </div>
-                    )}
-
-                    {presetId === 'custom' && (
-                        <input
-                            type="text"
-                            value={customScene}
-                            onChange={(e) => setCustomScene(e.target.value)}
-                            placeholder="Describí la escena..."
-                            className="absolute top-full left-0 z-40 mt-1 w-full px-3 py-1.5 rounded-xl bg-white border border-white shadow-lg text-xs placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[color:var(--studio-ink)]/20"
-                        />
-                    )}
+                    </div>
                 </div>
-
-                {/* Advanced Settings Toggle */}
-                <button
-                    onClick={() => setShowAdvanced(!showAdvanced)}
-                    className="shrink-0 flex items-center justify-center gap-1 px-3 py-1.5 rounded-xl bg-white/60 border border-white/80 text-xs shadow-sm transition hover:bg-white/80"
-                >
-                    <span className="material-symbols-outlined text-[14px] text-[color:var(--studio-ink-muted)]">tune</span>
-                    <span className="font-medium text-[color:var(--studio-ink)]">Ajustes</span>
-                </button>
             </div>
 
             <AnimatePresence>

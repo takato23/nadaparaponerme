@@ -138,7 +138,7 @@ const PackingListView = ({ result, inventory, onBack }: PackingListViewProps) =>
         </div>
 
         {/* Bottom Action Bar (Mobile) */}
-        <div className="md:hidden fixed bottom-0 left-0 right-0 p-4 bg-white/90 dark:bg-background-dark/90 backdrop-blur-lg border-t border-gray-100 dark:border-gray-800 z-40 flex gap-3">
+        <div className="md:hidden fixed bottom-0 left-0 right-0 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] bg-white/90 dark:bg-background-dark/90 backdrop-blur-lg border-t border-gray-100 dark:border-gray-800 z-40 flex gap-3">
           <button
             onClick={handleSaveTrip}
             className="flex-1 bg-gray-100 dark:bg-gray-800 text-text-primary dark:text-white font-bold py-3 px-4 rounded-xl flex items-center justify-center gap-2"

@@ -16,7 +16,9 @@ const LOOK_CREATION_INTENT_PATTERNS = [
   /crea(?:me|r)?\s+.*(?:look|prenda)/i,
   /genera(?:me|r)?\s+.*(?:look|prenda)/i,
   /dise(?:ñ|n)a(?:me|r)?\s+.*(?:look|prenda)/i,
+  /(?:hacer|hace|haceme|crear|crea|creame|generar|genera|generame|dise(?:ñ|n)ar|dise(?:ñ|n)a|dise(?:ñ|n)ame).*(?:remera|camisa|blusa|camiseta|top|pantal[oó]n|jean|falda|pollera|short|zapatillas|zapas|zapatos|botas|calzado)/i,
   /(?:look|prenda)\s+(?:nuevo|nueva)/i,
+  /(?:remera|camisa|blusa|camiseta|top|pantal[oó]n|jean|falda|pollera|short|zapatillas|zapas|zapatos|botas|calzado)\s+(?:nuevo|nueva)/i,
   /(?:look|prenda).*(?:con ia|con ai)/i,
   /(?:con ia|con ai).*(?:look|prenda)/i,
 ];

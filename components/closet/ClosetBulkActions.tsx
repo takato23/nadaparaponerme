@@ -148,9 +148,9 @@ export default function ClosetBulkActions({
 
   // Position-based layout classes
   const positionClasses = {
-    top: 'fixed top-20 left-1/2 -translate-x-1/2 z-40',
-    bottom: 'fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 z-40',
-    floating: 'fixed bottom-24 md:bottom-10 right-6 z-40'
+    top: 'fixed top-safe-20 left-1/2 -translate-x-1/2 z-40',
+    bottom: 'fixed bottom-safe-20 md:bottom-6 left-1/2 -translate-x-1/2 z-40',
+    floating: 'fixed bottom-safe-24 md:bottom-10 right-safe-6 z-40'
   };
 
   const resolvedActions = extraActions.length ? [...extraActions, ...actions] : actions;

@@ -17,7 +17,9 @@ describe('lookCreationFlow', () => {
   it('detecta intención de crear look nuevo con IA', () => {
     expect(detectLookCreationIntent('creame un look nuevo')).toBe(true);
     expect(detectLookCreationIntent('quiero una prenda con IA para una cita')).toBe(true);
+    expect(detectLookCreationIntent('quiero hacer una remera nueva')).toBe(true);
     expect(detectLookCreationIntent('armame un outfit con mi armario')).toBe(false);
+    expect(detectLookCreationIntent('quiero combinar mi remera azul con un jean')).toBe(false);
   });
 
   it('detecta intención de editar una prenda existente', () => {

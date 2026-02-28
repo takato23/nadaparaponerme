@@ -866,7 +866,7 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
             variants={containerVariants}
             initial="hidden"
             animate="show"
-            className="w-full min-w-0-safe overflow-x-hidden contain-overflow-x px-3 pt-3 pb-[calc(5.5rem+env(safe-area-inset-bottom))] lg:pb-[calc(6rem+env(safe-area-inset-bottom))]"
+            className="mx-auto w-full max-w-5xl min-w-0-safe overflow-x-hidden contain-overflow-x px-3 pt-3 pb-[calc(5.5rem+env(safe-area-inset-bottom))] lg:pb-[calc(6rem+env(safe-area-inset-bottom))]"
           >
             {!activeBaseImage && (
               <motion.section variants={itemVariants} className="mb-1">

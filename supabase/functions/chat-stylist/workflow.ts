@@ -1,9 +1,13 @@
 export type GuidedLookStatus =
   | 'idle'
   | 'collecting'
+  | 'choosing_mode'
   | 'confirming'
   | 'generating'
   | 'generated'
+  | 'editing'
+  | 'tryon_confirming'
+  | 'tryon_generating'
   | 'cancelled'
   | 'error';
 
@@ -11,11 +15,14 @@ export type GuidedLookErrorCode =
   | 'INSUFFICIENT_CREDITS'
   | 'GENERATION_TIMEOUT'
   | 'GENERATION_FAILED'
+  | 'TRYON_FAILED'
   | 'SESSION_EXPIRED'
   | 'INVALID_CONFIRMATION';
 
 export type GuidedLookCategory = 'top' | 'bottom' | 'shoes';
 export type GuidedLookMissingField = 'occasion' | 'style' | 'category';
+export type GuidedLookStrategy = 'direct' | 'guided';
+export type GuidedLookPendingAction = 'generate' | 'edit' | 'tryon';
 
 export interface GuidedLookCollected {
   occasion?: string;
@@ -28,19 +35,32 @@ export interface GuidedLookWorkflowResponse {
   mode: 'guided_look_creation';
   sessionId: string;
   status: GuidedLookStatus;
+  strategy?: GuidedLookStrategy | null;
+  pendingAction?: GuidedLookPendingAction | null;
   missingFields: GuidedLookMissingField[];
   collected: GuidedLookCollected;
   estimatedCostCredits: number;
   requiresConfirmation: boolean;
   confirmationToken?: string | null;
   generatedItem?: any;
+  tryOnResultImageUrl?: string | null;
+  editInstruction?: string | null;
   autosaveEnabled: boolean;
   errorCode?: GuidedLookErrorCode | null;
 }
 
 export const GUIDED_LOOK_MODE = 'guided_look_creation' as const;
 export const GUIDED_LOOK_CREDIT_COST = 2;
+export const LOOK_EDIT_CREDIT_COST = 2;
+export const TRY_ON_CREDIT_COST = 4;
 export const GUIDED_LOOK_TTL_HOURS = 12;
+
+const BILLABLE_WORKFLOW_CHAT_ACTIONS = new Set([
+  'start',
+  'submit',
+  'select_strategy',
+  'request_edit',
+]);
 
 const CATEGORY_PATTERNS: Array<{ category: GuidedLookCategory; regex: RegExp }> = [
   { category: 'top', regex: /\b(top|remera|camisa|blusa|camiseta|shirt)\b/i },
@@ -112,6 +132,15 @@ export function parseLookCreationCategory(text: string): GuidedLookCategory | nu
   return match?.category || null;
 }
 
+export function parseLookStrategy(text: string): GuidedLookStrategy | null {
+  const normalized = String(text || '').trim().toLowerCase();
+  if (!normalized) return null;
+  if (/guiad/.test(normalized)) return 'guided';
+  if (/direct/.test(normalized)) return 'direct';
+  if (/r[aá]pido|sin vueltas|ya mismo|ahora/.test(normalized)) return 'direct';
+  return null;
+}
+
 export function parseLookCreationFields(text: string): Partial<GuidedLookCollected> {
   const normalized = String(text || '').trim();
   if (!normalized) return {};
@@ -143,6 +172,11 @@ export function getMissingLookFields(collected: GuidedLookCollected): GuidedLook
   return missing;
 }
 
+export function getDirectMissingLookFields(collected: GuidedLookCollected): GuidedLookMissingField[] {
+  if (!collected.category) return ['category'];
+  return [];
+}
+
 export function getLookFieldQuestion(field: GuidedLookMissingField): string {
   if (field === 'occasion') {
     return 'Perfecto. ¿Para qué ocasión lo querés? (ej: oficina, cita, fiesta, fin de semana)';
@@ -170,6 +204,16 @@ export function getCategoryLabel(category?: GuidedLookCategory): string {
   return '-';
 }
 
+export function buildModeChoiceMessage(): string {
+  return [
+    'Podemos hacerlo de dos formas:',
+    `1) Modo directo: genero rápido con lo mínimo (${GUIDED_LOOK_CREDIT_COST} créditos al confirmar).`,
+    `2) Modo guiado: te hago preguntas paso a paso (${GUIDED_LOOK_CREDIT_COST} créditos al confirmar).`,
+    '',
+    'Decime "directo" o "guiado".',
+  ].join('\n');
+}
+
 export function buildLookCreationPrompt(collected: GuidedLookCollected): string {
   const parts = [
     collected.requestText ? `Pedido base: ${collected.requestText}.` : '',
@@ -182,8 +226,19 @@ export function buildLookCreationPrompt(collected: GuidedLookCollected): string 
   return parts.join(' ');
 }
 
-export function buildLookCostMessage(collected: GuidedLookCollected): string {
-  return `Tengo todo para generar tu prenda:\n- Ocasión: ${collected.occasion}\n- Estilo: ${collected.style}\n- Categoría: ${getCategoryLabel(collected.category)}\n\nEsta generación cuesta ${GUIDED_LOOK_CREDIT_COST} créditos. ¿Confirmás que la genere ahora?`;
+export function buildLookCostMessage(
+  collected: GuidedLookCollected,
+  costCredits = GUIDED_LOOK_CREDIT_COST,
+): string {
+  return `Tengo todo para generar tu prenda:\n- Ocasión: ${collected.occasion || 'uso diario'}\n- Estilo: ${collected.style || 'casual'}\n- Categoría: ${getCategoryLabel(collected.category)}\n\nEsta generación cuesta ${costCredits} créditos. ¿Confirmás que la genere ahora?`;
+}
+
+export function buildEditCostMessage(instruction: string): string {
+  return `Perfecto. Puedo modificar la prenda aplicando "${instruction}". Esta edición cuesta ${LOOK_EDIT_CREDIT_COST} créditos. ¿Confirmás?`;
+}
+
+export function buildTryOnCostMessage(): string {
+  return `El probador virtual con selfie cuesta ${TRY_ON_CREDIT_COST} créditos. ¿Confirmás que lo genere ahora?`;
 }
 
 export function normalizeCollected(
@@ -204,29 +259,66 @@ export function normalizeCollected(
 export function buildGuidedWorkflowResponse(input: {
   sessionId: string;
   status: GuidedLookStatus;
+  strategy?: GuidedLookStrategy | null;
+  pendingAction?: GuidedLookPendingAction | null;
   collected: GuidedLookCollected;
   missingFields?: GuidedLookMissingField[];
+  pendingCostCredits?: number;
   requiresConfirmation?: boolean;
   confirmationToken?: string | null;
   generatedItem?: any;
+  tryOnResultImageUrl?: string | null;
+  editInstruction?: string | null;
   autosaveEnabled?: boolean;
   errorCode?: GuidedLookErrorCode | null;
 }): GuidedLookWorkflowResponse {
   const missingFields = input.missingFields || getMissingLookFields(input.collected);
-  const requiresConfirmation = input.requiresConfirmation ?? (input.status === 'confirming');
+  const requiresConfirmation = input.requiresConfirmation
+    ?? (input.status === 'confirming' || input.status === 'tryon_confirming');
   return {
     mode: GUIDED_LOOK_MODE,
     sessionId: input.sessionId,
     status: input.status,
+    strategy: input.strategy || null,
+    pendingAction: input.pendingAction || null,
     missingFields,
     collected: input.collected,
-    estimatedCostCredits: GUIDED_LOOK_CREDIT_COST,
+    estimatedCostCredits: input.pendingCostCredits || GUIDED_LOOK_CREDIT_COST,
     requiresConfirmation,
     confirmationToken: input.confirmationToken || null,
     generatedItem: input.generatedItem || null,
+    tryOnResultImageUrl: input.tryOnResultImageUrl || null,
+    editInstruction: input.editInstruction || null,
     autosaveEnabled: Boolean(input.autosaveEnabled),
     errorCode: input.errorCode || null,
   };
+}
+
+export function buildGarmentEditPrompt(params: {
+  collected: GuidedLookCollected;
+  instruction: string;
+  basePrompt?: string;
+}) {
+  const trimmedInstruction = String(params.instruction || '').trim();
+  const parts = [
+    params.basePrompt ? `Base de la prenda original: ${params.basePrompt}.` : '',
+    params.collected.occasion ? `Ocasión objetivo: ${params.collected.occasion}.` : '',
+    params.collected.style ? `Estilo objetivo: ${params.collected.style}.` : '',
+    params.collected.category ? `Categoría: ${params.collected.category}.` : '',
+    trimmedInstruction ? `Cambios solicitados: ${trimmedInstruction}.` : '',
+    'Reimaginar la misma prenda con esas modificaciones, foto de producto de moda, fondo limpio tipo e-commerce, alta calidad, sin modelo.',
+  ].filter(Boolean);
+  return parts.join(' ');
+}
+
+export function mapLookCategoryToTryOnSlot(category?: GuidedLookCategory): string {
+  if (category === 'bottom') return 'bottom';
+  if (category === 'shoes') return 'shoes';
+  return 'top_base';
+}
+
+export function shouldChargeChatCreditsForWorkflowAction(action: string): boolean {
+  return BILLABLE_WORKFLOW_CHAT_ACTIONS.has(String(action || '').trim());
 }
 
 export function buildGeneratedItemFromImage(params: {

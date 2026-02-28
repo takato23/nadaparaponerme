@@ -10,7 +10,7 @@ export const CookieConsentBanner: React.FC = () => {
   if (consent) return null;
 
   return (
-    <div className="fixed bottom-0 inset-x-0 z-[9998] p-4">
+    <div className="fixed bottom-0 inset-x-0 z-[9998] pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]">
       <div className="mx-auto max-w-4xl rounded-2xl border border-white/20 bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl shadow-2xl p-4 md:p-5">
         <div className="flex flex-col md:flex-row md:items-center gap-4">
           <div className="flex-1">

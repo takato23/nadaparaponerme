@@ -34,7 +34,7 @@ export function UndoToast({
                     initial={{ opacity: 0, y: 50, scale: 0.9 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: 20, scale: 0.9 }}
-                    className="fixed bottom-24 left-4 right-4 z-[9999] flex justify-center pointer-events-none"
+                    className="fixed bottom-safe-24 left-safe-4 right-safe-4 z-[9999] flex justify-center pointer-events-none"
                 >
                     <div className="
                         relative
@@ -128,7 +128,7 @@ export function UndoToastCompact({
                     initial={{ opacity: 0, y: 50 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: 20 }}
-                    className="fixed bottom-24 left-4 right-4 z-[9999] flex justify-center pointer-events-none"
+                    className="fixed bottom-safe-24 left-safe-4 right-safe-4 z-[9999] flex justify-center pointer-events-none"
                 >
                     <button
                         onClick={onUndo}

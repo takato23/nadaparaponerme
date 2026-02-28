@@ -8,8 +8,12 @@ describe('guidedLookWorkflowUi', () => {
   it('mapea estados del workflow backend al estado de UI', () => {
     expect(mapGuidedStatusToLookCreationStatus('idle')).toBe('idle');
     expect(mapGuidedStatusToLookCreationStatus('collecting')).toBe('collecting');
+    expect(mapGuidedStatusToLookCreationStatus('choosing_mode')).toBe('collecting');
     expect(mapGuidedStatusToLookCreationStatus('confirming')).toBe('confirming');
     expect(mapGuidedStatusToLookCreationStatus('generating')).toBe('generating');
+    expect(mapGuidedStatusToLookCreationStatus('editing')).toBe('result');
+    expect(mapGuidedStatusToLookCreationStatus('tryon_confirming')).toBe('result');
+    expect(mapGuidedStatusToLookCreationStatus('tryon_generating')).toBe('result');
     expect(mapGuidedStatusToLookCreationStatus('generated')).toBe('result');
     expect(mapGuidedStatusToLookCreationStatus('cancelled')).toBe('idle');
     expect(mapGuidedStatusToLookCreationStatus('error')).toBe('idle');
@@ -18,6 +22,7 @@ describe('guidedLookWorkflowUi', () => {
   it('mapea errores tipados a mensajes en español', () => {
     expect(getGuidedLookErrorMessage('INSUFFICIENT_CREDITS')).toContain('créditos');
     expect(getGuidedLookErrorMessage('GENERATION_TIMEOUT')).toContain('tardó');
+    expect(getGuidedLookErrorMessage('TRYON_FAILED')).toContain('probador virtual');
     expect(getGuidedLookErrorMessage('SESSION_EXPIRED')).toContain('expiró');
     expect(getGuidedLookErrorMessage('INVALID_CONFIRMATION')).toContain('confirmación');
     expect(getGuidedLookErrorMessage('GENERATION_FAILED')).toContain('No pude generar');

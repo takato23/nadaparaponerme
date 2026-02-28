@@ -33,7 +33,7 @@ const Toast: React.FC<ToastProps> = ({ message, type = 'info', duration = 3000, 
   }[type];
 
   return (
-    <div className="fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 z-[100] animate-slide-in-up">
+    <div className="fixed bottom-safe-20 md:bottom-6 left-1/2 -translate-x-1/2 z-[100] animate-slide-in-up">
       <div className={`${bgColor} text-white px-6 py-3 rounded-2xl shadow-soft-lg flex items-center gap-3 min-w-[280px] max-w-md transition-all duration-250 ease-smooth hover:shadow-xl`}>
         <span className="material-symbols-outlined text-2xl">{icon}</span>
         <p className="text-sm font-medium flex-1">{message}</p>

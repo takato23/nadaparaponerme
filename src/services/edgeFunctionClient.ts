@@ -8,8 +8,10 @@
 import { supabase } from '../lib/supabase';
 import { logger } from '../utils/logger';
 import type {
+  BrandRecognitionResult,
   ChatStylistResponse,
   ClothingItemMetadata,
+  DupeFinderResult,
   FitResult,
   GuidedLookWorkflowRequest,
   GuidedLookWorkflowResponse,
@@ -110,14 +112,24 @@ const toEdgeFunctionError = async (error: unknown, fallbackMessage: string): Pro
   });
 };
 
+const sanitizeInvokeHeaders = (headers: Record<string, string>): Record<string, string> => {
+  const sanitized: Record<string, string> = {};
+  Object.entries(headers || {}).forEach(([key, value]) => {
+    const normalized = key.toLowerCase();
+    // Keep auth header only; avoid custom global headers that can trigger unnecessary preflights.
+    if (normalized === 'authorization') {
+      sanitized.Authorization = value;
+    }
+  });
+  return sanitized;
+};
+
 // Helper to add timeout to Supabase invocations
 const invokeWithTimeout = async (functionName: string, options: any, timeoutMs = 90000) => {
   const start = Date.now();
   console.log(`[Edge Function] Invoking ${functionName}... (Timeout: ${timeoutMs}ms)`);
 
-  const mergedHeaders: Record<string, string> = {
-    ...(options?.headers || {}),
-  };
+  const mergedHeaders = sanitizeInvokeHeaders(options?.headers || {});
 
   if (!mergedHeaders.Authorization) {
     const { data: { session } } = await supabase.auth.getSession();
@@ -531,6 +543,76 @@ export async function generateShoppingRecommendationsViaEdge(
   } catch (error) {
     logger.error('Edge function shopping-assistant (recommendations) failed:', error);
     throw new Error('Failed to generate shopping recommendations via Edge Function');
+  }
+}
+
+/**
+ * Recognize brand and estimate price using Edge Function
+ */
+export async function recognizeBrandAndPriceViaEdge(
+  imageDataUrl: string
+): Promise<BrandRecognitionResult> {
+  try {
+    const { data, error } = await invokeWithTimeout('shopping-assistant', {
+      body: {
+        action: 'recognize-brand',
+        imageDataUrl,
+      },
+    });
+
+    if (error) throw error;
+
+    return data as BrandRecognitionResult;
+  } catch (error) {
+    logger.error('Edge function shopping-assistant (recognize-brand) failed:', error);
+    throw await toEdgeFunctionError(error, 'No se pudo analizar la marca y precio');
+  }
+}
+
+/**
+ * Find dupe alternatives using Edge Function
+ */
+export async function findDupeAlternativesViaEdge(
+  item: any,
+  brandInfo?: BrandRecognitionResult
+): Promise<DupeFinderResult> {
+  try {
+    const { data, error } = await invokeWithTimeout('shopping-assistant', {
+      body: {
+        action: 'find-dupes',
+        item,
+        brandInfo,
+      },
+    }, 120000);
+
+    if (error) throw error;
+
+    return data as DupeFinderResult;
+  } catch (error) {
+    logger.error('Edge function shopping-assistant (find-dupes) failed:', error);
+    throw await toEdgeFunctionError(error, 'No se pudieron buscar alternativas');
+  }
+}
+
+export async function findSimilarByImageViaEdge(
+  searchImage: string,
+  inventory: Array<{ id: string; metadata?: any }>
+): Promise<string[]> {
+  try {
+    const { data, error } = await invokeWithTimeout('shopping-assistant', {
+      body: {
+        action: 'find-similar-by-image',
+        searchImage,
+        inventory,
+      },
+    });
+
+    if (error) throw error;
+
+    return Array.isArray(data) ? data : [];
+  } catch (error) {
+    logger.error('Edge function shopping-assistant (find-similar-by-image) failed:', error);
+    throw await toEdgeFunctionError(error, 'No se pudo completar la búsqueda visual');
   }
 }
 

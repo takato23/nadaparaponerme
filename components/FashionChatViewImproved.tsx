@@ -163,8 +163,8 @@ const FashionChatViewImproved = ({
         userFacingError = '⏳ Demasiadas solicitudes. Por favor esperá unos segundos e intentá de nuevo.';
       } else if (errorMsg.includes('503') || errorMsg.includes('overloaded') || errorMsg.includes('UNAVAILABLE')) {
         userFacingError = '🔧 El servicio de IA está temporalmente sobrecargado. Intentá de nuevo en unos segundos.';
-      } else if (errorMsg.includes('API not configured') || errorMsg.includes('VITE_GEMINI_API_KEY')) {
-        userFacingError = '⚠️ El servicio de chat no está configurado correctamente. Contactá al administrador.';
+      } else if (errorMsg.includes('API not configured') || errorMsg.includes('not available') || errorMsg.includes('desactivado')) {
+        userFacingError = '⚠️ Este servicio de chat no está disponible en la configuración actual.';
       } else if (errorMsg.includes('network') || errorMsg.includes('fetch') || errorMsg.includes('Failed to fetch')) {
         userFacingError = '📶 Error de conexión. Verificá tu conexión a internet e intentá de nuevo.';
       }

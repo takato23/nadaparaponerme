@@ -345,6 +345,14 @@ export async function generateVirtualTryOn(
   return await geminiServiceFull.generateVirtualTryOn(userImage, topImage, bottomImage, shoesImage);
 }
 
+export async function generateOutfitWithCustomPrompt(...args: Parameters<typeof geminiServiceFull.generateOutfitWithCustomPrompt>) {
+  if (V1_SAFE_MODE) {
+    throw new Error('Stylist profesional no disponible en Safe Mode.');
+  }
+  if (getFeatureFlag('useSupabaseAI')) return assertFeatureAvailable('Stylist profesional');
+  return await geminiServiceFull.generateOutfitWithCustomPrompt(...args);
+}
+
 // Virtual Try-On with Slot System
 export async function generateVirtualTryOnWithSlots(
   userImage: string,
@@ -431,6 +439,19 @@ export async function findSimilarItems(...args: Parameters<typeof geminiService.
   if (V1_SAFE_MODE) return [];
   if (getFeatureFlag('useSupabaseAI')) return assertFeatureAvailable('Búsqueda de similares');
   return await geminiService.findSimilarItems(...args);
+}
+
+export async function findSimilarByImage(...args: Parameters<typeof geminiServiceFull.findSimilarByImage>) {
+  if (V1_SAFE_MODE) return [];
+  if (getFeatureFlag('useSupabaseAI')) {
+    const [searchImage, inventory] = args;
+    const simplifiedInventory = inventory.map(item => ({
+      id: item.id,
+      metadata: item.metadata,
+    }));
+    return await edgeClient.findSimilarByImageViaEdge(searchImage, simplifiedInventory);
+  }
+  return await geminiServiceFull.findSimilarByImage(...args);
 }
 
 export async function searchShoppingSuggestions(...args: Parameters<typeof geminiServiceFull.searchShoppingSuggestions>) {
@@ -699,7 +720,9 @@ export async function analyzeClosetGaps(...args: Parameters<typeof geminiService
 // Brand Recognition
 export async function recognizeBrandAndPrice(...args: Parameters<typeof geminiServiceFull.recognizeBrandAndPrice>) {
   if (V1_SAFE_MODE) return null;
-  // if (getFeatureFlag('useSupabaseAI')) return assertFeatureAvailable('Reconocimiento de marca');
+  if (getFeatureFlag('useSupabaseAI')) {
+    return await edgeClient.recognizeBrandAndPriceViaEdge(args[0]);
+  }
   return await geminiServiceFull.recognizeBrandAndPrice(...args);
 }
 
@@ -732,7 +755,9 @@ export async function findDupeAlternatives(...args: Parameters<typeof geminiServ
       analyzed_at: new Date().toISOString(),
     };
   }
-  // if (getFeatureFlag('useSupabaseAI')) return assertFeatureAvailable('Dupe finder');
+  if (getFeatureFlag('useSupabaseAI')) {
+    return await edgeClient.findDupeAlternativesViaEdge(args[0], args[1]);
+  }
   return await geminiServiceFull.findDupeAlternatives(...args);
 }
 

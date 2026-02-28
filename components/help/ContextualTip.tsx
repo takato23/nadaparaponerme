@@ -100,8 +100,8 @@ const ContextualTip: React.FC<ContextualTipProps> = ({
   const styles = variantStyles[variant];
 
   const positionClasses = {
-    top: 'fixed top-4 left-4 right-4 z-50 max-w-lg mx-auto',
-    bottom: 'fixed bottom-20 left-4 right-4 z-50 max-w-lg mx-auto',
+    top: 'fixed top-safe-4 left-safe-4 right-safe-4 z-50 max-w-lg mx-auto',
+    bottom: 'fixed bottom-safe-20 left-safe-4 right-safe-4 z-50 max-w-lg mx-auto',
     inline: ''
   };
 

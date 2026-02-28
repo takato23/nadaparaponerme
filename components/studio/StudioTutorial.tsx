@@ -141,7 +141,7 @@ export const StudioTutorial: React.FC<StudioTutorialProps> = ({ onComplete, onSk
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 10 }}
-                className="fixed bottom-24 left-4 right-4 z-50"
+                className="fixed bottom-safe-24 left-safe-4 right-safe-4 z-50"
             >
                 <div className="bg-white rounded-2xl p-5 shadow-2xl max-w-md mx-auto">
                     {/* Progress dots */}

@@ -9,20 +9,30 @@ import { buildClosetHash, buildPromptHash, sanitizeIdempotencyKey } from '../_sh
 import { buildCategoryMap, trimClosetContext, validateOutfitSuggestion } from './guards.ts';
 import {
   GUIDED_LOOK_CREDIT_COST,
+  LOOK_EDIT_CREDIT_COST,
+  TRY_ON_CREDIT_COST,
   GUIDED_LOOK_MODE,
   GUIDED_LOOK_TTL_HOURS,
   buildGeneratedItemFromImage,
+  buildGarmentEditPrompt,
   buildGuidedWorkflowResponse,
+  buildModeChoiceMessage,
+  buildEditCostMessage,
   buildLookCostMessage,
   buildLookCreationPrompt,
   buildOutfitSuggestionWithGeneratedItem,
+  buildTryOnCostMessage,
+  getDirectMissingLookFields,
   getLookFieldQuestion,
   getMissingLookFields,
   isAffirmative,
   isNegative,
+  mapLookCategoryToTryOnSlot,
   normalizeCollected,
   parseLookCreationCategory,
   parseLookCreationFields,
+  parseLookStrategy,
+  shouldChargeChatCreditsForWorkflowAction,
 } from './workflow.ts';
 import {
   assertAllowedOrigin,
@@ -117,11 +127,34 @@ ${HARDENING_RULES}`;
 const GUIDED_LOOK_ACTIONS = new Set([
   'start',
   'submit',
+  'select_strategy',
   'confirm_generate',
+  'confirm_edit',
+  'confirm_tryon',
   'cancel',
   'toggle_autosave',
   'request_outfit',
+  'request_edit',
+  'upload_selfie',
+  'request_tryon',
+  'save_generated_item',
 ]);
+
+type GuidedStrategy = 'direct' | 'guided';
+type GuidedPendingAction = 'generate' | 'edit' | 'tryon';
+
+type WorkflowSessionCollected = {
+  occasion?: string;
+  style?: string;
+  category?: 'top' | 'bottom' | 'shoes';
+  requestText?: string;
+  strategy?: GuidedStrategy | null;
+  pendingAction?: GuidedPendingAction | null;
+  pendingCostCredits?: number | null;
+  editInstruction?: string | null;
+  tryOnSelfieImageDataUrl?: string | null;
+  tryOnResultImageUrl?: string | null;
+};
 
 async function resolveInventory(
   supabase: any,
@@ -161,9 +194,13 @@ function sanitizeGuidedStatus(status: string | null | undefined) {
   if (
     value === 'idle' ||
     value === 'collecting' ||
+    value === 'choosing_mode' ||
     value === 'confirming' ||
     value === 'generating' ||
     value === 'generated' ||
+    value === 'editing' ||
+    value === 'tryon_confirming' ||
+    value === 'tryon_generating' ||
     value === 'cancelled' ||
     value === 'error'
   ) {
@@ -172,24 +209,87 @@ function sanitizeGuidedStatus(status: string | null | undefined) {
   return 'idle';
 }
 
+function sanitizeStrategy(strategy: unknown): GuidedStrategy | null {
+  if (strategy === 'direct' || strategy === 'guided') return strategy;
+  return null;
+}
+
+function sanitizePendingAction(action: unknown): GuidedPendingAction | null {
+  if (action === 'generate' || action === 'edit' || action === 'tryon') return action;
+  return null;
+}
+
+function normalizeWorkflowCollected(collected: unknown): WorkflowSessionCollected {
+  if (!collected || typeof collected !== 'object') return {};
+  const raw = collected as Record<string, unknown>;
+
+  const category = raw.category === 'top' || raw.category === 'bottom' || raw.category === 'shoes'
+    ? raw.category
+    : undefined;
+  const pendingCostRaw = Number(raw.pendingCostCredits);
+  const pendingCostCredits = Number.isFinite(pendingCostRaw) ? pendingCostRaw : null;
+
+  return {
+    occasion: typeof raw.occasion === 'string' ? raw.occasion : undefined,
+    style: typeof raw.style === 'string' ? raw.style : undefined,
+    category,
+    requestText: typeof raw.requestText === 'string' ? raw.requestText : undefined,
+    strategy: sanitizeStrategy(raw.strategy),
+    pendingAction: sanitizePendingAction(raw.pendingAction),
+    pendingCostCredits,
+    editInstruction: typeof raw.editInstruction === 'string' ? raw.editInstruction : null,
+    tryOnSelfieImageDataUrl: typeof raw.tryOnSelfieImageDataUrl === 'string' ? raw.tryOnSelfieImageDataUrl : null,
+    tryOnResultImageUrl: typeof raw.tryOnResultImageUrl === 'string' ? raw.tryOnResultImageUrl : null,
+  };
+}
+
+function pickCollectedFields(collected: WorkflowSessionCollected) {
+  return {
+    occasion: collected.occasion,
+    style: collected.style,
+    category: collected.category,
+    requestText: collected.requestText,
+  };
+}
+
+function getMissingFieldsByStrategy(
+  strategy: GuidedStrategy | null,
+  collected: WorkflowSessionCollected,
+) {
+  if (strategy === 'direct') return getDirectMissingLookFields(pickCollectedFields(collected));
+  if (strategy === 'guided') return getMissingLookFields(pickCollectedFields(collected));
+  return [];
+}
+
 function buildGuidedPayload(params: {
   sessionId: string;
   status: string;
-  collected: any;
+  strategy?: GuidedStrategy | null;
+  pendingAction?: GuidedPendingAction | null;
+  collected: WorkflowSessionCollected;
   confirmationToken?: string | null;
   generatedItem?: any;
+  tryOnResultImageUrl?: string | null;
+  editInstruction?: string | null;
+  pendingCostCredits?: number | null;
   autosaveEnabled?: boolean;
   errorCode?: any;
 }) {
-  const collected = params.collected && typeof params.collected === 'object' ? params.collected : {};
-  const missingFields = getMissingLookFields(collected);
+  const collected = pickCollectedFields(params.collected || {});
+  const strategy = sanitizeStrategy(params.strategy);
+  const missingFields = getMissingFieldsByStrategy(strategy, params.collected || {});
   return buildGuidedWorkflowResponse({
     sessionId: params.sessionId,
     status: sanitizeGuidedStatus(params.status),
+    strategy,
+    pendingAction: sanitizePendingAction(params.pendingAction),
     collected,
     missingFields,
+    pendingCostCredits: params.pendingCostCredits || undefined,
     confirmationToken: params.confirmationToken || null,
     generatedItem: params.generatedItem || null,
+    tryOnResultImageUrl: params.tryOnResultImageUrl || null,
+    editInstruction: params.editInstruction || null,
     autosaveEnabled: Boolean(params.autosaveEnabled),
     errorCode: params.errorCode || null,
   });
@@ -231,17 +331,66 @@ async function saveGeneratedItemToCloset(
   return { saved: true };
 }
 
+function isInsufficientCreditsMessage(raw: unknown): boolean {
+  const normalized = String(raw || '').toLowerCase();
+  return normalized.includes('crédito')
+    || normalized.includes('credito')
+    || normalized.includes('insufficient')
+    || normalized.includes('402')
+    || normalized.includes('upgrade')
+    || normalized.includes('saldo');
+}
+
+async function ensureWorkflowChatCreditAllowance(params: {
+  supabase: any;
+  userId: string;
+}) {
+  const budgetGuard = await enforceAIBudgetGuard(params.supabase, params.userId, 'chat-stylist', CREDIT_COST);
+  if (!budgetGuard.allowed) {
+    return {
+      ok: false as const,
+      errorCode: 'INSUFFICIENT_CREDITS' as const,
+      errorMessage: getBudgetLimitMessage(budgetGuard.reason),
+    };
+  }
+
+  const { data: canUseCredits, error: canUseCreditsError } = await params.supabase.rpc('can_user_generate_outfit', {
+    p_user_id: params.userId,
+    p_amount: CREDIT_COST,
+  });
+
+  if (canUseCreditsError) {
+    console.error('workflow chat credit check failed:', canUseCreditsError);
+    return {
+      ok: false as const,
+      errorCode: 'GENERATION_FAILED' as const,
+      errorMessage: 'No pude validar tus créditos ahora. Intentá nuevamente.',
+    };
+  }
+
+  if (!canUseCredits) {
+    return {
+      ok: false as const,
+      errorCode: 'INSUFFICIENT_CREDITS' as const,
+      errorMessage: 'No tenés créditos suficientes para seguir usando el chat. Hacé upgrade o sumá créditos para continuar.',
+    };
+  }
+
+  return { ok: true as const };
+}
+
 async function runGuidedLookGeneration(params: {
   supabase: any;
   authHeader: string;
-  collected: any;
+  prompt: string;
+  stylePreferences?: Record<string, unknown>;
   timeoutMs?: number;
 }) {
-  const prompt = buildLookCreationPrompt(params.collected || {});
+  const prompt = params.prompt;
   const timeoutMs = params.timeoutMs || 95000;
   const maxAttempts = 3;
   const baseBackoffMs = 700;
-  let lastErrorCode: 'GENERATION_FAILED' | 'GENERATION_TIMEOUT' = 'GENERATION_FAILED';
+  let lastErrorCode: 'GENERATION_FAILED' | 'GENERATION_TIMEOUT' | 'INSUFFICIENT_CREDITS' = 'GENERATION_FAILED';
   let lastErrorMessage = 'No se pudo generar la prenda';
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
@@ -254,11 +403,7 @@ async function runGuidedLookGeneration(params: {
         },
         body: {
           prompt,
-          style_preferences: {
-            category: params.collected?.category || 'top',
-            occasion: params.collected?.occasion || undefined,
-            style: params.collected?.style || undefined,
-          },
+          style_preferences: params.stylePreferences || undefined,
         },
         signal: controller.signal,
       });
@@ -266,7 +411,10 @@ async function runGuidedLookGeneration(params: {
       if (error) {
         const message = error.message || 'No se pudo generar la prenda';
         const lower = message.toLowerCase();
-        if (lower.includes('timed out') || lower.includes('timeout')) {
+        if (isInsufficientCreditsMessage(message)) {
+          lastErrorCode = 'INSUFFICIENT_CREDITS';
+          lastErrorMessage = 'No tenés créditos suficientes para generar esta prenda. Hacé upgrade o sumá créditos.';
+        } else if (lower.includes('timed out') || lower.includes('timeout')) {
           lastErrorCode = 'GENERATION_TIMEOUT';
           lastErrorMessage = 'La generación tardó demasiado. Intentá nuevamente.';
         } else {
@@ -277,11 +425,11 @@ async function runGuidedLookGeneration(params: {
         const payload = data as any;
         if (!payload?.success || !payload?.image_url) {
           const payloadError = payload?.error || 'No se pudo generar la prenda';
-          if (payload?.error_code === 'DAILY_BUDGET_LIMIT') {
+          if (payload?.error_code === 'DAILY_BUDGET_LIMIT' || isInsufficientCreditsMessage(payloadError)) {
             return {
               ok: false,
               errorCode: 'INSUFFICIENT_CREDITS',
-              errorMessage: payloadError,
+              errorMessage: 'No tenés créditos suficientes para generar esta prenda. Hacé upgrade o sumá créditos.',
             };
           }
           lastErrorCode = 'GENERATION_FAILED';
@@ -298,7 +446,10 @@ async function runGuidedLookGeneration(params: {
     } catch (error: any) {
       const msg = String(error?.message || error || '');
       const lower = msg.toLowerCase();
-      if (lower.includes('aborted') || lower.includes('aborterror') || lower.includes('timed out') || lower.includes('timeout')) {
+      if (isInsufficientCreditsMessage(msg)) {
+        lastErrorCode = 'INSUFFICIENT_CREDITS';
+        lastErrorMessage = 'No tenés créditos suficientes para generar esta prenda. Hacé upgrade o sumá créditos.';
+      } else if (lower.includes('aborted') || lower.includes('aborterror') || lower.includes('timed out') || lower.includes('timeout')) {
         lastErrorCode = 'GENERATION_TIMEOUT';
         lastErrorMessage = 'La generación tardó demasiado. Intentá nuevamente.';
       } else {
@@ -320,6 +471,100 @@ async function runGuidedLookGeneration(params: {
     errorCode: lastErrorCode,
     errorMessage: lastErrorMessage,
   };
+}
+
+async function runGuidedTryOnGeneration(params: {
+  supabase: any;
+  authHeader: string;
+  selfieImageDataUrl: string;
+  generatedItem: any;
+  timeoutMs?: number;
+}) {
+  const timeoutMs = params.timeoutMs || 120000;
+  const category = params.generatedItem?.metadata?.category;
+  const slot = mapLookCategoryToTryOnSlot(category);
+  const slots = {
+    [slot]: params.generatedItem?.imageDataUrl,
+  };
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const { data, error } = await params.supabase.functions.invoke('virtual-try-on', {
+      headers: {
+        Authorization: params.authHeader,
+      },
+      body: {
+        userImage: params.selfieImageDataUrl,
+        slots,
+        preset: 'mirror_selfie',
+        quality: 'pro',
+        keepPose: true,
+        useFaceReferences: true,
+        view: 'front',
+        slotFits: {
+          [slot]: 'regular',
+        },
+      },
+      signal: controller.signal,
+    });
+
+    if (error) {
+      const message = error.message || 'No se pudo generar el probador virtual';
+      if (isInsufficientCreditsMessage(message)) {
+        return {
+          ok: false,
+          errorCode: 'INSUFFICIENT_CREDITS',
+          errorMessage: 'No tenés créditos suficientes para usar el probador virtual. Hacé upgrade o sumá créditos para continuar.',
+          creditsUsed: 0,
+        };
+      }
+      return {
+        ok: false,
+        errorCode: 'TRYON_FAILED',
+        errorMessage: message,
+        creditsUsed: 0,
+      };
+    }
+
+    const payload = data as any;
+    const resultImage = payload?.resultImage || payload?.image;
+    if (!resultImage) {
+      return {
+        ok: false,
+        errorCode: 'TRYON_FAILED',
+        errorMessage: 'No se pudo generar el probador virtual con esa selfie.',
+        creditsUsed: 0,
+      };
+    }
+
+    return {
+      ok: true,
+      resultImageUrl: resultImage,
+      creditsUsed: Number(payload?.credits_used || TRY_ON_CREDIT_COST),
+      model: String(payload?.model || 'gemini-3.1-flash-image-preview'),
+    };
+  } catch (error: any) {
+    const message = String(error?.message || error || 'No se pudo generar el probador virtual');
+    if (isInsufficientCreditsMessage(message)) {
+      return {
+        ok: false,
+        errorCode: 'INSUFFICIENT_CREDITS',
+        errorMessage: 'No tenés créditos suficientes para usar el probador virtual. Hacé upgrade o sumá créditos para continuar.',
+        creditsUsed: 0,
+      };
+    }
+    return {
+      ok: false,
+      errorCode: 'TRYON_FAILED',
+      errorMessage: message.includes('timeout')
+        ? 'El probador virtual tardó más de lo esperado. Intentá de nuevo en unos segundos.'
+        : 'No se pudo generar el probador virtual con esa selfie.',
+      creditsUsed: 0,
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 serve(async (req) => {
@@ -452,16 +697,23 @@ serve(async (req) => {
         && new Date(existingSession.expires_at).getTime() <= Date.now();
 
       let status = sanitizeGuidedStatus(existingSession?.status);
-      let collected = existingSession?.collected_json && typeof existingSession.collected_json === 'object'
-        ? existingSession.collected_json
-        : {};
+      let collected = normalizeWorkflowCollected(existingSession?.collected_json);
       let confirmationToken = existingSession?.pending_confirmation_token || null;
       let generatedItem = existingSession?.generated_item_json || null;
       let autosaveEnabled = Boolean(existingSession?.autosave_enabled);
+      let strategy = sanitizeStrategy(collected.strategy);
+      let pendingAction = sanitizePendingAction(collected.pendingAction);
+      let pendingCostCredits = Number.isFinite(Number(collected.pendingCostCredits))
+        ? Number(collected.pendingCostCredits)
+        : null;
+      let editInstruction = collected.editInstruction || null;
+      let tryOnSelfieImageDataUrl = collected.tryOnSelfieImageDataUrl || null;
+      let tryOnResultImageUrl = collected.tryOnResultImageUrl || null;
       let content = '';
       let creditsUsed = 0;
       let outfitSuggestion: any = null;
       let errorCode: any = null;
+      let shouldIncrementWorkflowChatCredits = false;
 
       const payloadMessage = typeof payload?.message === 'string' ? payload.message.trim() : '';
       const rawMessage = typeof body?.message === 'string' ? body.message.trim() : '';
@@ -471,13 +723,23 @@ serve(async (req) => {
         autosaveEnabled = Boolean(payload.autosaveEnabled);
       }
 
-      if (requestedAction === 'toggle_autosave') {
-        autosaveEnabled = Boolean(payload?.autosaveEnabled);
-      }
-
       if (requestedAction === 'start') {
         status = 'idle';
-        collected = {};
+        const parsedFields = parseLookCreationFields(incomingMessage);
+        const explicitCategory = parseLookCreationCategory(String(payload?.category || ''));
+        const incomingPatch = {
+          ...parsedFields,
+          occasion: typeof payload?.occasion === 'string' ? payload.occasion : parsedFields.occasion,
+          style: typeof payload?.style === 'string' ? payload.style : parsedFields.style,
+          category: explicitCategory || parsedFields.category,
+        };
+        strategy = sanitizeStrategy(payload?.strategy) || parseLookStrategy(incomingMessage);
+        collected = normalizeCollected({}, incomingPatch, incomingMessage);
+        pendingAction = null;
+        pendingCostCredits = null;
+        editInstruction = null;
+        tryOnSelfieImageDataUrl = null;
+        tryOnResultImageUrl = null;
         confirmationToken = null;
         generatedItem = null;
       }
@@ -487,41 +749,210 @@ serve(async (req) => {
         errorCode = 'SESSION_EXPIRED';
         content = 'La sesión para crear look expiró. Empecemos de nuevo.';
         collected = {};
+        strategy = null;
+        pendingAction = null;
+        pendingCostCredits = null;
+        editInstruction = null;
+        tryOnSelfieImageDataUrl = null;
+        tryOnResultImageUrl = null;
         confirmationToken = null;
         generatedItem = null;
       } else if (requestedAction === 'cancel') {
-        status = 'cancelled';
-        content = 'Listo, cancelé la creación del look. Cuando quieras lo retomamos.';
+        const wasTryOn = pendingAction === 'tryon' || status === 'tryon_confirming' || status === 'tryon_generating';
+        const wasEdit = pendingAction === 'edit' || status === 'editing';
+        pendingAction = null;
+        pendingCostCredits = null;
         confirmationToken = null;
+        if (generatedItem) {
+          status = 'generated';
+          content = wasTryOn
+            ? 'Perfecto, cancelé el probador virtual.'
+            : (wasEdit ? 'Perfecto, cancelé la edición de la prenda.' : 'Perfecto, cancelé la operación.');
+        } else {
+          status = 'cancelled';
+          content = 'Listo, cancelé la creación del look. Cuando quieras lo retomamos.';
+        }
       } else {
         let effectiveAction = requestedAction;
-        if (requestedAction === 'submit' && status === 'confirming') {
-          if (isAffirmative(incomingMessage)) effectiveAction = 'confirm_generate';
-          if (isNegative(incomingMessage)) effectiveAction = 'cancel';
+        if (requestedAction === 'submit') {
+          if (status === 'confirming') {
+            if (isAffirmative(incomingMessage)) {
+              effectiveAction = pendingAction === 'edit' ? 'confirm_edit' : 'confirm_generate';
+            } else if (isNegative(incomingMessage)) {
+              effectiveAction = 'cancel';
+            }
+          } else if (status === 'tryon_confirming') {
+            if (isAffirmative(incomingMessage)) effectiveAction = 'confirm_tryon';
+            if (isNegative(incomingMessage)) effectiveAction = 'cancel';
+          } else if (status === 'choosing_mode') {
+            effectiveAction = 'select_strategy';
+          }
         }
 
-        if (effectiveAction === 'toggle_autosave') {
-          const missingFields = getMissingLookFields(collected);
-          if (status === 'generated' && generatedItem) {
+        if (effectiveAction === 'confirm_generate' && pendingAction === 'edit') {
+          effectiveAction = 'confirm_edit';
+        }
+        if (effectiveAction === 'confirm_generate' && pendingAction === 'tryon') {
+          effectiveAction = 'confirm_tryon';
+        }
+
+        const shouldChargeWorkflowChatMessage = incomingMessage.length > 0
+          && shouldChargeChatCreditsForWorkflowAction(effectiveAction);
+        if (shouldChargeWorkflowChatMessage) {
+          const creditAllowance = await ensureWorkflowChatCreditAllowance({
+            supabase,
+            userId: user.id,
+          });
+          if (!creditAllowance.ok) {
+            status = 'error';
+            errorCode = creditAllowance.errorCode;
+            content = creditAllowance.errorMessage;
+          } else {
+            shouldIncrementWorkflowChatCredits = true;
+          }
+        }
+
+        if (status === 'error') {
+          // Credit/budget guard already resolved the response copy.
+        } else if (effectiveAction === 'toggle_autosave') {
+          autosaveEnabled = Boolean(payload?.autosaveEnabled);
+          if (status === 'generated' && generatedItem && !pendingAction) {
             content = autosaveEnabled
               ? 'Auto-guardado activado. La próxima prenda generada se guardará automáticamente.'
               : 'Auto-guardado desactivado. Vas a poder guardar manualmente cada prenda.';
-          } else if (missingFields.length > 0) {
-            status = 'collecting';
-            content = getLookFieldQuestion(missingFields[0]);
+          } else if (!strategy) {
+            status = 'choosing_mode';
+            content = buildModeChoiceMessage();
           } else {
-            status = 'confirming';
-            content = buildLookCostMessage(collected);
+            const missingFields = getMissingFieldsByStrategy(strategy, collected);
+            if (missingFields.length > 0) {
+              status = 'collecting';
+              if (strategy === 'direct' && missingFields[0] === 'category') {
+                content = 'Para ir en modo directo necesito solo la categoría: top, bottom o calzado.';
+              } else {
+                content = getLookFieldQuestion(missingFields[0]);
+              }
+            } else {
+              pendingAction = 'generate';
+              pendingCostCredits = GUIDED_LOOK_CREDIT_COST;
+              status = 'confirming';
+              confirmationToken = crypto.randomUUID();
+              content = buildLookCostMessage(pickCollectedFields(collected), GUIDED_LOOK_CREDIT_COST);
+            }
           }
-        } else if (effectiveAction === 'cancel') {
-          status = 'cancelled';
-          content = 'Perfecto, cancelé la generación.';
-          confirmationToken = null;
-        } else if (effectiveAction === 'confirm_generate') {
-          if (status === 'generating') {
-            content = 'Estoy generando tu prenda en este momento. Esperá unos segundos.';
-          } else if (status === 'generated' && generatedItem) {
-            content = 'Ya tenía tu prenda generada en esta sesión.';
+        } else if (effectiveAction === 'select_strategy') {
+          const selectedStrategy = sanitizeStrategy(payload?.strategy) || parseLookStrategy(incomingMessage);
+          if (!selectedStrategy) {
+            status = 'choosing_mode';
+            content = buildModeChoiceMessage();
+          } else {
+            strategy = selectedStrategy;
+            const parsedFields = parseLookCreationFields(incomingMessage);
+            const explicitCategory = parseLookCreationCategory(String(payload?.category || ''));
+            const incomingPatch = {
+              ...parsedFields,
+              occasion: typeof payload?.occasion === 'string' ? payload.occasion : parsedFields.occasion,
+              style: typeof payload?.style === 'string' ? payload.style : parsedFields.style,
+              category: explicitCategory || parsedFields.category,
+            };
+            collected = normalizeCollected(collected, incomingPatch, incomingMessage);
+            const missingFields = getMissingFieldsByStrategy(strategy, collected);
+            if (missingFields.length > 0) {
+              status = 'collecting';
+              if (strategy === 'direct' && missingFields[0] === 'category') {
+                content = 'Perfecto, modo directo. Decime solo la categoría (top, bottom o calzado) y genero.';
+              } else {
+                content = getLookFieldQuestion(missingFields[0]);
+              }
+            } else {
+              pendingAction = 'generate';
+              pendingCostCredits = GUIDED_LOOK_CREDIT_COST;
+              status = 'confirming';
+              confirmationToken = crypto.randomUUID();
+              content = buildLookCostMessage(pickCollectedFields(collected), GUIDED_LOOK_CREDIT_COST);
+            }
+          }
+        } else if (effectiveAction === 'upload_selfie') {
+          const selfie = typeof payload?.selfieImageDataUrl === 'string' ? payload.selfieImageDataUrl.trim() : '';
+          if (!selfie || !selfie.startsWith('data:image')) {
+            content = 'No pude leer la selfie. Subila de nuevo en formato imagen.';
+          } else {
+            tryOnSelfieImageDataUrl = selfie;
+            content = `Selfie cargada. El probador virtual cuesta ${TRY_ON_CREDIT_COST} créditos cuando confirmes.`;
+            if (!status || status === 'idle') {
+              status = generatedItem ? 'generated' : 'collecting';
+            }
+          }
+        } else if (effectiveAction === 'request_edit') {
+          if (!generatedItem) {
+            status = 'error';
+            errorCode = 'SESSION_EXPIRED';
+            content = 'No encontré una prenda generada para editar. Primero generemos una.';
+          } else {
+            const requestedInstruction = typeof payload?.editInstruction === 'string'
+              ? payload.editInstruction.trim()
+              : incomingMessage.trim();
+            if (!requestedInstruction) {
+              status = 'generated';
+              content = 'Contame qué querés cambiar en la prenda. Ejemplo: "cambiar a negro mate".';
+            } else {
+              editInstruction = requestedInstruction;
+              pendingAction = 'edit';
+              pendingCostCredits = LOOK_EDIT_CREDIT_COST;
+              status = 'confirming';
+              confirmationToken = crypto.randomUUID();
+              content = buildEditCostMessage(requestedInstruction);
+            }
+          }
+        } else if (effectiveAction === 'request_tryon') {
+          if (!generatedItem) {
+            status = 'error';
+            errorCode = 'SESSION_EXPIRED';
+            content = 'No encontré una prenda generada para el probador. Primero generemos una.';
+          } else {
+            const incomingSelfie = typeof payload?.selfieImageDataUrl === 'string'
+              ? payload.selfieImageDataUrl.trim()
+              : '';
+            if (incomingSelfie.startsWith('data:image')) {
+              tryOnSelfieImageDataUrl = incomingSelfie;
+            }
+            if (!tryOnSelfieImageDataUrl) {
+              status = 'generated';
+              content = 'Primero subí una selfie para usar el probador virtual.';
+            } else {
+              pendingAction = 'tryon';
+              pendingCostCredits = TRY_ON_CREDIT_COST;
+              status = 'tryon_confirming';
+              confirmationToken = crypto.randomUUID();
+              content = buildTryOnCostMessage();
+            }
+          }
+        } else if (effectiveAction === 'save_generated_item') {
+          if (!generatedItem) {
+            status = 'error';
+            errorCode = 'SESSION_EXPIRED';
+            content = 'No encontré una prenda generada para guardar.';
+          } else if (generatedItem.saved_to_closet) {
+            status = 'generated';
+            content = 'Esta prenda ya estaba guardada en tu armario.';
+          } else {
+            const saveResult = await saveGeneratedItemToCloset(supabase, user.id, generatedItem);
+            if (saveResult.saved) {
+              generatedItem.saved_to_closet = true;
+              status = 'generated';
+              content = 'Listo, guardé la prenda en tu armario.';
+            } else {
+              status = 'generated';
+              content = 'No pude guardarla automáticamente, pero podés reintentar en unos segundos.';
+            }
+          }
+        } else if (
+          effectiveAction === 'confirm_generate'
+          || effectiveAction === 'confirm_edit'
+          || effectiveAction === 'confirm_tryon'
+        ) {
+          if (status === 'generating' || status === 'editing' || status === 'tryon_generating') {
+            content = 'Sigo procesando tu pedido. Esperá unos segundos.';
           } else {
             const incomingToken = typeof payload?.confirmationToken === 'string' ? payload.confirmationToken : null;
             if (!confirmationToken || !incomingToken || incomingToken !== confirmationToken) {
@@ -529,82 +960,100 @@ serve(async (req) => {
               errorCode = 'INVALID_CONFIRMATION';
               content = 'No pude validar la confirmación. Volvé a confirmar el costo para continuar.';
             } else {
-              const missingFields = getMissingLookFields(collected);
-              if (missingFields.length > 0) {
-                status = 'collecting';
-                content = getLookFieldQuestion(missingFields[0]);
-              } else {
-                const { data: claimed, error: claimError } = await supabase
-                  .from('guided_look_sessions')
-                  .update({
-                    status: 'generating',
-                    expires_at: expiresAt,
-                    updated_at: nowIso,
-                  })
-                  .eq('user_id', user.id)
-                  .eq('session_id', sessionId)
-                  .eq('status', 'confirming')
-                  .eq('pending_confirmation_token', incomingToken)
-                  .select('status')
-                  .maybeSingle();
+              const actionToConfirm: GuidedPendingAction = effectiveAction === 'confirm_edit'
+                ? 'edit'
+                : effectiveAction === 'confirm_tryon'
+                  ? 'tryon'
+                  : (pendingAction || 'generate');
 
-                if (claimError) {
-                  console.error('guided look generation claim failed:', claimError);
-                }
-
-                if (!claimed) {
-                  const { data: latestSession } = await supabase
-                    .from('guided_look_sessions')
-                    .select('status, generated_item_json')
-                    .eq('user_id', user.id)
-                    .eq('session_id', sessionId)
-                    .maybeSingle();
-
-                  const latestStatus = sanitizeGuidedStatus(latestSession?.status);
-                  if (latestStatus === 'generated' && latestSession?.generated_item_json) {
-                    status = 'generated';
-                    generatedItem = latestSession.generated_item_json;
-                    confirmationToken = null;
-                    content = 'Ya tenía tu prenda generada en esta sesión.';
-                  } else if (latestStatus === 'generating') {
-                    status = 'generating';
-                    content = 'Estoy generando tu prenda en este momento. Esperá unos segundos.';
-                  } else {
+              if (actionToConfirm === 'tryon') {
+                if (!generatedItem || !tryOnSelfieImageDataUrl) {
+                  status = 'error';
+                  errorCode = 'SESSION_EXPIRED';
+                  content = 'Necesito una selfie y una prenda generada para ejecutar el probador virtual.';
+                } else {
+                  status = 'tryon_generating';
+                  const tryOn = await runGuidedTryOnGeneration({
+                    supabase,
+                    authHeader,
+                    selfieImageDataUrl: tryOnSelfieImageDataUrl,
+                    generatedItem,
+                  });
+                  if (!tryOn.ok) {
                     status = 'error';
-                    errorCode = 'INVALID_CONFIRMATION';
-                    content = 'No pude validar la confirmación. Volvé a confirmar el costo para continuar.';
+                    errorCode = tryOn.errorCode;
+                    content = tryOn.errorMessage;
+                  } else {
+                    creditsUsed = tryOn.creditsUsed || TRY_ON_CREDIT_COST;
+                    pendingAction = null;
+                    pendingCostCredits = null;
+                    confirmationToken = null;
+                    tryOnResultImageUrl = tryOn.resultImageUrl;
+                    status = 'generated';
+                    content = '¡Listo! Generé tu prueba virtual con la selfie.';
+                  }
+                }
+              } else {
+                const missingFields = actionToConfirm === 'generate'
+                  ? getMissingFieldsByStrategy(strategy, collected)
+                  : [];
+                if (actionToConfirm === 'generate' && missingFields.length > 0) {
+                  status = 'collecting';
+                  if (strategy === 'direct' && missingFields[0] === 'category') {
+                    content = 'Para ir en modo directo necesito solo la categoría: top, bottom o calzado.';
+                  } else {
+                    content = getLookFieldQuestion(missingFields[0]);
                   }
                 } else {
-                  status = 'generating';
+                  status = actionToConfirm === 'edit' ? 'editing' : 'generating';
                   const { data: canUseCredits, error: canUseCreditsError } = await supabase.rpc('can_user_generate_outfit', {
                     p_user_id: user.id,
                     p_amount: GUIDED_LOOK_CREDIT_COST,
                   });
                   if (canUseCreditsError) {
-                    console.error('guided look credit check failed:', canUseCreditsError);
+                    console.error('guided workflow credit check failed:', canUseCreditsError);
                     status = 'error';
                     errorCode = 'GENERATION_FAILED';
                     content = 'No pude validar tus créditos ahora. Intentá nuevamente.';
                   } else if (!canUseCredits) {
                     status = 'error';
                     errorCode = 'INSUFFICIENT_CREDITS';
-                    content = 'No tenés créditos suficientes para generar esta prenda. Hacé upgrade o sumá créditos.';
+                    content = actionToConfirm === 'edit'
+                      ? 'No tenés créditos suficientes para editar esta prenda. Hacé upgrade o sumá créditos.'
+                      : 'No tenés créditos suficientes para generar esta prenda. Hacé upgrade o sumá créditos.';
                   } else {
+                    const stylePreferences = {
+                      category: collected.category || 'top',
+                      occasion: collected.occasion || undefined,
+                      style: collected.style || undefined,
+                    };
+                    const generationPrompt = actionToConfirm === 'edit'
+                      ? buildGarmentEditPrompt({
+                        collected: pickCollectedFields(collected),
+                        instruction: editInstruction || '',
+                        basePrompt: generatedItem?.aiGenerationPrompt
+                          || generatedItem?.metadata?.description
+                          || buildLookCreationPrompt(pickCollectedFields(collected)),
+                      })
+                      : buildLookCreationPrompt(pickCollectedFields(collected));
+
                     const generation = await runGuidedLookGeneration({
                       supabase,
                       authHeader,
-                      collected,
+                      prompt: generationPrompt,
+                      stylePreferences,
                     });
+
                     if (!generation.ok) {
                       status = 'error';
                       errorCode = generation.errorCode;
-                      content = generation.errorMessage;
+                      content = generation.errorMessage || 'No pude generar la prenda.';
                     } else {
                       const generated = buildGeneratedItemFromImage({
                         sessionId,
                         imageUrl: generation.imageUrl,
-                        prompt: generation.prompt || buildLookCreationPrompt(collected),
-                        collected,
+                        prompt: generation.prompt || generationPrompt,
+                        collected: pickCollectedFields(collected),
                       });
 
                       let autosaveError: string | null = null;
@@ -622,25 +1071,32 @@ serve(async (req) => {
                         p_amount: GUIDED_LOOK_CREDIT_COST,
                       });
                       if (incrementError) {
-                        console.error('guided look credit increment failed:', incrementError);
+                        console.error('guided workflow credit increment failed:', incrementError);
                       }
                       creditsUsed = incremented ? GUIDED_LOOK_CREDIT_COST : 0;
 
                       generatedItem = generated;
                       status = 'generated';
+                      pendingAction = null;
+                      pendingCostCredits = null;
                       confirmationToken = null;
+                      tryOnResultImageUrl = null;
 
-                      const inventory = await resolveInventory(supabase, user.id, body);
-                      const enrichedInventory = [generated, ...inventory.filter((item: any) => item.id !== generated.id)];
-                      const suggestion = buildOutfitSuggestionWithGeneratedItem(generated, enrichedInventory);
-                      if (suggestion) {
-                        outfitSuggestion = suggestion;
+                      if (actionToConfirm === 'generate') {
+                        const inventory = await resolveInventory(supabase, user.id, body);
+                        const enrichedInventory = [generated, ...inventory.filter((item: any) => item.id !== generated.id)];
+                        const suggestion = buildOutfitSuggestionWithGeneratedItem(generated, enrichedInventory);
+                        if (suggestion) {
+                          outfitSuggestion = suggestion;
+                        }
+                        content = `¡Listo! Generé tu prenda (${collected?.category || 'top'}) para ${collected?.occasion || 'tu ocasión'} con estilo ${collected?.style || 'casual'}.`;
+                        if (outfitSuggestion) {
+                          content += ' También te propuse un outfit completo usando esta prenda.';
+                        }
+                      } else {
+                        content = `¡Listo! Apliqué la edición "${editInstruction || 'solicitada'}" a tu prenda.`;
                       }
 
-                      content = `¡Listo! Generé tu prenda (${collected?.category || 'top'}) para ${collected?.occasion || 'tu ocasión'} con estilo ${collected?.style || 'casual'}.`;
-                      if (outfitSuggestion) {
-                        content += ' También te propuse un outfit completo usando esta prenda.';
-                      }
                       if (autosaveError) {
                         content += ' No pude guardarla automáticamente, pero podés guardarla manualmente con un click.';
                       }
@@ -668,6 +1124,16 @@ serve(async (req) => {
             status = 'generated';
           }
         } else {
+          if (!strategy) {
+            const parsedStrategy = sanitizeStrategy(payload?.strategy) || parseLookStrategy(incomingMessage);
+            if (!parsedStrategy) {
+              status = 'choosing_mode';
+              content = buildModeChoiceMessage();
+            } else {
+              strategy = parsedStrategy;
+            }
+          }
+
           const parsedFields = parseLookCreationFields(incomingMessage);
           const explicitCategory = parseLookCreationCategory(String(payload?.category || ''));
           const incomingPatch = {
@@ -678,24 +1144,64 @@ serve(async (req) => {
           };
           collected = normalizeCollected(collected, incomingPatch, incomingMessage);
 
-          const missingFields = getMissingLookFields(collected);
-          if (missingFields.length > 0) {
-            status = 'collecting';
-            content = getLookFieldQuestion(missingFields[0]);
+          if (!strategy) {
+            status = 'choosing_mode';
+            content = buildModeChoiceMessage();
           } else {
-            status = 'confirming';
-            confirmationToken = crypto.randomUUID();
-            content = buildLookCostMessage(collected);
+            const missingFields = getMissingFieldsByStrategy(strategy, collected);
+            if (missingFields.length > 0) {
+              status = 'collecting';
+              if (strategy === 'direct' && missingFields[0] === 'category') {
+                content = 'Para ir en modo directo necesito solo la categoría: top, bottom o calzado.';
+              } else {
+                content = getLookFieldQuestion(missingFields[0]);
+              }
+            } else {
+              pendingAction = 'generate';
+              pendingCostCredits = GUIDED_LOOK_CREDIT_COST;
+              status = 'confirming';
+              confirmationToken = crypto.randomUUID();
+              content = buildLookCostMessage(pickCollectedFields(collected), GUIDED_LOOK_CREDIT_COST);
+            }
           }
+        }
+      }
+
+      if (!content && status === 'choosing_mode') {
+        content = buildModeChoiceMessage();
+      }
+
+      collected.strategy = strategy;
+      collected.pendingAction = pendingAction;
+      collected.pendingCostCredits = pendingCostCredits;
+      collected.editInstruction = editInstruction;
+      collected.tryOnSelfieImageDataUrl = tryOnSelfieImageDataUrl;
+      collected.tryOnResultImageUrl = tryOnResultImageUrl;
+
+      if (shouldIncrementWorkflowChatCredits && status !== 'error') {
+        const { data: incremented, error: incrementError } = await supabase.rpc('increment_ai_generation_usage', {
+          p_user_id: user.id,
+          p_amount: CREDIT_COST,
+        });
+        if (incrementError) {
+          console.error('workflow chat credit increment failed:', incrementError);
+        } else if (incremented) {
+          creditsUsed += CREDIT_COST;
+          await recordAIBudgetSuccess(supabase, user.id, 'chat-stylist', CREDIT_COST);
         }
       }
 
       const workflowPayload = buildGuidedPayload({
         sessionId,
         status,
+        strategy,
+        pendingAction,
         collected,
+        pendingCostCredits,
         confirmationToken,
         generatedItem,
+        tryOnResultImageUrl,
+        editInstruction,
         autosaveEnabled,
         errorCode,
       });
@@ -704,7 +1210,7 @@ serve(async (req) => {
         user_id: user.id,
         session_id: sessionId,
         status: workflowPayload.status,
-        collected_json: workflowPayload.collected,
+        collected_json: collected,
         pending_confirmation_token: workflowPayload.confirmationToken,
         generated_item_json: workflowPayload.generatedItem,
         autosave_enabled: workflowPayload.autosaveEnabled,

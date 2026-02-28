@@ -4,8 +4,12 @@ export type LookCreationUiStatus = 'idle' | 'collecting' | 'confirming' | 'gener
 
 export function mapGuidedStatusToLookCreationStatus(status: GuidedLookStatus): LookCreationUiStatus {
   if (status === 'collecting') return 'collecting';
+  if (status === 'choosing_mode') return 'collecting';
   if (status === 'confirming') return 'confirming';
   if (status === 'generating') return 'generating';
+  if (status === 'editing') return 'result';
+  if (status === 'tryon_confirming') return 'result';
+  if (status === 'tryon_generating') return 'result';
   if (status === 'generated') return 'result';
   return 'idle';
 }
@@ -17,6 +21,9 @@ export function getGuidedLookErrorMessage(errorCode?: GuidedLookErrorCode | null
   }
   if (errorCode === 'GENERATION_TIMEOUT') {
     return '⏱️ La generación tardó más de lo esperado. Probá de nuevo en unos segundos.';
+  }
+  if (errorCode === 'TRYON_FAILED') {
+    return 'No pude generar el probador virtual con esa selfie. Probá de nuevo o subí otra foto.';
   }
   if (errorCode === 'SESSION_EXPIRED') {
     return 'La sesión para crear el look expiró. Empezá una nueva y lo hacemos de nuevo.';

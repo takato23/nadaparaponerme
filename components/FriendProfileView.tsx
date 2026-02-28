@@ -4,7 +4,11 @@ import ClosetGrid from './ClosetGrid';
 import ActivityCard from './ActivityCard';
 import { fetchActivityFeed } from '../src/services/activityFeedService';
 import { isCloseFriend, toggleCloseFriend } from '../src/services/socialService';
-import { requestToBorrowMultiple, getItemBorrowStatus } from '../src/services/borrowedItemsService';
+import {
+    requestToBorrowMultiple,
+    getBorrowStatusesForItems,
+    type ItemBorrowStatus
+} from '../src/services/borrowedItemsService';
 import { Card } from './ui/Card';
 import Loader from './Loader';
 
@@ -33,11 +37,16 @@ const FriendProfileView = ({ friend, onClose, onAddBorrowedItems, onTryBorrowedI
     const [showBorrowModal, setShowBorrowModal] = useState(false);
     const [borrowNotes, setBorrowNotes] = useState('');
     const [borrowLoading, setBorrowLoading] = useState(false);
-    const [requestedItemIds, setRequestedItemIds] = useState<Set<string>>(new Set());
+    const [itemBorrowStatuses, setItemBorrowStatuses] = useState<Record<string, ItemBorrowStatus>>({});
+    const [loadingBorrowStatuses, setLoadingBorrowStatuses] = useState(false);
 
     useEffect(() => {
         checkCloseFriendStatus();
         loadFriendActivity();
+    }, [friend.id]);
+
+    useEffect(() => {
+        loadBorrowStatuses();
     }, [friend.id]);
 
     const checkCloseFriendStatus = async () => {
@@ -57,6 +66,47 @@ const FriendProfileView = ({ friend, onClose, onAddBorrowedItems, onTryBorrowedI
         }
     };
 
+    const loadBorrowStatuses = async () => {
+        setLoadingBorrowStatuses(true);
+        try {
+            const statuses = await getBorrowStatusesForItems(friend.closet.map(item => item.id));
+            setItemBorrowStatuses(statuses);
+        } catch (error) {
+            console.error('Failed to load borrow statuses:', error);
+            setItemBorrowStatuses({});
+        } finally {
+            setLoadingBorrowStatuses(false);
+        }
+    };
+
+    const getBorrowStatusMeta = (status: ItemBorrowStatus['status']) => {
+        if (!status) {
+            return {
+                label: 'Disponible',
+                badgeClass: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+            };
+        }
+
+        if (status === 'requested') {
+            return {
+                label: 'Solicitada',
+                badgeClass: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+            };
+        }
+
+        if (status === 'approved') {
+            return {
+                label: 'Aprobada',
+                badgeClass: 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300'
+            };
+        }
+
+        return {
+            label: 'Prestada',
+            badgeClass: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300'
+        };
+    };
+
     const handleToggleCloseFriend = async () => {
         const newStatus = !isCloseFriendStatus;
         setIsCloseFriendStatus(newStatus);
@@ -71,9 +121,15 @@ const FriendProfileView = ({ friend, onClose, onAddBorrowedItems, onTryBorrowedI
     const handleRequestBorrow = async () => {
         if (selectedItems.length === 0) return;
 
+        const requestableItems = selectedItems.filter(item => !itemBorrowStatuses[item.id]?.status);
+        if (requestableItems.length === 0) {
+            onShowToast?.('Estas prendas ya tienen una solicitud o préstamo activo', 'error');
+            return;
+        }
+
         setBorrowLoading(true);
         try {
-            const items = selectedItems.map(item => ({
+            const items = requestableItems.map(item => ({
                 itemId: item.id,
                 ownerId: friend.id
             }));
@@ -81,16 +137,12 @@ const FriendProfileView = ({ friend, onClose, onAddBorrowedItems, onTryBorrowedI
             const result = await requestToBorrowMultiple(items, borrowNotes || undefined);
 
             if (result.success) {
-                // Mark items as requested
-                const newRequestedIds = new Set(requestedItemIds);
-                selectedItems.forEach(item => newRequestedIds.add(item.id));
-                setRequestedItemIds(newRequestedIds);
-
                 // Clear selection
                 setSelectedItems([]);
                 setSelectedIds(new Set());
                 setBorrowNotes('');
                 setShowBorrowModal(false);
+                await loadBorrowStatuses();
 
                 onShowToast?.(`${result.count} ${result.count === 1 ? 'prenda solicitada' : 'prendas solicitadas'}`, 'success');
             } else {
@@ -141,6 +193,14 @@ const FriendProfileView = ({ friend, onClose, onAddBorrowedItems, onTryBorrowedI
     ];
 
     const hasSelection = selectedItems.length > 0;
+    const selectedItemsWithStatus = selectedItems.map(item => ({
+        item,
+        status: itemBorrowStatuses[item.id]?.status || null
+    }));
+    const requestableSelectionCount = selectedItemsWithStatus.filter(entry => !entry.status).length;
+    const blockedSelectionCount = selectedItemsWithStatus.length - requestableSelectionCount;
+    const hasRequestableSelection = requestableSelectionCount > 0;
+    const borrowActionDisabled = !hasSelection || !hasRequestableSelection || loadingBorrowStatuses;
 
     return (
         // Desktop: Right sidebar | Mobile: Bottom sheet
@@ -319,7 +379,9 @@ const FriendProfileView = ({ friend, onClose, onAddBorrowedItems, onTryBorrowedI
                                             </div>
                                             <div>
                                                 <p className="font-semibold text-xs">{selectedItems.length} {selectedItems.length === 1 ? 'prenda' : 'prendas'}</p>
-                                                <p className="text-xs text-text-secondary">Seleccionadas</p>
+                                                <p className="text-xs text-text-secondary">
+                                                    {requestableSelectionCount} disponibles · {blockedSelectionCount} con estado activo
+                                                </p>
                                             </div>
                                         </div>
                                         <button onClick={() => { setSelectedItems([]); setSelectedIds(new Set()); }} className="text-xs font-semibold text-primary">Limpiar</button>
@@ -419,14 +481,14 @@ const FriendProfileView = ({ friend, onClose, onAddBorrowedItems, onTryBorrowedI
                         <div className="grid grid-cols-2 gap-2">
                             <button
                                 onClick={() => setShowBorrowModal(true)}
-                                disabled={!hasSelection}
-                                className={`py-3 rounded-2xl font-semibold text-sm transition-all flex items-center justify-center gap-1.5 ${hasSelection
+                                disabled={borrowActionDisabled}
+                                className={`py-3 rounded-2xl font-semibold text-sm transition-all flex items-center justify-center gap-1.5 ${!borrowActionDisabled
                                     ? 'bg-white text-text-primary shadow-md active:scale-95'
                                     : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                                     }`}
                             >
                                 <span className="material-symbols-outlined text-base">swap_horiz</span>
-                                Pedir prestado
+                                Solicitar préstamo
                             </button>
                             <button
                                 onClick={() => onTryBorrowedItems(selectedItems)}
@@ -437,11 +499,22 @@ const FriendProfileView = ({ friend, onClose, onAddBorrowedItems, onTryBorrowedI
                                     }`}
                             >
                                 <span className="material-symbols-outlined text-base">auto_awesome</span>
-                                Probar ahora
+                                Probar local
                             </button>
                         </div>
                         {!hasSelection && (
-                            <p className="text-xs text-center text-text-secondary">Selecciona prendas para probar.</p>
+                            <p className="text-xs text-center text-text-secondary">Seleccioná prendas para probar localmente o solicitar préstamo.</p>
+                        )}
+                        {hasSelection && blockedSelectionCount > 0 && (
+                            <p className="text-xs text-center text-amber-600 dark:text-amber-400">
+                                {blockedSelectionCount} {blockedSelectionCount === 1 ? 'prenda ya está' : 'prendas ya están'} solicitada{blockedSelectionCount === 1 ? '' : 's'} o prestada{blockedSelectionCount === 1 ? '' : 's'}.
+                            </p>
+                        )}
+                        {hasSelection && (
+                            <p className="text-xs text-center text-text-secondary">Probar local no envía solicitud ni confirma préstamo oficial.</p>
+                        )}
+                        {loadingBorrowStatuses && (
+                            <p className="text-xs text-center text-text-secondary">Actualizando estado de préstamos...</p>
                         )}
                     </div>
                 )}
@@ -457,25 +530,35 @@ const FriendProfileView = ({ friend, onClose, onAddBorrowedItems, onTryBorrowedI
                                 <div>
                                     <h3 className="font-bold text-base">Solicitar préstamo</h3>
                                     <p className="text-xs text-gray-500">{selectedItems.length} {selectedItems.length === 1 ? 'prenda' : 'prendas'} de {friend.name}</p>
+                                    <p className="text-xs text-teal-600 dark:text-teal-400">{requestableSelectionCount} disponibles para solicitud oficial</p>
                                 </div>
                             </div>
 
-                            {/* Selected items preview */}
-                            <div className="flex gap-2 overflow-x-auto pb-2 mb-3">
-                                {selectedItems.slice(0, 4).map(item => (
-                                    <img
-                                        key={item.id}
-                                        src={item.imageDataUrl}
-                                        alt=""
-                                        className="w-14 h-14 rounded-lg object-cover flex-shrink-0"
-                                    />
-                                ))}
-                                {selectedItems.length > 4 && (
-                                    <div className="w-14 h-14 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center flex-shrink-0">
-                                        <span className="text-sm font-bold text-gray-500">+{selectedItems.length - 4}</span>
-                                    </div>
-                                )}
+                            {/* Selected items + borrow status */}
+                            <div className="space-y-2 max-h-40 overflow-y-auto pr-1 mb-3">
+                                {selectedItems.map(item => {
+                                    const statusMeta = getBorrowStatusMeta(itemBorrowStatuses[item.id]?.status || null);
+                                    return (
+                                        <div key={item.id} className="flex items-center gap-2 p-2 rounded-xl bg-gray-50 dark:bg-gray-800/70">
+                                            <img
+                                                src={item.imageDataUrl}
+                                                alt={item.metadata?.subcategory || 'Prenda'}
+                                                className="w-12 h-12 rounded-lg object-cover flex-shrink-0"
+                                            />
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-sm font-medium truncate">{item.metadata?.subcategory || 'Prenda'}</p>
+                                                <span className={`inline-flex mt-1 px-2 py-0.5 text-[11px] rounded-full font-semibold ${statusMeta.badgeClass}`}>
+                                                    {statusMeta.label}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
                             </div>
+
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                                Esta acción envía una solicitud oficial. Para solo visualizar el look, usá "Probar local".
+                            </p>
 
                             {/* Notes input */}
                             <div className="mb-4">
@@ -505,15 +588,17 @@ const FriendProfileView = ({ friend, onClose, onAddBorrowedItems, onTryBorrowedI
                                 </button>
                                 <button
                                     onClick={handleRequestBorrow}
-                                    disabled={borrowLoading}
+                                    disabled={borrowLoading || !hasRequestableSelection}
                                     className="flex-1 py-2.5 rounded-xl font-semibold text-sm bg-gradient-to-r from-teal-500 to-cyan-600 text-white hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-1.5"
                                 >
                                     {borrowLoading ? (
                                         <span className="animate-spin">⏳</span>
+                                    ) : !hasRequestableSelection ? (
+                                        'Sin disponibles'
                                     ) : (
                                         <>
                                             <span className="material-symbols-outlined text-base">send</span>
-                                            Enviar solicitud
+                                            Enviar solicitud oficial
                                         </>
                                     )}
                                 </button>

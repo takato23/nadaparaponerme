@@ -45,11 +45,13 @@ import {
   trackGuidedLookConfirmed,
   trackGuidedLookCostShown,
   trackGuidedLookFieldCompleted,
+  trackGuidedLookModeSelected,
   trackGuidedLookGenerationError,
   trackGuidedLookGenerationSuccess,
   trackGuidedLookOutfitRequested,
   trackGuidedLookSaved,
   trackGuidedLookStart,
+  trackGuidedLookTryOn,
   trackGuidedLookUpgradeCTAClick,
   trackVirtualTryOn
 } from '../src/services/analyticsService';
@@ -303,8 +305,8 @@ const AIStylistView: React.FC<AIStylistViewProps> = ({
     if (errorMsg.includes('503') || errorMsg.includes('overloaded') || errorMsg.includes('UNAVAILABLE')) {
       return '🔧 El servicio de IA está temporalmente sobrecargado. Intentá de nuevo en unos segundos.';
     }
-    if (errorMsg.includes('API not configured') || errorMsg.includes('VITE_GEMINI_API_KEY')) {
-      return '⚠️ El servicio de chat no está configurado correctamente. Contactá al administrador.';
+    if (errorMsg.includes('API not configured') || errorMsg.includes('not available') || errorMsg.includes('desactivado')) {
+      return '⚠️ Este servicio de chat no está disponible en la configuración actual.';
     }
     if (errorMsg.includes('network') || errorMsg.includes('fetch') || errorMsg.includes('Failed to fetch')) {
       return '📶 Error de conexión. Verificá tu conexión a internet e intentá de nuevo.';
@@ -420,25 +422,82 @@ const AIStylistView: React.FC<AIStylistViewProps> = ({
       generatedPrompt: generatedItem?.aiGenerationPrompt || prev.generatedPrompt,
       savedToCloset: Boolean((generatedItem as any)?.saved_to_closet) || prev.savedToCloset,
     }));
+
+    const isEditConfirmation = workflow.status === 'confirming' && workflow.pendingAction === 'edit';
+    if (workflow.status === 'editing' || isEditConfirmation) {
+      setGarmentEdit({
+        status: workflow.status === 'editing' ? 'editing' : 'confirming',
+        instruction: workflow.editInstruction || '',
+      });
+    } else if (workflow.pendingAction !== 'edit') {
+      setGarmentEdit(null);
+    }
+
+    if (workflow.status === 'tryon_confirming') {
+      setTryOn((prev) => ({
+        ...prev,
+        status: 'confirming',
+      }));
+    } else if (workflow.status === 'tryon_generating') {
+      setTryOn((prev) => ({
+        ...prev,
+        status: 'generating',
+      }));
+    } else if (workflow.tryOnResultImageUrl) {
+      setTryOn((prev) => ({
+        ...prev,
+        status: 'result',
+        resultImageUrl: workflow.tryOnResultImageUrl || prev.resultImageUrl,
+      }));
+    } else if (workflow.pendingAction !== 'tryon' && workflow.status === 'generated') {
+      setTryOn((prev) => ({
+        ...prev,
+        status: prev.selfieImageDataUrl ? 'ready' : 'idle',
+      }));
+    }
   }, []);
 
   const runGuidedWorkflowAction = useCallback(async (
-    action: 'start' | 'submit' | 'confirm_generate' | 'cancel' | 'toggle_autosave' | 'request_outfit',
+    action:
+      | 'start'
+      | 'submit'
+      | 'select_strategy'
+      | 'confirm_generate'
+      | 'confirm_edit'
+      | 'confirm_tryon'
+      | 'cancel'
+      | 'toggle_autosave'
+      | 'request_outfit'
+      | 'request_edit'
+      | 'upload_selfie'
+      | 'request_tryon'
+      | 'save_generated_item',
     baseMessages: ChatMessage[],
     payload: {
       message?: string;
+      strategy?: 'direct' | 'guided';
       occasion?: string;
       style?: string;
       category?: 'top' | 'bottom' | 'shoes';
       confirmationToken?: string;
       autosaveEnabled?: boolean;
+      editInstruction?: string;
+      selfieImageDataUrl?: string;
     } = {},
   ) => {
     const startAt = Date.now();
     const previousWorkflow = guidedWorkflow;
+
     if (action === 'confirm_generate') {
       setLookCreation((prev) => ({ ...prev, status: 'generating' }));
     }
+    if (action === 'confirm_edit') {
+      setGarmentEdit((prev) => prev ? { ...prev, status: 'editing' } : { status: 'editing', instruction: payload.editInstruction || '' });
+    }
+    if (action === 'confirm_tryon') {
+      setTryOn((prev) => ({ ...prev, status: 'generating' }));
+    }
+
     setIsTyping(true);
     setStreamingMessage('');
 
@@ -446,7 +505,10 @@ const AIStylistView: React.FC<AIStylistViewProps> = ({
       const response = await chatWithFashionAssistantWorkflow(
         payload.message || '',
         enrichedCloset,
-        messages,
+        baseMessages.map((msg) => ({
+          role: msg.role,
+          content: msg.content,
+        })),
         {
           mode: 'guided_look_creation',
           sessionId: guidedWorkflow?.sessionId || null,
@@ -466,6 +528,7 @@ const AIStylistView: React.FC<AIStylistViewProps> = ({
           trackGuidedLookFieldCompleted({
             session_id: workflow.sessionId,
             field: 'occasion',
+            strategy: workflow.strategy || undefined,
             occasion: workflow.collected.occasion,
             category: workflow.collected.category,
             style: workflow.collected.style,
@@ -475,6 +538,7 @@ const AIStylistView: React.FC<AIStylistViewProps> = ({
           trackGuidedLookFieldCompleted({
             session_id: workflow.sessionId,
             field: 'style',
+            strategy: workflow.strategy || undefined,
             occasion: workflow.collected.occasion,
             category: workflow.collected.category,
             style: workflow.collected.style,
@@ -484,6 +548,7 @@ const AIStylistView: React.FC<AIStylistViewProps> = ({
           trackGuidedLookFieldCompleted({
             session_id: workflow.sessionId,
             field: 'category',
+            strategy: workflow.strategy || undefined,
             occasion: workflow.collected.occasion,
             category: workflow.collected.category,
             style: workflow.collected.style,
@@ -494,37 +559,99 @@ const AIStylistView: React.FC<AIStylistViewProps> = ({
       if (action === 'start' && workflow?.sessionId) {
         trackGuidedLookStart({ session_id: workflow.sessionId });
       }
-      if (workflow?.status === 'confirming') {
+
+      if (
+        workflow?.sessionId
+        && workflow.strategy
+        && workflow.strategy !== previousWorkflow?.strategy
+      ) {
+        trackGuidedLookModeSelected({
+          session_id: workflow.sessionId,
+          strategy: workflow.strategy,
+          category: workflow.collected.category,
+          occasion: workflow.collected.occasion,
+          style: workflow.collected.style,
+        });
+      }
+
+      if (workflow?.sessionId && workflow.requiresConfirmation) {
         trackGuidedLookCostShown({
           session_id: workflow.sessionId,
+          strategy: workflow.strategy || undefined,
+          operation: workflow.pendingAction || undefined,
           category: workflow.collected.category,
           occasion: workflow.collected.occasion,
           style: workflow.collected.style,
-          credits_charged: 2,
+          credits_charged: workflow.estimatedCostCredits,
         });
       }
-      if (action === 'confirm_generate' && workflow?.sessionId) {
+
+      if (
+        workflow?.sessionId
+        && (action === 'confirm_generate' || action === 'confirm_edit' || action === 'confirm_tryon')
+      ) {
         trackGuidedLookConfirmed({
           session_id: workflow.sessionId,
+          strategy: workflow.strategy || undefined,
+          operation: action === 'confirm_tryon' ? 'tryon' : action === 'confirm_edit' ? 'edit' : 'generate',
           category: workflow.collected.category,
           occasion: workflow.collected.occasion,
           style: workflow.collected.style,
-          credits_charged: 2,
+          credits_charged: workflow.estimatedCostCredits,
         });
       }
-      if (workflow?.status === 'generated' && action === 'confirm_generate') {
+
+      if (
+        workflow?.sessionId
+        && workflow.status === 'generated'
+        && (action === 'confirm_generate' || action === 'confirm_edit' || action === 'confirm_tryon')
+        && !workflow.errorCode
+      ) {
+        const operation = action === 'confirm_tryon' ? 'tryon' : action === 'confirm_edit' ? 'edit' : 'generate';
         trackGuidedLookGenerationSuccess({
           session_id: workflow.sessionId,
+          strategy: workflow.strategy || undefined,
+          operation,
           category: workflow.collected.category,
           occasion: workflow.collected.occasion,
           style: workflow.collected.style,
           credits_charged: response.credits_used || 0,
           latency_ms: Date.now() - startAt,
         });
+        if (operation === 'tryon') {
+          trackGuidedLookTryOn({
+            session_id: workflow.sessionId,
+            strategy: workflow.strategy || undefined,
+            operation: 'tryon',
+            category: workflow.collected.category,
+            occasion: workflow.collected.occasion,
+            style: workflow.collected.style,
+            credits_charged: response.credits_used || 0,
+            latency_ms: Date.now() - startAt,
+          });
+          trackVirtualTryOn();
+        }
       }
+
+      if (
+        workflow?.sessionId
+        && action === 'save_generated_item'
+        && Boolean((workflow.generatedItem as any)?.saved_to_closet)
+      ) {
+        trackGuidedLookSaved({
+          session_id: workflow.sessionId,
+          strategy: workflow.strategy || undefined,
+          category: workflow.collected.category,
+          occasion: workflow.collected.occasion,
+          style: workflow.collected.style,
+        });
+      }
+
       if (workflow?.errorCode) {
         trackGuidedLookGenerationError({
           session_id: workflow.sessionId,
+          strategy: workflow.strategy || undefined,
+          operation: workflow.pendingAction || undefined,
           category: workflow.collected.category,
           occasion: workflow.collected.occasion,
           style: workflow.collected.style,
@@ -857,28 +984,101 @@ const AIStylistView: React.FC<AIStylistViewProps> = ({
     withTimeout,
   ]);
 
-  const handlePrepareGarmentEditFromInput = useCallback(() => {
+  const beginUserTurn = useCallback((trimmedText: string) => {
+    const userMessage: ChatMessage = {
+      id: `user_${Date.now()}`,
+      role: 'user',
+      content: trimmedText,
+      timestamp: Date.now(),
+    };
+
+    const updatedMessages = [...messages, userMessage];
+    onMessagesUpdate(updatedMessages);
+    setInputValue('');
+    setStreamingMessage('');
+
+    if (messages.filter((m) => m.role === 'user').length === 0) {
+      const title = trimmedText.slice(0, 40) + (trimmedText.length > 40 ? '...' : '');
+      onUpdateTitle(title);
+    }
+
+    return updatedMessages;
+  }, [messages, onMessagesUpdate, onUpdateTitle]);
+
+  const handlePrepareGarmentEditFromInput = useCallback(async () => {
     if (!lookCreation.generatedItem || isTyping) return;
-    requestGarmentEditConfirmation(messages, editInstructionInput);
+    const cleanedInstruction = editInstructionInput.trim();
+    if (!cleanedInstruction) {
+      appendAssistantMessage(messages, 'Contame qué cambio querés aplicar en la prenda. Ej: "cambiar a negro mate" o "agregar estampa floral".');
+      return;
+    }
+
+    if (useGuidedLookBackend && guidedWorkflow?.sessionId) {
+      const updatedMessages = beginUserTurn(cleanedInstruction);
+      await runGuidedWorkflowAction('request_edit', updatedMessages, {
+        message: cleanedInstruction,
+        editInstruction: cleanedInstruction,
+      });
+      setEditInstructionInput('');
+      return;
+    }
+
+    requestGarmentEditConfirmation(messages, cleanedInstruction);
     setEditInstructionInput('');
   }, [
+    appendAssistantMessage,
+    beginUserTurn,
     editInstructionInput,
+    guidedWorkflow?.sessionId,
     isTyping,
     lookCreation.generatedItem,
     messages,
     requestGarmentEditConfirmation,
+    runGuidedWorkflowAction,
+    useGuidedLookBackend,
   ]);
 
   const handleConfirmGarmentEdit = useCallback(async () => {
     if (!garmentEdit || garmentEdit.status !== 'confirming' || isTyping) return;
+    if (useGuidedLookBackend && guidedWorkflow?.sessionId) {
+      const updatedMessages = beginUserTurn('Confirmar edición de la prenda');
+      await runGuidedWorkflowAction('confirm_edit', updatedMessages, {
+        message: 'confirmo',
+        confirmationToken: guidedWorkflow.confirmationToken || undefined,
+      });
+      return;
+    }
     await runGarmentEditGeneration(messages, garmentEdit.instruction);
-  }, [garmentEdit, isTyping, messages, runGarmentEditGeneration]);
+  }, [
+    beginUserTurn,
+    garmentEdit,
+    guidedWorkflow,
+    isTyping,
+    messages,
+    runGarmentEditGeneration,
+    runGuidedWorkflowAction,
+    useGuidedLookBackend,
+  ]);
 
-  const handleCancelGarmentEdit = useCallback(() => {
+  const handleCancelGarmentEdit = useCallback(async () => {
     if (!garmentEdit || isTyping) return;
+    if (useGuidedLookBackend && guidedWorkflow?.sessionId) {
+      const updatedMessages = beginUserTurn('Cancelar edición de la prenda');
+      await runGuidedWorkflowAction('cancel', updatedMessages, { message: 'cancelar' });
+      return;
+    }
     setGarmentEdit(null);
     appendAssistantMessage(messages, 'Perfecto, cancelé la edición de la prenda.');
-  }, [appendAssistantMessage, garmentEdit, isTyping, messages]);
+  }, [
+    appendAssistantMessage,
+    beginUserTurn,
+    garmentEdit,
+    guidedWorkflow?.sessionId,
+    isTyping,
+    messages,
+    runGuidedWorkflowAction,
+    useGuidedLookBackend,
+  ]);
 
   const handleSelfieUpload = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -890,19 +1090,44 @@ const AIStylistView: React.FC<AIStylistViewProps> = ({
         status: 'ready',
         selfieImageDataUrl: dataUrl,
       });
-      appendAssistantMessage(messages, `Selfie cargada. El probador virtual cuesta ${TRY_ON_CREDIT_COST} créditos cuando confirmes.`);
+      if (useGuidedLookBackend && guidedWorkflow?.sessionId) {
+        const updatedMessages = beginUserTurn('Subí una selfie para el probador');
+        await runGuidedWorkflowAction('upload_selfie', updatedMessages, {
+          message: 'selfie cargada',
+          selfieImageDataUrl: dataUrl,
+        });
+      } else {
+        appendAssistantMessage(messages, `Selfie cargada. El probador virtual cuesta ${TRY_ON_CREDIT_COST} créditos cuando confirmes.`);
+      }
     } catch (error: any) {
       appendAssistantMessage(messages, `No pude cargar la selfie: ${error?.message || 'error inesperado'}`);
     } finally {
       event.target.value = '';
     }
-  }, [appendAssistantMessage, messages, readFileAsDataUrl]);
+  }, [
+    appendAssistantMessage,
+    beginUserTurn,
+    guidedWorkflow?.sessionId,
+    messages,
+    readFileAsDataUrl,
+    runGuidedWorkflowAction,
+    useGuidedLookBackend,
+  ]);
 
-  const handlePrepareTryOn = useCallback(() => {
+  const handlePrepareTryOn = useCallback(async () => {
     if (!lookCreation.generatedItem || isTyping) return;
     if (!tryOn.selfieImageDataUrl) {
       appendAssistantMessage(messages, 'Primero subí una selfie para poder probarte la prenda.');
       selfieInputRef.current?.click();
+      return;
+    }
+
+    if (useGuidedLookBackend && guidedWorkflow?.sessionId) {
+      const updatedMessages = beginUserTurn('Quiero probarme esta prenda');
+      await runGuidedWorkflowAction('request_tryon', updatedMessages, {
+        message: 'probar en mí',
+        selfieImageDataUrl: tryOn.selfieImageDataUrl,
+      });
       return;
     }
 
@@ -911,21 +1136,61 @@ const AIStylistView: React.FC<AIStylistViewProps> = ({
       status: 'confirming',
     }));
     appendAssistantMessage(messages, `El probador virtual cuesta ${TRY_ON_CREDIT_COST} créditos. ¿Confirmás que lo genere ahora?`);
-  }, [appendAssistantMessage, isTyping, lookCreation.generatedItem, messages, tryOn.selfieImageDataUrl]);
+  }, [
+    appendAssistantMessage,
+    beginUserTurn,
+    guidedWorkflow?.sessionId,
+    isTyping,
+    lookCreation.generatedItem,
+    messages,
+    runGuidedWorkflowAction,
+    tryOn.selfieImageDataUrl,
+    useGuidedLookBackend,
+  ]);
 
   const handleConfirmTryOn = useCallback(async () => {
     if (isTyping || tryOn.status !== 'confirming') return;
+    if (useGuidedLookBackend && guidedWorkflow?.sessionId) {
+      const updatedMessages = beginUserTurn('Confirmar probador virtual');
+      await runGuidedWorkflowAction('confirm_tryon', updatedMessages, {
+        message: 'confirmo',
+        confirmationToken: guidedWorkflow.confirmationToken || undefined,
+      });
+      return;
+    }
     await runTryOnGeneration(messages);
-  }, [isTyping, messages, runTryOnGeneration, tryOn.status]);
+  }, [
+    beginUserTurn,
+    guidedWorkflow,
+    isTyping,
+    messages,
+    runGuidedWorkflowAction,
+    runTryOnGeneration,
+    tryOn.status,
+    useGuidedLookBackend,
+  ]);
 
-  const handleCancelTryOn = useCallback(() => {
+  const handleCancelTryOn = useCallback(async () => {
     if (isTyping) return;
+    if (useGuidedLookBackend && guidedWorkflow?.sessionId) {
+      const updatedMessages = beginUserTurn('Cancelar probador virtual');
+      await runGuidedWorkflowAction('cancel', updatedMessages, { message: 'cancelar' });
+      return;
+    }
     setTryOn((prev) => ({
       ...prev,
       status: prev.selfieImageDataUrl ? 'ready' : 'idle',
     }));
     appendAssistantMessage(messages, 'Perfecto, cancelé el probador virtual.');
-  }, [appendAssistantMessage, isTyping, messages]);
+  }, [
+    appendAssistantMessage,
+    beginUserTurn,
+    guidedWorkflow?.sessionId,
+    isTyping,
+    messages,
+    runGuidedWorkflowAction,
+    useGuidedLookBackend,
+  ]);
 
   const handleSuggestOutfitWithGeneratedItem = useCallback(async () => {
     if (!lookCreation.generatedItem || isTyping || !currentConversation) return;
@@ -1009,6 +1274,14 @@ const AIStylistView: React.FC<AIStylistViewProps> = ({
     if (!lookCreation.generatedImageUrl || !lookCreation.generatedPrompt || !lookCreation.category) return;
     if (lookCreation.savedToCloset) return;
 
+    if (useGuidedLookBackend && guidedWorkflow?.sessionId) {
+      const updatedMessages = beginUserTurn('Guardar prenda generada en armario');
+      await runGuidedWorkflowAction('save_generated_item', updatedMessages, {
+        message: 'guardar',
+      });
+      return;
+    }
+
     try {
       await aiImageService.saveToCloset(
         lookCreation.generatedImageUrl,
@@ -1049,28 +1322,10 @@ const AIStylistView: React.FC<AIStylistViewProps> = ({
     lookCreation.savedToCloset,
     messages,
     guidedWorkflow,
+    beginUserTurn,
+    runGuidedWorkflowAction,
+    useGuidedLookBackend,
   ]);
-
-  const beginUserTurn = useCallback((trimmedText: string) => {
-    const userMessage: ChatMessage = {
-      id: `user_${Date.now()}`,
-      role: 'user',
-      content: trimmedText,
-      timestamp: Date.now(),
-    };
-
-    const updatedMessages = [...messages, userMessage];
-    onMessagesUpdate(updatedMessages);
-    setInputValue('');
-    setStreamingMessage('');
-
-    if (messages.filter((m) => m.role === 'user').length === 0) {
-      const title = trimmedText.slice(0, 40) + (trimmedText.length > 40 ? '...' : '');
-      onUpdateTitle(title);
-    }
-
-    return updatedMessages;
-  }, [messages, onMessagesUpdate, onUpdateTitle]);
 
   const handleGuidedAutosaveToggle = useCallback(async (enabled: boolean) => {
     if (!useGuidedLookBackend || !currentConversation || isTyping) return;
@@ -1081,12 +1336,25 @@ const AIStylistView: React.FC<AIStylistViewProps> = ({
 
   const handleGuidedConfirmGenerate = useCallback(async () => {
     if (!currentConversation || isTyping) return;
-    const updatedMessages = beginUserTurn('Confirmar generación de la prenda');
-    await runGuidedWorkflowAction('confirm_generate', updatedMessages, {
+    const pendingAction = guidedWorkflow?.pendingAction;
+    const action = pendingAction === 'edit'
+      ? 'confirm_edit'
+      : pendingAction === 'tryon'
+        ? 'confirm_tryon'
+        : 'confirm_generate';
+    const updatedMessages = beginUserTurn('Confirmar acción del workflow');
+    await runGuidedWorkflowAction(action, updatedMessages, {
       confirmationToken: guidedWorkflow?.confirmationToken || undefined,
       message: 'confirmo',
     });
-  }, [beginUserTurn, currentConversation, guidedWorkflow?.confirmationToken, isTyping, runGuidedWorkflowAction]);
+  }, [
+    beginUserTurn,
+    currentConversation,
+    guidedWorkflow?.confirmationToken,
+    guidedWorkflow?.pendingAction,
+    isTyping,
+    runGuidedWorkflowAction,
+  ]);
 
   const handleGuidedCancelGenerate = useCallback(async () => {
     if (!currentConversation || isTyping) return;
@@ -1104,12 +1372,23 @@ const AIStylistView: React.FC<AIStylistViewProps> = ({
     if (garmentEdit?.status === 'confirming') {
       const updatedMessages = beginUserTurn(trimmedText);
       if (isAffirmative(trimmedText)) {
+        if (useGuidedLookBackend && guidedWorkflow?.sessionId) {
+          await runGuidedWorkflowAction('confirm_edit', updatedMessages, {
+            message: trimmedText,
+            confirmationToken: guidedWorkflow.confirmationToken || undefined,
+          });
+          return;
+        }
         await runGarmentEditGeneration(updatedMessages, garmentEdit.instruction);
         return;
       }
       if (isNegative(trimmedText)) {
-        setGarmentEdit(null);
-        appendAssistantMessage(updatedMessages, 'Perfecto, cancelé la edición de la prenda.');
+        if (useGuidedLookBackend && guidedWorkflow?.sessionId) {
+          await runGuidedWorkflowAction('cancel', updatedMessages, { message: trimmedText });
+        } else {
+          setGarmentEdit(null);
+          appendAssistantMessage(updatedMessages, 'Perfecto, cancelé la edición de la prenda.');
+        }
         return;
       }
       appendAssistantMessage(updatedMessages, 'Decime "sí" para confirmar la edición o "no" para cancelarla.');
@@ -1119,22 +1398,33 @@ const AIStylistView: React.FC<AIStylistViewProps> = ({
     if (tryOn.status === 'confirming') {
       const updatedMessages = beginUserTurn(trimmedText);
       if (isAffirmative(trimmedText)) {
+        if (useGuidedLookBackend && guidedWorkflow?.sessionId) {
+          await runGuidedWorkflowAction('confirm_tryon', updatedMessages, {
+            message: trimmedText,
+            confirmationToken: guidedWorkflow.confirmationToken || undefined,
+          });
+          return;
+        }
         await runTryOnGeneration(updatedMessages);
         return;
       }
       if (isNegative(trimmedText)) {
-        setTryOn((prev) => ({
-          ...prev,
-          status: prev.selfieImageDataUrl ? 'ready' : 'idle',
-        }));
-        appendAssistantMessage(updatedMessages, 'Perfecto, cancelé el probador virtual.');
+        if (useGuidedLookBackend && guidedWorkflow?.sessionId) {
+          await runGuidedWorkflowAction('cancel', updatedMessages, { message: trimmedText });
+        } else {
+          setTryOn((prev) => ({
+            ...prev,
+            status: prev.selfieImageDataUrl ? 'ready' : 'idle',
+          }));
+          appendAssistantMessage(updatedMessages, 'Perfecto, cancelé el probador virtual.');
+        }
         return;
       }
       appendAssistantMessage(updatedMessages, 'Decime "sí" para generar el probador ahora o "no" para cancelarlo.');
       return;
     }
 
-    if (hybridLookChoice) {
+    if (!useGuidedLookBackend && hybridLookChoice) {
       const updatedMessages = beginUserTurn(trimmedText);
       const normalized = trimmedText.toLowerCase();
       const wantsGuided = normalized.includes('guiad');
@@ -1142,10 +1432,22 @@ const AIStylistView: React.FC<AIStylistViewProps> = ({
 
       if (wantsGuided) {
         setHybridLookChoice(null);
-        await runGuidedWorkflowAction('start', updatedMessages, {
-          message: hybridLookChoice.requestText,
-          autosaveEnabled: guidedAutosaveEnabled,
+        const draft: LookCreationDraft = {
+          ...hybridLookChoice.parsed,
+          requestText: hybridLookChoice.requestText,
+        };
+        const missing = getMissingLookFields(draft);
+        const nextField = missing[0];
+        setLookCreation({
+          ...draft,
+          status: missing.length > 0 ? 'collecting' : 'confirming',
+          awaitingField: nextField,
         });
+        if (missing.length > 0 && nextField) {
+          appendAssistantMessage(updatedMessages, getLookFieldQuestion(nextField));
+        } else {
+          appendAssistantMessage(updatedMessages, buildLookCostMessage(draft));
+        }
         return;
       }
 
@@ -1168,51 +1470,65 @@ const AIStylistView: React.FC<AIStylistViewProps> = ({
     }
 
     const guidedStatus = guidedWorkflow?.status;
+    const guidedPendingAction = guidedWorkflow?.pendingAction;
     const guidedInProgress = guidedStatus === 'collecting'
+      || guidedStatus === 'choosing_mode'
       || guidedStatus === 'confirming'
-      || guidedStatus === 'generating';
+      || guidedStatus === 'generating'
+      || guidedStatus === 'editing'
+      || guidedStatus === 'tryon_confirming'
+      || guidedStatus === 'tryon_generating';
 
     const lastAssistantHadOutfit = Boolean(messages[messages.length - 1]?.outfitSuggestion);
     const canUseTextEditIntent = lookCreation.status === 'result' && !lastAssistantHadOutfit;
 
     if (!guidedInProgress && canUseTextEditIntent && lookCreation.generatedItem && detectGarmentEditIntent(trimmedText)) {
       const updatedMessages = beginUserTurn(trimmedText);
-      requestGarmentEditConfirmation(updatedMessages, trimmedText);
+      if (useGuidedLookBackend && guidedWorkflow?.sessionId) {
+        await runGuidedWorkflowAction('request_edit', updatedMessages, {
+          message: trimmedText,
+          editInstruction: trimmedText,
+        });
+      } else {
+        requestGarmentEditConfirmation(updatedMessages, trimmedText);
+      }
       return;
     }
 
     const lookIntentDetected = detectLookCreationIntent(trimmedText);
     if (useGuidedLookBackend && !guidedInProgress && lookIntentDetected) {
       const updatedMessages = beginUserTurn(trimmedText);
-      const parsed = parseLookCreationFields(trimmedText);
-      setHybridLookChoice({
-        requestText: trimmedText,
-        parsed,
+      await runGuidedWorkflowAction('start', updatedMessages, {
+        message: trimmedText,
+        autosaveEnabled: guidedAutosaveEnabled,
       });
-      appendAssistantMessage(
-        updatedMessages,
-        `Puedo resolverlo de dos maneras:\n1) Modo directo (chat intermediario + generación IA) → ${LOOK_CREATION_CREDIT_COST} créditos.\n2) Modo guiado paso a paso → mismo costo al confirmar.\n\nRespondé "directo" o "guiado".`,
-      );
       return;
     }
 
     const shouldUseGuidedWorkflow = useGuidedLookBackend && (
-      guidedStatus === 'collecting'
+      guidedStatus === 'choosing_mode'
+      || guidedStatus === 'collecting'
       || guidedStatus === 'confirming'
       || guidedStatus === 'generating'
+      || guidedStatus === 'editing'
+      || guidedStatus === 'tryon_confirming'
+      || guidedStatus === 'tryon_generating'
     );
 
     if (shouldUseGuidedWorkflow) {
       const updatedMessages = beginUserTurn(trimmedText);
-      if (guidedStatus === 'confirming' && isAffirmative(trimmedText)) {
-        await runGuidedWorkflowAction('confirm_generate', updatedMessages, {
+      if ((guidedStatus === 'confirming' || guidedStatus === 'tryon_confirming') && isAffirmative(trimmedText)) {
+        const confirmAction = guidedStatus === 'tryon_confirming'
+          ? 'confirm_tryon'
+          : (guidedPendingAction === 'edit' ? 'confirm_edit' : 'confirm_generate');
+        await runGuidedWorkflowAction(confirmAction, updatedMessages, {
           message: trimmedText,
           confirmationToken: guidedWorkflow?.confirmationToken || undefined,
         });
         return;
       }
 
-      if (guidedStatus === 'confirming' && isNegative(trimmedText)) {
+      if ((guidedStatus === 'confirming' || guidedStatus === 'tryon_confirming') && isNegative(trimmedText)) {
         await runGuidedWorkflowAction('cancel', updatedMessages, { message: trimmedText });
         return;
       }
@@ -2096,14 +2412,14 @@ const AIStylistView: React.FC<AIStylistViewProps> = ({
                   Crear prenda con IA ({LOOK_CREATION_CREDIT_COST} créditos)
                 </button>
               </div>
-              {hybridLookChoice && (
+              {((useGuidedLookBackend && guidedWorkflow?.status === 'choosing_mode') || (!useGuidedLookBackend && hybridLookChoice)) && (
                 <div className="mb-2 flex flex-wrap gap-2">
                   <button
                     onClick={() => handleSend('directo')}
                     disabled={isTyping}
                     className="px-3 py-1.5 rounded-full border border-violet-300/70 dark:border-violet-700/60 bg-violet-50/70 dark:bg-violet-900/20 text-violet-700 dark:text-violet-300 text-xs font-semibold hover:bg-violet-100/80 dark:hover:bg-violet-900/30 transition-all disabled:opacity-50"
                   >
-                    Directo ({LOOK_CREATION_CREDIT_COST} créditos)
+                    Directo ({guidedWorkflow?.estimatedCostCredits || LOOK_CREATION_CREDIT_COST} créditos)
                   </button>
                   <button
                     onClick={() => handleSend('guiado')}
@@ -2149,10 +2465,10 @@ const AIStylistView: React.FC<AIStylistViewProps> = ({
                   ))}
                 </div>
               )}
-              {useGuidedLookBackend && lookCreation.status === 'confirming' && (
+              {useGuidedLookBackend && lookCreation.status === 'confirming' && guidedWorkflow?.pendingAction === 'generate' && (
                 <div className="mb-2 p-3 rounded-xl border border-violet-200/80 dark:border-violet-800/50 bg-violet-50/60 dark:bg-violet-900/20">
                   <p className="text-xs text-violet-700 dark:text-violet-300 font-semibold">
-                    Esta generación cuesta {LOOK_CREATION_CREDIT_COST} créditos.
+                    Esta generación cuesta {guidedWorkflow?.estimatedCostCredits || LOOK_CREATION_CREDIT_COST} créditos.
                   </p>
                   <div className="mt-2 flex flex-wrap gap-2">
                     <button

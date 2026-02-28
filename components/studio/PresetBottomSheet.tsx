@@ -40,7 +40,7 @@ export const PresetBottomSheet: React.FC<PresetBottomSheetProps> = ({
                         animate={{ y: 0 }}
                         exit={{ y: '100%' }}
                         transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-                        className="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-3xl shadow-2xl max-h-[80vh] overflow-hidden"
+                        className="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-3xl shadow-2xl max-h-[80vh] overflow-hidden pb-[max(0px,env(safe-area-inset-bottom))]"
                     >
                         {/* Handle */}
                         <div className="flex justify-center py-3">

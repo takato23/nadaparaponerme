@@ -107,9 +107,13 @@ export interface ChatStylistResponse {
 export type GuidedLookStatus =
   | 'idle'
   | 'collecting'
+  | 'choosing_mode'
   | 'confirming'
   | 'generating'
   | 'generated'
+  | 'editing'
+  | 'tryon_confirming'
+  | 'tryon_generating'
   | 'cancelled'
   | 'error';
 
@@ -117,10 +121,13 @@ export type GuidedLookErrorCode =
   | 'INSUFFICIENT_CREDITS'
   | 'GENERATION_TIMEOUT'
   | 'GENERATION_FAILED'
+  | 'TRYON_FAILED'
   | 'SESSION_EXPIRED'
   | 'INVALID_CONFIRMATION';
 
 export type GuidedLookMissingField = 'occasion' | 'style' | 'category';
+export type GuidedLookStrategy = 'direct' | 'guided';
+export type GuidedLookPendingAction = 'generate' | 'edit' | 'tryon';
 
 export interface GuidedLookCollected {
   occasion?: string;
@@ -136,14 +143,29 @@ export interface GuidedLookGeneratedItem extends ClothingItem {
 export interface GuidedLookWorkflowRequest {
   mode: 'guided_look_creation';
   sessionId?: string | null;
-  action?: 'start' | 'submit' | 'confirm_generate' | 'cancel' | 'toggle_autosave' | 'request_outfit';
+  action?: 'start'
+    | 'submit'
+    | 'select_strategy'
+    | 'confirm_generate'
+    | 'confirm_edit'
+    | 'confirm_tryon'
+    | 'cancel'
+    | 'toggle_autosave'
+    | 'request_outfit'
+    | 'request_edit'
+    | 'upload_selfie'
+    | 'request_tryon'
+    | 'save_generated_item';
   payload?: {
     message?: string;
+    strategy?: GuidedLookStrategy;
     occasion?: string;
     style?: string;
     category?: 'top' | 'bottom' | 'shoes';
     confirmationToken?: string;
     autosaveEnabled?: boolean;
+    editInstruction?: string;
+    selfieImageDataUrl?: string;
   };
 }
 
@@ -151,12 +173,16 @@ export interface GuidedLookWorkflowResponse {
   mode: 'guided_look_creation';
   sessionId: string;
   status: GuidedLookStatus;
+  strategy?: GuidedLookStrategy | null;
+  pendingAction?: GuidedLookPendingAction | null;
   missingFields: GuidedLookMissingField[];
   collected: GuidedLookCollected;
   estimatedCostCredits: number;
   requiresConfirmation: boolean;
   confirmationToken?: string | null;
   generatedItem?: GuidedLookGeneratedItem | null;
+  tryOnResultImageUrl?: string | null;
+  editInstruction?: string | null;
   autosaveEnabled: boolean;
   errorCode?: GuidedLookErrorCode | null;
 }
@@ -820,7 +846,7 @@ export type ActivityType =
   | 'style_milestone'        // User achieved a style milestone
   | 'lookbook_created'       // User created a lookbook
   | 'rating_given'           // User rated an outfit
-  | 'borrow_requested'       // Someone requested to borrow an item
+  | 'borrow_request'         // Someone requested to borrow an item
   | 'borrow_approved'        // Borrow request was approved
   | 'borrow_declined'        // Borrow request was declined
   | 'item_returned';         // Borrowed item was returned

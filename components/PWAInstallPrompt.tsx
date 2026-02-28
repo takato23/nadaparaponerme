@@ -110,7 +110,7 @@ export const PWAInstallPrompt: React.FC = () => {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 100 }}
                 transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-                className="fixed bottom-4 left-4 right-4 z-[9999] sm:left-auto sm:right-4 sm:max-w-sm"
+                className="fixed bottom-safe-4 inset-x-safe-4 z-[9999] sm:left-auto sm:right-safe-4 sm:max-w-sm"
             >
                 <div className="bg-gradient-to-r from-primary/95 to-secondary/95 backdrop-blur-xl rounded-2xl p-4 shadow-2xl border border-white/20">
                     {/* Close button */}

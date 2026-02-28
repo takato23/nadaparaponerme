@@ -37,10 +37,10 @@ const FloatingHelpButton: React.FC<FloatingHelpButtonProps> = ({
   };
 
   const positionClasses = {
-    'bottom-right': 'bottom-24 right-4 md:bottom-8 md:right-8',
-    'bottom-left': 'bottom-24 left-4 md:bottom-8 md:left-8',
-    'top-right': 'top-20 right-4 md:top-8 md:right-8',
-    'top-left': 'top-20 left-4 md:top-8 md:left-8'
+    'bottom-right': 'bottom-safe-24 right-safe-4 md:bottom-8 md:right-8',
+    'bottom-left': 'bottom-safe-24 left-safe-4 md:bottom-8 md:left-8',
+    'top-right': 'top-safe-20 right-safe-4 md:top-8 md:right-8',
+    'top-left': 'top-safe-20 left-safe-4 md:top-8 md:left-8'
   };
 
   return (

@@ -78,7 +78,7 @@ export function StudioGenerationIndicator() {
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.8, y: 20 }}
         transition={{ duration: 0.3, ease: 'easeOut' }}
-        className="fixed bottom-24 right-4 z-50"
+        className="fixed bottom-safe-24 right-safe-4 z-50"
       >
         {/* Main Button */}
         <motion.button

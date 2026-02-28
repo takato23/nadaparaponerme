@@ -96,6 +96,43 @@ export interface BorrowRequestSent {
   created_at: string;
 }
 
+export interface ItemBorrowStatus {
+  status: BorrowStatus | null;
+  requestId: string | null;
+}
+
+const ACTIVE_BORROW_STATUSES: BorrowStatus[] = ['requested', 'approved', 'borrowed'];
+
+type BorrowMutationError = {
+  code?: string | null;
+  message?: string | null;
+  details?: string | null;
+};
+
+function mapBorrowRequestError(error: BorrowMutationError | null | undefined): string {
+  if (!error) return 'Error al solicitar préstamo';
+
+  const raw = `${error.message || ''} ${error.details || ''}`.toLowerCase();
+
+  if (
+    error.code === '23505' ||
+    raw.includes('borrow_item_already_active') ||
+    raw.includes('idx_borrowed_items_single_active_per_item')
+  ) {
+    return 'Esta prenda ya tiene una solicitud o préstamo activo';
+  }
+
+  if (error.code === '23514' || raw.includes('borrow_owner_mismatch')) {
+    return 'La prenda ya no está disponible para préstamo';
+  }
+
+  if (error.code === '23503' || raw.includes('borrow_item_not_found')) {
+    return 'La prenda no está disponible';
+  }
+
+  return 'Error al solicitar préstamo';
+}
+
 // ===== REQUEST TO BORROW =====
 
 /**
@@ -113,18 +150,44 @@ export async function requestToBorrow(
       return { success: false, error: 'No autenticado' };
     }
 
+    const { data: itemOwner, error: itemOwnerError } = await supabase
+      .from('clothing_items')
+      .select('user_id')
+      .eq('id', itemId)
+      .maybeSingle();
+
+    if (itemOwnerError) {
+      console.error('Error validating borrow item owner:', itemOwnerError);
+      return { success: false, error: 'No se pudo validar la prenda' };
+    }
+
+    if (!itemOwner) {
+      return { success: false, error: 'La prenda no está disponible' };
+    }
+
+    if (itemOwner.user_id !== ownerId) {
+      return { success: false, error: 'La prenda ya no pertenece a esta amiga' };
+    }
+
     if (user.id === ownerId) {
       return { success: false, error: 'No puedes pedir prestado tu propia prenda' };
     }
 
     // Check if there's already an active request for this item
-    const { data: existing } = await supabase
+    const { data: existing, error: existingError } = await supabase
       .from('borrowed_items')
       .select('id, status')
       .eq('clothing_item_id', itemId)
       .eq('borrower_id', user.id)
-      .in('status', ['requested', 'approved', 'borrowed'])
-      .single();
+      .in('status', ACTIVE_BORROW_STATUSES)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (existingError) {
+      console.error('Error checking existing borrow request:', existingError);
+      return { success: false, error: 'No se pudo validar el estado de la solicitud' };
+    }
 
     if (existing) {
       if (existing.status === 'requested') {
@@ -153,7 +216,7 @@ export async function requestToBorrow(
 
     if (error) {
       console.error('Error creating borrow request:', error);
-      return { success: false, error: 'Error al solicitar préstamo' };
+      return { success: false, error: mapBorrowRequestError(error) };
     }
 
     // Create activity notification for owner
@@ -443,16 +506,21 @@ export async function cancelBorrowRequest(
       return { success: false, error: 'No autenticado' };
     }
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('borrowed_items')
       .delete()
       .eq('id', requestId)
       .eq('borrower_id', user.id)
-      .eq('status', 'requested');
+      .eq('status', 'requested')
+      .select('id');
 
     if (error) {
       console.error('Error canceling borrow request:', error);
       return { success: false, error: 'Error al cancelar solicitud' };
+    }
+
+    if (!data || data.length === 0) {
+      return { success: false, error: 'Solo puedes cancelar tus solicitudes pendientes' };
     }
 
     return { success: true };
@@ -787,25 +855,62 @@ export async function getActiveBorrowsCount(): Promise<number> {
 export async function getItemBorrowStatus(
   itemId: string
 ): Promise<{ status: BorrowStatus | null; requestId: string | null }> {
+  const statuses = await getBorrowStatusesForItems([itemId]);
+  return statuses[itemId] || { status: null, requestId: null };
+}
+
+/**
+ * Get borrow status for multiple items in one round-trip
+ */
+export async function getBorrowStatusesForItems(
+  itemIds: string[]
+): Promise<Record<string, ItemBorrowStatus>> {
+  const uniqueItemIds = [...new Set(itemIds.filter(Boolean))];
+  const emptyResult = uniqueItemIds.reduce<Record<string, ItemBorrowStatus>>((acc, id) => {
+    acc[id] = { status: null, requestId: null };
+    return acc;
+  }, {});
+
+  if (uniqueItemIds.length === 0) {
+    return {};
+  }
+
   try {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return { status: null, requestId: null };
+    if (!user) return emptyResult;
 
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('borrowed_items')
-      .select('id, status')
-      .eq('clothing_item_id', itemId)
+      .select('id, clothing_item_id, status, created_at')
       .eq('borrower_id', user.id)
-      .in('status', ['requested', 'approved', 'borrowed'])
-      .single();
+      .in('clothing_item_id', uniqueItemIds)
+      .in('status', ACTIVE_BORROW_STATUSES)
+      .order('created_at', { ascending: false });
 
-    if (data) {
-      return { status: data.status, requestId: data.id };
+    if (error) {
+      console.error('Error fetching borrow statuses for items:', error);
+      return emptyResult;
     }
 
-    return { status: null, requestId: null };
+    const result = { ...emptyResult };
+
+    for (const borrow of data || []) {
+      if (!result[borrow.clothing_item_id]) {
+        result[borrow.clothing_item_id] = { status: null, requestId: null };
+      }
+
+      if (!result[borrow.clothing_item_id].status) {
+        result[borrow.clothing_item_id] = {
+          status: borrow.status as BorrowStatus,
+          requestId: borrow.id
+        };
+      }
+    }
+
+    return result;
   } catch (error) {
-    return { status: null, requestId: null };
+    console.error('Error in getBorrowStatusesForItems:', error);
+    return emptyResult;
   }
 }
 

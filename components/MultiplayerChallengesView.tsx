@@ -262,7 +262,7 @@ const MultiplayerChallengesView = ({ closet, onClose }: MultiplayerChallengesVie
   return (
     <div className="fixed inset-0 bg-white dark:bg-background-dark z-40 flex flex-col overflow-hidden">
       {/* Header */}
-      <header className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-800 shrink-0">
+      <header className="flex items-center justify-between px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-4 border-b border-gray-200 dark:border-gray-800 shrink-0">
         <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full">
           <span className="material-symbols-outlined text-gray-600 dark:text-gray-400">arrow_back</span>
         </button>

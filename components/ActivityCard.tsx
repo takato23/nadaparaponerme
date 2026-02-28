@@ -234,7 +234,7 @@ const ActivityCard = ({
           </div>
         );
 
-      case 'borrow_requested':
+      case 'borrow_request':
         return (
           <div className="mt-3 p-4 rounded-xl bg-gradient-to-r from-teal-500/10 to-cyan-500/10 border border-teal-200 dark:border-teal-800">
             <div className="flex items-start gap-3">

@@ -130,7 +130,7 @@ const ActivityFeedView = ({
     <div className="fixed inset-0 z-50 flex flex-col bg-background-primary dark:bg-gray-900">
       {/* Header with close button and title */}
       <Card variant="glass" padding="none" rounded="none" className="sticky top-0 z-20 border-b border-gray-200 dark:border-gray-800" component="header">
-        <div className="flex items-center justify-between px-4 py-3">
+        <div className="flex items-center justify-between px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3">
           <div className="flex items-center gap-3">
             <button
               onClick={onClose}
@@ -242,7 +242,7 @@ const ActivityFeedView = ({
 
       {/* Refreshing indicator */}
       {refreshing && (
-        <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-30">
+        <div className="fixed top-safe-20 left-1/2 transform -translate-x-1/2 z-30">
           <Card variant="glass" padding="sm" rounded="full" className="shadow-lg flex items-center gap-2">
             <span className="material-symbols-outlined text-lg animate-spin">refresh</span>
             <span className="text-sm font-medium">Actualizando...</span>

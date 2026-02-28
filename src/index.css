@@ -421,6 +421,51 @@
     padding-left: max(1rem, env(safe-area-inset-left));
     padding-right: max(1rem, env(safe-area-inset-right));
   }
+
+  .h-safe {
+    height: env(safe-area-inset-bottom);
+  }
+
+  .top-safe-4 {
+    top: calc(1rem + env(safe-area-inset-top));
+  }
+
+  .top-safe-20 {
+    top: calc(5rem + env(safe-area-inset-top));
+  }
+
+  .bottom-safe-4 {
+    bottom: calc(1rem + env(safe-area-inset-bottom));
+  }
+
+  .bottom-safe-6 {
+    bottom: calc(1.5rem + env(safe-area-inset-bottom));
+  }
+
+  .bottom-safe-20 {
+    bottom: calc(5rem + env(safe-area-inset-bottom));
+  }
+
+  .bottom-safe-24 {
+    bottom: calc(6rem + env(safe-area-inset-bottom));
+  }
+
+  .left-safe-4 {
+    left: max(1rem, env(safe-area-inset-left));
+  }
+
+  .right-safe-4 {
+    right: max(1rem, env(safe-area-inset-right));
+  }
+
+  .right-safe-6 {
+    right: max(1.5rem, env(safe-area-inset-right));
+  }
+
+  .inset-x-safe-4 {
+    left: max(1rem, env(safe-area-inset-left));
+    right: max(1rem, env(safe-area-inset-right));
+  }
 }
 
 /* Keyframe animations */

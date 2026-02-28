@@ -225,6 +225,8 @@ export function trackRewardedAdReward(provider: string, credits: number): void {
 
 type GuidedLookAnalyticsParams = {
   session_id: string;
+  strategy?: 'direct' | 'guided';
+  operation?: 'generate' | 'edit' | 'tryon';
   category?: string;
   occasion?: string;
   style?: string;
@@ -235,6 +237,10 @@ type GuidedLookAnalyticsParams = {
 
 export function trackGuidedLookStart(params: GuidedLookAnalyticsParams): void {
   trackEvent('guided_look_start', params);
+}
+
+export function trackGuidedLookModeSelected(params: GuidedLookAnalyticsParams): void {
+  trackEvent('guided_look_mode_selected', params);
 }
 
 export function trackGuidedLookFieldCompleted(params: GuidedLookAnalyticsParams & { field: string }): void {
@@ -267,6 +273,10 @@ export function trackGuidedLookOutfitRequested(params: GuidedLookAnalyticsParams
 
 export function trackGuidedLookUpgradeCTAClick(params: GuidedLookAnalyticsParams): void {
   trackEvent('guided_look_upgrade_cta_click', params);
+}
+
+export function trackGuidedLookTryOn(params: GuidedLookAnalyticsParams): void {
+  trackEvent('guided_look_tryon', params);
 }
 
 // ============================================================================
