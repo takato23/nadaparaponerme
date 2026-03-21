@@ -13,38 +13,19 @@
  * - Infinite scroll ready
  */
 
-import React, { useMemo, useRef, useCallback, useState, useEffect } from 'react';
+import React, { useMemo, useRef, useCallback, useState, useEffect, Suspense, lazy } from 'react';
 import ClosetItemCard from './ClosetItemCard';
 import ClosetQuickActions, { useContextMenu, QuickAction } from './ClosetQuickActions';
 import type { ClothingItem } from '../../types';
-import NanoBanana from './NanoBanana';
 
-// Type for Grid cell renderer props
-type GridCellProps = {
-  items: ClothingItem[];
-  columnCount: number;
-  selectedIds: Set<string>;
-  getItemVersatilityScore?: (itemId: string) => number;
-  gapSize: number;
-  onItemClick: (id: string) => void;
-  onToggleSelection?: (id: string) => void;
-  onQuickAction?: (action: string, item: ClothingItem) => void;
-  openContextMenu: (e: React.MouseEvent, item: ClothingItem) => void;
-  isSelectionMode: boolean;
-  showVersatilityScore: boolean;
-};
-
-type GridChildComponentProps = {
-  columnIndex: number;
-  rowIndex: number;
-  style: React.CSSProperties;
-} & GridCellProps;
+const NanoBanana = lazy(() => import('./NanoBanana'));
 
 interface ClosetGridVirtualizedProps {
   items: ClothingItem[];
   onItemClick: (id: string) => void;
   showVersatilityScore?: boolean;
   getItemVersatilityScore?: (itemId: string) => number;
+  recommendedItemId?: string | null;
 
   // Selection mode
   isSelectionMode?: boolean;
@@ -79,6 +60,7 @@ export default function ClosetGridVirtualized({
   onItemClick,
   showVersatilityScore = false,
   getItemVersatilityScore,
+  recommendedItemId = null,
   isSelectionMode = false,
   selectedIds = new Set(),
   onToggleSelection,
@@ -95,35 +77,13 @@ export default function ClosetGridVirtualized({
   onEmptyAction,
   emptyActionLabel = 'Agregar Prenda'
 }: ClosetGridVirtualizedProps) {
-  // ============================================
-  // ALL HOOKS MUST BE CALLED UNCONDITIONALLY
-  // (before any conditional logic or returns)
-  // ============================================
-
-  const gridRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [visibleRange, setVisibleRange] = useState({ start: 0, end: 50 });
+  const rangeRef = useRef(visibleRange);
+  const rafIdRef = useRef<number | null>(null);
   const { contextMenu, openContextMenu, closeContextMenu } = useContextMenu();
 
-  // Safe items array (handle null/undefined)
   const safeItems = items ?? [];
-
-  // Calculate responsive columns
-  const getColumnCount = useCallback((containerWidth: number): number => {
-    const effectiveWidth = containerWidth - gapSize;
-    const columns = Math.floor(effectiveWidth / (columnWidth + gapSize));
-    return Math.max(1, columns);
-  }, [columnWidth, gapSize]);
-
-  // Calculate row count based on items and columns
-  const getRowCount = useCallback((columnCount: number): number => {
-    return Math.ceil(safeItems.length / columnCount);
-  }, [safeItems.length]);
-
-  // Handle context menu (right-click or long-press)
-  const handleContextMenu = useCallback((e: React.MouseEvent, item: ClothingItem) => {
-    openContextMenu(e, item);
-  }, [openContextMenu]);
 
   const handleQuickActionInternal = useCallback((actionId: string, item: ClothingItem) => {
     if (onQuickAction) {
@@ -131,84 +91,15 @@ export default function ClosetGridVirtualized({
     }
   }, [onQuickAction]);
 
-  // Cell renderer
-  const Cell = useCallback(({
-    columnIndex,
-    rowIndex,
-    style,
-    data
-  }: { columnIndex: number; rowIndex: number; style: React.CSSProperties; data: GridCellProps }) => {
-    const {
-      items: gridItems,
-      columnCount,
-      selectedIds,
-      getItemVersatilityScore,
-      gapSize: cellGapSize,
-      onItemClick: cellOnItemClick,
-      onToggleSelection: cellOnToggleSelection,
-      onQuickAction: cellOnQuickAction,
-      openContextMenu: cellOpenContextMenu,
-      isSelectionMode: cellIsSelectionMode,
-      showVersatilityScore: cellShowVersatilityScore
-    } = data;
-    const itemIndex = rowIndex * columnCount + columnIndex;
+  useEffect(() => {
+    rangeRef.current = visibleRange;
+  }, [visibleRange]);
 
-    if (itemIndex >= gridItems.length) {
-      return null;
-    }
-
-    const item = gridItems[itemIndex];
-    const isSelected = selectedIds.has(item.id);
-    const versatilityScore = getItemVersatilityScore?.(item.id) || 0;
-
-    return (
-      <div
-        style={{
-          ...style,
-          padding: `${cellGapSize / 2}px`,
-          boxSizing: 'border-box'
-        }}
-      >
-        <ClosetItemCard
-          item={item}
-          onClick={cellOnItemClick}
-          onLongPress={(id) => {
-            const itemForMenu = gridItems.find((i: ClothingItem) => i.id === id);
-            if (itemForMenu) {
-              const fakeEvent = {
-                clientX: window.innerWidth / 2,
-                clientY: window.innerHeight / 2,
-                preventDefault: () => { }
-              } as React.MouseEvent;
-              cellOpenContextMenu(fakeEvent, itemForMenu);
-            }
-          }}
-          isSelected={isSelected}
-          onToggleSelection={cellOnToggleSelection}
-          showVersatilityScore={cellShowVersatilityScore}
-          versatilityScore={versatilityScore}
-          viewMode="grid"
-          size="normal"
-          showQuickActions={true}
-          onQuickAction={(action, itemId) => {
-            const itemForAction = gridItems.find((i: ClothingItem) => i.id === itemId);
-            if (itemForAction && cellOnQuickAction) {
-              cellOnQuickAction(action, itemForAction);
-            }
-          }}
-          index={itemIndex}
-          isSelectionMode={cellIsSelectionMode}
-        />
-      </div>
-    );
-  }, []);
-
-  // Calculate visible items based on scroll position
   useEffect(() => {
     const container = containerRef.current;
     if (!container || safeItems.length === 0) return;
 
-    const handleScroll = () => {
+    const calculateVisibleRange = () => {
       const scrollTop = container.scrollTop;
       const containerHeight = container.clientHeight;
 
@@ -223,37 +114,54 @@ export default function ClosetGridVirtualized({
       const startIndex = Math.max(0, (startRow - overscanRowCount) * itemsPerRow);
       const endIndex = Math.min(safeItems.length, startIndex + itemsPerScreen + (overscanRowCount * 2 * itemsPerRow));
 
-      setVisibleRange({ start: startIndex, end: endIndex });
+      return { start: startIndex, end: endIndex };
+    };
+
+    const commitRange = () => {
+      const nextRange = calculateVisibleRange();
+      const previousRange = rangeRef.current;
+      if (
+        previousRange.start === nextRange.start &&
+        previousRange.end === nextRange.end
+      ) {
+        return;
+      }
+      rangeRef.current = nextRange;
+      setVisibleRange(nextRange);
+    };
+
+    const scheduleRangeUpdate = () => {
+      if (rafIdRef.current !== null) return;
+      rafIdRef.current = window.requestAnimationFrame(() => {
+        rafIdRef.current = null;
+        commitRange();
+      });
     };
 
     // Initial calculation
-    handleScroll();
+    commitRange();
 
-    container.addEventListener('scroll', handleScroll, { passive: true });
-    window.addEventListener('resize', handleScroll);
+    container.addEventListener('scroll', scheduleRangeUpdate, { passive: true });
+    window.addEventListener('resize', scheduleRangeUpdate);
 
     return () => {
-      container.removeEventListener('scroll', handleScroll);
-      window.removeEventListener('resize', handleScroll);
+      container.removeEventListener('scroll', scheduleRangeUpdate);
+      window.removeEventListener('resize', scheduleRangeUpdate);
+      if (rafIdRef.current !== null) {
+        window.cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
     };
   }, [safeItems.length, columnWidth, rowHeight, gapSize, overscanRowCount]);
 
-  // Get visible items
   const visibleItems = useMemo(() => {
     return safeItems.slice(visibleRange.start, visibleRange.end);
   }, [safeItems, visibleRange]);
 
-  // ============================================
-  // RENDER LOGIC (conditional rendering in JSX)
-  // ============================================
-
-  // Null/undefined items
   if (!items) {
-    console.warn('ClosetGridVirtualized: items prop is null or undefined');
     return null;
   }
 
-  // Empty state
   if (items.length === 0 && !isLoading) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-center px-8 animate-fade-in">
@@ -269,7 +177,9 @@ export default function ClosetGridVirtualized({
           <div className="absolute top-1/2 right-0 w-2 h-2 rounded-full bg-accent animate-bounce-small" style={{ animationDelay: '0.6s' }} />
 
           <div className="absolute -bottom-4 -right-10 z-20">
-            <NanoBanana className="scale-50 origin-bottom-right" />
+            <Suspense fallback={null}>
+              <NanoBanana className="scale-50 origin-bottom-right" />
+            </Suspense>
           </div>
         </div>
 
@@ -292,7 +202,6 @@ export default function ClosetGridVirtualized({
     );
   }
 
-  // Loading state
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center h-full animate-fade-in">
@@ -338,6 +247,7 @@ export default function ClosetGridVirtualized({
             <div key={item.id} style={{ minHeight: '50px' }}>
               <ClosetItemCard
                 item={item}
+                isRecommended={Boolean(recommendedItemId && item.id === recommendedItemId)}
                 onClick={onItemClick}
                 onLongPress={(id) => {
                   const fakeEvent = {

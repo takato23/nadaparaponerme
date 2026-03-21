@@ -167,7 +167,11 @@ export default function ClosetCollections({
                 onChange={(e) => setNewCollectionName(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && newCollectionName.trim()) {
-                    editingCollection ? handleUpdateCollection() : handleCreateCollection();
+                    if (editingCollection) {
+                      handleUpdateCollection();
+                    } else {
+                      handleCreateCollection();
+                    }
                   }
                   if (e.key === 'Escape') {
                     setShowCreateDialog(false);

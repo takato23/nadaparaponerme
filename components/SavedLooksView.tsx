@@ -1,785 +1,1439 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { createPortal } from 'react-dom';
-import { motion, AnimatePresence } from 'framer-motion';
-import type { Variants } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import type { GeneratedLook, ClothingItem } from '../types';
-import { SLOT_CONFIGS, GENERATION_PRESETS } from '../types';
+import { useLocation, useNavigate } from 'react-router-dom';
+import type { ClothingItem, GeneratedLook, InferredLookContext, LookFolder, SavedLookContext, SavedOutfit } from '../types';
+import { ROUTES } from '../src/routes';
 import {
-  getGeneratedLooks,
-  getLookStats,
-  toggleLookFavorite,
-  deleteGeneratedLook,
-  enableLookSharing,
-  disableLookSharing,
-} from '../src/services/generatedLooksService';
-import Loader from './Loader';
-import EditLookModal from './EditLookModal';
-import ShopTheLookPanel from './ShopTheLookPanel';
-import LiquidMorphBackground from './LiquidMorphBackground';
+  buildOutfitShareUrl,
+  createLookFolder,
+  deleteOutfit,
+  enableOutfitSharing,
+  getLookFolders,
+  getSavedOutfits,
+  saveOutfit,
+  updateOutfit,
+  type OutfitLibraryItem,
+} from '../src/services/outfitService';
+import { getGeneratedLooks } from '../src/services/generatedLooksService';
+import { publishOutfitToTimeline } from '../src/services/activityFeedService';
+import { getPreferredClothingImage } from '../src/utils/closetImages';
+import { SurfaceTour, type SurfaceTourStep } from './help/SurfaceTour';
+import { useSurfaceTour } from './help/useSurfaceTour';
+import LooksFirstUploader from './looks/LooksFirstUploader';
+import LookGarmentSeparator from './looks/LookGarmentSeparator';
 
 interface SavedLooksViewProps {
   closet: ClothingItem[];
+  onClosetSync: (items: ClothingItem[]) => void;
+  useSupabaseCloset: boolean;
+  onUseLookInChat?: (look: SavedOutfit) => void;
+  onUseInferredLookInChat?: (options: {
+    prompt: string;
+    selectedLook: SavedLookContext;
+    selectedInferredLook: InferredLookContext;
+    lookUploadSessionId: string;
+  }) => void;
 }
 
-type FilterMode = 'all' | 'favorites' | 'shared';
+type ManualSlotKey = 'topId' | 'bottomId' | 'shoesId';
+type ManualPickerTarget = ManualSlotKey | 'extras';
+type ClothingCategory = 'top' | 'bottom' | 'shoes';
+type MobileLooksViewMode = 'grid' | 'list' | 'carousel';
 
-const studioTheme = {
-  '--studio-ink': '#1b1a17',
-  '--studio-ink-muted': 'rgba(27, 26, 23, 0.6)',
-  '--studio-paper': '#f8f3ee',
-  '--studio-cream': '#f2ece4',
-  '--studio-rose': '#f5a7a3',
-  '--studio-mint': '#9ad4c0',
-  '--studio-gold': '#f6c681',
-} as React.CSSProperties;
-const EASE_STANDARD: [number, number, number, number] = [0.22, 1, 0.36, 1];
+const DEFAULT_FOLDER_COLOR = '#D97706';
 
-const containerVariants: Variants = {
-  hidden: { opacity: 0 },
-  show: {
-    opacity: 1,
-    transition: { staggerChildren: 0.06, delayChildren: 0.1 }
-  }
+const MANUAL_SLOT_CONFIG: Array<{
+  key: ManualSlotKey;
+  category: ClothingCategory;
+  label: string;
+  emptyLabel: string;
+  helper: string;
+  icon: string;
+}> = [
+  {
+    key: 'topId',
+    category: 'top',
+    label: 'Top',
+    emptyLabel: 'Elegir top',
+    helper: 'Remeras, camisas, sweaters.',
+    icon: 'checkroom',
+  },
+  {
+    key: 'bottomId',
+    category: 'bottom',
+    label: 'Bottom',
+    emptyLabel: 'Elegir bottom',
+    helper: 'Pantalones, faldas, shorts.',
+    icon: 'view_in_ar',
+  },
+  {
+    key: 'shoesId',
+    category: 'shoes',
+    label: 'Calzado',
+    emptyLabel: 'Elegir calzado',
+    helper: 'Zapatillas, botas, zapatos.',
+    icon: 'footprint',
+  },
+];
+
+function buildLookPreview(outfit: SavedOutfit, closet: ClothingItem[]) {
+  const items = [
+    closet.find((item) => item.id === outfit.top_id),
+    closet.find((item) => item.id === outfit.bottom_id),
+    closet.find((item) => item.id === outfit.shoes_id),
+  ].filter(Boolean) as ClothingItem[];
+  return items;
+}
+
+function buildStudioSelection(outfit: SavedOutfit) {
+  const extraItemIds = Array.isArray(outfit.context_json?.extra_item_ids)
+    ? outfit.context_json.extra_item_ids.filter((itemId): itemId is string => typeof itemId === 'string')
+    : [];
+
+  return Array.from(new Set([
+    outfit.top_id,
+    outfit.bottom_id,
+    outfit.shoes_id,
+    outfit.hero_item_id,
+    ...extraItemIds,
+  ].filter(Boolean) as string[]));
+}
+
+function getItemCaption(item: ClothingItem) {
+  return item.metadata.subcategory || 'Prenda';
+}
+
+function getItemMeta(item: ClothingItem) {
+  return [item.metadata.color_primary, item.metadata.category]
+    .filter(Boolean)
+    .join(' • ');
+}
+
+const SOURCE_LABELS: Record<string, string> = {
+  ai_recommendation: 'Recomendado por Kumbi',
+  manual: 'Manual',
+  reference_recreation: 'Inspiración',
+  planner: 'Planificado',
+  community_import: 'Comunidad',
 };
 
-const itemVariants: Variants = {
-  hidden: { opacity: 0, y: 12 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.3, ease: EASE_STANDARD } }
-};
+function getSourceLabel(source: string | null | undefined): string {
+  if (!source) return 'Manual';
+  return SOURCE_LABELS[source] || source;
+}
 
-export default function SavedLooksView({ closet }: SavedLooksViewProps) {
+const LOOKS_TOUR_STEPS: SurfaceTourStep[] = [
+  {
+    id: 'search',
+    target: 'looks-search',
+    title: 'Encontrá un look rápido',
+    description: 'Buscá por nombre o refrescá la biblioteca cuando quieras volver a cargar tus combinaciones.',
+    position: 'bottom',
+  },
+  {
+    id: 'folders',
+    target: 'looks-folders',
+    title: 'Ordená por carpetas',
+    description: 'Filtrá por carpeta o creá una nueva para separar oficina, salida, viaje o lo que uses más.',
+    position: 'right',
+  },
+  {
+    id: 'manual',
+    target: 'looks-manual-builder',
+    title: 'Guardá un look manual',
+    description: 'Elegís top, bottom y calzado, le ponés nombre y lo dejás listo para reutilizar después.',
+    position: 'right',
+  },
+  {
+    id: 'library',
+    target: 'looks-library-card',
+    title: 'Reutilizá y adaptá',
+    description: 'Cada look guardado se puede editar, compartir, mandar a Kumbi o abrir en Studio.',
+    position: 'top',
+  },
+];
+
+function matchClosetItem(item: ClothingItem, query: string) {
+  if (!query.trim()) return true;
+  const haystack = [
+    item.metadata.subcategory,
+    item.metadata.color_primary,
+    item.metadata.category,
+    item.metadata.description,
+    ...(item.metadata.vibe_tags || []),
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+  return haystack.includes(query.trim().toLowerCase());
+}
+
+function getExtraItemIds(contextJson: SavedOutfit['context_json']) {
+  if (!contextJson || typeof contextJson !== 'object') return [];
+  const extraItemIds = contextJson.extra_item_ids;
+  if (!Array.isArray(extraItemIds)) return [];
+  return extraItemIds.filter((itemId): itemId is string => typeof itemId === 'string');
+}
+
+export default function SavedLooksView({
+  closet,
+  onClosetSync,
+  useSupabaseCloset,
+  onUseLookInChat,
+  onUseInferredLookInChat,
+}: SavedLooksViewProps) {
+  const { showTour, completeTour, skipTour } = useSurfaceTour('looks-surface-tour-completed');
   const navigate = useNavigate();
-  const [looks, setLooks] = useState<GeneratedLook[]>([]);
-  const [stats, setStats] = useState<{
-    total: number;
-    favorites: number;
-    shared: number;
-    limit: number;
-    tier: string;
-  } | null>(null);
+  const location = useLocation();
+  const [library, setLibrary] = useState<OutfitLibraryItem[]>([]);
+  const [folders, setFolders] = useState<LookFolder[]>([]);
+  const [generatedLooks, setGeneratedLooks] = useState<GeneratedLook[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [filter, setFilter] = useState<FilterMode>('all');
-  const [selectedLook, setSelectedLook] = useState<GeneratedLook | null>(null);
-  const [isDetailOpen, setIsDetailOpen] = useState(false);
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [isEditOpen, setIsEditOpen] = useState(false);
-  const [editingLook, setEditingLook] = useState<GeneratedLook | null>(null);
-  const [compareMode, setCompareMode] = useState(false);
-  const [comparePosition, setComparePosition] = useState(50);
+  const [search, setSearch] = useState('');
+  const [activeFolderId, setActiveFolderId] = useState<string>('all');
+  const [creatingFolder, setCreatingFolder] = useState(false);
+  const [newFolderName, setNewFolderName] = useState('');
+  const [editingLookId, setEditingLookId] = useState<string | null>(null);
+  const [editingDraft, setEditingDraft] = useState<{ name: string; tags: string; referenceSummary: string }>({
+    name: '',
+    tags: '',
+    referenceSummary: '',
+  });
+  const [manualDraft, setManualDraft] = useState({
+    name: '',
+    folderId: '',
+    tags: '',
+    topId: '',
+    bottomId: '',
+    shoesId: '',
+    extraItemIds: [] as string[],
+    explanation: '',
+  });
+  const [activeManualPicker, setActiveManualPicker] = useState<ManualPickerTarget | null>(null);
+  const [manualPickerSearch, setManualPickerSearch] = useState('');
+  const [isBuilderOpen, setIsBuilderOpen] = useState(false);
+  const [cardMenuOpenId, setCardMenuOpenId] = useState<string | null>(null);
+  const [selectedLookId, setSelectedLookId] = useState<string | null>(null);
+  const [mobileViewMode, setMobileViewMode] = useState<MobileLooksViewMode>('list');
+  const shouldAutoOpenLooksFirst = useMemo(
+    () => new URLSearchParams(location.search).get('intent') === 'upload-looks',
+    [location.search],
+  );
 
-  // Load looks and stats
-  const loadData = useCallback(async () => {
+  const loadLibrary = useCallback(async () => {
+    setIsLoading(true);
     try {
-      const [looksData, statsData] = await Promise.all([
-        getGeneratedLooks({ favoritesOnly: filter === 'favorites' }),
-        getLookStats()
+      const [outfits, foldersData, renders] = await Promise.all([
+        getSavedOutfits(),
+        getLookFolders(),
+        getGeneratedLooks({ limit: 100 }),
       ]);
-
-      let filtered = looksData;
-      if (filter === 'shared') {
-        filtered = looksData.filter(l => l.is_public);
-      }
-
-      setLooks(filtered);
-      setStats(statsData);
+      setLibrary(outfits);
+      setFolders(foldersData);
+      setGeneratedLooks(renders);
     } catch (error) {
-      console.error('Error loading looks:', error);
-      toast.error('Error al cargar los looks');
+      console.error('Error loading look library:', error);
+      toast.error('No pude cargar tu biblioteca de looks.');
     } finally {
       setIsLoading(false);
     }
-  }, [filter]);
+  }, []);
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    void loadLibrary();
+  }, [loadLibrary]);
 
-  // Get clothing item by ID
-  const getItemById = useCallback((itemId: string | undefined): ClothingItem | undefined => {
-    if (!itemId) return undefined;
-    return closet.find(item => item.id === itemId);
+  useEffect(() => {
+    if (!activeManualPicker) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [activeManualPicker]);
+
+  const renderMap = useMemo(() => {
+    const map = new Map<string, GeneratedLook[]>();
+    generatedLooks.forEach((look) => {
+      if (!look.outfit_id) return;
+      const current = map.get(look.outfit_id) || [];
+      current.push(look);
+      map.set(look.outfit_id, current);
+    });
+    return map;
+  }, [generatedLooks]);
+
+  const filteredLibrary = useMemo(() => {
+    return library.filter((look) => {
+      if (activeFolderId !== 'all' && (look.folder_id || '') !== activeFolderId) return false;
+      if (!search.trim()) return true;
+      const haystack = [
+        look.name,
+        look.description,
+        look.reference_summary,
+        ...(look.tags || []),
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      return haystack.includes(search.trim().toLowerCase());
+    });
+  }, [activeFolderId, library, search]);
+
+  const closetByCategory = useMemo(
+    () => ({
+      top: closet.filter((item) => item.metadata.category === 'top'),
+      bottom: closet.filter((item) => item.metadata.category === 'bottom'),
+      shoes: closet.filter((item) => item.metadata.category === 'shoes'),
+    }),
+    [closet],
+  );
+
+  const selectedManualItems = useMemo(
+    () => ({
+      topId: closet.find((item) => item.id === manualDraft.topId) || null,
+      bottomId: closet.find((item) => item.id === manualDraft.bottomId) || null,
+      shoesId: closet.find((item) => item.id === manualDraft.shoesId) || null,
+    }),
+    [closet, manualDraft.bottomId, manualDraft.shoesId, manualDraft.topId],
+  );
+
+  const selectedManualExtras = useMemo(
+    () => manualDraft.extraItemIds
+      .map((itemId) => closet.find((item) => item.id === itemId) || null)
+      .filter(Boolean) as ClothingItem[],
+    [closet, manualDraft.extraItemIds],
+  );
+
+  const activePickerConfig = useMemo(
+    () => MANUAL_SLOT_CONFIG.find((slot) => slot.key === activeManualPicker) || null,
+    [activeManualPicker],
+  );
+
+  const pickerItems = useMemo(() => {
+    if (activeManualPicker === 'extras') {
+      const blockedIds = new Set([manualDraft.topId, manualDraft.bottomId, manualDraft.shoesId].filter(Boolean));
+      return closet
+        .filter((item) => !blockedIds.has(item.id))
+        .filter((item) => matchClosetItem(item, manualPickerSearch));
+    }
+    if (!activePickerConfig) return [];
+    return closetByCategory[activePickerConfig.category].filter((item) => matchClosetItem(item, manualPickerSearch));
+  }, [activeManualPicker, activePickerConfig, closet, closetByCategory, manualDraft.bottomId, manualDraft.shoesId, manualDraft.topId, manualPickerSearch]);
+
+  const manualSelectedCount = useMemo(() => {
+    return MANUAL_SLOT_CONFIG.reduce((count, slot) => (
+      manualDraft[slot.key] ? count + 1 : count
+    ), 0);
+  }, [manualDraft]);
+
+  const createFolder = useCallback(async () => {
+    const name = newFolderName.trim();
+    if (!name) return;
+    setCreatingFolder(true);
+    try {
+      const folder = await createLookFolder({
+        name,
+        color: DEFAULT_FOLDER_COLOR,
+        icon: 'folder',
+        sortOrder: folders.length,
+      });
+      setFolders((prev) => [...prev, folder]);
+      setNewFolderName('');
+      toast.success('Carpeta creada');
+    } catch (error) {
+      console.error('Error creating folder:', error);
+      toast.error('No pude crear la carpeta.');
+    } finally {
+      setCreatingFolder(false);
+    }
+  }, [folders.length, newFolderName]);
+
+  const createManualLook = useCallback(async () => {
+    if (!manualDraft.topId || !manualDraft.bottomId || !manualDraft.shoesId) {
+      toast.error('Elegí top, bottom y calzado.');
+      return;
+    }
+
+    try {
+      const saved = await saveOutfit({
+        top_id: manualDraft.topId,
+        bottom_id: manualDraft.bottomId,
+        shoes_id: manualDraft.shoesId,
+        explanation: manualDraft.explanation || 'Look armado manualmente en la biblioteca.',
+        name: manualDraft.name || 'Look manual',
+        source: 'manual',
+        aiGenerated: false,
+        folderId: manualDraft.folderId || null,
+        tags: manualDraft.tags.split(',').map((tag) => tag.trim()).filter(Boolean),
+        contextJson: {
+          creation_surface: 'look_library_manual',
+          extra_item_ids: manualDraft.extraItemIds,
+        },
+      });
+
+      setLibrary((prev) => [saved, ...prev]);
+      setManualDraft({
+        name: '',
+        folderId: '',
+        tags: '',
+        topId: '',
+        bottomId: '',
+        shoesId: '',
+        extraItemIds: [],
+        explanation: '',
+      });
+      toast.success('Look manual guardado');
+    } catch (error) {
+      console.error('Error saving manual look:', error);
+      toast.error('No pude guardar el look manual.');
+    }
+  }, [manualDraft]);
+
+  const moveToFolder = useCallback(async (look: OutfitLibraryItem, folderId: string) => {
+    try {
+      const updated = await updateOutfit(look.id, { folder_id: folderId || null });
+      setLibrary((prev) => prev.map((entry) => (entry.id === look.id ? { ...entry, ...updated } : entry)));
+      toast.success(folderId ? 'Look movido de carpeta' : 'Look sin carpeta');
+    } catch (error) {
+      console.error('Error moving look:', error);
+      toast.error('No pude mover el look.');
+    }
+  }, []);
+
+  const removeLook = useCallback(async (lookId: string) => {
+    if (!window.confirm('¿Eliminar este look de la biblioteca?')) return;
+    try {
+      await deleteOutfit(lookId);
+      setLibrary((prev) => prev.filter((look) => look.id !== lookId));
+      toast.success('Look eliminado');
+    } catch (error) {
+      console.error('Error deleting look:', error);
+      toast.error('No pude eliminar el look.');
+    }
+  }, []);
+
+  const startEditing = useCallback((look: OutfitLibraryItem) => {
+    setEditingLookId(look.id);
+    setEditingDraft({
+      name: look.name || '',
+      tags: (look.tags || []).join(', '),
+      referenceSummary: look.reference_summary || '',
+    });
+  }, []);
+
+  const saveEdit = useCallback(async (look: OutfitLibraryItem) => {
+    try {
+      const updated = await updateOutfit(look.id, {
+        name: editingDraft.name.trim() || look.name,
+        tags: editingDraft.tags.split(',').map((tag) => tag.trim()).filter(Boolean),
+        reference_summary: editingDraft.referenceSummary.trim() || null,
+      });
+      setLibrary((prev) => prev.map((entry) => (entry.id === look.id ? { ...entry, ...updated } : entry)));
+      setEditingLookId(null);
+      toast.success('Look actualizado');
+    } catch (error) {
+      console.error('Error updating look:', error);
+      toast.error('No pude actualizar el look.');
+    }
+  }, [editingDraft]);
+
+  const toggleShare = useCallback(async (look: OutfitLibraryItem) => {
+    try {
+      const shareToken = look.share_token && look.is_public
+        ? look.share_token
+        : await enableOutfitSharing(look.id);
+      const shareUrl = buildOutfitShareUrl(shareToken);
+      const bundle = {
+        top: closet.find((item) => item.id === look.top_id),
+        bottom: closet.find((item) => item.id === look.bottom_id),
+        shoes: closet.find((item) => item.id === look.shoes_id),
+      };
+      const alreadyPublished = Boolean(
+        look.context_json && typeof look.context_json === 'object' && look.context_json.community_published_at,
+      );
+
+      let nextLook: OutfitLibraryItem = {
+        ...look,
+        is_public: true,
+        share_token: shareToken,
+      };
+
+      if (!alreadyPublished) {
+        await publishOutfitToTimeline(
+          {
+            ...look,
+            is_public: true,
+            share_token: shareToken,
+          },
+          bundle,
+          {
+            caption: look.description || look.explanation || look.name || 'Look compartido desde tu biblioteca',
+            tags: look.tags || [],
+            visibility: 'community',
+          },
+        );
+
+        const updated = await updateOutfit(look.id, {
+          context_json: {
+            ...(look.context_json || {}),
+            community_published_at: new Date().toISOString(),
+          },
+          is_public: true,
+        });
+        nextLook = {
+          ...updated,
+          share_token: shareToken,
+        };
+      }
+
+      await navigator.clipboard.writeText(shareUrl);
+      setLibrary((prev) => prev.map((entry) => (entry.id === look.id ? nextLook : entry)));
+      toast.success(alreadyPublished ? 'Link copiado' : 'Look compartido en Comunidad');
+    } catch (error) {
+      console.error('Error sharing look:', error);
+      toast.error('No pude compartir este look.');
+    }
   }, [closet]);
 
-  const shopLookItems = useMemo(() => {
-    if (!selectedLook) return [];
+  const openManualPicker = useCallback((slot: ManualSlotKey) => {
+    setActiveManualPicker(slot);
+    setManualPickerSearch('');
+  }, []);
 
-    return SLOT_CONFIGS.map((config) => {
-      const itemId = selectedLook.source_items[config.id];
-      if (!itemId) return null;
-      const item = getItemById(itemId);
-      if (!item) return null;
-      return { slot: config.id, item, label: config.labelShort };
-    }).filter(Boolean) as { slot: string; item: ClothingItem; label?: string }[];
-  }, [selectedLook, getItemById]);
+  const openManualExtrasPicker = useCallback(() => {
+    setActiveManualPicker('extras');
+    setManualPickerSearch('');
+  }, []);
 
-  // Handle favorite toggle
-  const handleToggleFavorite = async (look: GeneratedLook) => {
-    setActionLoading(look.id);
-    try {
-      const newStatus = await toggleLookFavorite(look.id);
-      setLooks(prev => prev.map(l =>
-        l.id === look.id ? { ...l, is_favorite: newStatus } : l
-      ));
-      if (selectedLook?.id === look.id) {
-        setSelectedLook(prev => prev ? { ...prev, is_favorite: newStatus } : null);
-      }
-      toast.success(newStatus ? 'Agregado a favoritos' : 'Quitado de favoritos');
-    } catch (error) {
-      toast.error('Error al actualizar favorito');
-    } finally {
-      setActionLoading(null);
+  const selectManualItem = useCallback((slot: ManualSlotKey, itemId: string) => {
+    setManualDraft((prev) => ({ ...prev, [slot]: itemId }));
+    setActiveManualPicker(null);
+    setManualPickerSearch('');
+  }, []);
+
+  const toggleManualExtraItem = useCallback((itemId: string) => {
+    setManualDraft((prev) => ({
+      ...prev,
+      extraItemIds: prev.extraItemIds.includes(itemId)
+        ? prev.extraItemIds.filter((entry) => entry !== itemId)
+        : [...prev.extraItemIds, itemId],
+    }));
+  }, []);
+
+  const openLookInStudio = useCallback((look: SavedOutfit) => {
+    const preselectedItemIds = buildStudioSelection(look);
+    if (preselectedItemIds.length === 0) {
+      toast.error('Este look no tiene prendas listas para Studio.');
+      return;
     }
-  };
 
-  // Handle share toggle
-  const handleToggleShare = async (look: GeneratedLook) => {
-    setActionLoading(look.id);
-    try {
-      if (look.is_public) {
-        await disableLookSharing(look.id);
-        setLooks(prev => prev.map(l =>
-          l.id === look.id ? { ...l, is_public: false, share_token: undefined } : l
-        ));
-        if (selectedLook?.id === look.id) {
-          setSelectedLook(prev => prev ? { ...prev, is_public: false, share_token: undefined } : null);
-        }
-        toast.success('Link de compartir desactivado');
-      } else {
-        const token = await enableLookSharing(look.id);
-        setLooks(prev => prev.map(l =>
-          l.id === look.id ? { ...l, is_public: true, share_token: token } : l
-        ));
-        if (selectedLook?.id === look.id) {
-          setSelectedLook(prev => prev ? { ...prev, is_public: true, share_token: token } : null);
-        }
-        // Copy to clipboard
-        const shareUrl = `${window.location.origin}/look/${token}`;
-        try {
-          await navigator.clipboard.writeText(shareUrl);
-          toast.success('Link de compartir copiado');
-        } catch {
-          toast.success('Link habilitado. Copialo manualmente desde el detalle.');
-        }
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Error al actualizar compartir';
-      if (message.includes('No autenticado')) {
-        toast.error('Tenés que iniciar sesión para compartir.');
-      } else if (message.includes('plan')) {
-        toast.error('Tu plan actual no permite compartir looks.');
-      } else if (message.includes('permite') || message.includes('límite')) {
-        toast.error(message);
-      } else {
-        toast.error(message || 'Error al actualizar compartir');
-      }
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  // Handle delete
-  const handleDelete = async (look: GeneratedLook) => {
-    if (!confirm('¿Seguro que querés eliminar este look?')) return;
-
-    setActionLoading(look.id);
-    try {
-      await deleteGeneratedLook(look.id);
-      setLooks(prev => prev.filter(l => l.id !== look.id));
-      if (selectedLook?.id === look.id) {
-        setIsDetailOpen(false);
-        setSelectedLook(null);
-      }
-      toast.success('Look eliminado');
-      // Refresh stats
-      const newStats = await getLookStats();
-      setStats(newStats);
-    } catch (error) {
-      toast.error('Error al eliminar');
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  // Download look image
-  const handleDownload = async (look: GeneratedLook) => {
-    try {
-      const response = await fetch(look.image_url);
-      if (!response.ok) {
-        throw new Error('No se pudo descargar la imagen del look.');
-      }
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `look-${look.title || look.id.slice(0, 8)}.jpg`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      toast.success('Descargando...');
-    } catch (err) {
-      console.error('Download failed:', err);
-      toast.error('Error al descargar');
-    }
-  };
-
-  // Open edit modal
-  const openEditModal = (look: GeneratedLook) => {
-    setEditingLook(look);
-    setIsEditOpen(true);
-  };
-
-  // Handle edit save
-  const handleEditSave = (updatedLook: GeneratedLook) => {
-    setLooks(prev => prev.map(l => l.id === updatedLook.id ? updatedLook : l));
-    if (selectedLook?.id === updatedLook.id) {
-      setSelectedLook(updatedLook);
-    }
-  };
-
-  // Open detail modal
-  const openDetail = (look: GeneratedLook) => {
-    setSelectedLook(look);
-    setIsDetailOpen(true);
-    setCompareMode(false);
-    setComparePosition(50);
-  };
-
-  // Get slot info for a look
-  const getSlotInfo = (look: GeneratedLook) => {
-    const items = look.source_items;
-    const usedSlots: Array<{ slot: string; item?: ClothingItem }> = [];
-
-    SLOT_CONFIGS.forEach(config => {
-      const itemId = items[config.id as keyof typeof items];
-      if (itemId) {
-        usedSlots.push({ slot: config.labelShort, item: getItemById(itemId) });
-      }
+    navigate(ROUTES.STUDIO, {
+      state: {
+        preselectedItemIds,
+      },
     });
-
-    return usedSlots;
-  };
-
-  const usagePercentage = stats ? Math.round((stats.total / stats.limit) * 100) : 0;
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center" style={studioTheme}>
-        <Loader />
-      </div>
-    );
-  }
+  }, [navigate]);
 
   return (
-    <div
-      className="relative min-h-screen overflow-hidden text-[color:var(--studio-ink)]"
-      style={{ ...studioTheme, fontFamily: '"Poppins", sans-serif' }}
-    >
-      {/* Background - Liquid Glass */}
-      <div className="fixed inset-0 -z-10 pointer-events-none">
-        <LiquidMorphBackground />
-        {/* Capa extra de unificación para dark mode si es necesario */}
-        <div className="absolute inset-0 bg-white/20 dark:bg-black/40 backdrop-blur-[2px]"></div>
-      </div>
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(255,255,255,0.75),_transparent_28%),linear-gradient(180deg,#f5eee6_0%,#f7f1ea_32%,#efe5da_100%)] text-[#211d1a]">
+      {showTour && (
+        <SurfaceTour
+          steps={LOOKS_TOUR_STEPS}
+          introTitle="Tour rápido de looks"
+          introDescription="Te ubico en los puntos clave para guardar, ordenar y volver a usar tus combinaciones."
+          introIcon="✨"
+          ctaLabel="Sí, mostrame"
+          dismissLabel="No, ya sé usarlo"
+          onComplete={completeTour}
+          onSkip={skipTour}
+        />
+      )}
 
-      {/* Header */}
-      <header className="px-5 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-4 sticky top-0 z-40 bg-white/40 dark:bg-black/20 backdrop-blur-xl border-b border-white/20 dark:border-white/5">
-        <div className="flex items-center justify-between">
-          <button
-            onClick={() => navigate(-1)}
-            className="w-11 h-11 rounded-[1.15rem] bg-white/50 dark:bg-white/5 backdrop-blur-md border border-white/60 dark:border-white/10 flex items-center justify-center shadow-sm hover:shadow-md hover:scale-105 active:scale-95 transition-all text-gray-800 dark:text-gray-200"
-            aria-label="Volver"
-          >
-            <span className="material-symbols-rounded">arrow_back</span>
-          </button>
-          <div className="text-right flex flex-col items-end">
-            <div className="flex items-center gap-1.5 mb-0.5">
-              <span className="material-symbols-rounded text-sm text-fuchsia-500 drop-shadow-sm">auto_awesome</span>
-              <p className="text-[10px] uppercase tracking-[0.2em] font-bold text-gray-500 dark:text-gray-400">Armario de looks</p>
-            </div>
-            <h1 className="text-2xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 dark:from-white dark:via-gray-200 dark:to-white">
-              Digital Wardrobe
-            </h1>
-          </div>
-        </div>
-      </header>
-
-      <motion.main
-        variants={containerVariants}
-        initial="hidden"
-        animate="show"
-        className="px-4 pb-[calc(6rem+env(safe-area-inset-bottom))]"
-      >
-        {/* Storage usage */}
-        {stats && (
-          <motion.section variants={itemVariants} className="mb-4">
-            <div className="rounded-2xl bg-white/70 backdrop-blur-md border border-white/60 p-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs text-[color:var(--studio-ink-muted)]">
-                  {stats.total} de {stats.limit} looks ({stats.tier})
-                </span>
-                <span className="text-xs font-semibold">{usagePercentage}%</span>
-              </div>
-              <div className="h-2 rounded-full bg-gray-200 overflow-hidden">
-                <div
-                  className="h-full rounded-full transition-all duration-500"
-                  style={{
-                    width: `${Math.min(usagePercentage, 100)}%`,
-                    background: usagePercentage > 80 ? '#f5a7a3' : '#9ad4c0'
-                  }}
-                />
-              </div>
-              <div className="flex gap-4 mt-3 text-xs text-[color:var(--studio-ink-muted)]">
-                <span className="flex items-center gap-1"><span className="material-symbols-outlined text-red-500 text-sm">favorite</span> {stats.favorites} favoritos</span>
-                <span className="flex items-center gap-1"><span className="material-symbols-outlined text-blue-500 text-sm">link</span> {stats.shared} compartidos</span>
-              </div>
-            </div>
-          </motion.section>
-        )}
-
-        {/* Filters - Pill Selectors */}
-        <motion.section variants={itemVariants} className="mb-6 mt-4">
-          <div className="flex gap-2 p-1 bg-white/40 dark:bg-black/20 backdrop-blur-md border border-white/50 dark:border-white/10 rounded-2xl w-fit shadow-sm overflow-x-auto hide-scrollbar">
-            {[
-              { id: 'all' as FilterMode, label: 'Todos', count: stats?.total, icon: 'grid_view' },
-              { id: 'favorites' as FilterMode, label: 'Favoritos', count: stats?.favorites, icon: 'favorite' },
-              { id: 'shared' as FilterMode, label: 'Compartidos', count: stats?.shared, icon: 'link' },
-            ].map(f => {
-              const isActive = filter === f.id;
-              return (
-                <button
-                  key={f.id}
-                  onClick={() => setFilter(f.id)}
-                  className={`relative px-4 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-1.5 whitespace-nowrap ${isActive
-                    ? 'text-white'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                    }`}
-                >
-                  {isActive && (
-                    <motion.div
-                      layoutId="saved-looks-filter"
-                      className="absolute inset-0 bg-gray-900 dark:bg-white rounded-xl shadow-md"
-                      transition={{ type: "spring", bounce: 0.2, duration: 0.5 }}
-                    />
-                  )}
-                  <span className="relative z-10 flex items-center gap-1.5">
-                    <span className={`material-symbols-rounded text-[16px] ${isActive ? (f.id === 'favorites' ? 'text-rose-400' : f.id === 'shared' ? 'text-blue-400' : '') : ''}`}>
-                      {f.icon}
-                    </span>
-                    {f.label}
-                    <span className={`ml-1 px-1.5 py-0.5 rounded-md text-[10px] ${isActive ? 'bg-white/20 dark:bg-black/20 text-white dark:text-gray-900' : 'bg-gray-200 dark:bg-gray-800 text-gray-500'}`}>
-                      {f.count || 0}
-                    </span>
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 py-4 md:px-6 md:py-5">
+        {/* ── Compact header ─────────────────────────────────────────── */}
+        <header className="overflow-hidden rounded-[28px] border border-white/60 bg-white/72 px-4 py-3 shadow-[0_18px_48px_-34px_rgba(74,51,27,0.38)] backdrop-blur-xl md:px-5 md:py-4">
+          <div className="flex flex-col gap-2.5">
+            {/* Row 1: title + stats + search */}
+            <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex items-center gap-3">
+                <h1 className="font-serif text-xl font-semibold tracking-[-0.04em] text-[#171411] md:text-2xl">
+                  Looks
+                </h1>
+                <div className="flex items-center gap-1.5">
+                  <span className="rounded-full bg-[#f5eee6] px-2.5 py-1 text-[11px] font-medium text-[#5f554d]">
+                    {library.length}
                   </span>
-                </button>
-              );
-            })}
-          </div>
-        </motion.section>
-
-        {/* Looks Grid - Masonry */}
-        <motion.section variants={itemVariants}>
-          {looks.length === 0 ? (
-            <div className="rounded-3xl bg-white/40 dark:bg-black/20 backdrop-blur-xl border border-white/50 dark:border-white/10 p-10 text-center shadow-sm">
-              <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 flex items-center justify-center">
-                <span className="material-symbols-rounded text-4xl text-violet-500 drop-shadow-sm">
-                  photo_library
-                </span>
+                  <span className="rounded-full bg-[#f5eee6] px-2.5 py-1 text-[11px] font-medium text-[#5f554d]">
+                    {folders.length} carpetas
+                  </span>
+                </div>
               </div>
-              <p className="text-sm font-bold text-gray-700 dark:text-gray-300">
-                {filter === 'all'
-                  ? 'Tu armario digital está vacío.'
-                  : filter === 'favorites'
-                    ? 'Aún no marcaste ningún look como favorito.'
-                    : 'No compartiste ningún look todavía.'}
-              </p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                Generá nuevos looks en el Studio para llenar esta galería.
-              </p>
-              {filter === 'all' && (
+
+              <div className="flex w-full items-center gap-2 lg:w-auto" data-surface-tour="looks-search">
+                <div className="relative flex-1 lg:min-w-[220px] lg:flex-initial">
+                  <span className="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-base text-[#9a8f84]">search</span>
+                  <input
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    placeholder="Buscar look…"
+                    className="w-full rounded-full border border-[#e4d8ca] bg-[#fbf8f4] py-2 pl-9 pr-4 text-sm text-[#211d1a] outline-none transition placeholder:text-[#9a8f84] focus:border-[#d2b89d]"
+                  />
+                </div>
                 <button
-                  onClick={() => navigate('/studio')}
-                  className="mt-6 px-6 py-2.5 rounded-full bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-sm font-bold shadow-md hover:shadow-lg transition-all hover:-translate-y-0.5"
+                  type="button"
+                  onClick={() => void loadLibrary()}
+                  aria-label="Recargar biblioteca de looks"
+                  className="inline-flex items-center justify-center rounded-full border border-[#dccfc0] bg-white p-2 text-[#2a241f] transition hover:bg-[#faf4ec]"
                 >
-                  Ir al Studio
+                  <span className="material-symbols-outlined text-lg">refresh</span>
                 </button>
-              )}
+              </div>
             </div>
-          ) : (
-            <div className="columns-2 sm:columns-3 gap-3 space-y-3 pb-8">
-              <AnimatePresence>
-                {looks.map(look => (
-                  <motion.div
-                    key={look.id}
-                    layoutId={`look-${look.id}`}
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
-                    className="relative rounded-[20px] overflow-hidden shadow-sm hover:shadow-xl group cursor-pointer border border-white/30 dark:border-white/10 bg-white/20 dark:bg-black/20 backdrop-blur-sm transition-all duration-300 hover:-translate-y-1 block break-inside-avoid"
-                    onClick={() => openDetail(look)}
+
+            {/* Row 2: Folder chips (inline) */}
+            <div className="flex items-center gap-2" data-surface-tour="looks-folders">
+              <div className="flex flex-1 gap-1.5 overflow-x-auto pb-0.5">
+                <button
+                  type="button"
+                  onClick={() => setActiveFolderId('all')}
+                  className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition ${
+                    activeFolderId === 'all'
+                      ? 'bg-[#171411] text-white'
+                      : 'bg-[#f5eee6] text-[#544a42] hover:bg-[#eadfce]'
+                  }`}
+                >
+                  Todos
+                </button>
+                {folders.map((folder) => (
+                  <button
+                    key={folder.id}
+                    type="button"
+                    onClick={() => setActiveFolderId(folder.id)}
+                    className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition ${
+                      activeFolderId === folder.id
+                        ? 'bg-[#171411] text-white'
+                        : 'bg-[#f5eee6] text-[#544a42] hover:bg-[#eadfce]'
+                    }`}
                   >
-                    <img
-                      src={look.image_url}
-                      alt={look.title || 'Look generado'}
-                      loading="lazy"
-                      className="w-full h-auto object-cover"
-                    />
-
-                    {/* Premium Hover Glow */}
-                    <div className="absolute inset-0 bg-gradient-to-br from-violet-500/10 to-fuchsia-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
-
-                    {/* Gradient Overlay for Text */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent opacity-60 group-hover:opacity-80 transition-opacity pointer-events-none" />
-
-                    {/* Glass Badges */}
-                    <div className="absolute top-2.5 right-2.5 flex flex-col gap-1.5 z-10">
-                      {look.is_favorite && (
-                        <span className="w-7 h-7 rounded-full bg-white/80 dark:bg-black/60 backdrop-blur-md flex items-center justify-center shadow-sm border border-white/40 dark:border-white/10">
-                          <span className="material-symbols-rounded text-rose-500 text-[15px] drop-shadow-sm">heart_check</span>
-                        </span>
-                      )}
-                      {look.is_public && (
-                        <span className="w-7 h-7 rounded-full bg-white/80 dark:bg-black/60 backdrop-blur-md flex items-center justify-center shadow-sm border border-white/40 dark:border-white/10">
-                          <span className="material-symbols-rounded text-blue-500 text-[15px] drop-shadow-sm">link</span>
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Date & Title */}
-                    <div className="absolute bottom-3 left-3 right-3 z-10 transform translate-y-1 group-hover:translate-y-0 transition-transform">
-                      <p className="text-xs font-bold text-white drop-shadow-sm truncate mb-0.5">
-                        {look.title || "Outfit Diario"}
-                      </p>
-                      <p className="text-[10px] text-white/80 truncate font-medium uppercase tracking-wide">
-                        {new Date(look.created_at).toLocaleDateString('es-AR', {
-                          day: 'numeric',
-                          month: 'short'
-                        })}
-                      </p>
-                    </div>
-                  </motion.div>
+                    {folder.name}
+                  </button>
                 ))}
-              </AnimatePresence>
-            </div>
-          )}
-        </motion.section>
-      </motion.main>
-
-      {/* Detail Modal */}
-      {createPortal(
-        <AnimatePresence>
-          {isDetailOpen && selectedLook && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6"
-              onClick={() => setIsDetailOpen(false)}
-            >
-              <motion.div
-                initial={{ scale: 0.95, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.95, opacity: 0 }}
-                transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-                className="w-full max-w-lg bg-white/85 dark:bg-[#05060a]/80 backdrop-blur-3xl border border-white/50 dark:border-white/10 rounded-[32px] overflow-hidden shadow-2xl max-h-[90vh] flex flex-col"
-                onClick={e => e.stopPropagation()}
-              >
-                <div className="overflow-y-auto custom-scrollbar w-full flex-1">
-                  {/* Image with comparison */}
-                  <div className="relative">
-                    {compareMode && selectedLook.selfie_url ? (
-                      // Comparison mode - before/after slider
-                      <div
-                        className="relative w-full aspect-[4/5] select-none"
-                        onMouseMove={(e) => {
-                          if (e.buttons === 1) {
-                            const rect = e.currentTarget.getBoundingClientRect();
-                            const x = ((e.clientX - rect.left) / rect.width) * 100;
-                            setComparePosition(Math.max(0, Math.min(100, x)));
-                          }
-                        }}
-                        onTouchMove={(e) => {
-                          const touch = e.touches[0];
-                          const rect = e.currentTarget.getBoundingClientRect();
-                          const x = ((touch.clientX - rect.left) / rect.width) * 100;
-                          setComparePosition(Math.max(0, Math.min(100, x)));
-                        }}
-                      >
-                        {/* Before (selfie) - full background */}
-                        <img
-                          src={selectedLook.selfie_url}
-                          alt="Antes"
-                          className="absolute inset-0 w-full h-full object-cover"
-                          draggable={false}
-                        />
-                        {/* After (generated) - clipped */}
-                        <div
-                          className="absolute inset-0 overflow-hidden"
-                          style={{ clipPath: `inset(0 ${100 - comparePosition}% 0 0)` }}
-                        >
-                          <img
-                            src={selectedLook.image_url}
-                            alt="Después"
-                            className="w-full h-full object-cover"
-                            draggable={false}
-                          />
-                        </div>
-                        {/* Slider line - Refined */}
-                        <div
-                          className="absolute top-0 bottom-0 w-0.5 bg-gradient-to-b from-white/0 via-white/80 to-white/0 shadow-[0_0_10px_rgba(255,255,255,0.5)] cursor-ew-resize"
-                          style={{ left: `${comparePosition}%` }}
-                        >
-                          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/90 backdrop-blur-md shadow-lg border border-white/50 flex items-center justify-center hover:scale-110 transition-transform">
-                            <span className="material-symbols-rounded text-gray-700 text-sm">drag_handle</span>
-                          </div>
-                        </div>
-                        {/* Labels - Refined */}
-                        <div className="absolute top-4 left-4 px-3 py-1.5 rounded-xl bg-black/40 backdrop-blur-md text-white text-[10px] font-bold tracking-wide uppercase border border-white/20">
-                          Antes
-                        </div>
-                        <div className="absolute top-4 right-4 px-3 py-1.5 rounded-xl bg-black/40 backdrop-blur-md text-white text-[10px] font-bold tracking-wide uppercase border border-white/20">
-                          Después
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="relative group">
-                        <img
-                          src={selectedLook.image_url}
-                          alt={selectedLook.title || 'Look'}
-                          className="w-full aspect-[4/5] object-cover"
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
-                      </div>
-                    )}
-                    {/* Close button - Refined */}
-                    <button
-                      onClick={() => setIsDetailOpen(false)}
-                      className="absolute top-4 right-4 w-10 h-10 rounded-full bg-black/30 backdrop-blur-md border border-white/20 flex items-center justify-center shadow-lg hover:bg-black/50 transition-colors z-10"
-                    >
-                      <span className="material-symbols-rounded text-white">close</span>
-                    </button>
-                    {/* Compare toggle - Refined */}
-                    {selectedLook.selfie_url && (
+                {/* Inline new folder */}
+                {creatingFolder ? (
+                  <span className="shrink-0 rounded-full bg-[#f5eee6] px-3 py-1.5 text-xs text-[#9a8f84]">Creando…</span>
+                ) : (
+                  <div className="flex shrink-0 items-center gap-1">
+                    <input
+                      value={newFolderName}
+                      onChange={(event) => setNewFolderName(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') void createFolder();
+                      }}
+                      placeholder="+ Nueva"
+                      className="w-[88px] rounded-full border border-dashed border-[#dccfc0] bg-transparent px-3 py-1.5 text-xs outline-none placeholder:text-[#9a8f84] focus:border-[#d2b89d] focus:bg-[#fbf8f4]"
+                    />
+                    {newFolderName.trim() && (
                       <button
-                        onClick={() => setCompareMode(!compareMode)}
-                        className={`absolute top-4 left-4 w-10 h-10 rounded-full flex items-center justify-center shadow-lg transition-all border z-10 ${compareMode ? 'bg-fuchsia-500 text-white border-fuchsia-400' : 'bg-black/30 backdrop-blur-md text-white border-white/20 hover:bg-black/50'
-                          }`}
+                        type="button"
+                        onClick={() => void createFolder()}
+                        className="rounded-full bg-[#171411] px-2.5 py-1 text-[10px] font-semibold text-white transition hover:bg-[#2a241f]"
                       >
-                        <span className="material-symbols-rounded text-[20px]">compare</span>
+                        OK
                       </button>
                     )}
                   </div>
+                )}
+              </div>
+              <span className="shrink-0 text-[11px] font-medium text-[#9a8f84]">
+                {filteredLibrary.length} visibles
+              </span>
+            </div>
+          </div>
+        </header>
 
-                  {/* Info */}
-                  <div className="p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
-                    {/* Title & date */}
-                    <div className="flex items-start justify-between mb-4">
-                      <div>
-                        <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">
-                          {selectedLook.title || 'Outfit Diario'}
-                        </h2>
-                        <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                          {new Date(selectedLook.created_at).toLocaleDateString('es-AR', {
-                            day: 'numeric',
-                            month: 'long',
-                            year: 'numeric'
-                          })}
-                        </p>
-                      </div>
-                    </div>
+        {/* ── Library grid ──────────────────────────────────────────── */}
+        {isLoading ? (
+          <div className="flex items-center justify-center rounded-[24px] border border-white/60 bg-white/80 p-6">
+            <span className="material-symbols-outlined mr-2 animate-spin text-lg text-[#9a8f84]">progress_activity</span>
+            <span className="text-sm text-[#5f554d]">Cargando biblioteca…</span>
+          </div>
+        ) : filteredLibrary.length === 0 ? (
+          <div className="rounded-[24px] border border-dashed border-[#dccfc0] bg-white/80 px-6 py-10 text-center">
+            <span className="material-symbols-outlined mb-3 text-4xl text-[#dccfc0]">style</span>
+            <h2 className="text-lg font-semibold tracking-[-0.03em]">Todavía no hay looks en esta vista</h2>
+            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#5f554d]">
+              Guardá looks desde Kumbi, armá variantes manuales o cambiá de carpeta para encontrar más rápido lo que ya funciona.
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[11px] uppercase tracking-[0.22em] text-[#8c8178]">Biblioteca</p>
+                <p className="text-sm text-[#5f554d]">Elegí cómo querés recorrer tus looks en mobile.</p>
+              </div>
+              <div className="flex items-center gap-1 rounded-full border border-white/60 bg-white/85 p-1 shadow-sm md:hidden">
+                {([
+                  ['grid', 'grid_view'],
+                  ['list', 'view_agenda'],
+                  ['carousel', 'view_carousel'],
+                ] as const).map(([mode, icon]) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    aria-label={mode === 'grid' ? 'Ver looks en grilla' : mode === 'list' ? 'Ver looks en lista' : 'Ver looks en carrusel'}
+                    onClick={() => setMobileViewMode(mode)}
+                    className={`rounded-full px-2.5 py-2 transition ${
+                      mobileViewMode === mode ? 'bg-[#171411] text-white' : 'text-[#7a7068]'
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-[18px]">{icon}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
 
-                    {/* Generation metadata badges */}
-                    <div className="flex flex-wrap gap-1.5 mb-4">
-                      {/* Model */}
-                      <span className="px-2 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-700">
-                        Nano 3.1
-                      </span>
-                      {/* Preset */}
-                      <span className="px-2 py-1 rounded-full bg-gray-100 text-gray-700 text-xs font-semibold">
-                        {GENERATION_PRESETS.find(p => p.id === selectedLook.generation_preset)?.label || selectedLook.generation_preset}
-                      </span>
-                      {/* Keep pose */}
-                      {selectedLook.keep_pose && (
-                        <span className="px-2 py-1 rounded-full bg-blue-100 text-blue-700 text-xs font-semibold flex items-center gap-1">
-                          <span className="material-symbols-outlined text-xs">person_pin</span>
-                          Pose fija
-                        </span>
-                      )}
-                      {/* Face refs */}
-                      {(selectedLook.face_refs_used ?? 0) > 0 && (
-                        <span className="px-2 py-1 rounded-full bg-green-100 text-green-700 text-xs font-semibold flex items-center gap-1">
-                          <span className="material-symbols-outlined text-xs">face</span>
-                          {selectedLook.face_refs_used} ref
-                        </span>
-                      )}
-                    </div>
+            <div
+              className={
+                mobileViewMode === 'carousel'
+                  ? 'flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 md:grid md:grid-cols-2 xl:grid-cols-3 md:overflow-visible'
+                  : mobileViewMode === 'list'
+                    ? 'flex flex-col gap-3 md:grid md:grid-cols-2 xl:grid-cols-3'
+                    : 'grid grid-cols-2 gap-3 xl:grid-cols-3'
+              }
+            >
+            {filteredLibrary.map((look) => {
+              const previewItems = buildLookPreview(look, closet);
+              const linkedRenders = renderMap.get(look.id) || [];
+              const coverRender = linkedRenders[0];
+              const folderName = folders.find((folder) => folder.id === look.folder_id)?.name;
+              const isMenuOpen = cardMenuOpenId === look.id;
+              const isCarousel = mobileViewMode === 'carousel';
+              const isList = mobileViewMode === 'list';
 
-                    {/* Slots used */}
-                    <div className="mb-4">
-                      <p className="text-xs text-gray-500 mb-2">Prendas usadas:</p>
-                      <div className="flex flex-wrap gap-2">
-                        {getSlotInfo(selectedLook).map((slot, idx) => (
-                          <div key={idx} className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-gray-100">
-                            {slot.item ? (
-                              <img
-                                src={slot.item.imageDataUrl}
-                                alt={slot.slot}
-                                className="w-6 h-6 rounded object-cover"
-                              />
-                            ) : (
-                              <span className="w-6 h-6 rounded bg-gray-200 flex items-center justify-center text-xs">?</span>
-                            )}
-                            <span className="text-xs text-gray-600">{slot.slot}</span>
-                          </div>
+              return (
+                <article
+                  key={look.id}
+                  data-surface-tour={look === filteredLibrary[0] ? 'looks-library-card' : undefined}
+                  className={`group relative overflow-hidden rounded-[24px] border border-white/60 bg-white/90 shadow-[0_12px_36px_-24px_rgba(74,51,27,0.3)] transition hover:shadow-[0_18px_48px_-28px_rgba(74,51,27,0.4)] ${
+                    isCarousel ? 'w-[82vw] max-w-[340px] shrink-0 snap-center md:w-auto md:max-w-none' : ''
+                  } ${isList ? 'flex min-h-[144px] flex-row md:block' : ''}`}
+                >
+                  {/* Cover image / preview grid */}
+                  <div
+                    className={`relative cursor-pointer ${isList ? 'w-[148px] shrink-0 sm:w-[170px]' : ''}`}
+                    onClick={() => setSelectedLookId(look.id)}
+                  >
+                    {coverRender?.image_url ? (
+                      <img
+                        src={coverRender.image_url}
+                        alt={look.name || 'Render del look'}
+                        className={`w-full object-cover transition duration-300 group-hover:scale-[1.02] ${
+                          isList ? 'h-full min-h-[176px]' : 'aspect-[4/5]'
+                        }`}
+                      />
+                    ) : previewItems.length > 0 ? (
+                      <div className={`grid grid-cols-3 ${isList ? 'h-full min-h-[176px]' : ''}`}>
+                        {previewItems.map((item) => (
+                          <img
+                            key={item.id}
+                            src={getPreferredClothingImage(item, 'thumbnail')}
+                            alt={item.metadata.subcategory}
+                            className={`w-full object-cover ${isList ? 'h-full min-h-[176px]' : 'aspect-[4/5]'}`}
+                          />
                         ))}
                       </div>
-                    </div>
-
-                    {shopLookItems.length > 0 && (
-                      <div className="mb-6">
-                        <ShopTheLookPanel
-                          items={shopLookItems}
-                          title="Comprar este look"
-                          variant="default"
-                          className="bg-white/50 dark:bg-black/20 backdrop-blur-md border border-white/60 dark:border-white/10 shadow-sm rounded-2xl"
-                        />
+                    ) : (
+                      <div className={`flex items-center justify-center bg-[#f5ede5] ${isList ? 'h-full min-h-[176px] w-full' : 'aspect-[4/5]'}`}>
+                        <span className="material-symbols-outlined text-4xl text-[#c9bead]">checkroom</span>
                       </div>
                     )}
 
-                    {/* Share link - Refined */}
-                    {selectedLook.is_public && selectedLook.share_token && (
-                      <div className="mb-6 p-4 rounded-2xl bg-white/40 dark:bg-white/5 backdrop-blur-md border border-white/50 dark:border-white/10 shadow-sm">
-                        <p className="text-xs font-bold text-gray-600 dark:text-gray-400 mb-2">Enlace compartido:</p>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="text"
-                            readOnly
-                            value={`${window.location.origin}/look/${selectedLook.share_token}`}
-                            className="flex-1 text-xs bg-white/60 dark:bg-black/40 rounded-xl px-3 py-2 border border-white/50 dark:border-white/10 text-gray-900 dark:text-white font-medium focus:outline-none"
-                          />
+                    {/* Overlay badges */}
+                    <div className="absolute inset-x-0 bottom-0 flex items-end justify-between bg-gradient-to-t from-black/50 via-black/20 to-transparent px-3 pb-3 pt-10">
+                      <span className="rounded-full bg-white/90 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-[#1d1d1d] backdrop-blur-sm">
+                        {getSourceLabel(look.source)}
+                      </span>
+                      {folderName && (
+                        <span className="rounded-full bg-white/80 px-2.5 py-1 text-[10px] font-semibold text-[#5e35b1] backdrop-blur-sm">
+                          {folderName}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Overflow menu button */}
+                    <button
+                      type="button"
+                      onClick={() => setCardMenuOpenId(isMenuOpen ? null : look.id)}
+                      className="absolute right-2 top-2 rounded-full bg-black/30 p-1.5 text-white opacity-0 backdrop-blur-sm transition group-hover:opacity-100"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">more_vert</span>
+                    </button>
+
+                    {/* Dropdown menu */}
+                    {isMenuOpen && (
+                      <>
+                        <button
+                          type="button"
+                          aria-label="Cerrar menú"
+                          className="fixed inset-0 z-30"
+                          onClick={() => setCardMenuOpenId(null)}
+                        />
+                        <div className="absolute right-2 top-10 z-40 min-w-[160px] overflow-hidden rounded-[16px] border border-white/70 bg-white/95 shadow-xl backdrop-blur-xl">
                           <button
-                            onClick={async () => {
-                              const shareUrl = `${window.location.origin}/look/${selectedLook.share_token}`;
-                              try {
-                                await navigator.clipboard.writeText(shareUrl);
-                                toast.success('Link copiado');
-                              } catch {
-                                toast.error('No se pudo copiar. Mantené el texto seleccionado manualmente.');
-                              }
-                            }}
-                            className="px-4 py-2 rounded-xl bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-xs font-bold shadow-md hover:scale-105 active:scale-95 transition-all"
+                            type="button"
+                            onClick={() => { startEditing(look); setCardMenuOpenId(null); }}
+                            className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm text-[#2a241f] transition hover:bg-[#f5eee6]"
                           >
-                            Copiar
+                            <span className="material-symbols-outlined text-[16px]">edit</span>
+                            Editar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { void toggleShare(look); setCardMenuOpenId(null); }}
+                            className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm text-[#2a241f] transition hover:bg-[#f5eee6]"
+                          >
+                            <span className="material-symbols-outlined text-[16px]">share</span>
+                            {look.context_json?.community_published_at ? 'Compartido' : 'Compartir'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { void moveToFolder(look, ''); setCardMenuOpenId(null); }}
+                            className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm text-[#2a241f] transition hover:bg-[#f5eee6]"
+                          >
+                            <span className="material-symbols-outlined text-[16px]">folder</span>
+                            Mover carpeta
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onUseLookInChat?.({
+                              ...look,
+                              name: `${look.name || 'Look'} · Variante`,
+                              reference_summary: look.reference_summary || 'Pedí una variante basada en este look.',
+                            })}
+                            className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm text-[#2a241f] transition hover:bg-[#f5eee6]"
+                          >
+                            <span className="material-symbols-outlined text-[16px]">auto_fix</span>
+                            Pedir variante
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { void removeLook(look.id); setCardMenuOpenId(null); }}
+                            className="flex w-full items-center gap-2.5 border-t border-[#f2ece4] px-4 py-2.5 text-left text-sm text-red-600 transition hover:bg-red-50"
+                          >
+                            <span className="material-symbols-outlined text-[16px]">delete</span>
+                            Eliminar
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Card body */}
+                  <div className={`space-y-2.5 px-3.5 pb-3.5 pt-3 ${isList ? 'flex min-w-0 flex-1 flex-col justify-between' : ''}`}>
+                    <div className="cursor-pointer" onClick={() => setSelectedLookId(look.id)}>
+                      <h2 className="line-clamp-1 text-[15px] font-semibold text-[#171411]">
+                        {look.name || 'Look sin nombre'}
+                      </h2>
+                      {isList && (
+                        <p className="mt-1 text-[11px] font-medium uppercase tracking-[0.16em] text-[#8c8178]">
+                          Vista rápida del look
+                        </p>
+                      )}
+                      {(look.description || look.explanation) && (
+                        <p className="mt-0.5 line-clamp-2 text-xs leading-[1.4] text-[#6f6258]">
+                          {look.description || look.explanation}
+                        </p>
+                      )}
+                    </div>
+
+                    {!!look.tags?.length && (
+                      <div className="flex flex-wrap gap-1">
+                        {look.tags.slice(0, 3).map((tag) => (
+                          <span
+                            key={`${look.id}-${tag}`}
+                            className="rounded-full bg-[#f5eee6] px-2 py-0.5 text-[10px] font-medium text-[#6d6157]"
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                        {(look.tags?.length ?? 0) > 3 && (
+                          <span className="rounded-full bg-[#f5eee6] px-2 py-0.5 text-[10px] font-medium text-[#9a8f84]">
+                            +{(look.tags?.length ?? 0) - 3}
+                          </span>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Editing inline */}
+                    {editingLookId === look.id && (
+                      <div className="space-y-2 rounded-[16px] border border-[#e4d8ca] bg-[#fbf8f4] p-2.5">
+                        <input
+                          value={editingDraft.name}
+                          onChange={(event) => setEditingDraft((prev) => ({ ...prev, name: event.target.value }))}
+                          placeholder="Nombre"
+                          className="w-full rounded-[12px] border border-[#e4d8ca] bg-white px-3 py-1.5 text-sm outline-none"
+                        />
+                        <input
+                          value={editingDraft.tags}
+                          onChange={(event) => setEditingDraft((prev) => ({ ...prev, tags: event.target.value }))}
+                          placeholder="tags, separados, por coma"
+                          className="w-full rounded-[12px] border border-[#e4d8ca] bg-white px-3 py-1.5 text-sm outline-none"
+                        />
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => void saveEdit(look)}
+                            className="rounded-[12px] bg-[#171411] px-3 py-1.5 text-xs font-semibold text-white"
+                          >
+                            Guardar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingLookId(null)}
+                            className="rounded-[12px] border border-[#dccfc0] bg-white px-3 py-1.5 text-xs font-semibold text-[#544a42]"
+                          >
+                            Cancelar
                           </button>
                         </div>
                       </div>
                     )}
 
-                    {/* Actions Row 1 - Primary & Secondary */}
-                    <div className="flex gap-3 mb-3">
+                    {/* Quick actions: Studio + Kumbi */}
+                    <div className="flex gap-2">
                       <button
-                        onClick={() => handleToggleFavorite(selectedLook)}
-                        disabled={actionLoading === selectedLook.id}
-                        className={`flex-1 py-3.5 rounded-[1.25rem] font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-sm ${selectedLook.is_favorite
-                          ? 'bg-rose-500 text-white shadow-rose-500/20 shadow-lg'
-                          : 'bg-white/50 dark:bg-white/5 backdrop-blur-md border border-white/60 dark:border-white/10 text-gray-800 dark:text-gray-200 hover:bg-white/80 dark:hover:bg-white/10'
-                          }`}
+                        type="button"
+                        onClick={() => openLookInStudio(look)}
+                        className="flex flex-1 items-center justify-center gap-1.5 rounded-[14px] border border-[#d7c3ac] bg-[#fff9f3] py-2 text-xs font-semibold text-[#2d241d] transition hover:bg-[#fff2e3]"
                       >
-                        {actionLoading === selectedLook.id ? (
-                          <Loader size="small" />
-                        ) : (
-                          <>
-                            <span className="material-symbols-rounded text-[20px]">{selectedLook.is_favorite ? 'heart_check' : 'favorite'}</span>
-                            {selectedLook.is_favorite ? 'Guardado' : 'Favorito'}
-                          </>
-                        )}
+                        <span className="material-symbols-outlined text-[14px]">auto_awesome</span>
+                        Studio
                       </button>
-
                       <button
-                        onClick={() => handleToggleShare(selectedLook)}
-                        disabled={actionLoading === selectedLook.id}
-                        className={`flex-1 py-3.5 rounded-[1.25rem] font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-sm ${selectedLook.is_public
-                          ? 'bg-blue-500 text-white shadow-blue-500/20 shadow-lg'
-                          : 'bg-white/50 dark:bg-white/5 backdrop-blur-md border border-white/60 dark:border-white/10 text-gray-800 dark:text-gray-200 hover:bg-white/80 dark:hover:bg-white/10'
-                          }`}
+                        type="button"
+                        onClick={() => onUseLookInChat?.(look)}
+                        className="flex flex-1 items-center justify-center gap-1.5 rounded-[14px] bg-[#c76332] py-2 text-xs font-semibold text-white transition hover:bg-[#b25628]"
                       >
-                        {actionLoading === selectedLook.id ? (
-                          <Loader size="small" />
-                        ) : (
-                          <>
-                            <span className="material-symbols-rounded text-[20px]">
-                              {selectedLook.is_public ? 'link' : 'ios_share'}
-                            </span>
-                            {selectedLook.is_public ? 'Compartitdo' : 'Compartir'}
-                          </>
-                        )}
-                      </button>
-                    </div>
-
-                    {/* Actions Row 2 - Tertiary */}
-                    <div className="flex gap-3">
-                      <button
-                        onClick={() => handleDownload(selectedLook)}
-                        className="flex-1 py-3.5 rounded-[1.25rem] bg-transparent border border-gray-200 dark:border-gray-800 font-bold text-sm text-gray-600 dark:text-gray-400 flex items-center justify-center gap-2 hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors"
-                      >
-                        <span className="material-symbols-rounded text-[18px]">download</span>
-                        Guardar
-                      </button>
-
-                      <button
-                        onClick={() => {
-                          setIsDetailOpen(false);
-                          openEditModal(selectedLook);
-                        }}
-                        className="flex-1 py-3.5 rounded-[1.25rem] bg-transparent border border-gray-200 dark:border-gray-800 font-bold text-sm text-gray-600 dark:text-gray-400 flex items-center justify-center gap-2 hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors"
-                      >
-                        <span className="material-symbols-rounded text-[18px]">edit</span>
-                        Editar
-                      </button>
-
-                      <button
-                        onClick={() => handleDelete(selectedLook)}
-                        disabled={actionLoading === selectedLook.id}
-                        className="w-[52px] h-[52px] shrink-0 rounded-[1.25rem] bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 flex items-center justify-center hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors"
-                        title="Eliminar Look"
-                      >
-                        {actionLoading === selectedLook.id ? (
-                          <Loader size="small" />
-                        ) : (
-                          <span className="material-symbols-rounded text-[20px]">delete</span>
-                        )}
+                        Kumbi
                       </button>
                     </div>
                   </div>
+                </article>
+              );
+            })}
+            </div>
+          </>
+        )}
+
+        <section className="space-y-3">
+          <div className="rounded-[22px] border border-white/60 bg-white/78 px-4 py-3 shadow-[0_10px_28px_-20px_rgba(74,51,27,0.28)] backdrop-blur-xl">
+            <p className="text-[11px] uppercase tracking-[0.22em] text-[#8c8178]">Cargar o crear</p>
+            <p className="mt-1 text-sm text-[#5f554d]">Cuando quieras sumar looks nuevos, arrancá por uno de estos caminos.</p>
+          </div>
+
+          {/* ── Compact Looks-First uploader ──────────────────────────── */}
+          <LooksFirstUploader
+            autoOpen={shouldAutoOpenLooksFirst}
+            onOpenWithKumbi={onUseInferredLookInChat || (() => undefined)}
+          />
+
+          <div data-surface-tour="looks-manual-builder">
+            {!isBuilderOpen ? (
+              <button
+                type="button"
+                onClick={() => setIsBuilderOpen(true)}
+                className="flex w-full items-center justify-between gap-3 rounded-[22px] border border-white/60 bg-white/85 px-5 py-3.5 shadow-[0_10px_28px_-20px_rgba(74,51,27,0.28)] backdrop-blur-xl transition hover:bg-white/95"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#c76332] text-white">
+                    <span className="material-symbols-outlined text-[18px]">add</span>
+                  </span>
+                  <span className="text-sm font-semibold text-[#171411]">Crear look manual</span>
                 </div>
-              </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>,
-        document.body
+                <span className="text-xs text-[#9a8f84]">Elegí top, bottom y calzado →</span>
+              </button>
+            ) : (
+              <div className="overflow-hidden rounded-[26px] border border-white/60 bg-white/85 shadow-[0_24px_58px_-36px_rgba(74,51,27,0.42)] backdrop-blur-xl">
+                <div className="flex items-center justify-between gap-3 border-b border-[#eee3d7] bg-[linear-gradient(135deg,rgba(253,247,241,0.98),rgba(255,255,255,0.94))] px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    <p className="text-sm font-semibold text-[#171411]">Crear look manual</p>
+                    <span className="rounded-full bg-[#ede4ff] px-2.5 py-0.5 text-[11px] font-semibold text-[#6a46c8]">
+                      {manualSelectedCount}/3
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsBuilderOpen(false)}
+                    className="rounded-full border border-[#dccfc0] bg-white p-1.5 text-[#5b5047] transition hover:bg-[#faf4ec]"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">close</span>
+                  </button>
+                </div>
+
+                <div className="space-y-3 p-4">
+                  <input
+                    value={manualDraft.name}
+                    onChange={(event) => setManualDraft((prev) => ({ ...prev, name: event.target.value }))}
+                    placeholder="Nombre del look"
+                    className="w-full rounded-[20px] border border-[#e4d8ca] bg-[#fbf8f4] px-4 py-2.5 text-sm outline-none placeholder:text-[#9a8f84] focus:border-[#d2b89d]"
+                  />
+
+                  <div>
+                    <p className="text-[11px] uppercase tracking-[0.22em] text-[#8c8178]">Carpeta</p>
+                    <div className="mt-1.5 flex gap-1.5 overflow-x-auto pb-0.5">
+                      <button
+                        type="button"
+                        onClick={() => setManualDraft((prev) => ({ ...prev, folderId: '' }))}
+                        className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition ${
+                          !manualDraft.folderId
+                            ? 'bg-[#171411] text-white'
+                            : 'bg-[#f5eee6] text-[#544a42] hover:bg-[#eadfce]'
+                        }`}
+                      >
+                        Sin carpeta
+                      </button>
+                      {folders.map((folder) => (
+                        <button
+                          key={folder.id}
+                          type="button"
+                          onClick={() => setManualDraft((prev) => ({ ...prev, folderId: folder.id }))}
+                          className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition ${
+                            manualDraft.folderId === folder.id
+                              ? 'bg-[#171411] text-white'
+                              : 'bg-[#f5eee6] text-[#544a42] hover:bg-[#eadfce]'
+                          }`}
+                        >
+                          {folder.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    {MANUAL_SLOT_CONFIG.map((slot) => {
+                      const selectedItem = selectedManualItems[slot.key];
+                      return (
+                        <button
+                          key={slot.key}
+                          type="button"
+                          onClick={() => openManualPicker(slot.key)}
+                          className="flex items-center gap-3 rounded-[18px] border border-[#eadfce] bg-[#fbf7f2] p-2.5 text-left transition hover:border-[#d6c0a7] hover:bg-[#fffdfa]"
+                        >
+                          <div className="h-12 w-12 shrink-0 overflow-hidden rounded-[12px] bg-white">
+                            {selectedItem ? (
+                              <img
+                                src={getPreferredClothingImage(selectedItem, 'thumbnail')}
+                                alt={getItemCaption(selectedItem)}
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              <div className="flex h-full items-center justify-center text-[#b09f90]">
+                                <span className="material-symbols-outlined text-xl">{slot.icon}</span>
+                              </div>
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-semibold text-[#1f1a16]">
+                              {selectedItem ? getItemCaption(selectedItem) : slot.emptyLabel}
+                            </p>
+                            <p className="line-clamp-1 text-[11px] leading-4 text-[#75695f]">
+                              {selectedItem ? getItemMeta(selectedItem) : slot.helper}
+                            </p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="flex items-center justify-between gap-3">
+                    <button
+                      type="button"
+                      onClick={openManualExtrasPicker}
+                      className="rounded-full border border-dashed border-[#dccfc0] bg-transparent px-3 py-1.5 text-xs text-[#544a42] transition hover:bg-[#faf4ec]"
+                    >
+                      {selectedManualExtras.length > 0 ? `${selectedManualExtras.length} extras` : '+ Extras'}
+                    </button>
+                    <input
+                      value={manualDraft.explanation}
+                      onChange={(event) => setManualDraft((prev) => ({ ...prev, explanation: event.target.value }))}
+                      placeholder="Nota breve (opcional)"
+                      className="flex-1 rounded-full border border-[#e4d8ca] bg-[#fbf8f4] px-3 py-1.5 text-xs outline-none placeholder:text-[#9a8f84] focus:border-[#d2b89d]"
+                    />
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => void createManualLook()}
+                    className="w-full rounded-[18px] bg-[#c76332] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#b25628] disabled:opacity-60"
+                    disabled={manualSelectedCount < 3}
+                  >
+                    Guardar look manual
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <LookGarmentSeparator
+            closet={closet}
+            onClosetSync={onClosetSync}
+            useSupabaseCloset={useSupabaseCloset}
+            collapsed
+          />
+        </section>
+      </div>
+
+      {/* ── Look detail modal ──────────────────────────────────── */}
+      {selectedLookId && (() => {
+        const look = library.find((l) => l.id === selectedLookId);
+        if (!look) return null;
+        const previewItems = buildLookPreview(look, closet);
+        const linkedRenders = renderMap.get(look.id) || [];
+        const coverRender = linkedRenders[0];
+        const folderName = folders.find((f) => f.id === look.folder_id)?.name;
+        const extraItems = getExtraItemIds(look.context_json)
+          .map((itemId) => closet.find((item) => item.id === itemId) || null)
+          .filter(Boolean) as ClothingItem[];
+
+        return (
+          <div className="fixed inset-0 z-50 flex animate-fade-in items-end justify-center p-0 sm:items-center sm:p-6">
+            <button
+              type="button"
+              aria-label="Cerrar detalle"
+              className="absolute inset-0 bg-black/45 backdrop-blur-sm"
+              onClick={() => setSelectedLookId(null)}
+            />
+            <div
+              className="relative flex h-[82dvh] w-full flex-col overflow-hidden overscroll-contain rounded-t-[28px] border border-white/60 bg-[#faf6f1] shadow-2xl sm:h-auto sm:max-h-[85vh] sm:max-w-lg sm:rounded-[28px]"
+              style={{ paddingBottom: 'max(0rem, env(safe-area-inset-bottom))' }}
+            >
+              {/* Header */}
+              <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#eee3d7] bg-[#faf6f1]/95 px-5 py-3.5 backdrop-blur-xl">
+                <div className="min-w-0 flex-1">
+                  <h2 className="truncate text-lg font-semibold text-[#171411]">
+                    {look.name || 'Look sin nombre'}
+                  </h2>
+                  <div className="mt-0.5 flex items-center gap-2">
+                    <span className="rounded-full bg-[#f5eee6] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-[#5f554d]">
+                      {getSourceLabel(look.source)}
+                    </span>
+                    {folderName && (
+                      <span className="rounded-full bg-[#ede5ff] px-2 py-0.5 text-[10px] font-semibold text-[#5e35b1]">
+                        {folderName}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedLookId(null)}
+                  className="ml-3 rounded-full border border-[#dccfc0] bg-white p-2 text-[#5b5047] transition hover:bg-[#faf4ec]"
+                >
+                  <span className="material-symbols-outlined text-xl">close</span>
+                </button>
+              </div>
+
+              {/* Cover — only show AI render if available */}
+              {coverRender?.image_url && (
+                <div className="px-4 pt-4 sm:px-5">
+                  <img
+                    src={coverRender.image_url}
+                    alt={look.name || 'Render'}
+                    className="max-h-[34vh] w-full rounded-[22px] object-cover sm:max-h-[46vh]"
+                  />
+                </div>
+              )}
+
+              {/* Body */}
+              <div className="flex-1 space-y-4 overflow-y-auto px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-4 sm:px-5 sm:pb-6">
+                {/* Description, Explanation & Occasion */}
+                {(look.description || look.explanation || look.occasion) && (
+                  <div className="space-y-3">
+                    {look.description && (
+                      <p className="text-sm leading-6 text-[#5f554d]">
+                        {look.description}
+                      </p>
+                    )}
+                    {look.explanation && (
+                      <div className="flex gap-2.5 rounded-[16px] bg-[#f2f8f8] p-3 text-sm leading-6 text-[#24515a] shadow-sm">
+                        <span className="material-symbols-outlined shrink-0 text-[18px] text-[#2aa1a7]">auto_awesome</span>
+                        <p>{look.explanation}</p>
+                      </div>
+                    )}
+                    {look.occasion && (
+                      <div className="flex items-center gap-1.5 text-xs text-[#7a7068]">
+                        <span className="material-symbols-outlined text-[14px]">event</span>
+                        {look.occasion}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Tags + Reference summary condensed row */}
+                {(!!look.tags?.length || look.reference_summary) && (
+                  <div className="space-y-2">
+                    {!!look.tags?.length && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {look.tags.map((tag) => (
+                          <span
+                            key={`detail-${look.id}-${tag}`}
+                            className="rounded-full border border-[#dccfc0] bg-white px-2.5 py-1 text-xs text-[#5f554d]"
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    {look.reference_summary && (
+                      <p className="rounded-[14px] bg-[#f7f3ff] px-3.5 py-2.5 text-xs leading-5 text-[#5a3ca8]">
+                        {look.reference_summary}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Prendas grid — hero section */}
+                <div>
+                  <p className="text-[11px] uppercase tracking-[0.22em] text-[#8c8178]">Prendas del look</p>
+                  <div className="mt-2.5 grid grid-cols-3 gap-2.5">
+                    {previewItems.map((item) => (
+                      <div key={item.id} className="overflow-hidden rounded-[16px] border border-white/70 bg-white shadow-sm">
+                        <img
+                          src={getPreferredClothingImage(item)}
+                          alt={item.metadata.subcategory}
+                          className="aspect-[4/5] w-full object-cover"
+                        />
+                        <div className="px-2 py-1.5">
+                          <p className="line-clamp-1 text-center text-[11px] font-semibold text-[#3e342c]">
+                            {item.metadata.subcategory}
+                          </p>
+                          {item.metadata.color_primary && (
+                            <p className="mt-0.5 line-clamp-1 text-center text-[10px] text-[#8c8178]">
+                              {item.metadata.color_primary}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Extras */}
+                {extraItems.length > 0 && (
+                  <div>
+                    <p className="text-[11px] uppercase tracking-[0.22em] text-[#8c8178]">Extras</p>
+                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                      {extraItems.map((item) => (
+                        <span
+                          key={`detail-extra-${item.id}`}
+                          className="rounded-full border border-[#dccfc0] bg-[#f8f2eb] px-3 py-1 text-xs font-semibold text-[#544a42]"
+                        >
+                          {item.metadata.subcategory}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* primary buttons */}
+                <div className="flex flex-col gap-2 pt-1 sm:flex-row">
+                  <button
+                    type="button"
+                    onClick={() => { openLookInStudio(look); setSelectedLookId(null); }}
+                    className="flex flex-1 items-center justify-center gap-2 rounded-[18px] border border-[#d7c3ac] bg-[#fff9f3] py-3 text-[13px] font-semibold text-[#2d241d] transition hover:bg-[#fff2e3]"
+                  >
+                    <span className="material-symbols-outlined text-base">auto_awesome</span>
+                    Studio
+                    <span className="rounded-full bg-[#171411] px-2 py-0.5 text-[9px] uppercase tracking-[0.14em] text-white">Pro</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { onUseLookInChat?.(look); setSelectedLookId(null); }}
+                    className="flex flex-1 items-center justify-center gap-2 rounded-[18px] bg-[#c76332] py-3 text-[13px] font-semibold text-white transition hover:bg-[#b25628]"
+                  >
+                    Usar con Kumbi
+                  </button>
+                </div>
+
+                {/* secondary tools grid */}
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onUseLookInChat?.({
+                        ...look,
+                        name: `${look.name || 'Look'} · Variante`,
+                        reference_summary: look.reference_summary || 'Pedí una variante basada en este look.',
+                      });
+                      setSelectedLookId(null);
+                    }}
+                    className="flex flex-col items-center justify-center gap-1.5 rounded-[16px] border border-[#dccfc0] bg-white py-2.5 text-[11px] font-semibold text-[#5f554d] transition hover:bg-[#faf4ec]"
+                  >
+                    <span className="material-symbols-outlined text-[18px] text-[#8c8178]">style</span>
+                    Pedir variante
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onUseLookInChat?.({
+                        ...look,
+                        name: `${look.name || 'Look'} · Análisis`,
+                        reference_summary: 'Hacé un análisis de estilo sobre este look: decime para qué ocasiones es ideal, qué transmite visualmente, y si hay alguna manera de elevarlo con accesorios o cambiando alguna prenda.',
+                      });
+                      setSelectedLookId(null);
+                    }}
+                    className="flex flex-col items-center justify-center gap-1.5 rounded-[16px] border border-[#dccfc0] bg-white py-2.5 text-[11px] font-semibold text-[#5f554d] transition hover:bg-[#faf4ec]"
+                  >
+                    <span className="material-symbols-outlined text-[18px] text-[#8c8178]">analytics</span>
+                    Analizar look
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void toggleShare(look);
+                      setSelectedLookId(null);
+                    }}
+                    className="flex flex-col items-center justify-center gap-1.5 rounded-[16px] border border-[#dccfc0] bg-white py-2.5 text-[11px] font-semibold text-[#5f554d] transition hover:bg-[#faf4ec]"
+                  >
+                    <span className="material-symbols-outlined text-[18px] text-[#8c8178]">ios_share</span>
+                    Prestar look
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {activePickerConfig && (
+        <div className="fixed inset-0 z-50 animate-fade-in">
+          <button
+            type="button"
+            aria-label="Cerrar selector"
+            className="absolute inset-0 bg-black/45 backdrop-blur-sm"
+            onClick={() => setActiveManualPicker(null)}
+          />
+
+          <div
+            className="absolute inset-x-0 bottom-0 rounded-t-[32px] border border-white/20 bg-[linear-gradient(180deg,rgba(255,250,246,0.98),rgba(246,239,230,0.98))] shadow-2xl md:left-1/2 md:top-1/2 md:w-full md:max-w-4xl md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-[32px] md:border-white/50"
+            style={{
+              maxHeight: 'min(88vh, calc(100dvh - 1.5rem))',
+              paddingBottom: 'max(1rem, env(safe-area-inset-bottom))',
+            }}
+          >
+            <div className="flex items-center justify-between gap-3 border-b border-[#eadfce] px-5 pb-4 pt-4">
+              <div className="min-w-0">
+                <p className="text-xs uppercase tracking-[0.24em] text-[#8c8178]">
+                  {activeManualPicker === 'extras' ? 'Extras opcionales' : activePickerConfig?.label}
+                </p>
+                <h3 className="mt-1 text-xl font-semibold tracking-[-0.04em] text-[#171411]">
+                  {activeManualPicker === 'extras'
+                    ? 'Sumá detalles libres al look'
+                    : `Elegí visualmente tu ${activePickerConfig?.label.toLowerCase()}`}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveManualPicker(null)}
+                className="rounded-full border border-[#dccfc0] bg-white p-2 text-[#5b5047] transition hover:bg-[#faf4ec]"
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            <div className="flex h-full max-h-[calc(88vh-72px)] flex-col overflow-hidden px-5 pb-5 pt-4 md:max-h-[calc(100dvh-9rem)]">
+              <div className="flex flex-col gap-3 border-b border-[#eadfce] pb-4 sm:flex-row">
+                <input
+                  value={manualPickerSearch}
+                  onChange={(event) => setManualPickerSearch(event.target.value)}
+                  placeholder={activeManualPicker === 'extras'
+                    ? 'Buscar extra por nombre o color'
+                    : `Buscar ${activePickerConfig?.label.toLowerCase()} por nombre o color`}
+                  className="w-full rounded-[20px] border border-[#e4d8ca] bg-white px-4 py-3 text-sm outline-none placeholder:text-[#9a8f84] focus:border-[#d2b89d]"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (activeManualPicker === 'extras') {
+                      setManualDraft((prev) => ({ ...prev, extraItemIds: [] }));
+                    } else if (activePickerConfig) {
+                      setManualDraft((prev) => ({ ...prev, [activePickerConfig.key]: '' }));
+                    }
+                    setActiveManualPicker(null);
+                    setManualPickerSearch('');
+                  }}
+                  className="rounded-[20px] border border-[#dccfc0] bg-white px-4 py-3 text-sm font-medium text-[#5b5047] transition hover:bg-[#faf4ec]"
+                >
+                  {activeManualPicker === 'extras' ? 'Limpiar extras' : 'Limpiar'}
+                </button>
+              </div>
+
+              <div className="mt-4 overflow-y-auto">
+                {pickerItems.length === 0 ? (
+                  <div className="rounded-[24px] border border-dashed border-[#dccfc0] bg-white/60 p-8 text-center text-sm text-[#6b5f55]">
+                    No encontré prendas con esa búsqueda.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                    {pickerItems.map((item) => {
+                      const isSelected = activeManualPicker === 'extras'
+                        ? manualDraft.extraItemIds.includes(item.id)
+                        : Boolean(activePickerConfig && manualDraft[activePickerConfig.key] === item.id);
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => {
+                            if (activeManualPicker === 'extras') {
+                              toggleManualExtraItem(item.id);
+                              return;
+                            }
+                            if (activePickerConfig) {
+                              selectManualItem(activePickerConfig.key, item.id);
+                            }
+                          }}
+                          className={`overflow-hidden rounded-[24px] border p-2 text-left transition ${
+                            isSelected
+                              ? 'border-[#c76332] bg-[#fff4ee] shadow-[0_16px_34px_-28px_rgba(199,99,50,0.65)]'
+                              : 'border-[#eadfce] bg-white hover:-translate-y-0.5 hover:border-[#d6c0a7] hover:shadow-md'
+                          }`}
+                        >
+                          <img
+                            src={getPreferredClothingImage(item, 'thumbnail')}
+                            alt={getItemCaption(item)}
+                            className="aspect-[4/5] w-full rounded-[18px] object-cover"
+                          />
+                          <div className="px-1 pb-1 pt-3">
+                            <p className="line-clamp-1 text-sm font-semibold text-[#1f1a16]">
+                              {getItemCaption(item)}
+                            </p>
+                            <p className="mt-1 line-clamp-2 text-xs leading-5 text-[#75695f]">
+                              {getItemMeta(item)}
+                            </p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {activeManualPicker === 'extras' && (
+                <div className="mt-4 flex justify-end border-t border-[#eadfce] pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setActiveManualPicker(null)}
+                    className="rounded-[20px] bg-[#171411] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#2a241f]"
+                  >
+                    Listo
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
-
-      {/* FAB to Studio */}
-      <button
-        onClick={() => navigate('/studio')}
-        className="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] right-safe-4 w-14 h-14 rounded-full bg-[color:var(--studio-ink)] text-white shadow-lg flex items-center justify-center hover:scale-105 active:scale-95 transition z-30"
-        aria-label="Ir al Studio"
-      >
-        <span className="material-symbols-outlined">add_photo_alternate</span>
-      </button>
-
-      {/* Edit Modal */}
-      <EditLookModal
-        look={editingLook}
-        isOpen={isEditOpen}
-        onClose={() => {
-          setIsEditOpen(false);
-          setEditingLook(null);
-        }}
-        onSave={handleEditSave}
-      />
     </div>
   );
 }

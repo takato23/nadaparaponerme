@@ -3,6 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import type { SharedGeneratedLook } from '../src/services/generatedLooksService';
 import { getGeneratedLookByShareToken } from '../src/services/generatedLooksService';
+import type { SharedOutfitPayload } from '../src/services/outfitService';
+import { getSharedOutfitByShareToken } from '../src/services/outfitService';
 import Loader from './Loader';
 
 const studioTheme = {
@@ -17,6 +19,7 @@ export default function SharedLookView() {
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
   const [look, setLook] = useState<SharedGeneratedLook | null>(null);
+  const [sharedOutfit, setSharedOutfit] = useState<SharedOutfitPayload | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -43,11 +46,16 @@ export default function SharedLookView() {
       }
 
       try {
-        const data = await getGeneratedLookByShareToken(token);
-        if (!data) {
-          setError('Este look no existe, fue desactivado o el enlace expiró.');
+        const outfitData = await getSharedOutfitByShareToken(token);
+        if (outfitData?.type === 'outfit' || outfitData?.items) {
+          setSharedOutfit(outfitData);
         } else {
-          setLook(data);
+          const data = await getGeneratedLookByShareToken(token);
+          if (!data) {
+            setError('Este look no existe, fue desactivado o el enlace expiró.');
+          } else {
+            setLook(data);
+          }
         }
       } catch (err) {
         console.error('Error loading shared look:', err);
@@ -62,10 +70,11 @@ export default function SharedLookView() {
   }, [token]);
 
   const handleDownload = async () => {
-    if (!look) return;
+    const imageUrl = sharedOutfit?.hero_image_url || look?.image_url;
+    if (!imageUrl) return;
 
     try {
-      const response = await fetch(look.image_url);
+      const response = await fetch(imageUrl);
       if (!response.ok) {
         throw new Error('No se pudo descargar la imagen compartida.');
       }
@@ -73,7 +82,7 @@ export default function SharedLookView() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `look-${look.id.slice(0, 8)}.jpg`;
+      a.download = `look-${(sharedOutfit?.id || look?.id || 'shared').slice(0, 8)}.jpg`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -90,7 +99,7 @@ export default function SharedLookView() {
       try {
         await navigator.share({
           title: look?.title || 'Mirá este look',
-          text: 'Creado con No Tengo Nada Para Ponerme',
+          text: sharedOutfit?.title || 'Mirá este look',
           url: shareUrl,
         });
       } catch (err) {
@@ -113,7 +122,7 @@ export default function SharedLookView() {
     );
   }
 
-  if (error || !look) {
+  if (error || (!look && !sharedOutfit)) {
     return (
       <div
         className="min-h-screen flex flex-col items-center justify-center px-6"
@@ -141,7 +150,7 @@ export default function SharedLookView() {
   return (
     <div
       className="min-h-screen"
-      style={{ ...studioTheme, fontFamily: '"Poppins", sans-serif' }}
+      style={{ ...studioTheme, fontFamily: '"Outfit", sans-serif' }}
     >
       {/* Background */}
       <div
@@ -167,10 +176,10 @@ export default function SharedLookView() {
             className="text-2xl font-semibold text-[color:var(--studio-ink)]"
             style={{ fontFamily: '"Playfair Display", serif' }}
           >
-            {look.title || 'Look generado'}
+            {sharedOutfit?.title || look?.title || 'Look generado'}
           </h1>
           <p className="text-xs text-[color:var(--studio-ink-muted)] mt-1">
-            {new Date(look.created_at).toLocaleDateString('es-AR', {
+            {new Date((sharedOutfit?.created_at || look?.created_at) as string).toLocaleDateString('es-AR', {
               day: 'numeric',
               month: 'long',
               year: 'numeric'
@@ -185,11 +194,19 @@ export default function SharedLookView() {
           transition={{ delay: 0.1 }}
           className="relative rounded-3xl overflow-hidden shadow-2xl mb-6"
         >
-          <img
-            src={look.image_url}
-            alt={look.title || 'Look compartido'}
-            className="w-full aspect-[3/4] object-cover"
-          />
+          {sharedOutfit?.hero_image_url || look?.image_url ? (
+            <img
+              src={sharedOutfit?.hero_image_url || look?.image_url}
+              alt={sharedOutfit?.title || look?.title || 'Look compartido'}
+              className="w-full aspect-[3/4] object-cover"
+            />
+          ) : (
+            <div className="grid grid-cols-3 gap-2 bg-white p-4">
+              {sharedOutfit?.items.map((item) => (
+                <img key={item.id} src={item.image_url} alt={item.label || 'Prenda'} className="aspect-square w-full rounded-2xl object-cover" />
+              ))}
+            </div>
+          )}
 
           {/* Watermark */}
           <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between">
@@ -201,23 +218,36 @@ export default function SharedLookView() {
             </div>
             <div className="px-3 py-2 rounded-full bg-white/80 backdrop-blur-sm">
               <span className="text-xs text-[color:var(--studio-ink-muted)]">
-                {look.generation_preset}
+                {sharedOutfit ? 'biblioteca' : look?.generation_preset}
               </span>
             </div>
           </div>
         </motion.div>
 
         {/* Notes */}
-        {look.notes && (
+        {(sharedOutfit?.reference_summary || look?.notes || sharedOutfit?.description || sharedOutfit?.explanation) && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.2 }}
             className="bg-white/60 rounded-2xl p-4 mb-6 border border-white/70"
           >
-            <p className="text-sm text-[color:var(--studio-ink)]">{look.notes}</p>
+            <p className="text-sm text-[color:var(--studio-ink)]">
+              {sharedOutfit?.reference_summary || look?.notes || sharedOutfit?.description || sharedOutfit?.explanation}
+            </p>
           </motion.div>
         )}
+
+        {sharedOutfit?.items?.length ? (
+          <div className="mb-6 grid grid-cols-3 gap-3">
+            {sharedOutfit.items.map((item) => (
+              <div key={item.id} className="rounded-2xl bg-white/60 p-2 border border-white/70">
+                <img src={item.image_url} alt={item.label || 'Prenda'} className="aspect-square w-full rounded-xl object-cover" />
+                <p className="mt-2 text-xs text-[color:var(--studio-ink-muted)] line-clamp-2">{item.label || 'Prenda'}</p>
+              </div>
+            ))}
+          </div>
+        ) : null}
 
         {/* Actions */}
         <motion.div

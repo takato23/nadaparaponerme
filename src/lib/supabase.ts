@@ -1,63 +1,56 @@
 import { createClient } from '@supabase/supabase-js';
 
 // Supabase configuration from environment variables
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const rawSupabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const rawSupabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabaseUrl = String(rawSupabaseUrl || '').trim().replace(/\/+$/, '');
+const supabaseAnonKey = String(rawSupabaseAnonKey || '').trim();
+const placeholderSupabaseUrl = 'https://placeholder.supabase.co';
+const placeholderSupabaseAnonKey = 'placeholder-anon-key';
+export const hasSupabaseEnv = Boolean(supabaseUrl && supabaseAnonKey);
 
 // Debug: Log environment variables (in development only)
 if (import.meta.env.DEV) {
   console.log('🔍 Supabase Environment Check:');
   console.log('  URL:', supabaseUrl ? '✅ Set' : '❌ Missing');
   console.log('  Key:', supabaseAnonKey ? '✅ Set' : '❌ Missing');
+  if (String(rawSupabaseAnonKey || '') !== supabaseAnonKey) {
+    console.warn('⚠️ VITE_SUPABASE_ANON_KEY had surrounding whitespace; sanitized at runtime.');
+  }
 }
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error(
-    'Missing Supabase environment variables. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env.local'
+if (!hasSupabaseEnv) {
+  console.warn(
+    'Missing Supabase environment variables. Falling back to a disabled Supabase client; backend-powered features will stay off until VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are configured.'
   );
 }
 
 // TEMP: use broad client typing until DB schema types are fully regenerated.
 // Current custom schema file drifts from the live DB and breaks builds with `never`.
-export const supabase: any = createClient<any>(supabaseUrl, supabaseAnonKey, {
+export const supabase: any = createClient<any>(
+  hasSupabaseEnv ? supabaseUrl : placeholderSupabaseUrl,
+  hasSupabaseEnv ? supabaseAnonKey : placeholderSupabaseAnonKey,
+  {
   auth: {
-    persistSession: true,
-    autoRefreshToken: true,
+    persistSession: hasSupabaseEnv,
+    autoRefreshToken: hasSupabaseEnv,
     detectSessionInUrl: true,
   },
 });
 
 // Handle auth errors globally
-supabase.auth.onAuthStateChange((event, session) => {
-  if (event === 'TOKEN_REFRESHED') {
-    console.log('✅ Auth token refreshed successfully');
-  } else if (event === 'SIGNED_OUT') {
-    console.log('👋 User signed out');
-  }
-});
-
-// Clear invalid auth state on initialization
-(async () => {
-  try {
-    const { data, error } = await supabase.auth.getSession();
-    if (error) {
-      // Silently clear auth state if refresh token is invalid (expected behavior)
-      if (error.message.includes('Refresh Token') || error.status === 400) {
-        await supabase.auth.signOut();
-        // Clear all auth-related localStorage items
-        Object.keys(localStorage).forEach(key => {
-          if (key.startsWith('sb-')) {
-            localStorage.removeItem(key);
-          }
-        });
-      } else {
-        console.warn('⚠️ Auth session error:', error.message);
-      }
+if (hasSupabaseEnv) {
+  supabase.auth.onAuthStateChange((event, session) => {
+    if (event === 'TOKEN_REFRESHED') {
+      console.log('✅ Auth token refreshed successfully');
+    } else if (event === 'SIGNED_OUT') {
+      console.log('👋 User signed out');
     }
-  } catch (err) {
-    // Suppress initialization errors - auth state will be fresh
-  }
-})();
+  });
+}
+
+// NOTE: auth session bootstrap runs in hooks/useAuth singleton.
+// Keeping it centralized prevents parallel getSession/getUser lock contention.
 
 // Helper functions for common operations
 
@@ -124,10 +117,15 @@ export function dataUrlToFile(dataUrl: string, filename: string): File {
  * Check if browser supports WebP format
  */
 function supportsWebP(): boolean {
-  const canvas = document.createElement('canvas');
-  canvas.width = 1;
-  canvas.height = 1;
-  return canvas.toDataURL('image/webp').indexOf('data:image/webp') === 0;
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1;
+    canvas.height = 1;
+    const result = canvas.toDataURL('image/webp');
+    return typeof result === 'string' && result.indexOf('data:image/webp') === 0;
+  } catch {
+    return false;
+  }
 }
 
 // Cache WebP support check

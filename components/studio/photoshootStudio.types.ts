@@ -9,6 +9,7 @@ import { CATEGORY_TO_SLOT } from '../../types';
 
 export interface PhotoshootStudioProps {
   closet: ClothingItem[];
+  bottomDockInset?: boolean;
 }
 
 export interface GeneratedImageRecord {
@@ -85,4 +86,21 @@ export function getValidSlotsForItem(item: ClothingItem): ClothingSlot[] {
 
 export function hasMinimumCoverage(slots: Map<ClothingSlot, SlotSelection>): boolean {
   return slots.size > 0;
+}
+
+export function shouldShowCompatibilityWarning({
+  slots,
+  presetId,
+  useVirtualModel,
+  hasUserSelfie,
+}: {
+  slots: Map<ClothingSlot, SlotSelection>;
+  presetId: GenerationPreset;
+  useVirtualModel: boolean;
+  hasUserSelfie: boolean;
+}): boolean {
+  if (presetId !== 'overlay') return false;
+  if (useVirtualModel || !hasUserSelfie) return false;
+
+  return slots.has('bottom') || slots.has('shoes');
 }

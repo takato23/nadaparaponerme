@@ -1,7 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const TUTORIAL_STEPS = [
+type TutorialPosition = 'top' | 'bottom' | 'left' | 'right' | 'center';
+
+interface StudioTutorialStep {
+    id: string;
+    target: string;
+    title: string;
+    description: string;
+    position: TutorialPosition;
+}
+
+const TUTORIAL_STEPS: StudioTutorialStep[] = [
     {
         id: 'selfie',
         target: 'studio-selfie-upload',
@@ -39,6 +49,87 @@ const TUTORIAL_STEPS = [
     },
 ];
 
+const TOUR_VIEWPORT_PADDING = 12;
+const TOUR_TOOLTIP_GAP = 14;
+const TOUR_TOOLTIP_MAX_WIDTH = 380;
+const TOUR_TOOLTIP_ESTIMATED_HEIGHT = 290;
+
+const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
+
+const resolveTutorialTarget = (target: string): HTMLElement | null => {
+    return (
+        document.querySelector<HTMLElement>(`[data-studio-tutorial="${target}"]`)
+        ?? document.getElementById(target)
+    );
+};
+
+const buildTooltipStyle = (
+    targetRect: DOMRect | null,
+    position: TutorialPosition
+): React.CSSProperties => {
+    if (typeof window === 'undefined') {
+        return {
+            position: 'fixed',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+        };
+    }
+
+    const tooltipWidth = Math.min(TOUR_TOOLTIP_MAX_WIDTH, window.innerWidth - TOUR_VIEWPORT_PADDING * 2);
+
+    if (!targetRect || position === 'center') {
+        return {
+            position: 'fixed',
+            width: `${tooltipWidth}px`,
+            maxWidth: `calc(100vw - ${TOUR_VIEWPORT_PADDING * 2}px)`,
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+        };
+    }
+
+    const minLeft = TOUR_VIEWPORT_PADDING;
+    const maxLeft = Math.max(minLeft, window.innerWidth - tooltipWidth - TOUR_VIEWPORT_PADDING);
+    const minTop = TOUR_VIEWPORT_PADDING;
+    const maxTop = Math.max(minTop, window.innerHeight - TOUR_TOOLTIP_ESTIMATED_HEIGHT - TOUR_VIEWPORT_PADDING);
+
+    let left = targetRect.left + targetRect.width / 2 - tooltipWidth / 2;
+    let top = targetRect.bottom + TOUR_TOOLTIP_GAP;
+
+    if (position === 'top') {
+        top = targetRect.top - TOUR_TOOLTIP_ESTIMATED_HEIGHT - TOUR_TOOLTIP_GAP;
+    }
+    if (position === 'left') {
+        left = targetRect.left - tooltipWidth - TOUR_TOOLTIP_GAP;
+        top = targetRect.top + targetRect.height / 2 - TOUR_TOOLTIP_ESTIMATED_HEIGHT / 2;
+    }
+    if (position === 'right') {
+        left = targetRect.right + TOUR_TOOLTIP_GAP;
+        top = targetRect.top + targetRect.height / 2 - TOUR_TOOLTIP_ESTIMATED_HEIGHT / 2;
+    }
+
+    if (position === 'top' && top < minTop) {
+        top = targetRect.bottom + TOUR_TOOLTIP_GAP;
+    } else if (position === 'bottom' && top > maxTop) {
+        top = targetRect.top - TOUR_TOOLTIP_ESTIMATED_HEIGHT - TOUR_TOOLTIP_GAP;
+    }
+
+    if (position === 'left' && left < minLeft) {
+        left = targetRect.right + TOUR_TOOLTIP_GAP;
+    } else if (position === 'right' && left > maxLeft) {
+        left = targetRect.left - tooltipWidth - TOUR_TOOLTIP_GAP;
+    }
+
+    return {
+        position: 'fixed',
+        width: `${tooltipWidth}px`,
+        maxWidth: `calc(100vw - ${TOUR_VIEWPORT_PADDING * 2}px)`,
+        left: `${clamp(left, minLeft, maxLeft)}px`,
+        top: `${clamp(top, minTop, maxTop)}px`,
+    };
+};
+
 // Tooltip definitions for confused terms
 const TERM_TOOLTIPS: Record<string, string> = {
     'Top base': 'Remera, camisa o musculosa que va directo al cuerpo',
@@ -58,9 +149,87 @@ interface StudioTutorialProps {
 export const StudioTutorial: React.FC<StudioTutorialProps> = ({ onComplete, onSkip }) => {
     const [currentStep, setCurrentStep] = useState(0);
     const [showInitialModal, setShowInitialModal] = useState(true);
+    const [targetRect, setTargetRect] = useState<DOMRect | null>(null);
 
     const step = TUTORIAL_STEPS[currentStep];
     const isLastStep = currentStep === TUTORIAL_STEPS.length - 1;
+    const tooltipStyle = useMemo(
+        () => buildTooltipStyle(targetRect, step.position),
+        [targetRect, step.position]
+    );
+
+    useEffect(() => {
+        if (showInitialModal) {
+            setTargetRect(null);
+            return;
+        }
+
+        let frameId: number | null = null;
+        let scrollTimeoutId: number | null = null;
+        let resizeObserver: ResizeObserver | null = null;
+
+        const updateTargetRect = () => {
+            const targetElement = resolveTutorialTarget(step.target);
+            if (!targetElement) {
+                setTargetRect(null);
+                return;
+            }
+            setTargetRect(targetElement.getBoundingClientRect());
+        };
+
+        const ensureTargetInView = () => {
+            const targetElement = resolveTutorialTarget(step.target);
+            if (!targetElement) {
+                setTargetRect(null);
+                return;
+            }
+
+            const rect = targetElement.getBoundingClientRect();
+            const viewportPadding = 24;
+            const isOutsideViewport = rect.top < viewportPadding || rect.bottom > window.innerHeight - viewportPadding;
+
+            if (isOutsideViewport) {
+                targetElement.scrollIntoView({
+                    behavior: 'smooth',
+                    block: step.position === 'top' ? 'end' : 'center',
+                    inline: 'nearest',
+                });
+                scrollTimeoutId = window.setTimeout(() => {
+                    frameId = window.requestAnimationFrame(updateTargetRect);
+                }, 220);
+            } else {
+                setTargetRect(rect);
+            }
+
+            if ('ResizeObserver' in window) {
+                resizeObserver = new ResizeObserver(updateTargetRect);
+                resizeObserver.observe(targetElement);
+            }
+        };
+
+        const handleViewportChange = () => {
+            if (frameId !== null) {
+                window.cancelAnimationFrame(frameId);
+            }
+            frameId = window.requestAnimationFrame(updateTargetRect);
+        };
+
+        ensureTargetInView();
+        window.addEventListener('resize', handleViewportChange);
+        window.addEventListener('scroll', handleViewportChange, true);
+
+        return () => {
+            if (frameId !== null) {
+                window.cancelAnimationFrame(frameId);
+            }
+            if (scrollTimeoutId !== null) {
+                window.clearTimeout(scrollTimeoutId);
+            }
+            resizeObserver?.disconnect();
+            window.removeEventListener('resize', handleViewportChange);
+            window.removeEventListener('scroll', handleViewportChange, true);
+        };
+    }, [showInitialModal, step.target, step.position]);
 
     const handleNext = () => {
         if (isLastStep) {
@@ -131,9 +300,25 @@ export const StudioTutorial: React.FC<StudioTutorialProps> = ({ onComplete, onSk
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="fixed inset-0 bg-black/30 z-40"
+                className="fixed inset-0 bg-black/35 z-40"
                 onClick={onSkip}
             />
+
+            {targetRect && (
+                <motion.div
+                    key={`${step.id}-highlight`}
+                    initial={{ opacity: 0, scale: 0.98 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="pointer-events-none fixed z-[45] rounded-2xl border-2 border-white/85 shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]"
+                    style={{
+                        top: `${targetRect.top - 6}px`,
+                        left: `${targetRect.left - 6}px`,
+                        width: `${targetRect.width + 12}px`,
+                        height: `${targetRect.height + 12}px`,
+                    }}
+                />
+            )}
 
             {/* Floating tooltip */}
             <motion.div
@@ -141,9 +326,11 @@ export const StudioTutorial: React.FC<StudioTutorialProps> = ({ onComplete, onSk
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 10 }}
-                className="fixed bottom-safe-24 left-safe-4 right-safe-4 z-50"
+                className="fixed z-50"
+                style={tooltipStyle}
+                onClick={(event) => event.stopPropagation()}
             >
-                <div className="bg-white rounded-2xl p-5 shadow-2xl max-w-md mx-auto">
+                <div className="bg-white rounded-2xl p-5 shadow-2xl">
                     {/* Progress dots */}
                     <div className="flex justify-center gap-1.5 mb-4">
                         {TUTORIAL_STEPS.map((_, idx) => (

@@ -10,6 +10,9 @@ Deno.test('validateOutfitSuggestion accepts valid top/bottom/shoes IDs', () => {
     { id: 't1', metadata: { category: 'top', subcategory: 'remera' } },
     { id: 'b1', metadata: { category: 'bottom', subcategory: 'jeans' } },
     { id: 's1', metadata: { category: 'shoes', subcategory: 'zapatillas' } },
+    { id: 'o1', metadata: { category: 'outerwear', subcategory: 'blazer' } },
+    { id: 'a1', metadata: { category: 'accessory', subcategory: 'cartera' } },
+    { id: 'a2', metadata: { category: 'accessory', subcategory: 'aros' } },
   ];
   const categoryById = buildCategoryMap(inventory);
   const result = validateOutfitSuggestion(
@@ -17,8 +20,13 @@ Deno.test('validateOutfitSuggestion accepts valid top/bottom/shoes IDs', () => {
       top_id: 't1',
       bottom_id: 'b1',
       shoes_id: 's1',
+      outerwear_id: 'o1',
+      accessory_ids: ['a1', 'a2'],
       explanation: 'Look balanceado',
       confidence: 0.9,
+      look_goal: 'reference_recreation',
+      similarity_score: 0.82,
+      styling_notes: ['Compensé con blazer', 'Los accesorios levantan el look'],
     },
     categoryById,
   );
@@ -28,6 +36,10 @@ Deno.test('validateOutfitSuggestion accepts valid top/bottom/shoes IDs', () => {
   assertEquals(result.suggestion?.top_id, 't1');
   assertEquals(result.suggestion?.bottom_id, 'b1');
   assertEquals(result.suggestion?.shoes_id, 's1');
+  assertEquals(result.suggestion?.outerwear_id, 'o1');
+  assertEquals(result.suggestion?.accessory_ids, ['a1', 'a2']);
+  assertEquals(result.suggestion?.look_goal, 'reference_recreation');
+  assertEquals(result.suggestion?.similarity_score, 0.82);
 });
 
 Deno.test('validateOutfitSuggestion rejects duplicated IDs', () => {
@@ -70,6 +82,29 @@ Deno.test('validateOutfitSuggestion rejects mismatched categories', () => {
 
   assertEquals(result.suggestion, null);
   assertStringIncludes(result.warnings.join(' '), 'categoría top');
+});
+
+Deno.test('validateOutfitSuggestion rejects accessory IDs outside accessory category', () => {
+  const inventory = [
+    { id: 't1', metadata: { category: 'top' } },
+    { id: 'b1', metadata: { category: 'bottom' } },
+    { id: 's1', metadata: { category: 'shoes' } },
+    { id: 'x1', metadata: { category: 'top' } },
+  ];
+  const categoryById = buildCategoryMap(inventory);
+  const result = validateOutfitSuggestion(
+    {
+      top_id: 't1',
+      bottom_id: 'b1',
+      shoes_id: 's1',
+      accessory_ids: ['x1'],
+      explanation: 'Categoría cruzada en accesorio',
+    },
+    categoryById,
+  );
+
+  assertEquals(result.suggestion, null);
+  assertStringIncludes(result.warnings.join(' '), 'categoría accessory');
 });
 
 Deno.test('trimClosetContext keeps latest items and caps at MAX_CLOSET_ITEMS', () => {

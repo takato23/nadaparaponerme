@@ -87,6 +87,7 @@
         "npm:html2canvas@^1.4.1",
         "npm:jsdom@^27.3.0",
         "npm:jspdf@4",
+        "npm:liquid-glass-react@^1.1.1",
         "npm:lucide-react@0.417",
         "npm:maath@~0.10.8",
         "npm:mercadopago@^2.10.0",

@@ -10,11 +10,20 @@
  * Supports: Studio looks, Outfit generation, Smart Packer, and more
  */
 import React, { createContext, useContext, useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { generateVirtualTryOnWithSlots } from '@/src/services/aiService';
-import * as aiService from '@/src/services/aiService';
 import * as analytics from '@/src/services/analyticsService';
 import { aiStorage } from '@/src/utils/aiStorage';
 import type { ClothingItem, GenerationPreset, ClothingSlot, FitResult, PackingListResult } from '@/types';
+
+type AIServiceModule = typeof import('@/src/services/aiService');
+
+let aiServicePromise: Promise<AIServiceModule> | null = null;
+
+const loadAiService = (): Promise<AIServiceModule> => {
+  if (!aiServicePromise) {
+    aiServicePromise = import('@/src/services/aiService');
+  }
+  return aiServicePromise;
+};
 
 // ============================================================================
 // Types
@@ -335,13 +344,14 @@ export function AIGenerationProvider({ children }: { children: React.ReactNode }
       let result: any;
 
       const timeoutMs = GENERATION_TIMEOUT_MS[request.type] ?? 60000;
+      const aiService = await loadAiService();
 
       switch (request.type) {
         case 'studio': {
           const payload = (request as StudioGenerationRequest).payload;
           const requestedQuality = payload.quality ?? 'pro';
           const apiResult = await runWithTimeout(
-            generateVirtualTryOnWithSlots(
+            aiService.generateVirtualTryOnWithSlots(
               payload.userImage,
               payload.slots,
               {

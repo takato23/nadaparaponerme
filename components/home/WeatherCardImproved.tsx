@@ -141,83 +141,79 @@ export const WeatherCardImproved: React.FC<WeatherCardImprovedProps> = ({ onWeat
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
 
-      try {
-        const response = await fetch(
-          `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,visibility&timezone=auto`,
-          { signal: controller.signal }
-        );
-        clearTimeout(timeoutId);
+      const response = await fetch(
+        `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,visibility&timezone=auto`,
+        { signal: controller.signal }
+      );
+      clearTimeout(timeoutId);
 
-        if (!response.ok) throw new Error('Error al obtener clima');
+      if (!response.ok) throw new Error('Error al obtener clima');
 
-        const data = await response.json();
-        const current = data.current;
+      const data = await response.json();
+      const current = data.current;
 
-        // Mapear código de clima a icono
-        const weatherCode = current.weather_code;
-        let icon = '01d';
-        let description = 'Despejado';
+      // Mapear código de clima a icono
+      const weatherCode = current.weather_code;
+      let icon = '01d';
+      let description = 'Despejado';
 
-        // Mapeo de códigos WMO a descripciones
-        if (weatherCode === 0) { icon = '01d'; description = 'Despejado'; }
-        else if (weatherCode <= 3) { icon = '02d'; description = 'Parcialmente nublado'; }
-        else if (weatherCode <= 49) { icon = '50d'; description = 'Niebla'; }
-        else if (weatherCode <= 59) { icon = '09d'; description = 'Llovizna'; }
-        else if (weatherCode <= 69) { icon = '10d'; description = 'Lluvia'; }
-        else if (weatherCode <= 79) { icon = '13d'; description = 'Nieve'; }
-        else if (weatherCode <= 84) { icon = '09d'; description = 'Aguaceros'; }
-        else if (weatherCode <= 94) { icon = '13d'; description = 'Nieve'; }
-        else { icon = '11d'; description = 'Tormenta'; }
+      // Mapeo de códigos WMO a descripciones
+      if (weatherCode === 0) { icon = '01d'; description = 'Despejado'; }
+      else if (weatherCode <= 3) { icon = '02d'; description = 'Parcialmente nublado'; }
+      else if (weatherCode <= 49) { icon = '50d'; description = 'Niebla'; }
+      else if (weatherCode <= 59) { icon = '09d'; description = 'Llovizna'; }
+      else if (weatherCode <= 69) { icon = '10d'; description = 'Lluvia'; }
+      else if (weatherCode <= 79) { icon = '13d'; description = 'Nieve'; }
+      else if (weatherCode <= 84) { icon = '09d'; description = 'Aguaceros'; }
+      else if (weatherCode <= 94) { icon = '13d'; description = 'Nieve'; }
+      else { icon = '11d'; description = 'Tormenta'; }
 
-        // Ajustar para noche (simplificado)
-        const hour = new Date().getHours();
-        if (hour < 6 || hour > 20) {
-          icon = icon.replace('d', 'n');
-        }
-
-        // Obtener nombre de ciudad con geocoding reverso
-        let city = 'Tu ubicación';
-        let country = '';
-        try {
-          // Short timeout for geocoding
-          const geoController = new AbortController();
-          const geoTimeout = setTimeout(() => geoController.abort(), 3000);
-
-          const geoResponse = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`,
-            { signal: geoController.signal }
-          );
-          clearTimeout(geoTimeout);
-
-          if (geoResponse.ok) {
-            const geoData = await geoResponse.json();
-            city = geoData.address?.city || geoData.address?.town || geoData.address?.village || 'Tu ubicación';
-            country = geoData.address?.country_code?.toUpperCase() || '';
-          }
-        } catch {
-          // Usar ubicación genérica si falla geocoding
-          console.warn('Geocoding failed, using generic location name');
-        }
-
-        const weatherData: WeatherData = {
-          temp: Math.round(current.temperature_2m),
-          feels_like: Math.round(current.apparent_temperature),
-          humidity: current.relative_humidity_2m,
-          wind_speed: Math.round(current.wind_speed_10m),
-          visibility: Math.round((current.visibility || 10000) / 1000),
-          description,
-          icon,
-          city,
-          country,
-        };
-
-        setWeather(weatherData);
-        saveToCache(weatherData);
-        onWeatherLoaded?.(weatherData);
-        setError(null);
-      } catch (err) {
-        throw err; // Re-throw to be caught by outer catch
+      // Ajustar para noche (simplificado)
+      const hour = new Date().getHours();
+      if (hour < 6 || hour > 20) {
+        icon = icon.replace('d', 'n');
       }
+
+      // Obtener nombre de ciudad con geocoding reverso
+      let city = 'Tu ubicación';
+      let country = '';
+      try {
+        // Short timeout for geocoding
+        const geoController = new AbortController();
+        const geoTimeout = setTimeout(() => geoController.abort(), 3000);
+
+        const geoResponse = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`,
+          { signal: geoController.signal }
+        );
+        clearTimeout(geoTimeout);
+
+        if (geoResponse.ok) {
+          const geoData = await geoResponse.json();
+          city = geoData.address?.city || geoData.address?.town || geoData.address?.village || 'Tu ubicación';
+          country = geoData.address?.country_code?.toUpperCase() || '';
+        }
+      } catch {
+        // Usar ubicación genérica si falla geocoding
+        console.warn('Geocoding failed, using generic location name');
+      }
+
+      const weatherData: WeatherData = {
+        temp: Math.round(current.temperature_2m),
+        feels_like: Math.round(current.apparent_temperature),
+        humidity: current.relative_humidity_2m,
+        wind_speed: Math.round(current.wind_speed_10m),
+        visibility: Math.round((current.visibility || 10000) / 1000),
+        description,
+        icon,
+        city,
+        country,
+      };
+
+      setWeather(weatherData);
+      saveToCache(weatherData);
+      onWeatherLoaded?.(weatherData);
+      setError(null);
     } catch (err) {
       console.warn('Error fetching weather, using fallback:', err);
       // Use fallback data seamlessly instead of showing error

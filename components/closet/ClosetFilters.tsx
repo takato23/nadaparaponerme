@@ -10,9 +10,10 @@
  * - Smooth animations
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import type { AdvancedFilters, CategoryFilter } from '../../types/closet';
 import { motion, AnimatePresence } from 'framer-motion';
+import { normalizeColorValue, resolveColorSwatch } from '../../src/utils/colorUtils';
 
 interface ClosetFiltersProps {
   isOpen: boolean;
@@ -27,13 +28,13 @@ interface ClosetFiltersProps {
   filteredCount: number;
 }
 
-export const CATEGORY_FILTERS: Array<{ value: CategoryFilter; label: string; icon: string }> = [
+const CATEGORY_FILTERS: Array<{ value: CategoryFilter; label: string; icon: string }> = [
   { value: 'all', label: 'Todo', icon: 'grid_view' },
   { value: 'top', label: 'Partes de Arriba', icon: 'checkroom' },
   { value: 'bottom', label: 'Partes de Abajo', icon: 'styler' },
   { value: 'shoes', label: 'Calzado', icon: 'steps' },
   { value: 'outerwear', label: 'Abrigos', icon: 'dry_cleaning' },
-  { value: 'dress', label: 'Vestidos', icon: 'woman' },
+  { value: 'one-piece', label: 'Vestidos', icon: 'woman' },
   { value: 'accessory', label: 'Accesorios', icon: 'watch' },
 ];
 
@@ -51,6 +52,11 @@ export default function ClosetFilters({
 }: ClosetFiltersProps) {
   const [localFilters, setLocalFilters] = useState<AdvancedFilters>(filters);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    setLocalFilters(filters);
+  }, [filters, isOpen]);
+
   const handleApply = () => {
     onApplyFilters(localFilters);
     onClose();
@@ -59,12 +65,31 @@ export default function ClosetFilters({
   const handleClear = () => {
     setLocalFilters({
       categories: [],
+      colors: undefined,
+      seasons: undefined,
+      tags: undefined,
+      versatility: undefined,
+      dateAdded: undefined,
+      usage: undefined,
+      brands: undefined,
+      price: undefined,
+      isFavorite: undefined,
+      isInCollection: undefined,
+      status: undefined,
       searchText: undefined
     });
     onClearFilters();
   };
 
   const toggleCategory = (category: CategoryFilter) => {
+    if (category === 'all') {
+      setLocalFilters(prev => ({
+        ...prev,
+        categories: []
+      }));
+      return;
+    }
+
     const categories = localFilters.categories || [];
     const hasCategory = categories.includes(category);
 
@@ -78,13 +103,14 @@ export default function ClosetFilters({
 
   const toggleColor = (color: string) => {
     const colors = localFilters.colors?.colors || [];
-    const hasColor = colors.includes(color);
+    const normalizedColor = normalizeColorValue(color);
+    const hasColor = colors.some(existingColor => normalizeColorValue(existingColor) === normalizedColor);
 
     setLocalFilters(prev => ({
       ...prev,
       colors: {
         colors: hasColor
-          ? colors.filter(c => c !== color)
+          ? colors.filter(c => normalizeColorValue(c) !== normalizedColor)
           : [...colors, color],
         matchMode: prev.colors?.matchMode || 'exact'
       }
@@ -139,12 +165,12 @@ export default function ClosetFilters({
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="relative w-full max-w-lg bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl rounded-t-3xl md:rounded-3xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl border-t border-white/20"
+            className="relative flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl border-t border-white/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(223,231,236,0.9))] shadow-2xl backdrop-blur-xl dark:border-white/20 dark:bg-gray-900/95 md:rounded-3xl"
           >
             {/* Header */}
-            <div className="sticky top-0 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-b border-gray-200/50 dark:border-gray-700/50 px-6 py-5 flex items-center justify-between z-10">
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/70 bg-white/72 px-6 py-5 backdrop-blur-md dark:border-gray-700/50 dark:bg-gray-900/80">
               <div>
-                <h2 className="text-2xl font-serif font-bold text-text-primary dark:text-gray-100">
+                <h2 className="text-2xl font-serif font-bold text-[#14343b] dark:text-gray-100">
                   Filtrar Armario
                 </h2>
                 <p className="text-sm text-text-secondary dark:text-gray-400 font-medium">
@@ -153,7 +179,7 @@ export default function ClosetFilters({
               </div>
               <button
                 onClick={onClose}
-                className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors group"
+                className="group flex h-10 w-10 items-center justify-center rounded-full bg-white/76 transition-colors hover:bg-white dark:bg-gray-800 dark:hover:bg-gray-700"
               >
                 <span className="material-symbols-outlined group-hover:rotate-90 transition-transform duration-300">close</span>
               </button>
@@ -169,7 +195,9 @@ export default function ClosetFilters({
                 </h3>
                 <div className="grid grid-cols-3 gap-3">
                   {CATEGORY_FILTERS.map((category) => {
-                    const isSelected = localFilters.categories?.includes(category.value);
+                    const isSelected = category.value === 'all'
+                      ? (localFilters.categories?.length ?? 0) === 0
+                      : localFilters.categories?.includes(category.value);
 
                     return (
                       <button
@@ -178,27 +206,27 @@ export default function ClosetFilters({
                         className={`
                           relative flex flex-col items-center gap-2 p-4 rounded-2xl transition-all duration-300 overflow-hidden group
                           ${isSelected
-                            ? 'shadow-glow-accent scale-[1.02]'
-                            : 'bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 border border-gray-100 dark:border-gray-700'
+                            ? 'scale-[1.02] shadow-sm'
+                            : 'border border-white/70 bg-white/64 hover:bg-white/86 dark:border-gray-700 dark:bg-gray-800/50 dark:hover:bg-gray-800'
                           }
                         `}
                       >
                         {isSelected && (
-                          <div className="absolute inset-0 bg-gradient-to-br from-primary/20 to-secondary/20 animate-shine" />
+                          <div className="absolute inset-0 animate-shine bg-[linear-gradient(135deg,rgba(202,232,234,0.5),rgba(235,229,231,0.38))]" />
                         )}
                         <div className={`
                           w-10 h-10 rounded-full flex items-center justify-center transition-colors z-10
-                          ${isSelected ? 'bg-primary text-white shadow-md' : 'bg-white dark:bg-gray-700 text-text-secondary dark:text-gray-400 group-hover:text-primary'}
+                          ${isSelected ? 'bg-[#14343b] text-white shadow-md' : 'bg-white dark:bg-gray-700 text-text-secondary dark:text-gray-400 group-hover:text-[#2aa1a7]'}
                         `}>
                           <span className="material-symbols-outlined text-2xl">
                             {category.icon}
                           </span>
                         </div>
-                        <span className={`text-xs font-bold z-10 ${isSelected ? 'text-primary' : 'text-text-primary dark:text-gray-300'}`}>
+                        <span className={`text-xs font-bold z-10 ${isSelected ? 'text-[#14343b]' : 'text-text-primary dark:text-gray-300'}`}>
                           {category.label}
                         </span>
                         {isSelected && (
-                          <div className="absolute inset-0 border-2 border-primary/30 rounded-2xl" />
+                          <div className="absolute inset-0 rounded-2xl border-2 border-[#9fcfd2]" />
                         )}
                       </button>
                     );
@@ -213,29 +241,46 @@ export default function ClosetFilters({
                     <span className="material-symbols-outlined text-lg">palette</span>
                     Colores
                   </h3>
-                  <div className="flex flex-wrap gap-3">
+                  <div className="grid grid-cols-4 sm:grid-cols-6 gap-3">
                     {availableColors.map((color) => {
-                      const isSelected = localFilters.colors?.colors.includes(color);
+                      const swatch = resolveColorSwatch(color);
+                      const isSelected = (localFilters.colors?.colors || []).some(
+                        (selected) => normalizeColorValue(selected) === swatch.key
+                      );
 
                       return (
                         <button
-                          key={color}
+                          key={`${swatch.key}-${color}`}
                           onClick={() => toggleColor(color)}
-                          className={`
-                            group relative w-10 h-10 rounded-full shadow-sm transition-transform hover:scale-110
-                            ${isSelected ? 'ring-2 ring-offset-2 ring-primary dark:ring-offset-gray-900 scale-110' : 'hover:ring-2 hover:ring-offset-1 hover:ring-gray-300 dark:hover:ring-gray-600'}
-                          `}
-                          title={color}
+                          className="group flex flex-col items-center gap-1.5"
+                          title={swatch.label}
                         >
-                          <span
-                            className="absolute inset-0 rounded-full border border-black/10 dark:border-white/10"
-                            style={{ backgroundColor: color }}
-                          />
-                          {isSelected && (
-                            <span className="absolute inset-0 flex items-center justify-center text-white drop-shadow-md">
-                              <span className="material-symbols-outlined text-lg font-bold">check</span>
-                            </span>
-                          )}
+                          <span className="relative w-10 h-10">
+                            <span
+                              className={`
+                                absolute inset-0 rounded-full shadow-sm transition-transform hover:scale-110 border
+                                ${isSelected
+                                  ? 'ring-2 ring-offset-2 ring-[#9fcfd2] dark:ring-offset-gray-900 scale-110'
+                                  : 'hover:ring-2 hover:ring-offset-1 hover:ring-[#cae8ea] dark:hover:ring-gray-600'
+                                }
+                              `}
+                              style={{
+                                backgroundColor: swatch.cssColor,
+                                borderColor: swatch.borderColor
+                              }}
+                            />
+                            {isSelected && (
+                              <span
+                                className="absolute inset-0 flex items-center justify-center drop-shadow-md"
+                                style={{ color: swatch.checkColor }}
+                              >
+                                <span className="material-symbols-outlined text-lg font-bold">check</span>
+                              </span>
+                            )}
+                          </span>
+                          <span className="text-[10px] leading-tight text-center text-text-secondary dark:text-gray-400 line-clamp-1 w-full">
+                            {swatch.label}
+                          </span>
                         </button>
                       );
                     })}
@@ -261,8 +306,8 @@ export default function ClosetFilters({
                           className={`
                             px-4 py-2 rounded-full text-sm font-medium transition-all capitalize border magnetic-hover
                             ${isSelected
-                              ? 'bg-primary text-white border-primary shadow-glow-accent'
-                              : 'bg-white dark:bg-gray-800 text-text-secondary dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-primary/50 hover:scale-105'
+                              ? 'bg-[#14343b] text-white border-[#14343b] shadow-sm'
+                              : 'bg-white/78 dark:bg-gray-800 text-text-secondary dark:text-gray-300 border-white/70 dark:border-gray-700 hover:border-[#9fcfd2] hover:scale-105'
                             }
                           `}
                         >
@@ -291,7 +336,7 @@ export default function ClosetFilters({
                             matchMode: prev.tags!.matchMode === 'any' ? 'all' : 'any'
                           }
                         }))}
-                        className="text-xs text-primary font-bold bg-primary/10 px-2 py-1 rounded-md hover:bg-primary/20 transition-colors"
+                        className="rounded-md bg-[linear-gradient(180deg,rgba(202,232,234,0.78),rgba(223,231,236,0.72))] px-2 py-1 text-xs font-bold text-[#14343b] transition-colors hover:bg-[linear-gradient(180deg,rgba(202,232,234,0.94),rgba(223,231,236,0.9))]"
                       >
                         {localFilters.tags.matchMode === 'any' ? 'Cualquiera' : 'Todos'}
                       </button>
@@ -308,8 +353,8 @@ export default function ClosetFilters({
                           className={`
                             px-3 py-1.5 rounded-lg text-xs font-bold transition-all capitalize border magnetic-hover
                             ${isSelected
-                              ? 'bg-secondary text-white border-secondary shadow-sm'
-                              : 'bg-gray-50 dark:bg-gray-800 text-text-secondary dark:text-gray-400 border-gray-200 dark:border-gray-700 hover:border-secondary/50 hover:scale-105'
+                              ? 'bg-[#14343b] text-white border-[#14343b] shadow-sm'
+                              : 'bg-white/76 dark:bg-gray-800 text-text-secondary dark:text-gray-400 border-white/70 dark:border-gray-700 hover:border-[#9fcfd2] hover:scale-105'
                             }
                           `}
                         >
@@ -333,8 +378,8 @@ export default function ClosetFilters({
                     className={`
                       px-4 py-3 rounded-xl font-semibold text-sm transition-all flex items-center justify-center gap-2 border
                       ${localFilters.isFavorite
-                        ? 'bg-red-50 dark:bg-red-900/20 text-red-500 border-red-200 dark:border-red-800'
-                        : 'bg-gray-50 dark:bg-gray-800 text-text-secondary dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:bg-gray-100'
+                        ? 'bg-[linear-gradient(180deg,rgba(235,229,231,0.84),rgba(255,255,255,0.82))] text-[#14343b] border-white/80'
+                        : 'bg-white/78 dark:bg-gray-800 text-text-secondary dark:text-gray-300 border-white/70 dark:border-gray-700 hover:bg-white'
                       }
                     `}
                   >
@@ -349,8 +394,9 @@ export default function ClosetFilters({
 
                       if (isRecent) {
                         setLocalFilters(prev => {
-                          const { dateAdded, ...rest } = prev;
-                          return rest;
+                          const nextFilters = { ...prev };
+                          delete nextFilters.dateAdded;
+                          return nextFilters;
                         });
                       } else {
                         setLocalFilters(prev => ({
@@ -366,8 +412,8 @@ export default function ClosetFilters({
                     className={`
                       px-4 py-3 rounded-xl font-semibold text-sm transition-all flex items-center justify-center gap-2 border
                       ${localFilters.dateAdded?.preset === 'last_month'
-                        ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-500 border-blue-200 dark:border-blue-800'
-                        : 'bg-gray-50 dark:bg-gray-800 text-text-secondary dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:bg-gray-100'
+                        ? 'bg-[linear-gradient(180deg,rgba(202,232,234,0.84),rgba(255,255,255,0.8))] text-[#14343b] border-white/80'
+                        : 'bg-white/78 dark:bg-gray-800 text-text-secondary dark:text-gray-300 border-white/70 dark:border-gray-700 hover:bg-white'
                       }
                     `}
                   >
@@ -386,8 +432,8 @@ export default function ClosetFilters({
                     className={`
                       px-4 py-3 rounded-xl font-semibold text-sm transition-all flex items-center justify-center gap-2 border col-span-2 md:col-span-1
                       ${(localFilters.status?.includes('virtual') && localFilters.status.length === 1)
-                        ? 'bg-purple-50 dark:bg-purple-900/20 text-purple-600 border-purple-200 dark:border-purple-800'
-                        : 'bg-gray-50 dark:bg-gray-800 text-text-secondary dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:bg-gray-100'
+                        ? 'bg-[linear-gradient(180deg,rgba(202,232,234,0.84),rgba(223,231,236,0.8))] text-[#14343b] border-white/80'
+                        : 'bg-white/78 dark:bg-gray-800 text-text-secondary dark:text-gray-300 border-white/70 dark:border-gray-700 hover:bg-white'
                       }
                     `}
                   >
@@ -399,16 +445,16 @@ export default function ClosetFilters({
             </div>
 
             {/* Footer Actions */}
-            <div className="sticky bottom-0 bg-white/90 dark:bg-gray-900/90 backdrop-blur-md border-t border-gray-200/50 dark:border-gray-700/50 px-6 py-4 flex gap-3 z-10">
+            <div className="sticky bottom-0 z-10 flex gap-3 border-t border-white/70 bg-white/90 px-6 py-4 backdrop-blur-md dark:border-gray-700/50 dark:bg-gray-900/90">
               <button
                 onClick={handleClear}
-                className="flex-1 px-4 py-3.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-text-primary dark:text-gray-200 font-bold hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                className="flex-1 rounded-xl bg-white/76 px-4 py-3.5 font-bold text-text-primary transition-colors hover:bg-white dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
               >
                 Limpiar
               </button>
               <button
                 onClick={handleApply}
-                className="flex-[2] px-4 py-3.5 rounded-xl bg-gradient-to-r from-primary to-secondary text-white font-bold shadow-glow-accent hover:shadow-glow-lg hover:scale-[1.02] transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+                className="flex flex-[2] items-center justify-center gap-2 rounded-xl bg-[#08111a] px-4 py-3.5 font-bold text-white transition-all hover:scale-[1.02] hover:bg-[#10202b] active:scale-[0.98]"
               >
                 <span className="material-symbols-outlined">filter_alt</span>
                 Aplicar Filtros

@@ -6,7 +6,7 @@ import { enforceRateLimit, recordRequestResult } from '../_shared/antiAbuse.ts';
 import { enforceAIBudgetGuard, getBudgetLimitMessage, recordAIBudgetSuccess } from '../_shared/aiBudgetGuard.ts';
 import { withRetry } from '../_shared/retry.ts';
 import { buildClosetHash, buildPromptHash, sanitizeIdempotencyKey } from '../_shared/insightUtils.ts';
-import { isFailClosedHighCostEnabled } from '../_shared/security.ts';
+import { assertAllowedOrigin, getRequestId, isFailClosedHighCostEnabled, jsonError } from '../_shared/security.ts';
 
 const MONTH_SECONDS = 60 * 60 * 24 * 30;
 const getMonthlyLimit = (envName: string, fallback: number) => {
@@ -25,9 +25,89 @@ const INSIGHT_TYPE = 'mix';
 const CREDIT_COST = 1;
 const CACHE_TTL_HOURS = 12;
 
+type OutfitResponsePayload = {
+  top_id: string;
+  bottom_id: string;
+  shoes_id: string;
+  explanation: string;
+  missing_piece_suggestion?: {
+    item_name: string;
+    reason: string;
+  };
+};
+
+const normalizeCategory = (item: any): string => {
+  const direct = String(item?.category || '').trim().toLowerCase();
+  if (direct) return direct;
+  return String(item?.ai_metadata?.category || '').trim().toLowerCase();
+};
+
+const validateOutfitPayload = (
+  raw: unknown,
+  inventory: any[],
+): { ok: true; outfit: OutfitResponsePayload } | { ok: false; error: string } => {
+  if (!raw || typeof raw !== 'object') {
+    return { ok: false, error: 'La IA devolvió una respuesta inválida.' };
+  }
+
+  const payload = raw as Record<string, unknown>;
+  const topId = typeof payload.top_id === 'string' ? payload.top_id.trim() : '';
+  const bottomId = typeof payload.bottom_id === 'string' ? payload.bottom_id.trim() : '';
+  const shoesId = typeof payload.shoes_id === 'string' ? payload.shoes_id.trim() : '';
+  const explanation = typeof payload.explanation === 'string' ? payload.explanation.trim() : '';
+
+  if (!topId || !bottomId || !shoesId || !explanation) {
+    return { ok: false, error: 'La IA devolvió un outfit incompleto.' };
+  }
+  if (topId === bottomId || topId === shoesId || bottomId === shoesId) {
+    return { ok: false, error: 'La IA devolvió IDs repetidos para distintas prendas.' };
+  }
+
+  const byId = new Map(inventory.map((item) => [String(item.id), item]));
+  const topItem = byId.get(topId);
+  const bottomItem = byId.get(bottomId);
+  const shoesItem = byId.get(shoesId);
+  if (!topItem || !bottomItem || !shoesItem) {
+    return { ok: false, error: 'La IA devolvió IDs que no existen en el inventario disponible.' };
+  }
+
+  if (normalizeCategory(topItem) !== 'top') {
+    return { ok: false, error: 'La IA devolvió una prenda superior inválida para top_id.' };
+  }
+  if (normalizeCategory(bottomItem) !== 'bottom') {
+    return { ok: false, error: 'La IA devolvió una prenda inferior inválida para bottom_id.' };
+  }
+  if (normalizeCategory(shoesItem) !== 'shoes') {
+    return { ok: false, error: 'La IA devolvió una prenda inválida para shoes_id.' };
+  }
+
+  const outfit: OutfitResponsePayload = {
+    top_id: topId,
+    bottom_id: bottomId,
+    shoes_id: shoesId,
+    explanation,
+  };
+
+  const missingPieceSuggestion = payload.missing_piece_suggestion;
+  if (missingPieceSuggestion && typeof missingPieceSuggestion === 'object') {
+    const itemName = typeof (missingPieceSuggestion as Record<string, unknown>).item_name === 'string'
+      ? ((missingPieceSuggestion as Record<string, unknown>).item_name as string).trim()
+      : '';
+    const reason = typeof (missingPieceSuggestion as Record<string, unknown>).reason === 'string'
+      ? ((missingPieceSuggestion as Record<string, unknown>).reason as string).trim()
+      : '';
+    if (itemName && reason) {
+      outfit.missing_piece_suggestion = { item_name: itemName, reason };
+    }
+  }
+
+  return { ok: true, outfit };
+};
+
 serve(async (req) => {
+  const requestId = getRequestId(req);
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return new Response('ok', { headers: { ...corsHeaders, 'X-Request-Id': requestId } });
   }
 
   let supabase: any = null;
@@ -37,6 +117,17 @@ serve(async (req) => {
   let closetHash: string | null = null;
 
   try {
+    const originCheck = assertAllowedOrigin(req, { requireConfigured: true });
+    if (!originCheck.allowed) {
+      return jsonError({
+        status: originCheck.missingConfig ? 503 : 403,
+        requestId,
+        error: originCheck.missingConfig ? 'ALLOWED_WEB_ORIGINS no está configurado' : 'Origen no permitido',
+        code: originCheck.missingConfig ? 'security_guard_error' : 'forbidden_origin',
+        corsHeaders,
+      });
+    }
+
     const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseServiceKey =
@@ -127,15 +218,45 @@ serve(async (req) => {
 
     const body = await req.json();
     const prompt = typeof body?.prompt === 'string' ? body.prompt : '';
+    const customSystemPromptRaw = typeof body?.systemPrompt === 'string' ? body.systemPrompt.trim() : '';
+    const requestedClosetItemIds = Array.isArray(body?.closetItemIds)
+      ? Array.from(
+        new Set(
+          body.closetItemIds
+            .filter((itemId: unknown) => typeof itemId === 'string')
+            .map((itemId: string) => itemId.trim())
+            .filter(Boolean),
+        ),
+      )
+      : [];
+    const customResponseSchema = body?.responseSchema && typeof body.responseSchema === 'object' && !Array.isArray(body.responseSchema)
+      ? body.responseSchema
+      : null;
     if (!prompt.trim()) {
       return new Response(
         JSON.stringify({ error: 'Missing prompt' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }
+    if (customSystemPromptRaw.length > 12_000) {
+      return new Response(
+        JSON.stringify({ error: 'systemPrompt too long' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+    if (customResponseSchema && JSON.stringify(customResponseSchema).length > 20_000) {
+      return new Response(
+        JSON.stringify({ error: 'responseSchema too long' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+    const customSystemPrompt = customSystemPromptRaw || null;
 
     idempotencyKey = sanitizeIdempotencyKey(body?.idempotencyKey);
-    promptHash = await buildPromptHash(prompt);
+    const promptHashSource = customSystemPrompt
+      ? `${prompt}\n\n${customSystemPrompt}\n\n${JSON.stringify(customResponseSchema || {})}\n\n${requestedClosetItemIds.join(',')}`
+      : `${prompt}\n\n${JSON.stringify(customResponseSchema || {})}\n\n${requestedClosetItemIds.join(',')}`;
+    promptHash = await buildPromptHash(promptHashSource);
 
     if (idempotencyKey) {
       const { data: existingJob, error: existingJobError } = await supabase
@@ -158,13 +279,29 @@ serve(async (req) => {
       }
     }
 
-    const { data: items, error: itemsError } = await supabase
+    let itemsQuery = supabase
       .from('clothing_items')
       .select('id, name, category, subcategory, color_primary, ai_metadata, tags, ai_status, ai_metadata_version, updated_at')
       .eq('user_id', user.id)
       .is('deleted_at', null);
 
+    if (requestedClosetItemIds.length > 0) {
+      itemsQuery = itemsQuery.in('id', requestedClosetItemIds);
+    }
+
+    const { data: items, error: itemsError } = await itemsQuery;
+
     if (itemsError) throw itemsError;
+    if (requestedClosetItemIds.length > 0) {
+      const foundIds = new Set((items || []).map((item: any) => String(item.id)));
+      const missingIds = requestedClosetItemIds.filter((itemId) => !foundIds.has(itemId));
+      if (missingIds.length > 0) {
+        return new Response(
+          JSON.stringify({ error: 'Algunas prendas seleccionadas no existen o no están disponibles.' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+    }
     if (!items || items.length < 3) {
       return new Response(
         JSON.stringify({
@@ -204,7 +341,7 @@ serve(async (req) => {
             status: 'success',
             prompt_hash: promptHash,
             closet_hash: closetHash,
-            request_json: { prompt, source: 'generate-outfit' },
+            request_json: { prompt, source: 'generate-outfit', closetItemIds: requestedClosetItemIds },
             response_json: cachedInsight.response_json,
             credits_used: 0,
           },
@@ -281,26 +418,54 @@ serve(async (req) => {
       required: ['top_id', 'bottom_id', 'shoes_id', 'explanation'],
     };
 
-    const systemInstruction = `Eres un estilista personal con un 'ojo de loca' para la moda. Tienes acceso al siguiente inventario de ropa: ${JSON.stringify(
+    const defaultSystemInstruction = `Eres un estilista personal con un 'ojo de loca' para la moda. Tienes acceso al siguiente inventario de ropa: ${JSON.stringify(
       items,
     )}. El usuario quiere un outfit para: "${prompt}".
 Selecciona la mejor combinación (Top + Bottom + Shoes) del inventario.
 Si falta una pieza clave, puedes sugerir una en 'missing_piece_suggestion'.
 Devuelve siempre JSON con IDs válidos del inventario.`;
 
+    const systemInstruction = customSystemPrompt
+      ? `${customSystemPrompt}
+
+INVENTARIO DISPONIBLE:
+${JSON.stringify(items)}
+
+REGLAS OPERATIVAS:
+- Selecciona la mejor combinación (Top + Bottom + Shoes) del inventario.
+- Si falta una pieza clave, puedes sugerir una en 'missing_piece_suggestion'.
+- Devuelve siempre JSON con IDs válidos del inventario.`
+      : defaultSystemInstruction;
+
     const response = await withRetry(() =>
       ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.1-flash-lite-preview',
         contents: { parts: [{ text: `Aquí está la petición del usuario: "${prompt}"` }] },
         config: {
           systemInstruction,
           responseMimeType: 'application/json',
-          responseSchema: fitResultSchema,
+          responseSchema: customResponseSchema || fitResultSchema,
         },
       }),
     );
 
-    const outfit = JSON.parse(response.text || '{}');
+    let parsedOutfitRaw: unknown = null;
+    try {
+      parsedOutfitRaw = JSON.parse(response.text || '{}');
+    } catch {
+      return new Response(
+        JSON.stringify({ error: 'La IA devolvió una respuesta no JSON.' }),
+        { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+    const validation = validateOutfitPayload(parsedOutfitRaw, items);
+    if (!validation.ok) {
+      return new Response(
+        JSON.stringify({ error: validation.error }),
+        { status: 422, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+    const outfit = validation.outfit;
     const { data: incremented, error: incrementError } = await supabase.rpc('increment_ai_generation_usage', {
       p_user_id: user.id,
       p_amount: CREDIT_COST,
@@ -313,7 +478,7 @@ Devuelve siempre JSON con IDs válidos del inventario.`;
 
     const payload = {
       ...outfit,
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.1-flash-lite-preview',
       credits_used: incremented ? CREDIT_COST : 0,
       cache_hit: false,
     };
@@ -325,7 +490,7 @@ Devuelve siempre JSON con IDs válidos del inventario.`;
         closet_hash: closetHash,
         prompt_hash: promptHash,
         response_json: payload,
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.1-flash-lite-preview',
         credits_used: incremented ? CREDIT_COST : 0,
         expires_at: new Date(Date.now() + CACHE_TTL_HOURS * 60 * 60 * 1000).toISOString(),
       },
@@ -341,7 +506,7 @@ Devuelve siempre JSON con IDs válidos del inventario.`;
           status: 'success',
           prompt_hash: promptHash,
           closet_hash: closetHash,
-          request_json: { prompt, source: 'generate-outfit' },
+          request_json: { prompt, source: 'generate-outfit', closetItemIds: requestedClosetItemIds },
           response_json: payload,
           credits_used: incremented ? CREDIT_COST : 0,
         },

@@ -1,4 +1,5 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
+import { submitAutomaticErrorReport } from '../src/services/errorReportingService';
 
 interface Props {
     children: ReactNode;
@@ -21,6 +22,13 @@ class ErrorBoundary extends Component<Props, State> {
 
     public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
         console.error('Uncaught error:', error, errorInfo);
+        void submitAutomaticErrorReport({
+            source: 'react_error_boundary',
+            errorName: error.name || 'ReactErrorBoundary',
+            message: error.message || 'Unhandled React render error',
+            stack: error.stack,
+            componentStack: errorInfo.componentStack || undefined,
+        });
     }
 
     public render() {

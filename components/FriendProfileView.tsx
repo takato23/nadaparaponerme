@@ -1,9 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import type { CommunityUser, ClothingItem, ActivityFeedItem } from '../types';
+import type { CommunityUser, ClothingItem, ActivityFeedItem, SavedOutfit } from '../types';
 import ClosetGrid from './ClosetGrid';
 import ActivityCard from './ActivityCard';
-import { fetchActivityFeed } from '../src/services/activityFeedService';
-import { isCloseFriend, toggleCloseFriend } from '../src/services/socialService';
+import ActivityCommentsDrawer from './ActivityCommentsDrawer';
+import {
+    fetchActivityFeed,
+    importFromActivity,
+    toggleActivityReaction,
+    toggleActivityLike,
+    toggleActivityShare
+} from '../src/services/activityFeedService';
+import {
+    isCloseFriend,
+    toggleCloseFriend,
+    getProfileSocialSummary,
+    followUser,
+    unfollowUser
+} from '../src/services/socialService';
+import { reportContent, blockUser } from '../src/services/moderationService';
 import {
     requestToBorrowMultiple,
     getBorrowStatusesForItems,
@@ -11,6 +25,9 @@ import {
 } from '../src/services/borrowedItemsService';
 import { Card } from './ui/Card';
 import Loader from './Loader';
+import { useFeatureFlag } from '../hooks/useFeatureFlag';
+import { useToast } from '../hooks/useToast';
+import { useAuth } from '../hooks/useAuth';
 
 interface FriendProfileViewProps {
     friend: CommunityUser;
@@ -18,17 +35,27 @@ interface FriendProfileViewProps {
     onAddBorrowedItems: (items: ClothingItem[]) => void;
     onTryBorrowedItems: (items: ClothingItem[]) => void;
     onShowToast?: (message: string, type: 'success' | 'error') => void;
+    onImportedFromActivity?: (items: ClothingItem[], importedOutfit?: SavedOutfit | null) => void;
 }
 
 type Tab = 'activity' | 'closet' | 'stats';
 
-const FriendProfileView = ({ friend, onClose, onAddBorrowedItems, onTryBorrowedItems, onShowToast }: FriendProfileViewProps) => {
+const FriendProfileView = ({ friend, onClose, onAddBorrowedItems, onTryBorrowedItems, onShowToast, onImportedFromActivity }: FriendProfileViewProps) => {
+    const toast = useToast();
+    const { user } = useAuth();
+    const useSupabaseCloset = useFeatureFlag('useSupabaseCloset');
+    const enableActivitySaveToCloset = useFeatureFlag('enableActivitySaveToCloset');
+    const enableLinkedSourceItems = useFeatureFlag('enableLinkedSourceItems');
     const [activeTab, setActiveTab] = useState<Tab>('activity');
     const [isCloseFriendStatus, setIsCloseFriendStatus] = useState(false);
     const [activities, setActivities] = useState<ActivityFeedItem[]>([]);
     const [loadingActivities, setLoadingActivities] = useState(false);
-    const [isFollowing, setIsFollowing] = useState(true);
+    const [isFollowing, setIsFollowing] = useState(false);
+    const [socialSummary, setSocialSummary] = useState({ followers_count: 0, following_count: 0 });
+    const [followLoading, setFollowLoading] = useState(false);
     const [showStyleMatch, setShowStyleMatch] = useState(false);
+    const [showProfileMenu, setShowProfileMenu] = useState(false);
+    const [selectedActivityForComments, setSelectedActivityForComments] = useState<string | null>(null);
 
     const [selectedItems, setSelectedItems] = useState<ClothingItem[]>([]);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -39,11 +66,14 @@ const FriendProfileView = ({ friend, onClose, onAddBorrowedItems, onTryBorrowedI
     const [borrowLoading, setBorrowLoading] = useState(false);
     const [itemBorrowStatuses, setItemBorrowStatuses] = useState<Record<string, ItemBorrowStatus>>({});
     const [loadingBorrowStatuses, setLoadingBorrowStatuses] = useState(false);
+    const [savingActivityId, setSavingActivityId] = useState<string | null>(null);
+    const [wishingActivityId, setWishingActivityId] = useState<string | null>(null);
 
     useEffect(() => {
         checkCloseFriendStatus();
         loadFriendActivity();
-    }, [friend.id]);
+        loadSocialSummary();
+    }, [friend.id, user?.id]);
 
     useEffect(() => {
         loadBorrowStatuses();
@@ -76,6 +106,19 @@ const FriendProfileView = ({ friend, onClose, onAddBorrowedItems, onTryBorrowedI
             setItemBorrowStatuses({});
         } finally {
             setLoadingBorrowStatuses(false);
+        }
+    };
+
+    const loadSocialSummary = async () => {
+        try {
+            const summary = await getProfileSocialSummary(friend.id, user?.id);
+            setIsFollowing(summary.is_following);
+            setSocialSummary({
+                followers_count: summary.followers_count,
+                following_count: summary.following_count,
+            });
+        } catch (error) {
+            console.error('Failed to load social summary:', error);
         }
     };
 
@@ -115,6 +158,111 @@ const FriendProfileView = ({ friend, onClose, onAddBorrowedItems, onTryBorrowedI
         } catch (error) {
             console.error('Failed to toggle close friend:', error);
             setIsCloseFriendStatus(!newStatus);
+        }
+    };
+
+    const handleToggleFollow = async () => {
+        if (followLoading) return;
+        setFollowLoading(true);
+        const previous = isFollowing;
+        const previousFollowers = socialSummary.followers_count;
+
+        setIsFollowing(!previous);
+        setSocialSummary((prev) => ({
+            ...prev,
+            followers_count: previous ? Math.max(0, prev.followers_count - 1) : prev.followers_count + 1,
+        }));
+
+        try {
+            if (previous) {
+                await unfollowUser(friend.id);
+            } else {
+                await followUser(friend.id);
+            }
+        } catch (error) {
+            console.error('Failed to toggle follow:', error);
+            setIsFollowing(previous);
+            setSocialSummary((prev) => ({ ...prev, followers_count: previousFollowers }));
+            toast.error('No se pudo actualizar seguimiento');
+        } finally {
+            setFollowLoading(false);
+        }
+    };
+
+    const handleLikeActivity = async (activityId: string) => {
+        const previous = activities;
+        setActivities(prev => toggleActivityLike(activityId, prev));
+        try {
+            const result = await toggleActivityReaction(activityId, 'like');
+            setActivities(prev => toggleActivityLike(activityId, prev, result));
+        } catch (error) {
+            console.error('Failed to like activity:', error);
+            setActivities(previous);
+            toast.error('No se pudo actualizar el like');
+        }
+    };
+
+    const handleShareActivity = async (activityId: string) => {
+        const previous = activities;
+        setActivities(prev => toggleActivityShare(activityId, prev));
+        try {
+            const result = await toggleActivityReaction(activityId, 'share');
+            setActivities(prev => toggleActivityShare(activityId, prev, result));
+        } catch (error) {
+            console.error('Failed to share activity:', error);
+            setActivities(previous);
+            toast.error('No se pudo actualizar el compartido');
+        }
+    };
+
+    const handleReportProfile = async () => {
+        try {
+            await reportContent({
+                targetType: 'profile',
+                targetId: friend.id,
+                reason: 'other',
+            });
+            toast.success('Perfil reportado');
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : 'No se pudo reportar');
+        } finally {
+            setShowProfileMenu(false);
+        }
+    };
+
+    const handleBlockProfile = async () => {
+        try {
+            await blockUser(friend.id);
+            toast.success('Usuario bloqueado');
+            onClose();
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : 'No se pudo bloquear');
+        } finally {
+            setShowProfileMenu(false);
+        }
+    };
+
+    const handleReportActivity = async (activityId: string) => {
+        try {
+            await reportContent({
+                targetType: 'activity',
+                targetId: activityId,
+                reason: 'other',
+            });
+            setActivities(prev => prev.filter(activity => activity.id !== activityId));
+            toast.success('Publicación reportada');
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : 'No se pudo reportar');
+        }
+    };
+
+    const handleBlockActivityUser = async (userId: string) => {
+        try {
+            await blockUser(userId);
+            toast.success('Usuario bloqueado');
+            onClose();
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : 'No se pudo bloquear');
         }
     };
 
@@ -172,6 +320,116 @@ const FriendProfileView = ({ friend, onClose, onAddBorrowedItems, onTryBorrowedI
         setSelectedItems(newSelectedItems);
     };
 
+    const importFromActivityLocal = (activity: ActivityFeedItem, mode: 'save' | 'wish'): { importedItems: ClothingItem[]; importedOutfit?: SavedOutfit | null } => {
+        const isFavorite = mode === 'wish';
+        const linkMode: ClothingItem['linkMode'] = enableLinkedSourceItems ? 'linked' : 'copy';
+        const importedItems: ClothingItem[] = [];
+
+        const importSnapshot = (snapshot: ClothingItem, slot?: 'top' | 'bottom' | 'shoes') => {
+            const slotSuffix = slot ? `:${slot}` : '';
+            importedItems.push({
+                id: `item_${Date.now()}_${Math.floor(Math.random() * 10000)}`,
+                imageDataUrl: snapshot.imageDataUrl,
+                metadata: {
+                    category: snapshot.metadata?.category || 'top',
+                    subcategory: snapshot.metadata?.subcategory || 'Prenda descubierta',
+                    color_primary: snapshot.metadata?.color_primary || 'desconocido',
+                    neckline: snapshot.metadata?.neckline,
+                    sleeve_type: snapshot.metadata?.sleeve_type,
+                    vibe_tags: snapshot.metadata?.vibe_tags || [],
+                    seasons: snapshot.metadata?.seasons || [],
+                    description: snapshot.metadata?.description,
+                },
+                status: 'wishlist',
+                isFavorite,
+                linkMode,
+                sourceRef: {
+                    originType: slot ? 'activity_outfit' : 'activity_item',
+                    originActivityId: activity.id,
+                    originUserId: activity.user_id,
+                    originItemId: snapshot.id,
+                    originOutfitId: activity.outfit?.id,
+                    originUrl: snapshot.imageDataUrl,
+                    dedupeKey: `${activity.id}:${snapshot.id || 'snapshot'}:local${slotSuffix}`,
+                },
+            });
+        };
+
+        if (activity.activity_type === 'item_added') {
+            const snapshot = activity.clothing_item || (activity.metadata_payload?.clothing_item as ClothingItem | undefined);
+            if (!snapshot?.imageDataUrl || !snapshot?.metadata?.subcategory) {
+                throw new Error('No disponible para guardar');
+            }
+            importSnapshot(snapshot);
+            return { importedItems };
+        }
+
+        if (activity.activity_type === 'outfit_shared') {
+            const bundle = activity.metadata_payload?.outfit_bundle || {};
+            const top = bundle.top as ClothingItem | undefined;
+            const bottom = bundle.bottom as ClothingItem | undefined;
+            const shoes = bundle.shoes as ClothingItem | undefined;
+            if (!top?.imageDataUrl || !bottom?.imageDataUrl || !shoes?.imageDataUrl) {
+                throw new Error('No disponible para guardar');
+            }
+            importSnapshot(top, 'top');
+            importSnapshot(bottom, 'bottom');
+            importSnapshot(shoes, 'shoes');
+            return {
+                importedItems,
+                importedOutfit: {
+                    id: `outfit_${Date.now()}`,
+                    top_id: importedItems[0].id,
+                    bottom_id: importedItems[1].id,
+                    shoes_id: importedItems[2].id,
+                    explanation: activity.outfit?.explanation || activity.caption || 'Outfit importado',
+                }
+            };
+        }
+
+        throw new Error('Actividad no soportada');
+    };
+
+    const handleImportFromActivity = async (activityId: string, mode: 'save' | 'wish') => {
+        if (!enableActivitySaveToCloset) {
+            toast.info('Guardado temporalmente desactivado');
+            return;
+        }
+        const targetActivity = activities.find(activity => activity.id === activityId);
+        if (!targetActivity) {
+            toast.error('No se encontró la publicación');
+            return;
+        }
+
+        if (mode === 'save') {
+            setSavingActivityId(activityId);
+        } else {
+            setWishingActivityId(activityId);
+        }
+        toast.info(mode === 'wish' ? 'Agregando a deseados...' : 'Guardando en armario...');
+        console.warn('[FriendProfile] import click', { activityId, mode });
+
+        try {
+            const result = useSupabaseCloset
+                ? await importFromActivity(targetActivity, mode)
+                : importFromActivityLocal(targetActivity, mode);
+            const importedItems = result.importedItems;
+
+            if (importedItems.length === 0) {
+                toast.info('No había nuevas prendas para importar');
+                return;
+            }
+            onImportedFromActivity?.(importedItems, result.importedOutfit);
+            toast.success(mode === 'wish' ? 'Agregado a deseados' : 'Prenda guardada');
+        } catch (error) {
+            console.error('Failed to import from friend activity:', error);
+            toast.error(error instanceof Error ? error.message : 'No se pudo importar');
+        } finally {
+            setSavingActivityId(null);
+            setWishingActivityId(null);
+        }
+    };
+
     const modifiedCloset = friend.closet.map(item => ({
         ...item,
         imageDataUrl: selectedIds.has(item.id)
@@ -181,9 +439,10 @@ const FriendProfileView = ({ friend, onClose, onAddBorrowedItems, onTryBorrowedI
 
     const stats = {
         outfits: activities.filter(a => a.activity_type === 'outfit_shared').length,
-        items: friend.closet.length,
-        followers: Math.floor(Math.random() * 500) + 50,
+        followers: socialSummary.followers_count,
+        following: socialSummary.following_count,
     };
+    const selectedActivity = activities.find(a => a.id === selectedActivityForComments) || null;
 
     const styleMatch = 87;
     const badges = [
@@ -235,7 +494,7 @@ const FriendProfileView = ({ friend, onClose, onAddBorrowedItems, onTryBorrowedI
                             </h1>
                             {isCloseFriendStatus && (
                                 <span className="text-xs text-yellow-600 dark:text-yellow-500 font-medium flex items-center gap-0.5">
-                                    <span className="material-symbols-oriented text-xs">star</span>
+                                    <span className="material-symbols-outlined text-xs">star</span>
                                     Close Friend
                                 </span>
                             )}
@@ -265,22 +524,46 @@ const FriendProfileView = ({ friend, onClose, onAddBorrowedItems, onTryBorrowedI
                                         <div className="text-xs font-medium text-text-secondary uppercase">seguidores</div>
                                     </div>
                                     <div className="text-center">
-                                        <div className="font-bold text-base bg-gradient-to-br from-primary to-purple-600 bg-clip-text text-transparent">{stats.items}</div>
-                                        <div className="text-xs font-medium text-text-secondary uppercase">prendas</div>
+                                        <div className="font-bold text-base bg-gradient-to-br from-primary to-purple-600 bg-clip-text text-transparent">{stats.following}</div>
+                                        <div className="text-xs font-medium text-text-secondary uppercase">siguiendo</div>
                                     </div>
                                 </div>
 
                                 <div className="flex gap-1.5">
-                                    <button className={`flex-1 py-1.5 px-2 rounded-lg font-semibold text-xs transition-all active:scale-95 ${isFollowing ? 'bg-gray-100 dark:bg-gray-800' : 'bg-gradient-to-r from-primary to-purple-600 text-white'}`} onClick={() => setIsFollowing(!isFollowing)}>
-                                        {isFollowing ? 'Siguiendo' : 'Seguir'}
+                                    <button
+                                        className={`flex-1 py-1.5 px-2 rounded-lg font-semibold text-xs transition-all active:scale-95 ${isFollowing ? 'bg-gray-100 dark:bg-gray-800' : 'bg-gradient-to-r from-primary to-purple-600 text-white'} ${followLoading ? 'opacity-60' : ''}`}
+                                        onClick={() => void handleToggleFollow()}
+                                        disabled={followLoading}
+                                    >
+                                        {followLoading ? 'Actualizando...' : isFollowing ? 'Siguiendo' : 'Seguir'}
                                     </button>
                                     <button className="flex-1 py-1.5 px-2 rounded-lg font-semibold text-xs bg-gray-100 dark:bg-gray-800 transition-all active:scale-95">Mensaje</button>
-                                    <button className="p-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 transition-all active:scale-95">
+                                    <button
+                                        onClick={() => setShowProfileMenu(prev => !prev)}
+                                        className="p-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 transition-all active:scale-95"
+                                    >
                                         <span className="material-symbols-outlined text-base">more_horiz</span>
                                     </button>
                                 </div>
                             </div>
                         </div>
+
+                        {showProfileMenu && (
+                            <div className="absolute right-4 top-24 z-30 min-w-[180px] rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-xl overflow-hidden">
+                                <button
+                                    onClick={() => void handleReportProfile()}
+                                    className="w-full text-left px-3 py-2 text-xs hover:bg-gray-100 dark:hover:bg-gray-800"
+                                >
+                                    Reportar perfil
+                                </button>
+                                <button
+                                    onClick={() => void handleBlockProfile()}
+                                    className="w-full text-left px-3 py-2 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                                >
+                                    Bloquear usuario
+                                </button>
+                            </div>
+                        )}
 
                         <div className="space-y-2">
                             <div>
@@ -355,7 +638,21 @@ const FriendProfileView = ({ friend, onClose, onAddBorrowedItems, onTryBorrowedI
                             {loadingActivities ? (
                                 <div className="flex justify-center py-12"><Loader /></div>
                             ) : activities.length > 0 ? (
-                                activities.map(activity => <ActivityCard key={activity.id} activity={activity} onLike={() => { }} onComment={() => { }} onShare={() => { }} />)
+                                activities.map(activity => (
+                                    <ActivityCard
+                                        key={activity.id}
+                                        activity={activity}
+                                        onLike={(id) => void handleLikeActivity(id)}
+                                        onComment={(id) => setSelectedActivityForComments(id)}
+                                        onShare={(id) => void handleShareActivity(id)}
+                                        onReportActivity={(id) => void handleReportActivity(id)}
+                                        onBlockUser={(id) => void handleBlockActivityUser(id)}
+                                        onSaveToCloset={enableActivitySaveToCloset ? (id) => handleImportFromActivity(id, 'save') : undefined}
+                                        onWishItem={enableActivitySaveToCloset ? (id) => handleImportFromActivity(id, 'wish') : undefined}
+                                        isSaving={savingActivityId === activity.id}
+                                        isWishing={wishingActivityId === activity.id}
+                                    />
+                                ))
                             ) : (
                                 <div className="text-center py-16">
                                     <div className="w-16 h-16 mx-auto mb-3 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-700 flex items-center justify-center">
@@ -607,6 +904,31 @@ const FriendProfileView = ({ friend, onClose, onAddBorrowedItems, onTryBorrowedI
                     </div>
                 )}
             </div>
+
+            {selectedActivity && (
+                <ActivityCommentsDrawer
+                    activity={selectedActivity}
+                    onClose={() => setSelectedActivityForComments(null)}
+                    onAddComment={(_content) => {
+                        setActivities(prev =>
+                            prev.map(entry =>
+                                entry.id === selectedActivity.id
+                                    ? { ...entry, comments_count: entry.comments_count + 1 }
+                                : entry
+                            )
+                        );
+                    }}
+                    onDeleteComment={() => {
+                        setActivities(prev =>
+                            prev.map(entry =>
+                                entry.id === selectedActivity.id
+                                    ? { ...entry, comments_count: Math.max(0, entry.comments_count - 1) }
+                                    : entry
+                            )
+                        );
+                    }}
+                />
+            )}
         </div>
     );
 };

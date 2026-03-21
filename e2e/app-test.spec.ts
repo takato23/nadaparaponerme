@@ -1,339 +1,377 @@
-import { test, expect, Page } from '@playwright/test';
+import { expect, type Locator, Page, test } from '@playwright/test';
 
-const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:5183';
+const DEMO_IMAGE = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
 
-// Helper para esperar que la app cargue
-async function waitForAppLoad(page: Page) {
-  // `networkidle` is flaky with dev servers / long-polling. Prefer DOM readiness + app main mount.
-  // This also avoids returning early while Suspense is still showing `LazyLoader`.
+const LOCAL_FEATURE_FLAGS = {
+  useSupabaseAuth: false,
+  useSupabaseCloset: false,
+  useSupabaseOutfits: false,
+  useSupabasePreferences: false,
+  useSupabaseAI: true,
+  enableHybridTryOn: false,
+  enableGuidedLookCreationBackend: true,
+};
+
+const DEMO_CLOSET = [
+  {
+    id: 'e2e-top-1',
+    imageDataUrl: DEMO_IMAGE,
+    status: 'owned',
+    metadata: {
+      category: 'top',
+      subcategory: 'Remera',
+      color_primary: 'negro',
+      vibe_tags: ['casual'],
+      seasons: ['all'],
+    },
+  },
+];
+
+async function waitForMain(page: Page) {
   await page.waitForLoadState('domcontentloaded');
-  await page.locator('main[role="main"]').first().waitFor({ state: 'attached' });
+  await page.locator('main').first().waitFor({ state: 'visible' });
 }
 
-// Helper para hacer login si es necesario
-async function ensureLoggedIn(page: Page) {
-  await page.goto(BASE_URL);
-  await waitForAppLoad(page);
-
-  // 1. Revisar si estamos en Landing (buscar botón 'Ya tengo cuenta')
-  const loginLink = page.locator('button:has-text("Ya tengo cuenta")').first();
-  if (await loginLink.isVisible({ timeout: 2000 }).catch(() => false)) {
-    console.log('🔄 En Landing: Clickeando "Ya tengo cuenta"...');
-    await loginLink.click();
-    await page.waitForTimeout(1000);
-  }
-
-  // 2. Revisar si estamos en Onboarding (buscar botón 'Ya tengo cuenta' de nuevo)
-  const onboardingLoginLink = page.locator('button:has-text("Ya tengo cuenta")').first();
-  if (await onboardingLoginLink.isVisible({ timeout: 2000 }).catch(() => false)) {
-    console.log('🔄 En Onboarding: Clickeando "Ya tengo cuenta" to Auth...');
-    await onboardingLoginLink.click();
-    await page.waitForTimeout(1000);
-  }
-
-  // 3. Revisar si estamos en Auth View (Formulario de login)
-  const emailInput = page.locator('input[type="email"]').first();
-  if (await emailInput.isVisible({ timeout: 10000 }).catch(() => false)) {
-    console.log('🔐 En Auth View: Intentando login con credenciales de prueba...');
-
-    // Check if we need to switch to Login mode (if "Crear Cuenta" is shown)
-    const switchModeBtn = page.locator('button:has-text("¿Ya tienes cuenta? Inicia sesión")');
-    if (await switchModeBtn.isVisible().catch(() => false)) {
-      await switchModeBtn.click();
-      await page.waitForTimeout(500);
-    }
-
-    await emailInput.fill('test@example.com');
-    await page.locator('input[type="password"]').fill('password123');
-    await page.locator('button[type="submit"]').click();
-
-    // Esperar navegación o error
-    await page.waitForTimeout(2000);
-  }
+async function horizontalOverflowDelta(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    const rootDelta = document.documentElement.scrollWidth - document.documentElement.clientWidth;
+    const bodyDelta = document.body.scrollWidth - document.body.clientWidth;
+    return Math.max(rootDelta, bodyDelta, 0);
+  });
 }
 
-test.describe('App General Tests', () => {
+async function dragPointer(
+  page: Page,
+  start: { x: number; y: number },
+  end: { x: number; y: number },
+  steps = 12,
+) {
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down();
+  await page.mouse.move(end.x, end.y, { steps });
+  await page.mouse.up();
+}
 
-  test('1. App carga correctamente', async ({ page }) => {
-    await page.goto(BASE_URL);
-    await waitForAppLoad(page);
+async function dispatchPointerSequence(
+  locator: Locator,
+  start: { x: number; y: number },
+  end: { x: number; y: number },
+) {
+  await locator.dispatchEvent('pointerdown', {
+    bubbles: true,
+    clientX: start.x,
+    clientY: start.y,
+    isPrimary: true,
+    pointerId: 1,
+    pointerType: 'touch',
+  });
+  await locator.dispatchEvent('pointermove', {
+    bubbles: true,
+    clientX: start.x + ((end.x - start.x) * 0.45),
+    clientY: start.y,
+    isPrimary: true,
+    pointerId: 1,
+    pointerType: 'touch',
+  });
+  await locator.dispatchEvent('pointermove', {
+    bubbles: true,
+    clientX: end.x,
+    clientY: end.y,
+    isPrimary: true,
+    pointerId: 1,
+    pointerType: 'touch',
+  });
+  await locator.dispatchEvent('pointerup', {
+    bubbles: true,
+    clientX: end.x,
+    clientY: end.y,
+    isPrimary: true,
+    pointerId: 1,
+    pointerType: 'touch',
+  });
+}
 
-    // Verificar que la página cargó
-    const title = await page.title();
-    console.log('✅ App cargada - Título:', title);
-    expect(title).toBeTruthy();
+async function bootstrapSession(
+  page: Page,
+  options: { authenticated: boolean; hasOnboarded: boolean },
+) {
+  await page.addInitScript(
+    ({ flags, authenticated, hasOnboarded, closet }) => {
+      localStorage.setItem('ojodeloca-feature-flags', JSON.stringify(flags));
+      localStorage.setItem('ojodeloca-is-authenticated', authenticated ? 'true' : 'false');
+      localStorage.setItem('ojodeloca-has-onboarded', hasOnboarded ? 'true' : 'false');
+      localStorage.setItem('studio-tutorial-completed', 'true');
+      localStorage.setItem('ojodeloca-closet', JSON.stringify(closet));
+      localStorage.setItem(
+        'ojodeloca-consent-v1',
+        JSON.stringify({
+          analytics: false,
+          ads: false,
+          updatedAt: new Date().toISOString(),
+          version: 1,
+        }),
+      );
+    },
+    {
+      flags: LOCAL_FEATURE_FLAGS,
+      authenticated: options.authenticated,
+      hasOnboarded: options.hasOnboarded,
+      closet: DEMO_CLOSET,
+    },
+  );
+}
+
+test.describe('App smoke', () => {
+  test('renders landing for anonymous users', async ({ page }) => {
+    await bootstrapSession(page, { authenticated: false, hasOnboarded: false });
+    await page.goto('/');
+    await waitForMain(page);
+
+    await expect(page.locator('main[aria-label="Landing"]')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Crear cuenta e ir al armario' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Ya tengo cuenta' })).toBeVisible();
   });
 
-  test('2. Home View se muestra', async ({ page }) => {
-    await page.goto(BASE_URL);
-    await waitForAppLoad(page);
+  test('protected routes still show landing for anonymous users', async ({ page }) => {
+    await bootstrapSession(page, { authenticated: false, hasOnboarded: false });
+    await page.goto('/studio');
+    await waitForMain(page);
 
-    // Validar landing real de producto (launch mode)
-    const homeContent = page.locator('main[aria-label="Landing"] h1, h1:has-text("No Tengo Nada"), button:has-text("Probar gratis ahora")').first();
-    const isVisible = await homeContent.isVisible({ timeout: 5000 }).catch(() => false);
-
-    console.log('✅ Home View visible:', isVisible);
-    expect(isVisible).toBeTruthy();
+    await expect(page.locator('main[aria-label="Landing"]')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Crear cuenta e ir al armario' })).toBeVisible();
   });
 
-  test('3. Navegación funciona', async ({ page }) => {
-    await page.goto(BASE_URL);
-    await waitForAppLoad(page);
+  test('primary CTA opens auth inline with closet routing by default', async ({ page }) => {
+    await bootstrapSession(page, { authenticated: false, hasOnboarded: false });
+    await page.goto('/');
+    await waitForMain(page);
 
-    // En launch mode la navegación primaria vive en links del landing/footer
-    const navButtons = page.locator('a[href="/pricing"], a[href="/stylist-onboarding"], a[href="/legal/privacidad"], a[href="/legal/terminos"]');
-    const count = await navButtons.count();
-
-    console.log('✅ Botones de navegación encontrados:', count);
-    expect(count).toBeGreaterThan(0);
+    await page.getByRole('button', { name: 'Crear cuenta e ir al armario' }).click();
+    await expect(page.getByRole('heading', { name: 'Crear Cuenta' })).toBeVisible();
+    await expect(page.getByText('Entrás por')).toBeVisible();
+    await expect(page.getByText('Cargar ropa').last()).toBeVisible();
   });
-});
 
-test.describe('Estilista IA Tests', () => {
+  test('stylist onboarding route resolves to the unified preview flow', async ({ page }) => {
+    await bootstrapSession(page, { authenticated: false, hasOnboarded: false });
+    await page.goto('/stylist-onboarding');
+    await waitForMain(page);
 
-  test('4. Estilista IA se abre', async ({ page }) => {
-    await ensureLoggedIn(page);
+    await expect(page).toHaveURL(/entry=preview/);
+    await expect(page.locator('main[aria-label="Landing"]')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Entrá al dashboard desde tu armario.' })).toBeVisible();
+  });
 
-    // Buscar botón de Estilista
-    const stylistButton = page.locator('text=Estilista, text=Stylist, text=Outfit, [data-testid="stylist"]').first();
+  test('selected intent is preserved when auth opens inline', async ({ page }) => {
+    await bootstrapSession(page, { authenticated: false, hasOnboarded: false });
+    await page.goto('/?entry=preview');
+    await waitForMain(page);
 
-    if (await stylistButton.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await stylistButton.click();
-      await page.waitForTimeout(1000);
+    await page.getByRole('button', { name: 'Definir estilo' }).click();
+    await page.getByRole('button', { name: 'Crear cuenta y seguir al perfil' }).click();
 
-      // Verificar que se abrió el modal
-      const modal = page.locator('text=¿Para qué ocasión?, text=Ocasión, text=Crear mi Outfit').first();
-      const modalVisible = await modal.isVisible({ timeout: 3000 }).catch(() => false);
+    await expect(page.getByRole('heading', { name: 'Crear Cuenta' })).toBeVisible();
+    await expect(page.getByText('Entrás por')).toBeVisible();
+    await expect(page.getByText('Definir estilo').last()).toBeVisible();
+  });
 
-      console.log('✅ Modal Estilista visible:', modalVisible);
-    } else {
-      console.log('⚠️ Botón Estilista no encontrado');
+  test('auth query opens inline auth on top of landing', async ({ page }) => {
+    await bootstrapSession(page, { authenticated: false, hasOnboarded: false });
+    await page.goto('/?auth=login');
+    await waitForMain(page);
+
+    await expect(page.locator('main[aria-label="Landing"]')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Bienvenido' })).toBeVisible();
+  });
+
+  test('lab quiz variant blocks CTA until final selection', async ({ page }) => {
+    await page.goto('/onboarding-lab?v=quiz');
+    await waitForMain(page);
+
+    await page.getByRole('button', { name: 'Cargar armario' }).click();
+    await page.getByRole('button', { name: 'Siguiente' }).click();
+
+    await page.getByRole('button', { name: 'Rápido (1 click)' }).click();
+    await page.getByRole('button', { name: 'Siguiente' }).click();
+
+    const createButton = page.getByRole('button', { name: 'Crear cuenta' });
+    const loginButton = page.getByRole('button', { name: 'Ya tengo cuenta' });
+    await expect(createButton).toBeDisabled();
+    await expect(loginButton).toBeDisabled();
+
+    await page.getByRole('button', { name: 'Subir prendas ahora' }).click();
+    await expect(createButton).toBeEnabled();
+    await expect(loginButton).toBeEnabled();
+  });
+
+  test('mock onboarding route exposes three templates and sticky navigation', async ({ page }) => {
+    await bootstrapSession(page, { authenticated: false, hasOnboarded: false });
+    await page.goto('/onboarding-mock');
+    await waitForMain(page);
+
+    await expect(page.locator('main[aria-label="Onboarding mock gallery"]')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Onboarding mock gallery' })).toBeVisible();
+    await expect(page.getByTestId('onboarding-template-editorial')).toBeVisible();
+    await expect(page.getByTestId('onboarding-template-concierge')).toBeAttached();
+    await expect(page.getByTestId('onboarding-template-sprint')).toBeAttached();
+
+    await page.getByRole('button', { name: 'Closet sprint' }).click();
+    await expect(page.getByRole('heading', { name: 'Closet sprint' })).toBeVisible();
+  });
+
+  test('mock editorial template keeps CTA gated until selection and opens signup auth', async ({ page }) => {
+    await bootstrapSession(page, { authenticated: false, hasOnboarded: false });
+    await page.goto('/onboarding-mock');
+    await waitForMain(page);
+
+    const editorial = page.getByTestId('onboarding-template-editorial');
+    await editorial.getByRole('button', { name: 'Continuar' }).click();
+    await expect(editorial.getByRole('button', { name: 'Continuar' })).toBeDisabled();
+
+    await editorial.getByRole('button', { name: 'Quiero mi primer look armado' }).click();
+    await expect(editorial.getByRole('button', { name: 'Continuar' })).toBeEnabled();
+    await editorial.getByRole('button', { name: 'Continuar' }).click();
+    await editorial.getByRole('button', { name: 'Crear cuenta' }).click();
+
+    await expect(page.getByRole('heading', { name: 'Crear Cuenta' })).toBeVisible();
+    await expect(page.getByText('Entrás por')).toBeVisible();
+    await expect(page.getByText('Mi primer look').last()).toBeVisible();
+  });
+
+  test('mock concierge and sprint templates can reach their final CTAs', async ({ page }) => {
+    await bootstrapSession(page, { authenticated: false, hasOnboarded: false });
+    await page.goto('/onboarding-mock');
+    await waitForMain(page);
+
+    const concierge = page.getByTestId('onboarding-template-concierge');
+    await concierge.getByRole('button', { name: 'Continuar' }).click();
+    await expect(concierge.getByText('La conversacion detecta por donde te conviene entrar.')).toBeVisible();
+    await concierge.getByRole('button', { name: 'Necesito resolver un look rapido' }).click({ force: true });
+    await concierge.getByRole('button', { name: 'Continuar' }).click();
+    await expect(concierge.getByRole('button', { name: 'Crear cuenta' })).toBeVisible();
+    await expect(concierge.getByRole('button', { name: 'Ya tengo cuenta' })).toBeVisible();
+
+    const sprint = page.getByTestId('onboarding-template-sprint');
+    await sprint.getByRole('button', { name: 'Continuar' }).click();
+    await sprint.getByRole('button', { name: 'Subir mis prendas primero' }).click();
+    await sprint.getByRole('button', { name: 'Continuar' }).click();
+    await expect(sprint.getByRole('button', { name: 'Crear cuenta' })).toBeVisible();
+    await expect(sprint.getByRole('button', { name: 'Ya tengo cuenta' })).toBeVisible();
+  });
+
+  test('authenticated users can open studio and floating dock is hidden there', async ({ page }) => {
+    await bootstrapSession(page, { authenticated: true, hasOnboarded: true });
+    await page.goto('/studio');
+
+    await expect(page.getByTestId('studio-root')).toBeVisible();
+    await expect(page.getByTestId('studio-generate-bar')).toBeVisible();
+    await expect(page.getByTestId('floating-dock')).toHaveCount(0);
+  });
+
+  test('lab header uses authenticated back label', async ({ page }) => {
+    await bootstrapSession(page, { authenticated: true, hasOnboarded: true });
+    await page.goto('/onboarding-lab?v=hero');
+    await waitForMain(page);
+
+    await expect(page.getByRole('button', { name: 'Ir al inicio' })).toBeVisible();
+  });
+
+  test('authenticated mobile routes do not introduce horizontal overflow', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await bootstrapSession(page, { authenticated: true, hasOnboarded: true });
+
+    for (const route of ['/', '/armario', '/studio', '/actividad', '/perfil', '/onboarding-mock']) {
+      await page.goto(route);
+      await waitForMain(page);
+      const main = page.locator('main').first();
+      await expect(main).toBeVisible();
+
+      const overflow = await horizontalOverflowDelta(page);
+      expect(overflow).toBeLessThanOrEqual(1);
+    }
+
+    await page.goto('/perfil');
+    await waitForMain(page);
+    await expect(page.getByTestId('floating-dock')).toBeVisible();
+    await expect(page.getByTestId('mobile-primary-shell')).toBeVisible();
+  });
+
+  test('mobile primary shell keeps dock visible and syncs through primary tabs including studio', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await bootstrapSession(page, { authenticated: true, hasOnboarded: true });
+    await page.goto('/');
+    await waitForMain(page);
+
+    const dock = page.getByTestId('floating-dock');
+    const shell = page.getByTestId('mobile-primary-shell');
+    await expect(dock).toBeVisible();
+    await expect(shell).toBeVisible();
+
+    const tabExpectations = [
+      { label: 'Armario', url: '/armario' },
+      { label: 'Studio', url: '/studio' },
+      { label: 'Social', url: '/actividad' },
+      { label: 'Perfil', url: '/perfil' },
+      { label: 'Inicio', url: '/' },
+    ];
+
+    for (const tab of tabExpectations) {
+      await dock.getByRole('button', { name: new RegExp(tab.label, 'i') }).click();
+      await expect(page).toHaveURL(new RegExp(`${tab.url.replace('/', '\\/')}$`));
+      await expect(dock.getByRole('button', { name: new RegExp(tab.label, 'i') })).toHaveAttribute('aria-current', 'page');
+      await expect(dock).toBeVisible();
     }
   });
 
-  test('5. Ocasiones se muestran', async ({ page }) => {
-    await ensureLoggedIn(page);
+  test('mobile dock drag snaps to destination and updates aria-current', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await bootstrapSession(page, { authenticated: true, hasOnboarded: true });
+    await page.goto('/');
+    await waitForMain(page);
 
-    // Abrir estilista
-    const stylistButton = page.locator('text=Estilista').first();
-    if (await stylistButton.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await stylistButton.click();
-      await page.waitForTimeout(1000);
+    const dock = page.getByTestId('floating-dock');
+    const dockRail = page.getByTestId('floating-dock-rail');
+    const dockBox = await dockRail.boundingBox();
+    expect(dockBox).not.toBeNull();
 
-      // Buscar ocasiones
-      const ocasiones = page.locator('text=Trabajo, text=Cita, text=Casual, text=Fiesta');
-      const count = await ocasiones.count();
+    const start = {
+      x: dockBox!.x + (dockBox!.width * 0.1),
+      y: dockBox!.y + (dockBox!.height * 0.5),
+    };
+    const end = {
+      x: dockBox!.x + (dockBox!.width * 0.7),
+      y: dockBox!.y + (dockBox!.height * 0.5),
+    };
 
-      console.log('✅ Ocasiones encontradas:', count);
-    }
+    await dispatchPointerSequence(dockRail, start, end);
+
+    await expect(page).toHaveURL(/\/actividad$/);
+    await expect(dock.getByRole('button', { name: /social/i })).toHaveAttribute('aria-current', 'page');
   });
 
-  test('6. Selección de ocasión funciona', async ({ page }) => {
-    await ensureLoggedIn(page);
+  test('mobile content swipe advances pager and keeps dock synced', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await bootstrapSession(page, { authenticated: true, hasOnboarded: true });
+    await page.goto('/');
+    await waitForMain(page);
 
-    const stylistButton = page.locator('text=Estilista').first();
-    if (await stylistButton.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await stylistButton.click();
-      await page.waitForTimeout(1000);
+    const shellViewport = page.getByTestId('mobile-primary-shell-viewport');
+    const dock = page.getByTestId('floating-dock');
+    const viewportBox = await shellViewport.boundingBox();
+    expect(viewportBox).not.toBeNull();
 
-      // Click en una ocasión
-      const trabajoBtn = page.locator('text=Trabajo').first();
-      if (await trabajoBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
-        await trabajoBtn.click();
-        await page.waitForTimeout(500);
+    const start = {
+      x: viewportBox!.x + (viewportBox!.width * 0.78),
+      y: viewportBox!.y + Math.min(viewportBox!.height * 0.35, 260),
+    };
+    const end = {
+      x: viewportBox!.x + (viewportBox!.width * 0.22),
+      y: start.y,
+    };
 
-        // Verificar que aparecen opciones de estilo
-        const estiloSection = page.locator('text=Estilo, text=Style').first();
-        const visible = await estiloSection.isVisible({ timeout: 2000 }).catch(() => false);
+    await dragPointer(page, start, end, 14);
 
-        console.log('✅ Sección Estilo visible tras seleccionar ocasión:', visible);
-      }
-    }
-  });
-});
-
-test.describe('Chat IA Tests', () => {
-
-  test('7. Chat IA se abre', async ({ page }) => {
-    await ensureLoggedIn(page);
-
-    // Buscar botón de Chat
-    const chatButton = page.locator('text=Chat, text=Asistente, [data-testid="chat"]').first();
-
-    if (await chatButton.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await chatButton.click();
-      await page.waitForTimeout(1500);
-
-      // Verificar que no hay error
-      const errorText = page.locator('text=Error, text=error');
-      const hasError = await errorText.isVisible({ timeout: 1000 }).catch(() => false);
-
-      console.log('✅ Chat abierto sin error:', !hasError);
-    } else {
-      console.log('⚠️ Botón Chat no encontrado');
-    }
-  });
-
-  test('8. Input de chat funciona', async ({ page }) => {
-    await ensureLoggedIn(page);
-
-    const chatButton = page.locator('text=Chat').first();
-    if (await chatButton.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await chatButton.click();
-      await page.waitForTimeout(1500);
-
-      // Buscar input
-      const input = page.locator('input[type="text"], textarea').first();
-      if (await input.isVisible({ timeout: 2000 }).catch(() => false)) {
-        await input.fill('Hola');
-        const value = await input.inputValue();
-
-        console.log('✅ Input de chat funciona:', value === 'Hola');
-      }
-    }
-  });
-});
-
-test.describe('Closet Tests', () => {
-
-  test('9. Closet se muestra', async ({ page }) => {
-    await ensureLoggedIn(page);
-
-    // Buscar navegación a closet
-    const closetNav = page.locator('text=Armario, text=Closet, text=Mi Ropa').first();
-
-    if (await closetNav.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await closetNav.click();
-      await page.waitForTimeout(1000);
-
-      // Verificar que estamos en closet
-      const closetContent = page.locator('text=prendas, text=items, text=Agregar').first();
-      const visible = await closetContent.isVisible({ timeout: 3000 }).catch(() => false);
-
-      console.log('✅ Vista Closet cargada:', visible);
-    }
-  });
-
-  test('10. Botón agregar prenda existe', async ({ page }) => {
-    await ensureLoggedIn(page);
-
-    const closetNav = page.locator('text=Armario, text=Closet').first();
-    if (await closetNav.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await closetNav.click();
-      await page.waitForTimeout(1000);
-
-      const addButton = page.locator('button:has-text("Agregar"), button:has-text("Add"), button:has([class*="add"]), [aria-label*="agregar"]');
-      const exists = await addButton.isVisible({ timeout: 2000 }).catch(() => false);
-
-      console.log('✅ Botón agregar existe:', exists);
-    }
-  });
-});
-
-test.describe('UI Components Tests', () => {
-
-  test('11. Dark mode toggle existe', async ({ page }) => {
-    await ensureLoggedIn(page);
-
-    const darkModeToggle = page.locator('button:has-text("dark"), button:has-text("tema"), [aria-label*="theme"], [aria-label*="dark"]');
-    const exists = await darkModeToggle.isVisible({ timeout: 2000 }).catch(() => false);
-
-    console.log('✅ Toggle dark mode existe:', exists);
-  });
-
-  test('12. Responsive - Mobile viewport', async ({ page }) => {
-    await page.setViewportSize({ width: 375, height: 667 });
-    await ensureLoggedIn(page);
-
-    // Verificar que la app se adapta
-    const body = page.locator('body');
-    const box = await body.boundingBox();
-
-    console.log('✅ Responsive mobile funciona:', box?.width === 375);
-    expect(box?.width).toBe(375);
-  });
-});
-
-test.describe('Feature Cards Tests', () => {
-
-  test('13. Feature cards se muestran en Home', async ({ page }) => {
-    await ensureLoggedIn(page);
-
-    // Secciones de valor del landing
-    const featureCards = page.locator('h2:has-text("Tu ropero"), h2:has-text("Tu estilista IA"), li:has-text("Antes y después realista")');
-    const count = await featureCards.count();
-
-    console.log('✅ Feature cards encontradas:', count);
-    expect(count).toBeGreaterThan(0);
-  });
-
-  test('14. Quick prompts en Estilista', async ({ page }) => {
-    // En launch mode, el "Estilista" es un flujo de adquisición: /stylist-onboarding.
-    // Evitamos "text=Estilista" porque también matchea un H2 del landing que no es CTA.
-    await page.goto(`${BASE_URL}/stylist-onboarding`);
-    await waitForAppLoad(page);
-
-    // STEP 1 (demo) - CTA principal visible
-    const heroTitle = page.locator('h1:has-text("Probá el efecto del estilista IA")').first();
-    await expect(heroTitle).toBeVisible({ timeout: 7000 });
-
-    const primaryCta = page.locator('button:has-text("Probar con mi foto gratis")').first();
-    await expect(primaryCta).toBeVisible({ timeout: 5000 });
-
-    // STEP 1 - CTA secundario abre personalización (step 2)
-    const secondaryCta = page.locator('button:has-text("Personalizar mi perfil")').first();
-    await expect(secondaryCta).toBeVisible({ timeout: 5000 });
-    await secondaryCta.click();
-
-    const step2Title = page.locator('text=¿Qué querés lograr primero?').first();
-    await expect(step2Title).toBeVisible({ timeout: 7000 });
-
-    // Verificar que existen opciones rápidas de objetivos
-    const goals = page.locator(
-      'button:has-text("Sentirme más segura"), button:has-text("Verme más profesional"), button:has-text("Estar a la moda")'
-    );
-    const count = await goals.count();
-
-    console.log('✅ Objetivos encontrados en onboarding estilista:', count);
-    expect(count).toBeGreaterThan(0);
-  });
-});
-
-test.describe('Error Handling Tests', () => {
-
-  test('15. No hay errores de consola críticos', async ({ page }) => {
-    const errors: string[] = [];
-
-    page.on('console', msg => {
-      if (msg.type() === 'error' && !msg.text().includes('favicon')) {
-        errors.push(msg.text());
-      }
-    });
-
-    await ensureLoggedIn(page);
-    await page.waitForTimeout(2000);
-
-    const criticalErrors = errors.filter(e =>
-      e.includes('React error') ||
-      e.includes('Uncaught') ||
-      e.includes('TypeError')
-    );
-
-    console.log('✅ Errores críticos de consola:', criticalErrors.length);
-    console.log('   Errores encontrados:', criticalErrors);
-  });
-});
-
-test.describe('Performance Tests', () => {
-
-  test('16. Tiempo de carga < 10s', async ({ page }) => {
-    const startTime = Date.now();
-    await page.goto(BASE_URL);
-    await waitForAppLoad(page);
-    const loadTime = Date.now() - startTime;
-
-    console.log('✅ Tiempo de carga:', loadTime, 'ms');
-    // NOTE: This is a coarse smoke check. Real performance should be tracked via Web Vitals in production.
-    expect(loadTime).toBeLessThan(10000);
+    await expect(page).toHaveURL(/\/armario$/);
+    await expect(dock.getByRole('button', { name: /armario/i })).toHaveAttribute('aria-current', 'page');
   });
 });

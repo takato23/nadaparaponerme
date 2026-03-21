@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import * as analytics from '../src/services/analyticsService';
 
 interface BeforeInstallPromptEvent extends Event {
     readonly platforms: string[];
@@ -27,10 +28,18 @@ export const PWAInstallPrompt: React.FC = () => {
     const [showPrompt, setShowPrompt] = useState(false);
     const [isInstalled, setIsInstalled] = useState(false);
     const [isIOS, setIsIOS] = useState(false);
+    const [supportsNativePrompt, setSupportsNativePrompt] = useState(false);
+
+    const trackInstalledOnce = useCallback((source: string) => {
+        if (sessionStorage.getItem('ojodeloca-pwa-installed-tracked') === '1') return;
+        sessionStorage.setItem('ojodeloca-pwa-installed-tracked', '1');
+        analytics.trackEvent('pwa_installed', { source });
+    }, []);
 
     useEffect(() => {
         // Check if already installed
-        if (window.matchMedia('(display-mode: standalone)').matches) {
+        const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
+        if (isStandalone) {
             setIsInstalled(true);
             return;
         }
@@ -38,44 +47,57 @@ export const PWAInstallPrompt: React.FC = () => {
         // Check if iOS (needs different instructions)
         const isIOSDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
         setIsIOS(isIOSDevice);
+        setSupportsNativePrompt(!isIOSDevice);
 
-        // Check if user dismissed recently (don't show for 7 days)
-        const dismissedAt = localStorage.getItem('pwa-prompt-dismissed');
+        // Check if user dismissed recently (don't show for 14 days)
+        const dismissedAt = localStorage.getItem('ojodeloca-pwa-prompt-dismissed');
         if (dismissedAt) {
             const dismissedDate = new Date(dismissedAt);
             const now = new Date();
             const daysSinceDismissed = (now.getTime() - dismissedDate.getTime()) / (1000 * 60 * 60 * 24);
-            if (daysSinceDismissed < 7) {
+            if (daysSinceDismissed < 14) {
                 return;
             }
         }
+
+        const visits = Number(localStorage.getItem('ojodeloca-pwa-prompt-visits') || '0') + 1;
+        localStorage.setItem('ojodeloca-pwa-prompt-visits', String(visits));
 
         // Listen for the beforeinstallprompt event
         const handleBeforeInstallPrompt = (e: BeforeInstallPromptEvent) => {
             e.preventDefault();
             setDeferredPrompt(e);
-            // Show prompt after a short delay (let user see the app first)
-            setTimeout(() => setShowPrompt(true), 3000);
+            if (visits >= 2) {
+                setTimeout(() => setShowPrompt(true), 3500);
+            }
         };
 
-        window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-
-        // For iOS, show instructions after delay
-        if (isIOSDevice) {
-            setTimeout(() => setShowPrompt(true), 5000);
-        }
-
-        // Listen for successful installation
-        window.addEventListener('appinstalled', () => {
+        const handleInstalled = () => {
             setIsInstalled(true);
             setShowPrompt(false);
             setDeferredPrompt(null);
-        });
+            localStorage.removeItem('ojodeloca-pwa-prompt-dismissed');
+            trackInstalledOnce('browser_event');
+        };
+
+        window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+        window.addEventListener('appinstalled', handleInstalled);
+
+        // For iOS, show instructions only after repeated intent.
+        if (isIOSDevice && visits >= 2) {
+            const timerId = window.setTimeout(() => setShowPrompt(true), 4500);
+            return () => {
+                window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+                window.removeEventListener('appinstalled', handleInstalled);
+                window.clearTimeout(timerId);
+            };
+        }
 
         return () => {
             window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+            window.removeEventListener('appinstalled', handleInstalled);
         };
-    }, []);
+    }, [trackInstalledOnce]);
 
     const handleInstall = useCallback(async () => {
         if (!deferredPrompt) return;
@@ -86,6 +108,7 @@ export const PWAInstallPrompt: React.FC = () => {
 
             if (outcome === 'accepted') {
                 setIsInstalled(true);
+                trackInstalledOnce('install_prompt');
             }
 
             setDeferredPrompt(null);
@@ -93,11 +116,11 @@ export const PWAInstallPrompt: React.FC = () => {
         } catch (error) {
             console.error('Error during PWA installation:', error);
         }
-    }, [deferredPrompt]);
+    }, [deferredPrompt, trackInstalledOnce]);
 
     const handleDismiss = useCallback(() => {
         setShowPrompt(false);
-        localStorage.setItem('pwa-prompt-dismissed', new Date().toISOString());
+        localStorage.setItem('ojodeloca-pwa-prompt-dismissed', new Date().toISOString());
     }, []);
 
     // Don't render if already installed or prompt shouldn't show
@@ -112,11 +135,11 @@ export const PWAInstallPrompt: React.FC = () => {
                 transition={{ type: 'spring', damping: 25, stiffness: 300 }}
                 className="fixed bottom-safe-4 inset-x-safe-4 z-[9999] sm:left-auto sm:right-safe-4 sm:max-w-sm"
             >
-                <div className="bg-gradient-to-r from-primary/95 to-secondary/95 backdrop-blur-xl rounded-2xl p-4 shadow-2xl border border-white/20">
+                <div className="relative rounded-[24px] border border-white/14 bg-[rgba(7,9,16,0.86)] p-4 shadow-[0_24px_80px_rgba(0,0,0,0.4)] backdrop-blur-2xl">
                     {/* Close button */}
                     <button
                         onClick={handleDismiss}
-                        className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded-full bg-white/20 hover:bg-white/30 transition-colors"
+                        className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-white/10 transition-colors hover:bg-white/18"
                         aria-label="Cerrar"
                     >
                         <span className="material-symbols-outlined text-white text-sm">close</span>
@@ -124,40 +147,40 @@ export const PWAInstallPrompt: React.FC = () => {
 
                     <div className="flex items-start gap-3">
                         {/* App Icon */}
-                        <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
+                        <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl border border-white/12 bg-white/8">
                             <span className="material-symbols-outlined text-white text-2xl">download</span>
                         </div>
 
                         <div className="flex-1 min-w-0">
-                            <h3 className="text-white font-semibold text-sm">
+                            <h3 className="text-sm font-semibold text-white">
                                 Instalá Ojo de Loca
                             </h3>
 
                             {isIOS ? (
                                 // iOS Instructions
-                                <p className="text-white/80 text-xs mt-1 leading-relaxed">
-                                    Tocá <span className="inline-flex items-center"><span className="material-symbols-outlined text-xs">ios_share</span></span> y luego "Agregar a inicio"
+                                <p className="mt-1 text-xs leading-relaxed text-white/74">
+                                    Tocá <span className="inline-flex items-center align-middle"><span className="material-symbols-outlined text-xs">ios_share</span></span> y después “Agregar a pantalla de inicio”.
                                 </p>
                             ) : (
                                 // Android/Desktop
-                                <p className="text-white/80 text-xs mt-1 leading-relaxed">
-                                    Accedé más rápido y usá la app sin conexión
+                                <p className="mt-1 text-xs leading-relaxed text-white/74">
+                                    Abrila como app, cargá más rápido y tené fallback offline cuando se corte la conexión.
                                 </p>
                             )}
 
                             {/* Action buttons */}
                             <div className="flex gap-2 mt-3">
-                                {!isIOS && deferredPrompt && (
+                                {!isIOS && deferredPrompt && supportsNativePrompt && (
                                     <button
                                         onClick={handleInstall}
-                                        className="flex-1 bg-white text-primary font-semibold text-xs py-2 px-4 rounded-lg hover:bg-white/90 transition-colors"
+                                        className="flex-1 rounded-xl bg-white px-4 py-2 text-xs font-semibold text-black transition-colors hover:bg-white/90"
                                     >
-                                        Instalar ahora
+                                        Instalar app
                                     </button>
                                 )}
                                 <button
                                     onClick={handleDismiss}
-                                    className="text-white/70 hover:text-white text-xs py-2 px-3 transition-colors"
+                                    className="px-3 py-2 text-xs text-white/70 transition-colors hover:text-white"
                                 >
                                     Más tarde
                                 </button>

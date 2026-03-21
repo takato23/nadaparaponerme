@@ -17,7 +17,7 @@ export function mapGuidedStatusToLookCreationStatus(status: GuidedLookStatus): L
 export function getGuidedLookErrorMessage(errorCode?: GuidedLookErrorCode | null): string | null {
   if (!errorCode) return null;
   if (errorCode === 'INSUFFICIENT_CREDITS') {
-    return 'No tenés créditos suficientes para generar esta prenda. Hacé upgrade o sumá créditos para continuar.';
+    return 'No tenés créditos suficientes para generar esta prenda. Hacé upgrade o comprá un pack para continuar.';
   }
   if (errorCode === 'GENERATION_TIMEOUT') {
     return '⏱️ La generación tardó más de lo esperado. Probá de nuevo en unos segundos.';

@@ -159,7 +159,7 @@ type PointerRef = React.MutableRefObject<{ x: number; y: number }>;
 export type Eye3DVariant = 'playground' | 'landing';
 export type Eye3DQuality = 'default' | 'medium' | 'watermark';
 
-function WatermarkFrameDriver({
+function FrameDriver({
     enabled,
     fps,
     reduced,
@@ -1038,8 +1038,15 @@ function Eyelashes({
             curl: number;
         }> = [];
 
+        // Avoid placing lashes at the tight almond tips (u=0, u=1)
+        // where they clump together during eye movement.
+        const uMargin = 0.06;
+        const uStart = uMargin;
+        const uEnd = 1 - uMargin;
+
         for (let i = 0; i < count; i++) {
-            const u = count === 1 ? 0.5 : i / (count - 1);
+            const uRaw = count === 1 ? 0.5 : i / (count - 1);
+            const u = uStart + uRaw * (uEnd - uStart);
             const arc = 1 - Math.pow((u - 0.5) * 2, 2); // 0..1..0
 
             const p = edgeCurve.getPoint(u);
@@ -1063,10 +1070,12 @@ function Eyelashes({
             // Quaternion: align cone's +Y to the normal direction (so it "grows" out from the lid edge)
             const q = new Quaternion().setFromUnitVectors(new Vector3(0, 1, 0), dir);
 
+            // Taper length toward edges so corner lashes fade naturally
+            const edgeFade = Math.min(uRaw / 0.15, (1 - uRaw) / 0.15, 1);
             const centerBoost = 0.7 + 0.5 * arc;
             const noise = (Math.random() - 0.5) * 0.16;
             const base = (side === 'top' ? 0.11 : 0.06) * centerBoost * (1 + noise);
-            const length = base * (side === 'top' ? V27_TUNING.lashes.topLengthMul : V27_TUNING.lashes.bottomLengthMul);
+            const length = base * (side === 'top' ? V27_TUNING.lashes.topLengthMul : V27_TUNING.lashes.bottomLengthMul) * edgeFade;
             const curl = (side === 'top' ? 0.85 : -0.6) + (Math.random() - 0.5) * 0.18;
 
             temp.push({
@@ -1122,10 +1131,11 @@ function Eyelids({ blink, mousePos }: { blink: React.MutableRefObject<number>; m
     useFrame((_, delta) => {
         const t = clamp01(blink.current);
         const gazeY = MathUtils.clamp(mousePos.current.y, -1, 1);
-        const gazeX = MathUtils.clamp(mousePos.current.x, -1, 1);
 
-        const yaw = MathUtils.clamp(gazeX * 0.06, -0.06, 0.06);
-        const pitch = MathUtils.clamp(-gazeY * 0.10, -0.10, 0.10);
+        // Only apply very subtle vertical (pitch) movement to lids.
+        // Horizontal (yaw) is handled by the parent rig group in EyeScene,
+        // so we do NOT rotate lids on Y — that was causing lash clipping at corners.
+        const pitch = MathUtils.clamp(-gazeY * 0.03, -0.03, 0.03);
         const ease = t * t * (3 - 2 * t); // smoothstep
 
         // Rotate lids around eye center (more natural than translating them on Y)
@@ -1134,18 +1144,18 @@ function Eyelids({ blink, mousePos }: { blink: React.MutableRefObject<number>; m
         const lowerOpen = -0.06;
         const lowerClosed = -0.78;
 
-        const upperRotX = lerp(upperOpen, upperClosed, ease) + pitch * 0.8;
-        const lowerRotX = lerp(lowerOpen, lowerClosed, ease) + pitch * 0.5;
+        const upperRotX = lerp(upperOpen, upperClosed, ease) + pitch * 0.25;
+        const lowerRotX = lerp(lowerOpen, lowerClosed, ease) + pitch * 0.15;
 
         if (upperRef.current) {
             upperRef.current.position.set(0, 0, 0.0);
             upperRef.current.rotation.x = MathUtils.damp(upperRef.current.rotation.x, upperRotX, 14, delta);
-            upperRef.current.rotation.y = MathUtils.damp(upperRef.current.rotation.y, yaw, 10, delta);
+            upperRef.current.rotation.y = MathUtils.damp(upperRef.current.rotation.y, 0, 10, delta);
         }
         if (lowerRef.current) {
             lowerRef.current.position.set(0, 0, 0.0);
             lowerRef.current.rotation.x = MathUtils.damp(lowerRef.current.rotation.x, lowerRotX, 14, delta);
-            lowerRef.current.rotation.y = MathUtils.damp(lowerRef.current.rotation.y, yaw, 10, delta);
+            lowerRef.current.rotation.y = MathUtils.damp(lowerRef.current.rotation.y, 0, 10, delta);
         }
     });
 
@@ -1301,18 +1311,20 @@ type BlinkMachine = {
 
 function EyeScene({
     colorScheme,
-    blinkInterval = 3000,
+    blinkInterval = 4200,
     variant = 'playground',
     showBackdrop = true,
+    pointer,
 }: {
     colorScheme: EyeColorKey;
     blinkInterval?: number;
     variant?: Eye3DVariant;
     showBackdrop?: boolean;
+    pointer?: { x: number; y: number };
 }) {
+    const { pointer: defaultPointer } = useThree();
+    const gazeRef = useRef({ x: 0, y: 0 });
     const rigRef = useRef<Group>(null);
-    const mousePos = useRef({ x: 0, y: 0 }); // smoothed pointer
-    const pointerRaw = useRef({ x: 0, y: 0 });
     const blink = useRef(0);
     const machine = useRef<BlinkMachine>({
         phase: 'idle',
@@ -1323,14 +1335,15 @@ function EyeScene({
     });
 
     useFrame((state, delta) => {
-        pointerRaw.current.x = state.pointer.x;
-        pointerRaw.current.y = state.pointer.y;
-        mousePos.current.x = MathUtils.damp(mousePos.current.x, pointerRaw.current.x, 10, delta);
-        mousePos.current.y = MathUtils.damp(mousePos.current.y, pointerRaw.current.y, 10, delta);
+        const targetX = pointer ? pointer.x : defaultPointer.x;
+        const targetY = pointer ? pointer.y : defaultPointer.y;
+
+        gazeRef.current.x = MathUtils.damp(gazeRef.current.x, targetX, 10, delta);
+        gazeRef.current.y = MathUtils.damp(gazeRef.current.y, targetY, 10, delta);
 
         if (rigRef.current) {
-            const targetYaw = MathUtils.clamp(mousePos.current.x * 0.18, -0.18, 0.18);
-            const targetPitch = MathUtils.clamp(-mousePos.current.y * 0.12, -0.12, 0.12);
+            const targetYaw = MathUtils.clamp(gazeRef.current.x * 0.18, -0.18, 0.18);
+            const targetPitch = MathUtils.clamp(-gazeRef.current.y * 0.12, -0.12, 0.12);
             rigRef.current.rotation.y = MathUtils.damp(rigRef.current.rotation.y, targetYaw, 10, delta);
             rigRef.current.rotation.x = MathUtils.damp(rigRef.current.rotation.x, targetPitch, 10, delta);
         }
@@ -1388,10 +1401,24 @@ function EyeScene({
         <group ref={rigRef} scale={[1.15, 1.15, 1.15]} position={[0, 0, 0]}>
             <FaceSocket enabled={showBackdrop} />
             <EyeAperture blink={blink} />
-            <Eyeball colors={EYE_COLORS[colorScheme]} mousePos={mousePos} />
-            <Eyelids blink={blink} mousePos={mousePos} />
+            <Eyeball colors={EYE_COLORS[colorScheme]} mousePos={gazeRef} />
+            <Eyelids blink={blink} mousePos={gazeRef} />
         </group>
     );
+}
+
+interface Eye3DProps {
+    colorScheme?: EyeColorKey;
+    blinkInterval?: number;
+    variant?: Eye3DVariant;
+    className?: string;
+    reducedMotion?: boolean;
+    dpr?: number | [number, number];
+    enableBackdrop?: boolean;
+    pointer?: { x: number; y: number };
+    quality?: Eye3DQuality;
+    interactive?: boolean;
+    watermarkFps?: number;
 }
 
 export default function Eye3D({
@@ -1405,32 +1432,37 @@ export default function Eye3D({
     watermarkFps = 24,
     className = '',
     enableBackdrop,
-}: {
-    colorScheme?: EyeColorKey;
-    blinkInterval?: number;
-    variant?: Eye3DVariant;
-    reducedMotion?: boolean;
-    dpr?: number | [number, number];
-    quality?: Eye3DQuality;
-    interactive?: boolean;
-    watermarkFps?: number;
-    className?: string;
-    enableBackdrop?: boolean;
-}) {
+    pointer,
+}: Eye3DProps) {
     const normalizedQuality: Exclude<Eye3DQuality, 'medium'> = quality === 'medium' ? 'default' : quality;
     const isWatermark = normalizedQuality === 'watermark';
-    const computedDpr = dpr ?? (isWatermark ? [0.8, 1.15] : [1, 1.75]);
-    const floatIntensity = reducedMotion ? 0 : isWatermark ? 0.03 : variant === 'landing' ? 0.06 : 0.15;
+    const isLanding = variant === 'landing';
+    const useDemandLoop = isWatermark || reducedMotion || !interactive || isLanding;
+    const computedDpr = dpr ?? (isWatermark ? [0.8, 1.15] : isLanding ? [0.75, 1.2] : [1, 1.75]);
+    const floatIntensity = reducedMotion ? 0 : isWatermark ? 0.03 : isLanding ? 0.06 : 0.15;
     const floatSpeed = reducedMotion ? 0 : isWatermark ? 0.75 : 1.2;
-    const envResolution = isWatermark ? 128 : 256;
-    const envBlur = isWatermark ? 0.85 : 0.7;
-    const enableShadows = !isWatermark;
-    const frameloop: 'always' | 'demand' = isWatermark ? 'demand' : 'always';
+    const envResolution = isWatermark ? 128 : isLanding ? 128 : 256;
+    const envBlur = isWatermark ? 0.85 : isLanding ? 0.8 : 0.7;
+    const enableShadows = !isWatermark && !isLanding;
+    const frameloop: 'always' | 'demand' = useDemandLoop ? 'demand' : 'always';
+    const targetFps = isWatermark ? watermarkFps : isLanding ? 20 : 24;
     const containerMinH = variant === 'playground' ? 'min-h-[520px]' : 'min-h-0';
+    const [contextLost, setContextLost] = useState(false);
+    const mounted = useRef(true);
+
+    useEffect(() => {
+        return () => {
+            mounted.current = false;
+        };
+    }, []);
 
     // Logic: if enableBackdrop is explicitly set, use it. Otherwise, default to hiding it on landing variant (legacy behavior)
     // but we are about to override this in LandingHeroEye.
     const showBackdrop = enableBackdrop ?? (variant !== 'landing');
+
+    if (contextLost) {
+        return <div className={`w-full h-full ${containerMinH} ${className}`} aria-hidden="true" />;
+    }
 
     return (
         <div className={`w-full h-full ${containerMinH} ${className}`}>
@@ -1440,19 +1472,31 @@ export default function Eye3D({
                 dpr={computedDpr}
                 camera={{ position: [0, 0, 6.2], fov: 34 }}
                 gl={{
-                    antialias: !isWatermark,
+                    antialias: !isWatermark && !isLanding,
                     alpha: true,
                     stencil: true,
-                    powerPreference: isWatermark ? 'low-power' : 'high-performance',
+                    powerPreference: isWatermark || isLanding ? 'low-power' : 'high-performance',
                 }}
                 style={{ pointerEvents: interactive ? 'auto' : 'none' }}
                 onCreated={({ gl }) => {
                     gl.toneMapping = ACESFilmicToneMapping;
                     gl.toneMappingExposure = V27_TUNING.render.exposure;
                     gl.outputColorSpace = SRGBColorSpace;
+                    gl.domElement.addEventListener(
+                        'webglcontextlost',
+                        (event) => {
+                            if (!mounted.current) return;
+                            event.preventDefault();
+                            if (import.meta.env.DEV) {
+                                console.warn('[Eye3D] WebGL context lost. Disabling 3D eye.');
+                            }
+                            setContextLost(true);
+                        },
+                        { once: true },
+                    );
                 }}
             >
-                <WatermarkFrameDriver enabled={isWatermark} fps={watermarkFps} reduced={reducedMotion} />
+                <FrameDriver enabled={useDemandLoop} fps={targetFps} reduced={reducedMotion} />
                 <ambientLight intensity={V27_TUNING.lights.ambient} />
                 <spotLight
                     castShadow={enableShadows}
@@ -1473,7 +1517,7 @@ export default function Eye3D({
                 )}
 
                 <Float speed={floatSpeed} rotationIntensity={0} floatIntensity={floatIntensity}>
-                    <EyeScene colorScheme={colorScheme} blinkInterval={blinkInterval} variant={variant} showBackdrop={showBackdrop} />
+                    <EyeScene colorScheme={colorScheme} blinkInterval={blinkInterval} variant={variant} showBackdrop={showBackdrop} pointer={pointer} />
                 </Float>
 
                 {/* Custom lightformers to avoid the HDRI "cross" reflection and keep a premium, controlled highlight */}

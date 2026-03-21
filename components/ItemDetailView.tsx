@@ -19,11 +19,28 @@ interface ItemDetailViewProps {
     onGenerateOutfitWithItem: (item: ClothingItem) => void;
     onSelectItem: (id: string) => void;
     onShareItem: (item: ClothingItem) => void;
+    onPublishToTimeline?: (item: ClothingItem, visibility: 'friends' | 'community') => Promise<void> | void;
+    onConvertLinkedToCopy?: (item: ClothingItem) => Promise<void> | void;
     onStartBrandRecognition?: (item: ClothingItem) => void;
     onStartDupeFinder?: (item: ClothingItem) => void;
+    onOpenStylistWithPrompt?: (item: ClothingItem, prompt: string) => void;
 }
 
-export const ItemDetailView = ({ item, inventory, onUpdate, onDelete, onBack, onGenerateOutfitWithItem, onSelectItem, onShareItem, onStartBrandRecognition, onStartDupeFinder }: ItemDetailViewProps) => {
+export const ItemDetailView = ({
+    item,
+    inventory,
+    onUpdate,
+    onDelete,
+    onBack,
+    onGenerateOutfitWithItem,
+    onSelectItem,
+    onShareItem,
+    onPublishToTimeline,
+    onConvertLinkedToCopy,
+    onStartBrandRecognition,
+    onStartDupeFinder,
+    onOpenStylistWithPrompt,
+}: ItemDetailViewProps) => {
     const [isEditing, setIsEditing] = useState(false);
     const [editableMetadata, setEditableMetadata] = useState(item.metadata);
     const [similarItems, setSimilarItems] = useState<ClothingItem[]>([]);
@@ -34,6 +51,9 @@ export const ItemDetailView = ({ item, inventory, onUpdate, onDelete, onBack, on
     const [showShopping, setShowShopping] = useState(false);
     const [shoppingLinks, setShoppingLinks] = useState<GroundingChunk[]>([]);
     const [isLoadingShopping, setIsLoadingShopping] = useState(false);
+    const [timelineVisibility, setTimelineVisibility] = useState<'friends' | 'community'>('friends');
+    const [isPublishingTimeline, setIsPublishingTimeline] = useState(false);
+    const [isConvertingLinked, setIsConvertingLinked] = useState(false);
 
     useEffect(() => {
         setEditableMetadata(item.metadata);
@@ -89,6 +109,32 @@ export const ItemDetailView = ({ item, inventory, onUpdate, onDelete, onBack, on
         }
     };
 
+    const handlePublishTimeline = async () => {
+        if (!onPublishToTimeline) return;
+        setIsPublishingTimeline(true);
+        try {
+            await onPublishToTimeline(item, timelineVisibility);
+            toast.success('Publicado en tu timeline');
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : 'No se pudo publicar');
+        } finally {
+            setIsPublishingTimeline(false);
+        }
+    };
+
+    const handleConvertLinkedToCopy = async () => {
+        if (!onConvertLinkedToCopy) return;
+        setIsConvertingLinked(true);
+        try {
+            await onConvertLinkedToCopy(item);
+            toast.success('Prenda convertida a copia');
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : 'No se pudo convertir');
+        } finally {
+            setIsConvertingLinked(false);
+        }
+    };
+
     return (
         <SwipeableModal
             isOpen={true}
@@ -119,6 +165,15 @@ export const ItemDetailView = ({ item, inventory, onUpdate, onDelete, onBack, on
                         <button onClick={() => onGenerateOutfitWithItem(item)} className="w-full bg-primary text-white font-bold py-4 rounded-2xl hover:bg-primary-dark transition-colors shadow-lg shadow-primary/30">
                             Crear Outfit con esta Prenda
                         </button>
+                        {onOpenStylistWithPrompt && (
+                            <button
+                                onClick={() => onOpenStylistWithPrompt(item, `Ayudame a usar esta prenda (${item.metadata.subcategory} ${item.metadata.color_primary || ''}) dentro de mi armario y decime con qué combinarla.`.trim())}
+                                className="w-full bg-white dark:bg-gray-800 border-2 border-sky-500 text-sky-600 dark:text-sky-400 font-bold py-4 rounded-2xl transition-transform active:scale-95 flex items-center justify-center gap-2 hover:bg-sky-50 dark:hover:bg-gray-700"
+                            >
+                                <span className="material-symbols-outlined">forum</span>
+                                Preguntarle a Kumbi
+                            </button>
+                        )}
                         {onStartBrandRecognition && (
                             <button
                                 onClick={() => onStartBrandRecognition(item)}
@@ -207,6 +262,32 @@ export const ItemDetailView = ({ item, inventory, onUpdate, onDelete, onBack, on
                                 </div>
                             </div>
                         )}
+
+                        {onPublishToTimeline && (
+                            <div className="bg-white/50 dark:bg-black/20 rounded-2xl p-3 border border-white/20 dark:border-white/10">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <span className="material-symbols-outlined text-base">dynamic_feed</span>
+                                    <p className="text-sm font-semibold">Compartir en timeline</p>
+                                </div>
+                                <div className="flex gap-2 mb-2">
+                                    <select
+                                        value={timelineVisibility}
+                                        onChange={(event) => setTimelineVisibility(event.target.value as 'friends' | 'community')}
+                                        className="flex-1 px-3 py-2 rounded-xl bg-white/80 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-sm"
+                                    >
+                                        <option value="friends">Solo amigos</option>
+                                        <option value="community">Comunidad</option>
+                                    </select>
+                                    <button
+                                        onClick={handlePublishTimeline}
+                                        disabled={isPublishingTimeline}
+                                        className="px-4 py-2 rounded-xl bg-primary text-white text-sm font-semibold disabled:opacity-60"
+                                    >
+                                        {isPublishingTimeline ? 'Publicando...' : 'Publicar'}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )
             }
@@ -261,7 +342,33 @@ export const ItemDetailView = ({ item, inventory, onUpdate, onDelete, onBack, on
                                     </>
                                 )}
                             </div>
+                            {item.linkMode === 'linked' && (
+                                <div className="flex items-center justify-center gap-2 mt-2">
+                                    <span className="inline-flex px-2 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                                        Linked
+                                    </span>
+                                    {onConvertLinkedToCopy && (
+                                        <button
+                                            onClick={handleConvertLinkedToCopy}
+                                            disabled={isConvertingLinked}
+                                            className="text-xs font-semibold text-primary hover:underline disabled:opacity-60"
+                                        >
+                                            {isConvertingLinked ? 'Convirtiendo...' : 'Convertir a copia'}
+                                        </button>
+                                    )}
+                                </div>
+                            )}
                         </div>
+
+                        {onOpenStylistWithPrompt && (
+                            <button
+                                onClick={() => onOpenStylistWithPrompt(item, `Ayudame a usar esta prenda (${item.metadata.subcategory} ${item.metadata.color_primary || ''}) dentro de mi armario y decime con qué combinarla.`.trim())}
+                                className="w-full bg-sky-50 dark:bg-sky-950/30 border-2 border-sky-500 text-sky-700 dark:text-sky-300 font-bold py-4 rounded-2xl transition-transform active:scale-95 flex items-center justify-center gap-2 hover:bg-sky-100 dark:hover:bg-sky-950/40"
+                            >
+                                <span className="material-symbols-outlined">forum</span>
+                                Destrabá esta prenda con Kumbi
+                            </button>
+                        )}
 
                         {/* Tags */}
                         <div className="flex flex-wrap justify-center gap-2">

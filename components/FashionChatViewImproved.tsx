@@ -438,7 +438,7 @@ const FashionChatViewImproved = ({
                 <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse shadow-[0_0_10px_rgba(74,222,128,0.5)]"></span>
               </h2>
               <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">
-                {isTyping ? 'Escribiendo...' : 'Asistente de Estilo'}
+                {isTyping ? 'Escribiendo...' : 'Kumbi'}
               </p>
             </div>
           </div>
@@ -465,7 +465,7 @@ const FashionChatViewImproved = ({
                 </div>
                 <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2 font-serif">¡Hola!</h3>
                 <p className="text-gray-600 dark:text-gray-300 text-sm max-w-xs mx-auto">
-                  Soy tu estilista personal con IA. Estoy lista para ayudarte a combinar tus prendas y darte consejos de moda.
+                  Soy Kumbi. Estoy lista para ayudarte a combinar tus prendas y darte consejos de moda.
                 </p>
               </div>
 

@@ -53,6 +53,12 @@ function sanitizeValidDays(value: unknown): number {
   return Math.max(1, Math.min(365, Math.floor(parsed)));
 }
 
+function sanitizeQuantity(value: unknown): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return 1;
+  return Math.max(1, Math.min(50, Math.floor(parsed)));
+}
+
 function buildInviteCode(prefix = 'BETA'): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let random = '';
@@ -149,56 +155,82 @@ serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const maxUses = sanitizeMaxUses(body?.maxUses);
     const validDays = sanitizeValidDays(body?.validDays);
-    const grantsPremium = body?.grantsPremium !== false;
-    const grantsUnlimitedAI = body?.grantsUnlimitedAI !== false;
+    const quantity = sanitizeQuantity(body?.quantity);
+    const grantsPremium = body?.grantsPremium === true;
+    const grantsUnlimitedAI = body?.grantsUnlimitedAI === true;
     const note = typeof body?.note === 'string' ? body.note.slice(0, 240) : null;
     const prefix = typeof body?.prefix === 'string' && body.prefix.trim().length >= 2
       ? body.prefix.trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8)
       : 'BETA';
 
-    let code: string | null = null;
-    for (let attempt = 0; attempt < 6; attempt += 1) {
-      const candidate = buildInviteCode(prefix);
-      const expiresAt = new Date(Date.now() + validDays * 24 * 60 * 60 * 1000).toISOString();
-
-      const { error: insertError } = await adminScoped.from('beta_invite_codes').insert({
-        code: candidate,
-        created_by: user.id,
-        max_uses: maxUses,
-        uses_count: 0,
-        grants_premium: grantsPremium,
-        grants_unlimited_ai: grantsUnlimitedAI,
-        expires_at: expiresAt,
-        metadata: note ? { note } : {},
-      });
-
-      if (!insertError) {
-        code = candidate;
-        break;
-      }
-
-      if (insertError.code !== '23505') {
-        throw insertError;
-      }
-    }
-
-    if (!code) {
-      throw new Error('No se pudo generar un código único');
-    }
-
     const appUrl = resolveAppUrl(req);
-    const shareLink = `${appUrl}/?beta=${encodeURIComponent(code)}`;
+    const expiresAt = new Date(Date.now() + validDays * 24 * 60 * 60 * 1000).toISOString();
+    const invites: Array<{
+      code: string;
+      shareLink: string;
+      maxUses: number;
+      validDays: number;
+      grantsPremium: boolean;
+      grantsUnlimitedAI: boolean;
+      expiresAt: string;
+    }> = [];
 
-    await recordRequestResult(userScoped, user.id, 'beta-invite-create', true);
+    for (let inviteIndex = 0; inviteIndex < quantity; inviteIndex += 1) {
+      let code: string | null = null;
+      for (let attempt = 0; attempt < 12; attempt += 1) {
+        const candidate = buildInviteCode(prefix);
 
-    return new Response(
-      JSON.stringify({
+        const { error: insertError } = await adminScoped.from('beta_invite_codes').insert({
+          code: candidate,
+          created_by: user.id,
+          max_uses: maxUses,
+          uses_count: 0,
+          grants_premium: grantsPremium,
+          grants_unlimited_ai: grantsUnlimitedAI,
+          expires_at: expiresAt,
+          metadata: note
+            ? { note, quantity_requested: quantity, batch_index: inviteIndex + 1 }
+            : { quantity_requested: quantity, batch_index: inviteIndex + 1 },
+        });
+
+        if (!insertError) {
+          code = candidate;
+          break;
+        }
+
+        if (insertError.code !== '23505') {
+          throw insertError;
+        }
+      }
+
+      if (!code) {
+        throw new Error('No se pudo generar un código único');
+      }
+
+      invites.push({
         code,
-        shareLink,
+        shareLink: `${appUrl}/invitacion?beta=${encodeURIComponent(code)}`,
         maxUses,
         validDays,
         grantsPremium,
         grantsUnlimitedAI,
+        expiresAt,
+      });
+    }
+
+    await recordRequestResult(userScoped, user.id, 'beta-invite-create', true);
+
+    const primaryInvite = invites[0];
+    return new Response(
+      JSON.stringify({
+        code: primaryInvite.code,
+        shareLink: primaryInvite.shareLink,
+        maxUses,
+        validDays,
+        grantsPremium,
+        grantsUnlimitedAI,
+        quantity,
+        invites,
         request_id: requestId,
       }),
       {

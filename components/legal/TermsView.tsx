@@ -52,8 +52,8 @@ export const TermsView: React.FC = () => {
         {
           title: '6. Créditos y suscripciones',
           paragraphs: [
-            'El acceso a funciones de IA se mide en créditos mensuales. Cada acción consume créditos según su costo.',
-            'Los créditos se reinician mensualmente y no son acumulables. Las condiciones pueden variar entre planes Free, Pro y Premium.'
+            'El acceso a funciones de IA se mide en usos IA mensuales. Cada acción consume usos IA según su costo.',
+            'Los usos se reinician mensualmente y no son acumulables. Las condiciones pueden variar entre planes Free, Pro y Premium.'
           ]
         },
         {

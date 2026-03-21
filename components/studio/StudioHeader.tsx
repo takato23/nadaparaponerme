@@ -1,9 +1,9 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAITokens } from '../../hooks/useAITokens';
 
 interface StudioHeaderProps {
+    onBack: () => void;
     generatedImagesCount: number;
     onOpenLatestResult: () => void;
     showResultsHint: boolean;
@@ -11,19 +11,19 @@ interface StudioHeaderProps {
 }
 
 export const StudioHeader: React.FC<StudioHeaderProps> = ({
+    onBack,
     generatedImagesCount,
     onOpenLatestResult,
     showResultsHint,
     onShowHelp
 }) => {
-    const navigate = useNavigate();
     const { balance, loading } = useAITokens();
 
     return (
         <header className="px-4 pt-[calc(1rem+env(safe-area-inset-top))] pb-3 sticky top-0 z-30 bg-[#f8f3ee]/85 backdrop-blur-lg border-b border-white/40">
             <div className="flex min-w-0 items-center justify-between gap-3">
                 <button
-                    onClick={() => navigate(-1)}
+                    onClick={onBack}
                     className="w-8 h-8 rounded-full bg-white/60 border border-white/70 flex items-center justify-center hover:bg-white/80 transition active:scale-95"
                     aria-label="Volver"
                 >

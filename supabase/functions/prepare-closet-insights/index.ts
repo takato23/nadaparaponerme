@@ -9,6 +9,8 @@ import { blobToDataUrl, parseClothingStoragePath } from '../_shared/insightUtils
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-application-name',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Max-Age': '86400',
 };
 
 const MAX_ITEMS_PER_PREPARE = 6;
@@ -248,7 +250,7 @@ serve(async (req) => {
 
         const response = await withRetry(() =>
           ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-3.1-flash-lite-preview',
             contents: {
               parts: [
                 {

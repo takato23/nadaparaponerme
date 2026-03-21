@@ -1,7 +1,17 @@
 import { useState } from 'react';
 import type { ClothingItem, ShoppingChatMessage, ShoppingGap, ShoppingRecommendation } from '../types';
-import * as aiService from '../src/services/aiService';
 import { useToast } from './useToast';
+
+type AIServiceModule = typeof import('../src/services/aiService');
+
+let aiServicePromise: Promise<AIServiceModule> | null = null;
+
+const loadAiService = (): Promise<AIServiceModule> => {
+    if (!aiServicePromise) {
+        aiServicePromise = import('../src/services/aiService');
+    }
+    return aiServicePromise;
+};
 
 export const useShoppingAssistant = (closet: ClothingItem[]) => {
     const [messages, setMessages] = useState<ShoppingChatMessage[]>([]);
@@ -14,6 +24,7 @@ export const useShoppingAssistant = (closet: ClothingItem[]) => {
     const analyzeShoppingGaps = async () => {
         setIsAnalyzing(true);
         try {
+            const aiService = await loadAiService();
             const result = await aiService.analyzeShoppingGaps(closet);
             setGaps(result);
 
@@ -52,6 +63,7 @@ export const useShoppingAssistant = (closet: ClothingItem[]) => {
 
         setIsAnalyzing(true);
         try {
+            const aiService = await loadAiService();
             const result = await aiService.generateShoppingRecommendations(gaps, closet);
             setRecommendations(result);
 
@@ -94,6 +106,7 @@ export const useShoppingAssistant = (closet: ClothingItem[]) => {
         setIsTyping(true);
 
         try {
+            const aiService = await loadAiService();
             const assistantMessage = await aiService.conversationalShoppingAssistant(
                 message,
                 messages,

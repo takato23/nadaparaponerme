@@ -17,6 +17,11 @@ const corsHeaders = {
 const ADMIN_ROLES = new Set(['admin', 'owner', 'superadmin']);
 const LIST_RATE_LIMIT_PER_MIN = parsePositiveIntEnv('RATE_LIMIT_LIST_BETA_PER_MIN', 20, 1, 240);
 
+type UsageAggregate = {
+  count: number;
+  last_at: string | null;
+};
+
 function isAdminUser(user: any): boolean {
   const appRole = typeof user?.app_metadata?.role === 'string' ? user.app_metadata.role.toLowerCase() : '';
   const userRole = typeof user?.user_metadata?.role === 'string' ? user.user_metadata.role.toLowerCase() : '';
@@ -38,6 +43,27 @@ function isAdminUser(user: any): boolean {
   ];
   const email = String(user?.email || '').toLowerCase().trim();
   return Boolean(email) && configured.includes(email);
+}
+
+function aggregateUsage(rows: Array<Record<string, any>>, dateField: string): Record<string, UsageAggregate> {
+  return (rows || []).reduce<Record<string, UsageAggregate>>((acc, row) => {
+    const userId = String(row.user_id || '');
+    if (!userId) return acc;
+    const timestamp = typeof row[dateField] === 'string' ? row[dateField] : null;
+    const current = acc[userId] || { count: 0, last_at: null };
+    current.count += 1;
+    if (timestamp && (!current.last_at || new Date(timestamp).getTime() > new Date(current.last_at).getTime())) {
+      current.last_at = timestamp;
+    }
+    acc[userId] = current;
+    return acc;
+  }, {});
+}
+
+function isRecent(timestamp: string | null | undefined, days: number): boolean {
+  if (!timestamp) return false;
+  const age = Date.now() - new Date(timestamp).getTime();
+  return age >= 0 && age <= days * 24 * 60 * 60 * 1000;
 }
 
 serve(async (req) => {
@@ -143,7 +169,31 @@ serve(async (req) => {
     const codes = (invites || []).map((invite: any) => String(invite.code));
     if (codes.length === 0) {
       await recordRequestResult(userScoped, user.id, 'beta-invite-list', true);
-      return new Response(JSON.stringify({ invites: [], claims: [] }), {
+      return new Response(JSON.stringify({
+        invites: [],
+        claims: [],
+        summary: {
+          total_invites: 0,
+          total_slots: 0,
+          used_slots: 0,
+          remaining_slots: 0,
+          claims: 0,
+          claimers: 0,
+          accounts_created: 0,
+          signed_in: 0,
+          active_users: 0,
+          active_last_7d: 0,
+          active_last_30d: 0,
+          closet_uploaders: 0,
+          look_savers: 0,
+          usage_event_users: 0,
+          total_clothing_items: 0,
+          total_outfits: 0,
+          total_usage_events: 0,
+          claim_rate: 0,
+          active_rate: 0,
+        },
+      }), {
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json', 'X-Request-Id': requestId },
       });
@@ -168,30 +218,99 @@ serve(async (req) => {
     }
 
     let emailsById: Record<string, string> = {};
+    let authUsersById: Record<string, { created_at: string | null; last_sign_in_at: string | null }> = {};
     if (userIds.length > 0) {
       try {
         const { data: authUsers } = await adminScoped
           .schema('auth')
           .from('users')
-          .select('id, email')
+          .select('id, email, created_at, last_sign_in_at')
           .in('id', userIds);
         emailsById = Object.fromEntries((authUsers || []).map((userRow: any) => [String(userRow.id), String(userRow.email || '')]));
+        authUsersById = Object.fromEntries((authUsers || []).map((userRow: any) => [
+          String(userRow.id),
+          {
+            created_at: userRow.created_at || null,
+            last_sign_in_at: userRow.last_sign_in_at || null,
+          },
+        ]));
       } catch (error) {
         console.warn('list-beta-invite-claims: could not fetch auth.users emails', error);
       }
     }
 
+    let clothingRows: Array<Record<string, any>> = [];
+    let outfitRows: Array<Record<string, any>> = [];
+    let usageRows: Array<Record<string, any>> = [];
+    if (userIds.length > 0) {
+      const [{ data: clothing }, { data: outfits }, { data: usage }] = await Promise.all([
+        adminScoped.from('clothing_items').select('user_id, created_at').in('user_id', userIds).is('deleted_at', null),
+        adminScoped.from('outfits').select('user_id, created_at').in('user_id', userIds).is('deleted_at', null),
+        adminScoped.from('billing_usage_events').select('user_id, committed_at, created_at').in('user_id', userIds).eq('status', 'committed'),
+      ]);
+      clothingRows = Array.isArray(clothing) ? clothing : [];
+      outfitRows = Array.isArray(outfits) ? outfits : [];
+      usageRows = Array.isArray(usage) ? usage : [];
+    }
+
+    const clothingByUser = aggregateUsage(clothingRows, 'created_at');
+    const outfitsByUser = aggregateUsage(outfitRows, 'created_at');
+    const usageByUser = aggregateUsage(
+      usageRows.map((row) => ({ ...row, effective_at: row.committed_at || row.created_at || null })),
+      'effective_at',
+    );
+
     const enrichedClaims = (claims || []).map((claim: any) => {
       const userId = String(claim.user_id);
       const profile = profilesById[userId] || {};
       const metadata = claim.metadata && typeof claim.metadata === 'object' ? claim.metadata : {};
+      const clothing = clothingByUser[userId] || { count: 0, last_at: null };
+      const outfits = outfitsByUser[userId] || { count: 0, last_at: null };
+      const usage = usageByUser[userId] || { count: 0, last_at: null };
+      const authUser = authUsersById[userId] || { created_at: null, last_sign_in_at: null };
+      const lastUsageAt = [clothing.last_at, outfits.last_at, usage.last_at]
+        .filter((value): value is string => Boolean(value))
+        .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0] || null;
+      const lastSignInAt = authUser.last_sign_in_at;
       return {
         ...claim,
         email: emailsById[userId] || metadata.claimed_email || null,
         username: profile.username || null,
         display_name: profile.display_name || null,
+        account_created_at: authUser.created_at,
+        last_sign_in_at: lastSignInAt,
+        clothing_items_count: clothing.count,
+        outfits_count: outfits.count,
+        usage_events_count: usage.count,
+        last_usage_at: lastUsageAt,
+        usage_state: (clothing.count > 0 || outfits.count > 0 || usage.count > 0)
+          ? 'active'
+          : 'created',
       };
     });
+
+    const totalSlots = (invites || []).reduce((sum: number, invite: any) => sum + Number(invite.max_uses || 0), 0);
+    const usedSlots = (invites || []).reduce((sum: number, invite: any) => sum + Number(invite.uses_count || 0), 0);
+    const claimers = userIds.length;
+    const signedIn = userIds.filter((userId) => Boolean(authUsersById[userId]?.last_sign_in_at)).length;
+    const activeUsers = userIds.filter((userId) => (
+      (clothingByUser[userId]?.count || 0) > 0 ||
+      (outfitsByUser[userId]?.count || 0) > 0 ||
+      (usageByUser[userId]?.count || 0) > 0
+    )).length;
+    const active7d = userIds.filter((userId) => (
+      isRecent(clothingByUser[userId]?.last_at, 7) ||
+      isRecent(outfitsByUser[userId]?.last_at, 7) ||
+      isRecent(usageByUser[userId]?.last_at, 7)
+    )).length;
+    const active30d = userIds.filter((userId) => (
+      isRecent(clothingByUser[userId]?.last_at, 30) ||
+      isRecent(outfitsByUser[userId]?.last_at, 30) ||
+      isRecent(usageByUser[userId]?.last_at, 30)
+    )).length;
+    const closetUploaders = userIds.filter((userId) => (clothingByUser[userId]?.count || 0) > 0).length;
+    const lookSavers = userIds.filter((userId) => (outfitsByUser[userId]?.count || 0) > 0).length;
+    const usageEventUsers = userIds.filter((userId) => (usageByUser[userId]?.count || 0) > 0).length;
 
     await recordRequestResult(userScoped, user.id, 'beta-invite-list', true);
 
@@ -199,6 +318,27 @@ serve(async (req) => {
       JSON.stringify({
         invites: invites || [],
         claims: enrichedClaims,
+        summary: {
+          total_invites: (invites || []).length,
+          total_slots: totalSlots,
+          used_slots: usedSlots,
+          remaining_slots: Math.max(0, totalSlots - usedSlots),
+          claims: (claims || []).length,
+          claimers,
+          accounts_created: claimers,
+          signed_in: signedIn,
+          active_users: activeUsers,
+          active_last_7d: active7d,
+          active_last_30d: active30d,
+          closet_uploaders: closetUploaders,
+          look_savers: lookSavers,
+          usage_event_users: usageEventUsers,
+          total_clothing_items: clothingRows.length,
+          total_outfits: outfitRows.length,
+          total_usage_events: usageRows.length,
+          claim_rate: totalSlots > 0 ? Number((usedSlots / totalSlots).toFixed(4)) : 0,
+          active_rate: claimers > 0 ? Number((activeUsers / claimers).toFixed(4)) : 0,
+        },
         request_id: requestId,
       }),
       {

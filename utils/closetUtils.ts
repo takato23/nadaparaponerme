@@ -21,6 +21,7 @@ import type {
   CategoryStats,
   SeasonStats
 } from '../types/closet';
+import { normalizeColorValue } from '../src/utils/colorUtils';
 
 // =====================================================
 // FILTERING UTILITIES
@@ -36,17 +37,19 @@ export function matchesFilters(
   const { metadata } = item;
 
   // Category filter
-  if (filters.categories && filters.categories.length > 0) {
-    if (!filters.categories.includes(metadata.category as CategoryFilter)) {
+  const selectedCategories = (filters.categories || []).filter((category): category is Exclude<CategoryFilter, 'all'> => category !== 'all');
+  if (selectedCategories.length > 0) {
+    if (!selectedCategories.includes(metadata.category as Exclude<CategoryFilter, 'all'>)) {
       return false;
     }
   }
 
   // Color filter
   if (filters.colors && filters.colors.colors.length > 0) {
-    const itemColor = metadata.color_primary.toLowerCase();
+    const itemColor = normalizeColorValue(metadata.color_primary);
     const hasMatch = filters.colors.colors.some(filterColor => {
-      const normalizedFilterColor = filterColor.toLowerCase();
+      const normalizedFilterColor = normalizeColorValue(filterColor);
+      if (!normalizedFilterColor || !itemColor) return false;
 
       if (filters.colors!.matchMode === 'exact') {
         return itemColor === normalizedFilterColor;
@@ -112,9 +115,7 @@ export function matchesFilters(
 
   // Favorite filter
   if (filters.isFavorite !== undefined) {
-    // Note: This requires adding is_favorite to ClothingItem type
-    // For now, we'll skip this filter
-    // if (item.is_favorite !== filters.isFavorite) return false;
+    if (Boolean(item.isFavorite) !== filters.isFavorite) return false;
   }
 
   // Status Filter
@@ -569,7 +570,7 @@ export function validateFilters(filters: AdvancedFilters): {
 export function normalizeFilters(filters: AdvancedFilters): AdvancedFilters {
   return {
     ...filters,
-    categories: filters.categories || [],
+    categories: (filters.categories || []).filter((category) => category !== 'all'),
     searchText: filters.searchText?.trim() || undefined
   };
 }

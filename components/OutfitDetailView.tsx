@@ -4,6 +4,7 @@ import type { SavedOutfit, ClothingItem } from '../types';
 import { Card } from './ui/Card';
 import { OutfitVisualizer } from './OutfitVisualizer';
 import ShopTheLookPanel from './ShopTheLookPanel';
+import { useToast } from '../hooks/useToast';
 
 interface OutfitDetailViewProps {
     outfit: SavedOutfit;
@@ -12,10 +13,18 @@ interface OutfitDetailViewProps {
     onDelete: (id: string) => void;
     // FIX: Add onShareOutfit prop to handle sharing functionality.
     onShareOutfit: (outfit: SavedOutfit) => void;
+    onPublishToTimeline?: (
+        outfit: SavedOutfit,
+        bundle: { top?: ClothingItem; bottom?: ClothingItem; shoes?: ClothingItem },
+        visibility: 'friends' | 'community'
+    ) => Promise<void> | void;
     onOpenShopLook?: () => void;
 }
 
-const OutfitDetailView = ({ outfit, inventory, onBack, onDelete, onShareOutfit, onOpenShopLook }: OutfitDetailViewProps) => {
+const OutfitDetailView = ({ outfit, inventory, onBack, onDelete, onShareOutfit, onPublishToTimeline, onOpenShopLook }: OutfitDetailViewProps) => {
+    const toast = useToast();
+    const [timelineVisibility, setTimelineVisibility] = React.useState<'friends' | 'community'>('friends');
+    const [isPublishingTimeline, setIsPublishingTimeline] = React.useState(false);
     const top = inventory.find(i => i.id === outfit.top_id);
     const bottom = inventory.find(i => i.id === outfit.bottom_id);
     const shoes = inventory.find(i => i.id === outfit.shoes_id);
@@ -24,6 +33,23 @@ const OutfitDetailView = ({ outfit, inventory, onBack, onDelete, onShareOutfit, 
         bottom ? { slot: 'bottom', item: bottom } : null,
         shoes ? { slot: 'shoes', item: shoes } : null,
     ].filter(Boolean) as { slot: string; item: ClothingItem }[];
+
+    const handlePublishTimeline = async () => {
+        if (!onPublishToTimeline) return;
+        setIsPublishingTimeline(true);
+        try {
+            await onPublishToTimeline(
+                outfit,
+                { top: top || undefined, bottom: bottom || undefined, shoes: shoes || undefined },
+                timelineVisibility
+            );
+            toast.success('Outfit publicado en timeline');
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : 'No se pudo publicar');
+        } finally {
+            setIsPublishingTimeline(false);
+        }
+    };
 
     if (!top || !bottom || !shoes) {
         return (
@@ -67,6 +93,32 @@ const OutfitDetailView = ({ outfit, inventory, onBack, onDelete, onShareOutfit, 
                                 onOpenFinder={onOpenShopLook}
                             />
                         </div>
+                    )}
+
+                    {onPublishToTimeline && (
+                        <Card variant="glass" padding="md" rounded="2xl" className="mt-4">
+                            <div className="flex items-center gap-2 mb-3">
+                                <span className="material-symbols-outlined text-base">dynamic_feed</span>
+                                <h3 className="font-semibold text-text-primary dark:text-gray-200">Compartir en timeline</h3>
+                            </div>
+                            <div className="flex gap-2">
+                                <select
+                                    value={timelineVisibility}
+                                    onChange={(event) => setTimelineVisibility(event.target.value as 'friends' | 'community')}
+                                    className="flex-1 px-3 py-2 rounded-xl bg-white/80 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-sm"
+                                >
+                                    <option value="friends">Solo amigos</option>
+                                    <option value="community">Comunidad</option>
+                                </select>
+                                <button
+                                    onClick={handlePublishTimeline}
+                                    disabled={isPublishingTimeline}
+                                    className="px-4 py-2 rounded-xl bg-primary text-white text-sm font-semibold disabled:opacity-60"
+                                >
+                                    {isPublishingTimeline ? 'Publicando...' : 'Publicar'}
+                                </button>
+                            </div>
+                        </Card>
                     )}
                 </div>
             </div>

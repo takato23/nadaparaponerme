@@ -3,6 +3,7 @@
 import React, { useState, useMemo, useEffect, lazy, Suspense, startTransition, useCallback, useRef } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useParams, matchPath } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
+import { Toaster } from 'react-hot-toast';
 import useLocalStorage from './hooks/useLocalStorage';
 import { useDebounce } from './hooks/useDebounce';
 import { useAppModals } from './hooks/useAppModals';
@@ -11,9 +12,7 @@ import { useOptimistic } from './hooks/useOptimistic';
 import { useSubscription } from './hooks/useSubscription';
 import { useNavigateTransition } from './hooks/useNavigateTransition';
 import { useChatConversations } from './hooks/useChatConversations';
-import type { ClothingItem, FitResult, ClothingItemMetadata, SavedOutfit, CommunityUser, PackingListResult, SortOption, BrandRecognitionResult, OutfitSuggestionForEvent, ChatConversation, ChatMessage, CategoryFilter, ProfessionalProfile, ProfessionalFitResult, ShoppingProduct } from './types';
-import * as aiService from './src/services/aiService';
-import { generateProfessionalOutfit } from './src/services/StylistService';
+import type { ActiveWardrobeRecommendation, ChatAttachment, ClothingItem, FitResult, ClothingItemMetadata, SavedOutfit, CommunityUser, PackingListResult, SortOption, BrandRecognitionResult, OutfitSuggestionForEvent, ChatConversation, ChatMessage, CategoryFilter, ProfessionalProfile, ProfessionalFitResult, ShoppingProduct, StylistContextPayload, StylistSurface } from './types';
 import { dataUrlToFile } from './src/lib/supabase';
 import * as preferencesService from './src/services/preferencesService';
 import { communityData } from './data/communityData';
@@ -22,19 +21,28 @@ import { useFeatureFlag } from './hooks/useFeatureFlag';
 import { useAuth } from './hooks/useAuth';
 import * as closetService from './src/services/closetService';
 import * as outfitService from './src/services/outfitService';
+import * as activityFeedService from './src/services/activityFeedService';
 import * as paymentService from './src/services/paymentService';
 import * as analytics from './src/services/analyticsService';
 import { deleteAccount } from './src/services/accountService';
+import { dismissRecommendation, getActiveRecommendation } from './src/services/recommendationService';
 import { usePullToRefresh } from './hooks/usePullToRefresh';
 import PullToRefreshIndicator from './components/ui/PullToRefreshIndicator';
 import { FloatingDock } from './components/ui/FloatingDock';
-import { claimBetaInviteViaEdge, createBetaInviteViaEdge, listBetaInviteClaimsViaEdge, proxyImageViaEdge } from './src/services/edgeFunctionClient';
-import { removeImageBackground } from './src/utils/backgroundRemoval';
+import MobilePrimaryShell from './components/ui/MobilePrimaryShell';
+import {
+    approveWaitlistEntryViaEdge,
+    createBetaInviteViaEdge,
+    listBetaInviteClaimsViaEdge,
+    listWaitlistViaEdge,
+    proxyImageViaEdge,
+    rejectWaitlistEntryViaEdge,
+} from './src/services/edgeFunctionClient';
 import { useFeatureAccess } from './hooks/useFeatureAccess';
 import { useShoppingAssistant } from './hooks/useShoppingAssistant';
 import { useOutfitGeneration } from './hooks/useOutfitGeneration';
-import { ClosetGridSkeleton } from './components/ui/Skeleton';
 import Toast from './components/Toast';
+import BugReportButton from './components/BugReportButton';
 import { NetworkIndicator } from './components/ui/NetworkIndicator';
 import { CommandPalette } from './components/ui/CommandPalette';
 import { StudioGenerationIndicator } from './components/ui/StudioGenerationIndicator';
@@ -42,26 +50,36 @@ import { KeyboardShortcutsHelp } from './components/ui/KeyboardShortcutsHelp';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { ROUTES } from './src/routes';
 import { getErrorMessage } from './utils/errorMessages';
-import { SkipToMainContent } from './utils/accessibility';
+import { SkipToMainContent, useMaterialSymbolsAccessibility } from './utils/accessibility';
+import { useDeviceProfile } from './src/hooks/useDeviceProfile';
+import { useMatchMedia } from './src/hooks/useMatchMedia';
+import { setPendingStylistEntry } from './src/services/stylistEntryService';
 import { PricingModal } from './components/PricingModal';
 import { QuotaIndicator, LimitReachedModal } from './components/QuotaIndicator';
 import { CreditsDetailView } from './components/CreditsDetailView';
-import AuthEyeScreen from './components/AuthEyeScreen';
 import CookieConsentBanner from './components/legal/CookieConsentBanner';
-import { PWAInstallPrompt } from './components/PWAInstallPrompt';
+import BetaAccessGate from './components/BetaAccessGate';
+import AIStylistView from './components/AIStylistView';
 import { useConsentPreferences } from './hooks/useConsentPreferences';
+import {
+    clearPublicEntryAuthPending,
+    clearPublicEntryState,
+    getPendingPublicEntryIntent,
+    isPublicEntryAuthPending,
+    markPublicEntryAuthOpened,
+    setPendingPublicEntryIntent,
+    type PublicEntryIntent,
+} from './src/services/publicEntryFlow';
+import type { MobilePrimaryTab } from './src/navigation/mobilePrimaryTabs';
+import { MOBILE_PRIMARY_TABS, isPrimaryShellRoute } from './src/navigation/mobilePrimaryTabs';
 
 // Eager load critical components (above the fold)
-import ClosetGrid from './components/ClosetGrid';
 import LazyLoader from './components/LazyLoader';
 
 // Enhanced Closet System
 import { ClosetProvider } from './contexts/ClosetContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { AIGenerationProvider } from './contexts/AIGenerationContext';
-import ClosetViewEnhanced from './components/closet/ClosetViewEnhanced';
-import { GlobalCanvas } from './components/3d/GlobalCanvas';
-const DISABLE_3D_BACKGROUND = true;
 import { DISALLOW_CLIENT_GEMINI_KEY_IN_PROD, PAYMENTS_ENABLED, V1_SAFE_MODE } from './src/config/runtime';
 
 // Lazy load all view components
@@ -79,7 +97,6 @@ const InstantOutfitView = lazy(() => import('./components/InstantOutfitView'));
 const ProfileView = lazy(() => import('./components/ProfileView'));
 const CommunityView = lazy(() => import('./components/CommunityView'));
 const FriendProfileView = lazy(() => import('./components/FriendProfileView'));
-const OnboardingView = lazy(() => import('./components/OnboardingView'));
 const ShareOutfitView = lazy(() => import('./components/ShareOutfitView'));
 const SmartPackerView = lazy(() => import('./components/SmartPackerView'));
 const PackingListView = lazy(() => import('./components/PackingListView'));
@@ -92,8 +109,8 @@ const MigrationModal = lazy(() => import('./components/MigrationModal'));
 const ClosetAnalyticsView = lazy(() => import('./components/ClosetAnalyticsView'));
 const ColorPaletteView = lazy(() => import('./components/ColorPaletteView'));
 const TopVersatileView = lazy(() => import('./components/TopVersatileView'));
-const AIStylistView = lazy(() => import('./components/AIStylistView'));
 const WeatherOutfitView = lazy(() => import('./components/WeatherOutfitView'));
+const HomeShortcutModal = lazy(() => import('./components/HomeShortcutModal'));
 const WeeklyPlannerView = lazy(() => import('./components/WeeklyPlannerView'));
 const LookbookCreatorView = lazy(() => import('./components/LookbookCreatorView'));
 const StyleChallengesView = lazy(() => import('./components/StyleChallengesView'));
@@ -116,20 +133,47 @@ const PaywallView = lazy(() => import('./components/PaywallView'));
 const FeatureLockedView = lazy(() => import('./components/FeatureLockedView'));
 const OutfitGenerationTestingPlayground = lazy(() => import('./components/OutfitGenerationTestingPlayground'));
 const AestheticPlayground = lazy(() => import('./components/AestheticPlayground'));
-const LandingPage = lazy(() => import('./components/LandingPage'));
+const PlannerHubView = lazy(() => import('./components/PlannerHubView'));
 const ProfessionalStyleWizardView = lazy(() => import('./components/ProfessionalStyleWizardView'));
 const ConfirmDeleteModal = lazy(() => import('./components/ui/ConfirmDeleteModal'));
 const PaddlePayPage = lazy(() => import('./components/PaddlePayPage'));
 const PremiumCameraView = lazy(() => import('@/components/PremiumCameraView'));
 const PhotoshootStudio = lazy(() => import('@/components/studio/PhotoshootStudio'));
-const SavedLooksView = lazy(() => import('@/components/SavedLooksView'));
+const SavedLooksView = lazy(() => import('./components/SavedLooksView'));
 const SharedLookView = lazy(() => import('./components/SharedLookView'));
 const VirtualMirrorView = lazy(() => import('./components/studio/VirtualMirrorView'));
 const DigitalTwinSetup = lazy(() => import('./components/digital-twin/DigitalTwinSetup'));
 const BorrowedItemsView = lazy(() => import('./components/BorrowedItemsView'));
 const ShopLookView = lazy(() => import('./components/ShopLookView'));
 const PricingPage = lazy(() => import('./components/PricingPage'));
-const OnboardingStylistFlow = lazy(() => import('./components/OnboardingStylistFlow').then(module => ({ default: module.OnboardingStylistFlow })));
+const BetaInviteLandingPage = lazy(() => import('./components/BetaInviteLandingPage'));
+const LandingPage = lazy(() => import('./components/LandingPage'));
+const OnboardingLabView = lazy(() => import('./components/OnboardingLabView'));
+const OnboardingMockGallery = lazy(() => import('./components/OnboardingMockGallery'));
+const EntryMockGallery = lazy(() => import('./components/EntryMockGallery'));
+const EntryEyeConceptMock = lazy(() => import('./components/EntryEyeConceptMock'));
+const ClosetViewEnhanced = lazy(() => import('./components/closet/ClosetViewEnhanced'));
+const DashboardStudioMockup = lazy(() => import('./components/DashboardStudioMockup'));
+
+type AIServiceModule = typeof import('./src/services/aiService');
+type BackgroundRemovalModule = typeof import('./src/utils/backgroundRemoval');
+
+let aiServicePromise: Promise<AIServiceModule> | null = null;
+let backgroundRemovalPromise: Promise<BackgroundRemovalModule> | null = null;
+
+const loadAiService = (): Promise<AIServiceModule> => {
+    if (!aiServicePromise) {
+        aiServicePromise = import('./src/services/aiService');
+    }
+    return aiServicePromise;
+};
+
+const loadBackgroundRemoval = (): Promise<BackgroundRemovalModule> => {
+    if (!backgroundRemovalPromise) {
+        backgroundRemovalPromise = import('./src/utils/backgroundRemoval');
+    }
+    return backgroundRemovalPromise;
+};
 
 /**
  * AppContent - Main app component with routing logic
@@ -138,11 +182,15 @@ const OnboardingStylistFlow = lazy(() => import('./components/OnboardingStylistF
 const AppContent = () => {
     const location = useLocation();
     const navigate = useNavigateTransition();
+    const deviceProfile = useDeviceProfile();
+    const isMobileViewport = useMatchMedia('(max-width: 767px)');
+    const isDesktopViewport = useMatchMedia('(min-width: 1024px)');
+    const reduceRouteMotion = deviceProfile.shouldReduceMotion;
     const consentPreferences = useConsentPreferences();
     const analyticsInitializedRef = useRef(false);
-    const betaClaimInFlightRef = useRef<string | null>(null);
+    useMaterialSymbolsAccessibility();
     // Authentication
-    const { user, signOut: authSignOut } = useAuth();
+    const { user, loading: authLoading, signOut: authSignOut } = useAuth();
     const isAuthenticated = !!user;
     const [hasOnboarded, setHasOnboarded] = useLocalStorage('ojodeloca-has-onboarded', false);
     const [closet, setCloset] = useLocalStorage<ClothingItem[]>('ojodeloca-closet', []);
@@ -167,6 +215,12 @@ const AppContent = () => {
     const useSupabasePreferences = useFeatureFlag('useSupabasePreferences');
     const useSupabaseAuth = useFeatureFlag('useSupabaseAuth');
     const enableUnifiedStudioStylist = useFeatureFlag('enableUnifiedStudioStylist');
+    const enableTimelinePublishing = useFeatureFlag('enableTimelinePublishing');
+    const enableLinkedSourceItems = useFeatureFlag('enableLinkedSourceItems');
+    const enableChatWardrobeRecommendations = useFeatureFlag('enableChatWardrobeRecommendations');
+    const enableKumbiReferenceLookSeeding = useFeatureFlag('enableKumbiReferenceLookSeeding');
+
+    const [activeRecommendation, setActiveRecommendation] = useState<ActiveWardrobeRecommendation | null>(null);
 
     // UX improvements: Toast notifications and optimistic UI
     const toast = useToast();
@@ -174,6 +228,13 @@ const AppContent = () => {
         toast.showToast(message, type);
     }, [toast]);
     const optimistic = useOptimistic();
+    const trackOnce = useCallback((storageKey: string, callback: () => void) => {
+        if (typeof window === 'undefined') return;
+        const key = `ojodeloca-${storageKey}`;
+        if (localStorage.getItem(key) === '1') return;
+        localStorage.setItem(key, '1');
+        callback();
+    }, []);
 
     // Hard safety: prevent client-side Gemini key in production builds
     // Initialize Google Analytics (only after consent)
@@ -186,14 +247,41 @@ const AppContent = () => {
 
     useEffect(() => {
         if (!consentPreferences?.analytics) return;
+        if (!user) {
+            analytics.resetUserTracking();
+            return;
+        }
+
+        analytics.identifyUser(user.id, {
+            email: user.email ?? '',
+            subscription_tier: subscription.tier,
+            beta_access: subscription.hasBetaAccess,
+            paid_access: subscription.hasPaidAccess,
+            app_access: subscription.hasAppAccess,
+        });
+    }, [
+        consentPreferences?.analytics,
+        subscription.hasAppAccess,
+        subscription.hasBetaAccess,
+        subscription.hasPaidAccess,
+        subscription.tier,
+        user,
+    ]);
+
+    useEffect(() => {
+        if (!consentPreferences?.analytics) return;
         analytics.trackPageView(location.pathname);
     }, [location.pathname, consentPreferences?.analytics]);
 
     useEffect(() => {
         if (showPricingModal) {
             analytics.trackUpgradeModalView('pricing_modal');
+            analytics.trackEvent('paywall_viewed', {
+                surface: 'pricing_modal',
+                tier: subscription.tier,
+            });
         }
-    }, [showPricingModal]);
+    }, [showPricingModal, subscription.tier]);
 
     useEffect(() => {
         if (!showLimitReachedModal) return;
@@ -226,88 +314,167 @@ const AppContent = () => {
         }
     }, [isAuthenticated, hasOnboarded, closet.length]);
 
-    useEffect(() => {
-        if (!isAuthenticated) return;
-
-        const params = new URLSearchParams(window.location.search);
-        const codeFromUrl = (params.get('beta') || '').trim().toUpperCase();
-        if (!codeFromUrl) return;
-        if (betaClaimInFlightRef.current === codeFromUrl) return;
-
-        const sessionGuardKey = `ojodeloca-beta-claimed-${codeFromUrl}`;
-        if (sessionStorage.getItem(sessionGuardKey) === '1') return;
-
-        betaClaimInFlightRef.current = codeFromUrl;
-        let cancelled = false;
-
-        const cleanupUrl = () => {
-            const cleanParams = new URLSearchParams(window.location.search);
-            cleanParams.delete('beta');
-            const cleanQuery = cleanParams.toString();
-            const cleanUrl = `${window.location.pathname}${cleanQuery ? `?${cleanQuery}` : ''}`;
-            window.history.replaceState({}, '', cleanUrl);
+    const handleCreateBetaInvite = useCallback(async (
+        options: {
+            quantity?: number;
+            maxUses?: number;
+            validDays?: number;
+            grantsPremium?: boolean;
+            grantsUnlimitedAI?: boolean;
+            note?: string;
+            prefix?: string;
+        } = {},
+    ) => {
+        const invite = await createBetaInviteViaEdge(options);
+        return {
+            ...invite,
+            invites: invite.invites.map((entry) => {
+                const inviteUrl = new URL(entry.shareLink || `${window.location.origin}${ROUTES.BETA_INVITE}`);
+                inviteUrl.searchParams.set('utm_source', 'instagram');
+                inviteUrl.searchParams.set('utm_medium', options.quantity && options.quantity > 1 ? 'batch_admin' : 'bio');
+                inviteUrl.searchParams.set('utm_campaign', options.quantity && options.quantity > 1 ? 'manual_beta_batch' : 'manual_beta_link');
+                return {
+                    ...entry,
+                    shareLink: inviteUrl.toString(),
+                };
+            }),
         };
-
-        const claimInvite = async () => {
-            try {
-                const result = await claimBetaInviteViaEdge(codeFromUrl);
-                if (cancelled) return;
-                if (result.success) {
-                    sessionStorage.setItem(sessionGuardKey, '1');
-                    await subscription.refresh();
-                    toast.success(result.message || 'Acceso beta activado');
-                } else {
-                    toast.error(result.message || 'No se pudo activar el acceso beta');
-                }
-            } catch (error) {
-                if (cancelled) return;
-                toast.error(error instanceof Error ? error.message : 'No se pudo activar el acceso beta');
-            } finally {
-                if (!cancelled) cleanupUrl();
-                betaClaimInFlightRef.current = null;
-            }
-        };
-
-        claimInvite();
-
-        return () => {
-            cancelled = true;
-        };
-    }, [isAuthenticated, location.pathname, location.search, subscription.refresh, toast]);
-
-    const handleCreateBetaInvite = useCallback(async () => {
-        try {
-            const invite = await createBetaInviteViaEdge({
-                maxUses: 10,
-                validDays: 30,
-                grantsPremium: true,
-                grantsUnlimitedAI: true,
-                note: 'creator-beta-share',
-            });
-
-            let copied = false;
-            try {
-                if (navigator?.clipboard?.writeText) {
-                    await navigator.clipboard.writeText(invite.shareLink);
-                    copied = true;
-                }
-            } catch {
-                copied = false;
-            }
-
-            if (!copied) {
-                window.prompt('Copiá este link beta y compartilo:', invite.shareLink);
-            }
-
-            toast.success(copied ? 'Link beta copiado al portapapeles' : 'Link beta generado');
-        } catch (error) {
-            toast.error(error instanceof Error ? error.message : 'No se pudo generar el link beta');
-        }
-    }, [toast]);
+    }, []);
 
     const handleListBetaInviteClaims = useCallback(async (code?: string) => {
         const trace = await listBetaInviteClaimsViaEdge({ code, limit: 20 });
         return trace;
+    }, []);
+
+    const handleListWaitlist = useCallback(async (status?: 'pending' | 'approved' | 'rejected', search?: string) => {
+        return await listWaitlistViaEdge({ status, search, limit: 60 });
+    }, []);
+
+    const handleApproveWaitlistEntry = useCallback(async (ids: string | string[], reviewNotes?: string) => {
+        const normalizedIds = Array.isArray(ids) ? ids : [ids];
+        const uniqueIds = Array.from(new Set(normalizedIds.filter(Boolean)));
+
+        if (uniqueIds.length === 1) {
+            const result = await approveWaitlistEntryViaEdge(uniqueIds[0], reviewNotes);
+            await subscription.refresh();
+            return result;
+        }
+
+        const results = await Promise.all(uniqueIds.map(async (id) => {
+            try {
+                return await approveWaitlistEntryViaEdge(id, reviewNotes);
+            } catch (error) {
+                return {
+                    success: false,
+                    status: 'error',
+                    processed: 1,
+                    approved_count: 0,
+                    failed_count: 1,
+                    matched_user_id: null,
+                    access_granted: false,
+                    message: error instanceof Error ? error.message : 'No se pudo aprobar la persona en waitlist',
+                    results: [{
+                        id,
+                        success: false,
+                        status: 'error',
+                        matched_user_id: null,
+                        access_granted: false,
+                        message: error instanceof Error ? error.message : 'No se pudo aprobar la persona en waitlist',
+                    }],
+                };
+            }
+        }));
+
+        await subscription.refresh();
+
+        const flattenedResults = results.flatMap((result, index) => (
+            result.results.length > 0
+                ? result.results
+                : [{
+                    id: uniqueIds[index],
+                    success: result.success,
+                    status: result.status,
+                    matched_user_id: result.matched_user_id,
+                    access_granted: result.access_granted,
+                    message: result.message,
+                }]
+        ));
+        const approvedCount = flattenedResults.filter((result) => result.success).length;
+        const failedCount = flattenedResults.length - approvedCount;
+        const firstResult = flattenedResults[0];
+
+        return {
+            success: failedCount === 0,
+            status: failedCount === 0 ? 'approved' : (approvedCount > 0 ? 'partial' : 'error'),
+            processed: flattenedResults.length,
+            approved_count: approvedCount,
+            failed_count: failedCount,
+            matched_user_id: firstResult?.matched_user_id || null,
+            access_granted: Boolean(firstResult?.access_granted),
+            message: failedCount === 0
+                ? `Se aprobaron ${approvedCount} personas.`
+                : approvedCount > 0
+                    ? `Se aprobaron ${approvedCount} personas y ${failedCount} fallaron.`
+                    : 'No se pudo aprobar ninguna persona.',
+            results: flattenedResults,
+        };
+    }, [subscription]);
+
+    const handleRejectWaitlistEntry = useCallback(async (ids: string | string[], reviewNotes?: string) => {
+        const normalizedIds = Array.isArray(ids) ? ids : [ids];
+        const uniqueIds = Array.from(new Set(normalizedIds.filter(Boolean)));
+
+        if (uniqueIds.length === 1) {
+            return await rejectWaitlistEntryViaEdge(uniqueIds[0], reviewNotes);
+        }
+
+        const results = await Promise.all(uniqueIds.map(async (id) => {
+            try {
+                return await rejectWaitlistEntryViaEdge(id, reviewNotes);
+            } catch (error) {
+                return {
+                    success: false,
+                    status: 'error',
+                    processed: 1,
+                    rejected_count: 0,
+                    failed_count: 1,
+                    message: error instanceof Error ? error.message : 'No se pudo rechazar la persona en waitlist',
+                    results: [{
+                        id,
+                        success: false,
+                        status: 'error',
+                        message: error instanceof Error ? error.message : 'No se pudo rechazar la persona en waitlist',
+                    }],
+                };
+            }
+        }));
+
+        const flattenedResults = results.flatMap((result, index) => (
+            result.results.length > 0
+                ? result.results
+                : [{
+                    id: uniqueIds[index],
+                    success: result.success,
+                    status: result.status,
+                    message: result.message,
+                }]
+        ));
+        const rejectedCount = flattenedResults.filter((result) => result.success).length;
+        const failedCount = flattenedResults.length - rejectedCount;
+
+        return {
+            success: failedCount === 0,
+            status: failedCount === 0 ? 'rejected' : (rejectedCount > 0 ? 'partial' : 'error'),
+            processed: flattenedResults.length,
+            rejected_count: rejectedCount,
+            failed_count: failedCount,
+            message: failedCount === 0
+                ? `Se rechazaron ${rejectedCount} personas.`
+                : rejectedCount > 0
+                    ? `Se rechazaron ${rejectedCount} personas y ${failedCount} fallaron.`
+                    : 'No se pudo rechazar ninguna persona.',
+            results: flattenedResults,
+        };
     }, []);
 
     // Handle payment callbacks (MercadoPago + Paddle)
@@ -326,6 +493,14 @@ const AppContent = () => {
             // Clean URL params after reading
             if (paymentStatus || checkoutStatus || mpSubStatus || subscriptionStatus) {
                 window.history.replaceState({}, '', window.location.pathname);
+            }
+
+            if (paymentStatus || checkoutStatus || mpSubStatus || subscriptionStatus) {
+                analytics.trackEvent('checkout_callback_received', {
+                    provider: provider || (subscriptionStatus || mpSubStatus ? 'mercadopago' : 'unknown'),
+                    payment_status: paymentStatus || checkoutStatus || mpSubStatus || subscriptionStatus || 'unknown',
+                    tier: tier || 'unknown',
+                });
             }
 
             const waitForTierActivation = async (expectedTier: 'pro' | 'premium'): Promise<boolean> => {
@@ -351,9 +526,10 @@ const AppContent = () => {
                 const ok = await waitForTierActivation(tier);
                 await subscription.refresh();
                 if (ok) {
+                    analytics.trackEvent('subscription_activated', { provider: 'paddle', tier });
                     toast.success(`¡Bienvenido a ${tier === 'premium' ? 'Premium' : 'Pro'}! Tu suscripción está activa.`);
                 } else {
-                    toast.success('Pago recibido. Si no ves tu plan activo aún, esperá unos segundos y recargá.');
+                    toast.success('Pago recibido. Estamos acreditando tu plan. Si demora, usá Soporte beta.');
                 }
                 return;
             }
@@ -372,9 +548,10 @@ const AppContent = () => {
                 const ok = await waitForTierActivation(tier);
                 await subscription.refresh();
                 if (ok) {
+                    analytics.trackEvent('subscription_activated', { provider: 'mercadopago', tier });
                     toast.success(`¡Bienvenido a ${tier === 'premium' ? 'Premium' : 'Pro'}! Tu suscripción está activa.`);
                 } else {
-                    toast.success('Listo. Si no ves tu plan activo aún, esperá unos segundos y recargá.');
+                    toast.success('Suscripción recibida. Si no se refleja enseguida, la seguimos procesando. Usá Soporte beta si hace falta.');
                 }
                 return;
             }
@@ -385,21 +562,22 @@ const AppContent = () => {
                     await paymentService.handlePaymentSuccess(collectionId, tier);
                     await subscription.refresh();
                     analytics.trackPurchase(tier, 'ARS', tier === 'premium' ? 4999 : 2999);
+                    analytics.trackEvent('subscription_activated', { provider: 'mercadopago', tier });
                     toast.success(`¡Bienvenido a ${tier === 'premium' ? 'Premium' : 'Pro'}! Tu suscripción está activa.`);
                 } catch (error) {
                     console.error('Error processing payment callback:', error);
-                    toast.error('Hubo un problema verificando tu pago. Si el cobro se realizó, tu suscripción se activará automáticamente en unos minutos.');
+                    toast.error('Hubo un problema verificando tu pago. Si ya te cobraron, usá Soporte beta y lo revisamos.');
                 }
             } else if (paymentStatus === 'failure') {
                 toast.error('El pago no se completó. Podés intentar de nuevo cuando quieras.');
             } else if (paymentStatus === 'pending') {
-                toast.info('Tu pago está pendiente. Te notificaremos cuando se confirme.');
+                toast.info('Tu pago está pendiente. Si MercadoPago ya te debitó y no ves cambios, usá Soporte beta.');
             } else if (checkoutStatus === 'success' && provider === 'paddle' && isAuthenticated) {
                 // Paddle activates via webhook; we just refresh and inform.
                 try {
                     toast.info('Procesando tu pago...');
                     await subscription.refresh();
-                    toast.success('Pago recibido. Si no ves tu plan activo aún, esperá unos segundos y recargá.');
+                    toast.success('Pago recibido. Si no ves tu plan activo aún, esperá unos segundos o usá Soporte beta.');
                 } catch (error) {
                     console.error('Error processing paddle callback:', error);
                     toast.error('Hubo un problema refrescando tu suscripción. Probá recargar en unos segundos.');
@@ -409,7 +587,7 @@ const AppContent = () => {
                 try {
                     toast.info('Procesando tu suscripción...');
                     await subscription.refresh();
-                    toast.success('Listo. Si no ves tu plan activo aún, esperá unos segundos y recargá.');
+                    toast.success('Listo. Si no ves tu plan activo aún, esperá unos segundos o usá Soporte beta.');
                 } catch (error) {
                     console.error('Error processing MercadoPago subscription callback:', error);
                     toast.error('Hubo un problema refrescando tu suscripción. Probá recargar en unos segundos.');
@@ -422,7 +600,7 @@ const AppContent = () => {
         };
 
         handlePaymentCallback();
-    }, [isAuthenticated]);
+    }, [isAuthenticated, subscription, toast]);
 
     // Helper: Check if user has data that needs migration
     const needsMigration = (): boolean => {
@@ -451,7 +629,7 @@ const AppContent = () => {
 
     // Load closet and outfits from Supabase in parallel when flags are enabled
     useEffect(() => {
-        if (!isAuthenticated || !user) return;
+        if (false || !user) return;
 
         const loadDataInParallel = async () => {
             const promises: Promise<void>[] = [];
@@ -480,11 +658,39 @@ const AppContent = () => {
         }
     };
 
+    const refreshActiveRecommendation = useCallback(async () => {
+        if (!enableChatWardrobeRecommendations || false) {
+            setActiveRecommendation(null);
+            return;
+        }
+        try {
+            const recommendation = await getActiveRecommendation();
+            setActiveRecommendation(recommendation);
+        } catch {
+            setActiveRecommendation(null);
+        }
+    }, [enableChatWardrobeRecommendations, isAuthenticated]);
+
+    const handleDismissActiveRecommendation = useCallback(async () => {
+        if (!activeRecommendation) return;
+        const previous = activeRecommendation;
+        setActiveRecommendation(null);
+        try {
+            await dismissRecommendation(previous.id);
+        } catch {
+            setActiveRecommendation(previous);
+        }
+    }, [activeRecommendation]);
+
     const handleLoadSampleData = useCallback(() => {
         setCloset(sampleData);
         showToast('Datos de ejemplo cargados correctamente', 'success');
         analytics.trackEvent('load_sample_data', { items_count: sampleData.length });
     }, [showToast, setCloset]);
+
+    useEffect(() => {
+        void refreshActiveRecommendation();
+    }, [refreshActiveRecommendation]);
 
 
     const loadOutfitsFromSupabase = async () => {
@@ -581,6 +787,51 @@ const AppContent = () => {
 
     const [outfitToShare, setOutfitToShare] = useState<FitResult | SavedOutfit | null>(null);
     const [itemToShare, setItemToShare] = useState<ClothingItem | null>(null);
+    const [selectedLookForChat, setSelectedLookForChat] = useState<SavedOutfit | null>(null);
+    const [stylistSurface, setStylistSurface] = useState<StylistSurface>('kumbi');
+
+    const inferStylistSurfaceFromPath = useCallback((pathname: string): StylistSurface => {
+        if (pathname === ROUTES.CLOSET) return 'closet';
+        if (pathname === ROUTES.SAVED || pathname === ROUTES.SAVED_LOOKS) return 'saved_looks';
+        if (pathname === ROUTES.VIRTUAL_SHOPPING || pathname === ROUTES.SHOP_LOOK) return 'shopping';
+        if (pathname === ROUTES.PLANNER) return 'planner';
+        if (pathname === ROUTES.ACTIVITY) return 'activity';
+        if (pathname === ROUTES.PROFILE) return 'profile';
+        if (pathname === ROUTES.KUMBI) return 'kumbi';
+        if (pathname === ROUTES.STUDIO || pathname === ROUTES.STUDIO_MIRROR || pathname === ROUTES.STUDIO_PHOTOSHOOT) return 'studio';
+        return 'home';
+    }, []);
+
+    const buildClosetSummary = useCallback((items: ClothingItem[]) => {
+        const categorySet = new Set<string>();
+        const colorCount = new Map<string, number>();
+        const wishlistItemIds: string[] = [];
+
+        items.forEach((item) => {
+            if (item.metadata?.category) categorySet.add(item.metadata.category);
+            if (item.metadata?.color_primary) {
+                colorCount.set(item.metadata.color_primary, (colorCount.get(item.metadata.color_primary) || 0) + 1);
+            }
+            if (item.status === 'wishlist') {
+                wishlistItemIds.push(item.id);
+            }
+        });
+
+        const dominantColors = Array.from(colorCount.entries())
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5)
+            .map(([color]) => color);
+
+        return {
+            closetSummary: {
+                totalItems: items.length,
+                categories: Array.from(categorySet),
+                dominantColors,
+            },
+            closetItemIds: items.map((item) => item.id),
+            wishlistItemIds,
+        };
+    }, []);
 
     // Chat conversations management - using extracted hook
     const chatHook = useChatConversations();
@@ -603,6 +854,84 @@ const AppContent = () => {
             modals.setShowChat(true);
         });
     };
+
+    const openStylistChat = (
+        options?: string | {
+            prompt?: string;
+            source?: string;
+            surface?: StylistSurface;
+            contextPayload?: StylistContextPayload | null;
+            attachments?: ChatAttachment[];
+        },
+        legacySource = 'app_surface',
+    ) => {
+        const normalized = typeof options === 'string'
+            ? { prompt: options, source: legacySource }
+            : (options || {});
+        const nextSurface = normalized.surface || inferStylistSurfaceFromPath(location.pathname);
+        const hasSeed = Boolean(normalized.prompt || normalized.contextPayload);
+
+        setStylistSurface(nextSurface);
+
+        if (normalized.prompt) {
+            setPendingStylistEntry({
+                prompt: normalized.prompt,
+                source: normalized.source || legacySource,
+                surface: nextSurface,
+                contextPayload: normalized.contextPayload || null,
+                attachments: normalized.attachments || undefined,
+            });
+        }
+
+        if (hasSeed) {
+            createNewConversation();
+            return;
+        }
+
+        if (currentConversation) {
+            startTransition(() => {
+                modals.setShowChat(true);
+            });
+            return;
+        }
+
+        if (chatConversations.length > 0) {
+            selectConversationBase(chatConversations[0].id);
+            startTransition(() => {
+                modals.setShowChat(true);
+            });
+            return;
+        }
+
+        createNewConversation();
+    };
+
+    useEffect(() => {
+        if (location.pathname !== ROUTES.KUMBI) return;
+        if (!isAuthenticated) return;
+
+        if (currentConversation) {
+            modals.setShowChat(true);
+            return;
+        }
+
+        if (chatConversations.length > 0) {
+            selectConversationBase(chatConversations[0].id);
+            modals.setShowChat(true);
+            return;
+        }
+
+        createConversation();
+        modals.setShowChat(true);
+    }, [
+        chatConversations,
+        createConversation,
+        currentConversation,
+        isAuthenticated,
+        location.pathname,
+        selectConversationBase,
+        modals.setShowChat,
+    ]);
 
     const selectConversation = (conversationId: string) => {
         selectConversationBase(conversationId);
@@ -649,10 +978,12 @@ const AppContent = () => {
 
             // 2. Remove Background locally
             toast.info(`Recortando prenda...`);
-            const transparentImage = await removeImageBackground(base64Image);
+            const backgroundRemoval = await loadBackgroundRemoval();
+            const transparentImage = await backgroundRemoval.removeImageBackground(base64Image);
 
             // 3. AI Analysis
             toast.info(`Analizando prenda...`);
+            const aiService = await loadAiService();
             const metadata = await aiService.analyzeClothingItem(transparentImage);
 
             // 4. Overwrite brand/name
@@ -740,6 +1071,7 @@ const AppContent = () => {
     }, [closet, debouncedSearchTerm, activeCategory, sortOption]);
 
     const handleLocalItemAdd = (item: ClothingItem) => {
+        trackOnce('first-item-added', () => analytics.trackFirstItem());
         setCloset(prev => [item, ...prev]);
     };
 
@@ -765,6 +1097,150 @@ const AppContent = () => {
         } else {
             handleLocalItemAdd(item);
         }
+    };
+
+    const isUuid = (value: string): boolean => {
+        return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+    };
+
+    const normalizeDiscoveredCategory = (rawCategory?: string): ClothingItemMetadata['category'] => {
+        const normalized = (rawCategory || '').toLowerCase();
+        if (normalized.includes('shoe')) return 'shoes';
+        if (normalized.includes('bottom') || normalized.includes('pant') || normalized.includes('jean') || normalized.includes('skirt')) return 'bottom';
+        if (normalized.includes('accessory')) return 'accessory';
+        if (normalized.includes('outer') || normalized.includes('jacket') || normalized.includes('coat')) return 'outerwear';
+        return 'top';
+    };
+
+    const mergeImportedItemsIntoCloset = (items: ClothingItem[]) => {
+        if (!items || items.length === 0) return;
+        setCloset(prev => {
+            const existingIds = new Set(prev.map(item => item.id));
+            const existingDedupeKeys = new Set(
+                prev.map(item => item.sourceRef?.dedupeKey).filter((value): value is string => Boolean(value))
+            );
+            const incoming = items.filter(item => {
+                if (existingIds.has(item.id)) return false;
+                const dedupeKey = item.sourceRef?.dedupeKey;
+                if (dedupeKey && existingDedupeKeys.has(dedupeKey)) return false;
+                return true;
+            });
+            if (incoming.length === 0) return prev;
+            return [...incoming, ...prev];
+        });
+    };
+
+    const handleImportedFromActivity = (items: ClothingItem[], importedOutfit?: SavedOutfit | null) => {
+        mergeImportedItemsIntoCloset(items);
+        if (useSupabaseCloset) {
+            // Force sync after import to ensure server state and local UI stay aligned.
+            void loadClosetFromSupabase();
+        }
+        if (importedOutfit) {
+            setSavedOutfits(prev => {
+                if (prev.some(outfit => outfit.id === importedOutfit.id)) return prev;
+                return [importedOutfit, ...prev];
+            });
+        }
+    };
+
+    const handleSaveDiscoveredItem = async (input: {
+        imageDataUrl?: string;
+        description: string;
+        category?: string;
+        mode: 'save' | 'wish';
+    }) => {
+        const metadata: ClothingItemMetadata = {
+            category: normalizeDiscoveredCategory(input.category),
+            subcategory: input.description || 'Prenda descubierta',
+            color_primary: 'desconocido',
+            vibe_tags: ['descubierta'],
+            seasons: [],
+            description: input.description || 'Prenda detectada desde búsqueda',
+        };
+
+        const linkMode: 'copy' | 'linked' = enableLinkedSourceItems ? 'linked' : 'copy';
+        const status: ClothingItem['status'] = 'wishlist';
+        const isFavorite = input.mode === 'wish';
+
+        if (useSupabaseCloset) {
+            const imported = await closetService.addImportedClothingItem({
+                imageSource: input.imageDataUrl,
+                metadata,
+                status,
+                isFavorite,
+                linkMode,
+                sourceRef: {
+                    originType: input.imageDataUrl ? 'street_capture' : 'shop_search',
+                    originUrl: input.imageDataUrl,
+                }
+            });
+            mergeImportedItemsIntoCloset([imported]);
+            return;
+        }
+
+        const newLocalItem: ClothingItem = {
+            id: `item_${Date.now()}`,
+            imageDataUrl: input.imageDataUrl || 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="512" height="640"><rect width="100%" height="100%" fill="#f3f4f6"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="Arial" font-size="20" fill="#6b7280">Prenda sin imagen</text></svg>'),
+            metadata,
+            status,
+            isFavorite,
+            linkMode,
+            sourceRef: {
+                originType: input.imageDataUrl ? 'street_capture' : 'shop_search',
+                originUrl: input.imageDataUrl,
+                dedupeKey: `${input.description}:${input.mode}:local`,
+            }
+        };
+        mergeImportedItemsIntoCloset([newLocalItem]);
+    };
+
+    const handlePublishItemToTimeline = async (
+        item: ClothingItem,
+        visibility: 'friends' | 'community'
+    ) => {
+        if (!enableTimelinePublishing) {
+            throw new Error('Timeline publishing desactivado');
+        }
+        await activityFeedService.publishItemToTimeline(item, { visibility });
+    };
+
+    const handlePublishOutfitToTimeline = async (
+        outfit: SavedOutfit,
+        bundle: { top?: ClothingItem; bottom?: ClothingItem; shoes?: ClothingItem },
+        visibility: 'friends' | 'community'
+    ) => {
+        if (!enableTimelinePublishing) {
+            throw new Error('Timeline publishing desactivado');
+        }
+        await activityFeedService.publishOutfitToTimeline(outfit, bundle, { visibility });
+    };
+
+    const handleConvertLinkedItemToCopy = async (item: ClothingItem) => {
+        if (item.linkMode !== 'linked') return;
+
+        if (useSupabaseCloset && isUuid(item.id)) {
+            const updatedItem = await closetService.convertLinkedItemToCopy(item.id);
+            setCloset(prev => prev.map(entry => entry.id === item.id ? updatedItem : entry));
+        } else {
+            setCloset(prev => prev.map(entry => (
+                entry.id === item.id
+                    ? {
+                        ...entry,
+                        linkMode: 'copy',
+                        sourceRef: {
+                            ...entry.sourceRef,
+                            copiedAt: new Date().toISOString(),
+                            copiedFrom: entry.sourceRef?.originUrl || entry.imageDataUrl,
+                        }
+                    }
+                    : entry
+            )));
+        }
+
+        analytics.trackEvent('linked_item_converted', {
+            source: useSupabaseCloset ? 'supabase' : 'local'
+        });
     };
 
     const handleUpdateItem = async (id: string, metadata: ClothingItemMetadata) => {
@@ -909,6 +1385,7 @@ const AppContent = () => {
                 // The service should get the key from Supabase secrets, not client-side env
 
                 // Generar outfit profesional
+                const { generateProfessionalOutfit } = await import('./src/services/StylistService');
                 const professionalResult = await generateProfessionalOutfit(
                     uniqueInventory,
                     professionalProfile,
@@ -932,6 +1409,8 @@ const AppContent = () => {
 
             setFitResult(result);
             setStylistView('result');
+            trackOnce('first-look-generated', () => analytics.trackFirstOutfit());
+            analytics.trackOutfitGenerated(closet.length);
 
             // Record usage after successful generation
             await subscription.incrementUsage('outfit_generation');
@@ -939,6 +1418,7 @@ const AppContent = () => {
             // Generate 2 alternatives in background (don't block UI)
             setTimeout(async () => {
                 try {
+                    const aiService = await loadAiService();
                     const alt1Promise = aiService.generateOutfit(`${prompt}. Genera una variación diferente usando otras combinaciones de colores`, uniqueInventory);
                     const alt2Promise = aiService.generateOutfit(`${prompt}. Genera otra alternativa con un estilo ligeramente diferente`, uniqueInventory);
 
@@ -970,6 +1450,7 @@ const AppContent = () => {
         setIsGeneratingPackingList(true);
         setPackerError(null);
         try {
+            const aiService = await loadAiService();
             const result = await aiService.generatePackingList(prompt, closet);
             setPackingListResult(result);
             setPackerStep('result');
@@ -1066,7 +1547,10 @@ const AppContent = () => {
 
             // Callbacks
             {
-                onSuccess: () => toast.success('¡Outfit guardado!'),
+                onSuccess: () => {
+                    analytics.trackOutfitSaved('saved_outfits', savedOutfits.length + 1);
+                    toast.success('¡Outfit guardado!');
+                },
                 onError: () => toast.error('Error al guardar el outfit. Intentá de nuevo.')
             }
         );
@@ -1109,10 +1593,6 @@ const AppContent = () => {
     };
 
     const handleStylistClick = () => {
-        if (enableUnifiedStudioStylist) {
-            navigate(`${ROUTES.STUDIO}?assistant=stylist&entry=home`);
-            return;
-        }
         resetStylist();
         modals.setBorrowedItems([]);
         startTransition(() => {
@@ -1140,11 +1620,11 @@ const AppContent = () => {
             action: () => setShowCommandPalette(true),
             description: 'Abrir búsqueda rápida'
         },
-        // Quick Navigation (1-4)
+        // Quick Navigation (1-5)
         {
             key: '1',
             action: () => navigate(ROUTES.HOME),
-            description: 'Ir a Inicio'
+            description: 'Ir a Hoy'
         },
         {
             key: '2',
@@ -1153,11 +1633,16 @@ const AppContent = () => {
         },
         {
             key: '3',
-            action: () => navigate(ROUTES.COMMUNITY),
-            description: 'Ir a Comunidad'
+            action: () => navigate(ROUTES.STUDIO),
+            description: 'Ir a Studio'
         },
         {
             key: '4',
+            action: () => navigate(ROUTES.SAVED),
+            description: 'Ir a Looks'
+        },
+        {
+            key: '5',
             action: () => navigate(ROUTES.PROFILE),
             description: 'Ir a Perfil'
         },
@@ -1303,18 +1788,36 @@ const AppContent = () => {
     };
 
     const handleLogin = () => {
-        if (location.pathname === ROUTES.ONBOARDING_STYLIST) {
-            navigate(ROUTES.HOME);
+        setShowAuthView(false);
+
+        if (typeof window !== 'undefined') {
+            window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+            if (window.location.hash) {
+                const nextUrl = `${window.location.pathname}${window.location.search}`;
+                window.history.replaceState({}, '', nextUrl);
+            }
         }
+
+        if (isPublicEntryAuthPending()) return;
+        if (location.pathname === ROUTES.ONBOARDING_STYLIST) {
+            setHasOnboarded(true);
+        }
+
+        const redirectTarget = new URLSearchParams(location.search).get('redirect');
+        if (redirectTarget && redirectTarget.startsWith('/')) {
+            navigate(redirectTarget, { replace: true });
+            return;
+        }
+
+        navigate(ROUTES.HOME, { replace: true });
     };
 
     const handleLogout = async () => {
         try {
             await authSignOut();
-            // Optional: clear user-specific data upon logout if needed
-            // setCloset([]);
-            // setSavedOutfits([]);
-            // setHasOnboarded(false);
+            clearPublicEntryState();
+            setShowAuthView(false);
+            navigate(`${ROUTES.HOME}?entry=preview`, { replace: true });
         } catch (error) {
             console.error('Logout failed:', error);
         }
@@ -1364,6 +1867,17 @@ const AppContent = () => {
 
     const [showAuthView, setShowAuthView] = useState(false);
     const [authInitialMode, setAuthInitialMode] = useState<'login' | 'signup'>('login');
+    const handleCloseAuthView = useCallback(() => {
+        setShowAuthView(false);
+        clearPublicEntryAuthPending();
+    }, []);
+    const handleOpenAuthView = useCallback((mode: 'login' | 'signup', intent?: PublicEntryIntent) => {
+        setAuthInitialMode(mode);
+        if (typeof intent !== 'undefined') {
+            setPendingPublicEntryIntent(intent);
+        }
+        setShowAuthView(true);
+    }, []);
     useEffect(() => {
         if (isAuthenticated) return;
         const params = new URLSearchParams(location.search);
@@ -1371,13 +1885,269 @@ const AppContent = () => {
         if (authIntent === 'login' || authIntent === 'signup') {
             setAuthInitialMode(authIntent);
             setShowAuthView(true);
-            window.history.replaceState({}, '', window.location.pathname);
+            markPublicEntryAuthOpened(getPendingPublicEntryIntent());
+            analytics.trackEvent('auth_opened', {
+                mode: authIntent,
+                source: 'query',
+                selected_intent: getPendingPublicEntryIntent() ?? 'none',
+            });
+            params.delete('auth');
+            const remainingQuery = params.toString();
+            const nextUrl = `${window.location.pathname}${remainingQuery ? `?${remainingQuery}` : ''}`;
+            window.history.replaceState({}, '', nextUrl);
         }
     }, [isAuthenticated, location.search]);
+
+    useEffect(() => {
+        if (false) return;
+        if (!isAuthenticated) return;
+        if (!isPublicEntryAuthPending()) return;
+
+        const pendingIntent = getPendingPublicEntryIntent();
+        setHasOnboarded(true);
+        setShowAuthView(false);
+        clearPublicEntryState();
+
+        analytics.trackEvent('public_entry_auth_completed', {
+            selected_intent: pendingIntent ?? 'none',
+        });
+
+        if (pendingIntent === 'closet') {
+            navigate(ROUTES.CLOSET, { replace: true });
+            return;
+        }
+
+        if (pendingIntent === 'look') {
+            navigate(`${ROUTES.SAVED}?intent=upload-looks&entry=public_entry`, { replace: true });
+            return;
+        }
+
+        if (pendingIntent === 'style') {
+            navigate(ROUTES.PROFILE, { replace: true });
+            modals.setShowProfessionalWizard(true);
+            return;
+        }
+
+        navigate(ROUTES.HOME, { replace: true });
+    }, [isAuthenticated, modals.setShowProfessionalWizard, navigate, setHasOnboarded]);
+
+    useEffect(() => {
+        if (false) return;
+        if (isPublicEntryAuthPending()) return;
+
+        setShowAuthView(false);
+
+        if (typeof window === 'undefined') return;
+
+        window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+
+        if (window.location.hash) {
+            const nextUrl = `${window.location.pathname}${window.location.search}`;
+            window.history.replaceState({}, '', nextUrl);
+        }
+    }, [isAuthenticated]);
+
+    const renderHomePrimaryView = () => (
+        <HomeView
+            user={user!}
+            closet={closet}
+            savedOutfitCount={savedOutfits.length}
+            activeRecommendation={activeRecommendation}
+            onAddItem={() => modals.setShowAddItem(true)}
+            onNavigateToCloset={() => navigate(ROUTES.CLOSET)}
+            onNavigateToLooks={() => navigate(ROUTES.SAVED)}
+            onStartLooksFirst={() => navigate(`${ROUTES.SAVED}?intent=upload-looks`)}
+            onOpenStylistChat={openStylistChat}
+            onOpenStylistWithPrompt={(prompt) => openStylistChat({
+                prompt,
+                source: 'home_contextual',
+                surface: 'home',
+                contextPayload: {
+                    currentSurface: 'home',
+                    ...buildClosetSummary(closet),
+                },
+            })}
+            onNavigateToPlanner={() => navigate(ROUTES.PLANNER)}
+            onNavigateToCommunity={() => navigate(ROUTES.COMMUNITY)}
+            onNavigateToActivity={() => navigate(ROUTES.ACTIVITY)}
+            onStartBulkUpload={() => navigate(ROUTES.BULK_UPLOAD)}
+            onStartWeatherOutfit={() => modals.setShowWeatherOutfit(true)}
+            onStartQuickLook={() => modals.setHomeShortcutIntent('quick-look')}
+            onStartDressMeToday={() => modals.setHomeShortcutIntent('dress-me-today')}
+            onStartPlanB={() => modals.setHomeShortcutIntent('plan-b')}
+            onStartBuildAroundItem={() => modals.setHomeShortcutIntent('build-around-item')}
+            onStartGapAnalysis={() => {
+                analytics.trackGapViewed('today_home');
+                modals.setShowGapAnalysis(true);
+            }}
+            onStartPremiumMirror={() => navigate(ROUTES.STUDIO_MIRROR)}
+            onStartPremiumStudio={() => navigate(ROUTES.STUDIO_PHOTOSHOOT)}
+            subscription={subscription}
+            onShowPricing={() => setShowPricingModal(true)}
+        />
+    );
+
+    const renderClosetPrimaryView = () => (
+        <ClosetProvider
+            items={closet}
+            onDeleteItem={handleDeleteItemClick}
+            onDeleteItems={handleDeleteItems}
+            onToggleFavorite={handleToggleFavorite}
+            activeRecommendation={enableChatWardrobeRecommendations ? activeRecommendation : null}
+            onDismissRecommendation={handleDismissActiveRecommendation}
+        >
+            <Suspense fallback={<LazyLoader type="view" />}>
+                <ClosetViewEnhanced
+                    onItemClick={modals.setSelectedItemId}
+                    onAddItem={() => modals.setShowAddItem(true)}
+                    onOutfitSaved={(outfit) => {
+                        setSavedOutfits((prev) => [outfit, ...prev.filter((entry) => entry.id !== outfit.id)]);
+                    }}
+                    onLoadDemoData={(items) => {
+                        setCloset(items);
+                    }}
+                />
+            </Suspense>
+        </ClosetProvider>
+    );
+
+    const renderStudioPrimaryView = (bottomDockInset = false) => (
+        <PhotoshootStudio closet={closet} bottomDockInset={bottomDockInset} />
+    );
+
+    const renderLooksPrimaryView = () => (
+        <SavedLooksView
+            closet={closet}
+            onClosetSync={handleClosetSync}
+            useSupabaseCloset={useSupabaseCloset}
+            onUseLookInChat={(look) => {
+                setSelectedLookForChat(look);
+                openStylistChat({
+                    source: 'saved_looks_contextual',
+                    surface: 'saved_looks',
+                });
+            }}
+            onUseInferredLookInChat={({ prompt, selectedLook, selectedInferredLook, lookUploadSessionId }) => {
+                openStylistChat({
+                    prompt,
+                    source: 'saved_looks_inferred',
+                    surface: 'saved_looks',
+                    attachments: enableKumbiReferenceLookSeeding && selectedInferredLook.image_data_url
+                        ? [{ kind: 'reference_look', imageDataUrl: selectedInferredLook.image_data_url }]
+                        : undefined,
+                    contextPayload: {
+                        currentSurface: 'saved_looks',
+                        entryMode: 'looks',
+                        lookUploadSessionId,
+                        selectedLook,
+                        selectedInferredLook,
+                        ...buildClosetSummary(closet),
+                        activitySummary: `Look subido desde sesion ${lookUploadSessionId}`,
+                    },
+                });
+            }}
+        />
+    );
+
+    const renderPlannerPrimaryView = () => (
+        <PlannerHubView
+            closet={closet}
+            savedOutfits={savedOutfits}
+            onOpenWeeklyPlanner={() => modals.setShowWeeklyPlanner(true)}
+            onOpenCalendarSync={() => modals.setShowCalendarSync(true)}
+            onOpenWeatherOutfit={() => modals.setShowWeatherOutfit(true)}
+            onOpenGapAnalysis={() => modals.setShowGapAnalysis(true)}
+            onOpenStylistWithPrompt={(prompt) => openStylistChat({
+                prompt,
+                source: 'planner_contextual',
+                surface: 'planner',
+                contextPayload: {
+                    currentSurface: 'planner',
+                    ...buildClosetSummary(closet),
+                    activitySummary: `Looks guardados disponibles: ${savedOutfits.length}`,
+                    occasion: 'planificación semanal',
+                },
+            })}
+        />
+    );
+
+    const renderActivityPrimaryView = () => (
+        <ActivityFeedView
+            closet={closet}
+            savedOutfits={savedOutfits}
+            embedded
+            onClose={() => navigate(ROUTES.HOME)}
+            onViewUserProfile={modals.setViewingFriend}
+            onImportedFromActivity={handleImportedFromActivity}
+            onOpenStylistWithPrompt={(prompt) => openStylistChat({
+                prompt,
+                source: 'activity_contextual',
+                surface: 'activity',
+                contextPayload: {
+                    currentSurface: 'activity',
+                    ...buildClosetSummary(closet),
+                    activitySummary: 'Feed social e inspiración de looks',
+                },
+            })}
+        />
+    );
+
+    const renderProfilePrimaryView = () => (
+        <ProfileView
+            user={user!}
+            closet={closet}
+            stats={{
+                totalItems: closet.length,
+                totalOutfits: savedOutfits.length,
+                favoriteBrand: 'Zara',
+                mostWornColor: 'Negro'
+            }}
+            onLogout={handleLogout}
+            onOpenAnalytics={() => modals.setShowAnalytics(true)}
+            onOpenColorPalette={() => modals.setShowColorPalette(true)}
+            onOpenTopVersatile={() => modals.setShowTopVersatile(true)}
+            onOpenWeeklyPlanner={() => modals.setShowWeeklyPlanner(true)}
+            onOpenCommunity={() => navigate(ROUTES.COMMUNITY)}
+            onOpenActivity={() => navigate(ROUTES.ACTIVITY)}
+            onOpenStylistWithPrompt={(prompt) => openStylistChat({
+                prompt,
+                source: 'profile_contextual',
+                surface: 'profile',
+                contextPayload: {
+                    currentSurface: 'profile',
+                    ...buildClosetSummary(closet),
+                },
+            })}
+            onOpenAestheticPlayground={!import.meta.env.PROD ? () => startTransition(() => setShowAestheticPlayground(true)) : undefined}
+            onOpenBorrowedItems={() => modals.setShowBorrowedItems(true)}
+            onDeleteAccount={handleDeleteAccount}
+            onLoadSampleData={handleLoadSampleData}
+            onCreateBetaInvite={handleCreateBetaInvite}
+            onListBetaInviteClaims={handleListBetaInviteClaims}
+            onListWaitlist={handleListWaitlist}
+            onApproveWaitlistEntry={handleApproveWaitlistEntry}
+            onRejectWaitlistEntry={handleRejectWaitlistEntry}
+            onViewUserProfile={modals.setViewingFriend}
+        />
+    );
+
+    const renderPrimaryTabPanel = (tab: MobilePrimaryTab) => {
+        if (tab.id === 'home') return renderHomePrimaryView();
+        if (tab.id === 'closet') return renderClosetPrimaryView();
+        if (tab.id === 'looks') return renderLooksPrimaryView();
+        if (tab.id === 'community') {
+            return renderActivityPrimaryView();
+        }
+        return renderProfilePrimaryView();
+    };
 
     // Public routes available without authentication
     const PUBLIC_ROUTE_PATTERNS = [
         ROUTES.ONBOARDING_STYLIST,
+        ROUTES.ONBOARDING_LAB,
+        ROUTES.ONBOARDING_MOCK,
+        ROUTES.ENTRY_MOCK,
+        ROUTES.ENTRY_EYE_MOCK,
         ROUTES.TERMS,
         ROUTES.PRIVACY,
         ROUTES.REFUND,
@@ -1395,39 +2165,153 @@ const AppContent = () => {
             return [ROUTES.STUDIO, ROUTES.STUDIO_MIRROR, ROUTES.STUDIO_PHOTOSHOOT]
                 .some(route => path === route || path.startsWith(`${route}/`));
         })();
+    const isOnboardingRoute =
+        location.pathname === ROUTES.ONBOARDING_STYLIST ||
+        location.pathname === ROUTES.ONBOARDING_LAB ||
+        location.pathname === ROUTES.ONBOARDING_MOCK ||
+        location.pathname === ROUTES.ENTRY_MOCK ||
+        location.pathname === ROUTES.ENTRY_EYE_MOCK;
+    const isMobilePrimaryShellActive =
+        isAuthenticated &&
+        isMobileViewport &&
+        !isPublicRoute &&
+        !isOnboardingRoute &&
+        isPrimaryShellRoute(location.pathname);
+    const useStudioSurfaceLayout = isStudioRoute && !isMobilePrimaryShellActive;
 
-    if (!isAuthenticated && !isPublicRoute) {
-        if (showAuthView) {
-            return (
-                <>
-                    <div className="relative z-10 w-full h-dvh overflow-hidden">
-                        <Suspense fallback={<LazyLoader type="modal" />}>
-                            <AuthEyeScreen initialMode={authInitialMode} onLoggedIn={handleLogin} />
-                        </Suspense>
-                    </div>
-                    <CookieConsentBanner />
-                    <PWAInstallPrompt />
-                </>
-            );
+    if (location.pathname === ROUTES.BETA_INVITE) {
+        return (
+            <>
+                <div className="relative z-10 w-full h-dvh overflow-hidden">
+                    <Suspense fallback={<LazyLoader type="view" />}>
+                        <BetaInviteLandingPage />
+                    </Suspense>
+                </div>
+                <CookieConsentBanner />
+            </>
+        );
+    }
+
+    // Show loading screen while auth session is still resolving (prevents landing page flash for returning users)
+    if (useSupabaseAuth && authLoading && !isPublicRoute) {
+        return (
+            <main className="relative min-h-dvh overflow-hidden bg-[#05060a] text-white flex items-center justify-center">
+                <div
+                    aria-hidden="true"
+                    className="absolute inset-0"
+                    style={{
+                        backgroundImage: [
+                            'radial-gradient(58% 45% at 50% 42%, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.00) 60%)',
+                            'radial-gradient(55% 45% at 18% 24%, rgba(236,72,153,0.18) 0%, rgba(236,72,153,0.00) 70%)',
+                            'radial-gradient(55% 45% at 80% 60%, rgba(59,130,246,0.16) 0%, rgba(59,130,246,0.00) 70%)',
+                            'linear-gradient(180deg, rgba(3,7,18,0.10) 0%, rgba(3,7,18,0.92) 100%)',
+                        ].join(','),
+                    }}
+                />
+                <div className="relative z-10 flex flex-col items-center gap-4">
+                    <div className="h-10 w-10 animate-spin rounded-full border-4 border-white/20 border-t-white/80" />
+                    <p className="text-sm text-white/60">Cargando...</p>
+                </div>
+            </main>
+        );
+    }
+
+    // Show loading screen while subscription data is resolving after authentication
+    if (useSupabaseAuth && isAuthenticated && !isPublicRoute && subscription.isLoading) {
+        return (
+            <main className="relative min-h-dvh overflow-hidden bg-[#05060a] text-white flex items-center justify-center">
+                <div
+                    aria-hidden="true"
+                    className="absolute inset-0"
+                    style={{
+                        backgroundImage: [
+                            'radial-gradient(58% 45% at 50% 42%, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.00) 60%)',
+                            'radial-gradient(55% 45% at 18% 24%, rgba(236,72,153,0.18) 0%, rgba(236,72,153,0.00) 70%)',
+                            'radial-gradient(55% 45% at 80% 60%, rgba(59,130,246,0.16) 0%, rgba(59,130,246,0.00) 70%)',
+                            'linear-gradient(180deg, rgba(3,7,18,0.10) 0%, rgba(3,7,18,0.92) 100%)',
+                        ].join(','),
+                    }}
+                />
+                <div className="relative z-10 flex flex-col items-center gap-4">
+                    <div className="h-10 w-10 animate-spin rounded-full border-4 border-white/20 border-t-white/80" />
+                    <p className="text-sm text-white/60">Cargando tu cuenta...</p>
+                </div>
+            </main>
+        );
+    }
+
+    if (useSupabaseAuth && isAuthenticated && !isPublicRoute && !subscription.isLoading && !subscription.hasAppAccess) {
+        return (
+            <>
+                <BetaAccessGate onLogout={handleLogout} />
+                <CookieConsentBanner />
+            </>
+        );
+    }
+
+    // If auth completed from a protected-route bounce, honor the original destination first.
+    if (isAuthenticated && location.pathname === ROUTES.HOME) {
+        const params = new URLSearchParams(location.search);
+        const redirectTarget = params.get('redirect');
+        if (redirectTarget && redirectTarget.startsWith('/')) {
+            return <Navigate to={redirectTarget} replace />;
+        }
+    }
+
+    // If the user is authenticated but landed on /?entry=preview (e.g. after OAuth
+    // redirect), strip the query param and send them to the dashboard.
+    if (isAuthenticated && location.pathname === ROUTES.HOME && new URLSearchParams(location.search).get('entry') === 'preview') {
+        return <Navigate to={ROUTES.HOME} replace />;
+    }
+
+    // Detect OAuth callback: Supabase appends #access_token=... after Google sign-in.
+    // While the tokens are being processed, isAuthenticated is still false. Show a
+    // loading screen instead of flashing the landing page.
+    const hasOAuthHashTokens = typeof window !== 'undefined' && window.location.hash.includes('access_token');
+
+    if (hasOAuthHashTokens && !isAuthenticated) {
+        return (
+            <main className="relative min-h-dvh overflow-hidden bg-[#05060a] text-white flex items-center justify-center">
+                <div
+                    aria-hidden="true"
+                    className="absolute inset-0"
+                    style={{
+                        backgroundImage: [
+                            'radial-gradient(58% 45% at 50% 42%, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.00) 60%)',
+                            'radial-gradient(55% 45% at 18% 24%, rgba(236,72,153,0.18) 0%, rgba(236,72,153,0.00) 70%)',
+                            'radial-gradient(55% 45% at 80% 60%, rgba(59,130,246,0.16) 0%, rgba(59,130,246,0.00) 70%)',
+                            'linear-gradient(180deg, rgba(3,7,18,0.10) 0%, rgba(3,7,18,0.92) 100%)',
+                        ].join(','),
+                    }}
+                />
+                <div className="relative z-10 flex flex-col items-center gap-4">
+                    <div className="h-10 w-10 animate-spin rounded-full border-4 border-white/20 border-t-white/80" />
+                    <p className="text-sm text-white/60">Conectando con Google...</p>
+                </div>
+            </main>
+        );
+    }
+
+    const showLandingPage = !isAuthenticated;
+
+    if (showLandingPage) {
+        if (!isAuthenticated && !isPublicRoute && location.pathname !== ROUTES.HOME) {
+            const redirect = encodeURIComponent(`${location.pathname}${location.search}`);
+            return <Navigate to={`${ROUTES.HOME}?entry=preview&auth=login&redirect=${redirect}`} replace />;
         }
 
         return (
             <>
-                <div className="relative w-full h-dvh overflow-hidden">
-                    <Suspense fallback={<LazyLoader type="view" />}>
-                        <LandingPage
-                            onGetStarted={() => navigate(ROUTES.ONBOARDING_STYLIST)}
-                            onLogin={() =>
-                                startTransition(() => {
-                                    setAuthInitialMode('login');
-                                    setShowAuthView(true);
-                                })
-                            }
-                        />
-                    </Suspense>
-                </div>
-                {!isPublicRoute && <CookieConsentBanner />}
-                {!isPublicRoute && <PWAInstallPrompt />}
+                <Suspense fallback={<LazyLoader type="view" />}>
+                    <LandingPage
+                        authInitialMode={authInitialMode}
+                        showAuth={showAuthView}
+                        onCloseAuth={handleCloseAuthView}
+                        onLoggedIn={handleLogin}
+                        onOpenAuth={handleOpenAuthView}
+                    />
+                </Suspense>
+                <CookieConsentBanner />
             </>
         );
     }
@@ -1436,236 +2320,171 @@ const AppContent = () => {
     return (
         <>
             <SkipToMainContent />
-            {!DISABLE_3D_BACKGROUND && <GlobalCanvas isAuth={!isAuthenticated && showAuthView} />}
-            <div className={`relative z-10 w-full h-dvh ${isStudioRoute ? 'flex items-stretch justify-stretch lg:p-4 lg:items-center lg:justify-center' : 'p-2 md:p-3 lg:p-4 flex items-center justify-center'}`}>
-                <div className={isStudioRoute
-                    ? 'w-full h-full overflow-hidden flex flex-col md:flex-row lg:max-w-7xl lg:liquid-glass lg:rounded-4xl lg:shadow-soft-lg'
-                    : 'w-full h-full max-w-7xl flex flex-col md:flex-row liquid-glass rounded-4xl overflow-hidden shadow-soft-lg'}>
+            <div className={`relative z-10 w-full ${useStudioSurfaceLayout && isDesktopViewport ? 'h-dvh overflow-hidden flex items-stretch justify-stretch lg:p-4 lg:items-center lg:justify-center' : 'min-h-dvh p-0 md:p-3 lg:p-4 flex items-stretch justify-stretch md:items-center md:justify-center'}`}>
+                <div className={useStudioSurfaceLayout
+                    ? `w-full h-full ${isDesktopViewport ? 'overflow-hidden' : ''} flex flex-col md:flex-row lg:max-w-7xl lg:liquid-glass lg:rounded-4xl lg:shadow-soft-lg`
+                    : 'w-full h-full max-w-7xl flex flex-col md:flex-row liquid-glass rounded-none shadow-none md:rounded-4xl md:shadow-soft-lg'}>
 
 
                     <main
                         id="main-content"
                         role="main"
                         aria-label="Contenido principal"
-                        className={`relative flex-grow min-w-0 flex flex-col ${location.pathname === ROUTES.CLOSET ? 'overflow-hidden' : 'overflow-y-auto'}`}
+                        className={`relative flex-grow min-w-0 min-h-0 flex flex-col ${isMobilePrimaryShellActive ? 'overflow-hidden' : 'overflow-y-auto'}`}
                     >
                         <Suspense fallback={<LazyLoader type="view" />}>
-                            {/* Main Content Area with Morphing Transitions */}
-                            <AnimatePresence mode="wait">
-                                <motion.div
-                                    key={location.pathname}
-                                    initial={{ opacity: 0, y: 20, filter: 'blur(10px)' }}
-                                    animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-                                    exit={{ opacity: 0, y: -20, filter: 'blur(10px)' }}
-                                    transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-                                    className="flex-grow overflow-x-hidden"
-                                >
-                                    <Routes>
-                                        <Route path={ROUTES.HOME} element={
-                                            <HomeView
-                                                user={user!}
-                                                closet={closet}
-                                                onAddItem={() => modals.setShowAddItem(true)}
-                                                onStartStudio={() => navigate(ROUTES.STUDIO)}
-                                                onStartStylist={handleStylistClick}
-                                                onStartVirtualTryOn={() => navigate(ROUTES.VIRTUAL_TRY_ON)}
-                                                onNavigateToCloset={() => navigate(ROUTES.CLOSET)}
-                                                onNavigateToSavedLooks={() => navigate(ROUTES.SAVED_LOOKS)}
-                                                onNavigateToCommunity={() => navigate(ROUTES.COMMUNITY)}
-                                                onStartSmartPacker={() => navigate(ROUTES.SMART_PACKER)}
-                                                onStartActivityFeed={() => navigate(ROUTES.ACTIVITY)}
-                                                onStartVirtualShopping={() => navigate(ROUTES.VIRTUAL_SHOPPING)}
-                                                onOpenShopLook={() => modals.setShowShopLook(true)}
-                                                onStartBulkUpload={() => navigate(ROUTES.BULK_UPLOAD)}
-                                                onStartMultiplayerChallenges={() => navigate(ROUTES.MULTIPLAYER_CHALLENGES)}
-                                                onStartCapsuleBuilder={() => navigate(ROUTES.CAPSULE_BUILDER)}
-                                                onStartChat={createNewConversation}
-                                                onStartWeatherOutfit={() => modals.setShowWeatherOutfit(true)}
-                                                onStartLookbookCreator={handleStartLookbookCreator}
-                                                onStartStyleChallenges={() => modals.setShowStyleChallenges(true)}
-                                                onStartRatingView={() => modals.setShowRatingView(true)}
-                                                onStartFeedbackAnalysis={() => modals.setShowFeedbackAnalysis(true)}
-                                                onStartGapAnalysis={() => modals.setShowGapAnalysis(true)}
-                                                onStartBrandRecognition={() => navigate(ROUTES.CLOSET)}
-                                                onStartDupeFinder={() => navigate(ROUTES.CLOSET)}
-                                                onStartStyleDNA={handleStartStyleDNA}
-                                                onStartAIDesigner={handleStartAIDesigner}
-                                                onShowGenerationHistory={() => modals.setShowGenerationHistory(true)}
-                                                onStartStyleEvolution={() => modals.setShowStyleEvolution(true)}
-                                                onStartCalendarSync={() => modals.setShowCalendarSync(true)}
-                                                onStartOutfitTesting={() => startTransition(() => setShowTestingPlayground(true))}
-                                                hasProfessionalProfile={!!professionalProfile}
-                                                onShowProfessionalWizard={() => modals.setShowProfessionalWizard(true)}
-                                                onShowAnalytics={() => modals.setShowAnalytics(true)}
-                                                // Subscription props
-                                                subscription={subscription}
-                                                onShowPricing={() => setShowPricingModal(true)}
-                                                onShowCredits={() => setShowCreditsDetail(true)}
-                                            />
-                                        } />
-                                        <Route path={ROUTES.CLOSET} element={
-                                            <ClosetProvider
-                                                items={closet}
-                                                onDeleteItem={handleDeleteItemClick}
-                                                onDeleteItems={handleDeleteItems}
-                                                onToggleFavorite={handleToggleFavorite}
-                                            >
-                                                <ClosetViewEnhanced
-                                                    onItemClick={modals.setSelectedItemId}
-                                                    onAddItem={() => modals.setShowAddItem(true)}
-                                                    onLoadDemoData={(items) => {
-                                                        setCloset(items);
-                                                        localStorage.setItem('ojodeloca-closet', JSON.stringify(items));
-                                                        toast.success('Armario demo cargado correctamente');
-                                                    }}
+                            {isMobilePrimaryShellActive ? (
+                                <MobilePrimaryShell
+                                    activePath={location.pathname}
+                                    reduceMotion={reduceRouteMotion}
+                                    tabs={MOBILE_PRIMARY_TABS}
+                                    onNavigate={(path) => navigate(path)}
+                                    renderPanel={renderPrimaryTabPanel}
+                                />
+                            ) : (
+                                <AnimatePresence mode="wait">
+                                    <motion.div
+                                        key={location.pathname}
+                                        initial={reduceRouteMotion ? false : { opacity: 0, y: 12 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={reduceRouteMotion ? { opacity: 0 } : { opacity: 0, y: -10 }}
+                                        transition={reduceRouteMotion
+                                            ? { duration: 0.14, ease: 'easeOut' }
+                                            : { duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+                                        className="flex-grow overflow-x-hidden"
+                                    >
+                                        <Routes>
+                                            <Route path={ROUTES.HOME} element={renderHomePrimaryView()} />
+                                            <Route path={ROUTES.CLOSET} element={renderClosetPrimaryView()} />
+                                            <Route path={ROUTES.PLANNER} element={renderPlannerPrimaryView()} />
+                                            <Route path={ROUTES.COMMUNITY} element={
+                                                renderActivityPrimaryView()
+                                            } />
+                                            <Route path={ROUTES.COMMUNITY_LEGACY} element={
+                                                <CommunityView friends={communityData} onViewFriendCloset={modals.setViewingFriend} />
+                                            } />
+                                            <Route path={ROUTES.SAVED} element={
+                                                renderLooksPrimaryView()
+                                            } />
+                                            <Route path={ROUTES.KUMBI} element={renderHomePrimaryView()} />
+                                            <Route path={ROUTES.STYLIST} element={
+                                                enableUnifiedStudioStylist
+                                                    ? <Navigate to={ROUTES.KUMBI} replace />
+                                                    : <ClosetProvider items={closet}>
+                                                        <InstantOutfitView />
+                                                    </ClosetProvider>
+                                            } />
+                                            <Route path={ROUTES.PROFILE} element={renderProfilePrimaryView()} />
+                                            <Route path={ROUTES.VIRTUAL_TRY_ON} element={
+                                                <VirtualMirrorView
+                                                    closet={closet}
+                                                    onOpenDigitalTwinSetup={() => modals.setShowDigitalTwinSetup(true)}
+                                                    onOpenHistory={() => modals.setShowGenerationHistory(true)}
                                                 />
-                                            </ClosetProvider>
-                                        } />
-                                        <Route path={ROUTES.COMMUNITY} element={
-                                            <CommunityView friends={communityData} onViewFriendCloset={modals.setViewingFriend} />
-                                        } />
-                                        <Route path={ROUTES.SAVED} element={
-                                            <SavedOutfitsView savedOutfits={savedOutfits} closet={closet} onSelectOutfit={modals.setSelectedOutfitId} />
-                                        } />
-                                        <Route path={ROUTES.STYLIST} element={
-                                            enableUnifiedStudioStylist
-                                                ? <Navigate to={`${ROUTES.STUDIO}?assistant=stylist&entry=legacy_route`} replace />
-                                                : <ClosetProvider items={closet}>
-                                                    <InstantOutfitView />
-                                                </ClosetProvider>
-                                        } />
-                                        <Route path={ROUTES.PROFILE} element={
-                                            <ProfileView
-                                                user={user!}
-                                                closet={closet}
-                                                stats={{
-                                                    totalItems: closet.length,
-                                                    totalOutfits: savedOutfits.length,
-                                                    favoriteBrand: 'Zara',
-                                                    mostWornColor: 'Negro'
-                                                }}
-                                                onLogout={handleLogout}
-                                                onOpenAnalytics={() => modals.setShowAnalytics(true)}
-                                                onOpenColorPalette={() => modals.setShowColorPalette(true)}
-                                                onOpenTopVersatile={() => modals.setShowTopVersatile(true)}
-                                                onOpenWeeklyPlanner={() => modals.setShowWeeklyPlanner(true)}
-                                                onOpenAestheticPlayground={!import.meta.env.PROD ? () => startTransition(() => setShowAestheticPlayground(true)) : undefined}
-                                                onOpenBorrowedItems={() => modals.setShowBorrowedItems(true)}
-                                                onDeleteAccount={handleDeleteAccount}
-                                                onLoadSampleData={handleLoadSampleData}
-                                                onCreateBetaInvite={handleCreateBetaInvite}
-                                                onListBetaInviteClaims={handleListBetaInviteClaims}
-                                            />
-                                        } />
-                                        <Route path={ROUTES.VIRTUAL_TRY_ON} element={
-                                            <VirtualMirrorView
-                                                closet={closet}
-                                                onOpenDigitalTwinSetup={() => modals.setShowDigitalTwinSetup(true)}
-                                                onOpenHistory={() => modals.setShowGenerationHistory(true)}
-                                            />
-                                        } />
-                                        <Route path={ROUTES.SMART_PACKER} element={
-                                            <SmartPackerView
-                                                closet={closet}
-                                                onClose={() => navigate(ROUTES.HOME)}
-                                            />
-                                        } />
-                                        <Route path={ROUTES.ACTIVITY} element={
-                                            <ActivityFeedView
-                                                closet={closet}
-                                                savedOutfits={savedOutfits}
-                                                onClose={() => navigate(ROUTES.HOME)}
-                                            />
-                                        } />
-                                        <Route path={ROUTES.VIRTUAL_SHOPPING} element={<VirtualShoppingView />} />
-                                        <Route path={ROUTES.BULK_UPLOAD} element={
-                                            <BulkUploadView
-                                                onClose={() => navigate(ROUTES.HOME)}
-                                                onAddItemsLocal={handleLocalBulkAdd}
-                                                onClosetSync={handleClosetSync}
-                                                useSupabaseCloset={useSupabaseCloset}
-                                            />
-                                        } />
-                                        <Route path={ROUTES.MULTIPLAYER_CHALLENGES} element={
-                                            <MultiplayerChallengesView
-                                                closet={closet}
-                                                onClose={() => navigate(ROUTES.HOME)}
-                                            />
-                                        } />
-                                        <Route path={ROUTES.CAPSULE_BUILDER} element={
-                                            <CapsuleWardrobeBuilderView
-                                                closet={closet}
-                                                onClose={() => navigate(ROUTES.HOME)}
-                                            />
-                                        } />
-                                        <Route path={ROUTES.STUDIO} element={
-                                            <PhotoshootStudio closet={closet} />
-                                        } />
-                                        <Route path={ROUTES.STUDIO_MIRROR} element={
-                                            <VirtualMirrorView
-                                                closet={closet}
-                                                onOpenDigitalTwinSetup={() => modals.setShowDigitalTwinSetup(true)}
-                                                onOpenHistory={() => modals.setShowGenerationHistory(true)}
-                                            />
-                                        } />
-                                        <Route path={ROUTES.STUDIO_PHOTOSHOOT} element={
-                                            <PhotoshootStudio closet={closet} />
-                                        } />
-                                        <Route path={ROUTES.SAVED_LOOKS} element={
-                                            <SavedLooksView closet={closet} />
-                                        } />
-                                        <Route path="/looks-guardados" element={<Navigate to={ROUTES.SAVED_LOOKS} replace />} />
-                                        <Route path={ROUTES.SHARED_LOOK} element={
-                                            <SharedLookView />
-                                        } />
-                                        <Route path={ROUTES.TERMS} element={<TermsView />} />
-                                        <Route path={ROUTES.PRIVACY} element={<PrivacyView />} />
-                                        <Route path={ROUTES.REFUND} element={<RefundPolicyView />} />
-                                        <Route path={ROUTES.PAY} element={
-                                            <Suspense fallback={<LazyLoader type="view" />}>
-                                                <PaddlePayPage />
-                                            </Suspense>
-                                        } />
-                                        <Route path={ROUTES.PRICING} element={
-                                            <Suspense fallback={<LazyLoader type="view" />}>
-                                                <PricingPage />
-                                            </Suspense>
-                                        } />
-                                        <Route path={ROUTES.PLANES} element={<Navigate to={ROUTES.PRICING} replace />} />
-
-                                        <Route path={ROUTES.ONBOARDING_STYLIST} element={
-                                            isAuthenticated ? (
-                                                <Navigate to={ROUTES.HOME} replace />
-                                            ) : (
+                                            } />
+                                            <Route path={ROUTES.SMART_PACKER} element={
+                                                <SmartPackerView
+                                                    closet={closet}
+                                                    onClose={() => navigate(ROUTES.HOME)}
+                                                />
+                                            } />
+                                            <Route path={ROUTES.ACTIVITY} element={renderActivityPrimaryView()} />
+                                            <Route path={ROUTES.VIRTUAL_SHOPPING} element={<VirtualShoppingView />} />
+                                            <Route path={ROUTES.BULK_UPLOAD} element={
+                                                <BulkUploadView
+                                                    embedded
+                                                    onClose={() => navigate(ROUTES.CLOSET)}
+                                                    onAddItemsLocal={handleLocalBulkAdd}
+                                                    onClosetSync={handleClosetSync}
+                                                    useSupabaseCloset={useSupabaseCloset}
+                                                />
+                                            } />
+                                            <Route path={ROUTES.MULTIPLAYER_CHALLENGES} element={
+                                                <MultiplayerChallengesView
+                                                    closet={closet}
+                                                    onClose={() => navigate(ROUTES.HOME)}
+                                                />
+                                            } />
+                                            <Route path={ROUTES.CAPSULE_BUILDER} element={
+                                                <CapsuleWardrobeBuilderView
+                                                    closet={closet}
+                                                    onClose={() => navigate(ROUTES.HOME)}
+                                                />
+                                            } />
+                                            <Route path={ROUTES.STUDIO} element={renderStudioPrimaryView()} />
+                                            <Route path={ROUTES.STUDIO_MIRROR} element={
+                                                <VirtualMirrorView
+                                                    closet={closet}
+                                                    onOpenDigitalTwinSetup={() => modals.setShowDigitalTwinSetup(true)}
+                                                    onOpenHistory={() => modals.setShowGenerationHistory(true)}
+                                                />
+                                            } />
+                                            <Route path={ROUTES.STUDIO_PHOTOSHOOT} element={
+                                                <PhotoshootStudio closet={closet} />
+                                            } />
+                                            <Route path={ROUTES.SAVED_LOOKS} element={<Navigate to={ROUTES.SAVED} replace />} />
+                                            <Route path="/looks-guardados" element={<Navigate to={ROUTES.SAVED} replace />} />
+                                            <Route path={ROUTES.SHARED_LOOK} element={
+                                                <SharedLookView />
+                                            } />
+                                            <Route path={ROUTES.TERMS} element={<TermsView />} />
+                                            <Route path={ROUTES.PRIVACY} element={<PrivacyView />} />
+                                            <Route path={ROUTES.REFUND} element={<RefundPolicyView />} />
+                                            <Route path={ROUTES.PAY} element={
                                                 <Suspense fallback={<LazyLoader type="view" />}>
-                                                    <OnboardingStylistFlow />
+                                                    <PaddlePayPage />
                                                 </Suspense>
-                                            )
-                                        } />
+                                            } />
+                                            <Route path={ROUTES.PRICING} element={
+                                                <Suspense fallback={<LazyLoader type="view" />}>
+                                                    <PricingPage />
+                                                </Suspense>
+                                            } />
+                                            <Route path={ROUTES.PLANES} element={<Navigate to={ROUTES.PRICING} replace />} />
 
-                                        {/* Redirect unknown routes to home */}
-                                        <Route path="*" element={<Navigate to={ROUTES.HOME} replace />} />
-                                    </Routes>
-                                </motion.div>
-                            </AnimatePresence>
+                                            <Route path={ROUTES.ONBOARDING_STYLIST} element={
+                                                isAuthenticated ? (
+                                                    <Navigate to={ROUTES.HOME} replace />
+                                                ) : (
+                                                    <Navigate to={`${ROUTES.HOME}?entry=preview`} replace />
+                                                )
+                                            } />
+                                            <Route path={ROUTES.ONBOARDING_LAB} element={
+                                                <Suspense fallback={<LazyLoader type="view" />}>
+                                                    <OnboardingLabView />
+                                                </Suspense>
+                                            } />
+                                            <Route path={ROUTES.ONBOARDING_MOCK} element={
+                                                <Suspense fallback={<LazyLoader type="view" />}>
+                                                    <OnboardingMockGallery />
+                                                </Suspense>
+                                            } />
+                                            <Route path={ROUTES.ENTRY_MOCK} element={
+                                                <Suspense fallback={<LazyLoader type="view" />}>
+                                                    <EntryMockGallery />
+                                                </Suspense>
+                                            } />
+                                            <Route path={ROUTES.ENTRY_EYE_MOCK} element={
+                                                <Suspense fallback={<LazyLoader type="view" />}>
+                                                    <EntryEyeConceptMock />
+                                                </Suspense>
+                                            } />
+                                            <Route path={ROUTES.DASHBOARD_MOCKUP} element={
+                                                <Suspense fallback={<LazyLoader type="view" />}>
+                                                    <DashboardStudioMockup />
+                                                </Suspense>
+                                            } />
 
-                            {/* Floating Dock Navigation */}
-                            <FloatingDock
-                                onCameraClick={() => modals.setShowQuickCamera(true)}
-                                forceHidden={isStudioRoute}
-                            />
-
+                                            {/* Redirect unknown routes to home */}
+                                            <Route path="*" element={<Navigate to={ROUTES.HOME} replace />} />
+                                        </Routes>
+                                    </motion.div>
+                                </AnimatePresence>
+                            )}
                         </Suspense>
                     </main>
                 </div>
 
-                {
-                    isAuthenticated && !hasOnboarded && location.pathname !== ROUTES.ONBOARDING_STYLIST && (
-                        <Suspense fallback={<LazyLoader type="modal" />}>
-                            <OnboardingView onComplete={() => setHasOnboarded(true)} />
-                        </Suspense>
-                    )
-                }
 
                 {
                     modals.showMigrationModal && (
@@ -1710,7 +2529,7 @@ const AppContent = () => {
                 />
 
                 {!isPublicRoute && <CookieConsentBanner />}
-                {!isPublicRoute && <PWAInstallPrompt />}
+                {isAuthenticated && <BugReportButton />}
 
                 {
                     itemToShare && (
@@ -1814,6 +2633,8 @@ const AppContent = () => {
                                     onGenerateOutfitWithItem={handleGenerateOutfitsForItem}
                                     onSelectItem={modals.setSelectedItemId}
                                     onShareItem={setItemToShare}
+                                    onPublishToTimeline={enableTimelinePublishing ? handlePublishItemToTimeline : undefined}
+                                    onConvertLinkedToCopy={handleConvertLinkedItemToCopy}
                                     onStartBrandRecognition={(item) => {
                                         modals.setSelectedItemForBrandRecognition(item);
                                         modals.setShowBrandRecognition(true);
@@ -1823,11 +2644,54 @@ const AppContent = () => {
                                         modals.setShowDupeFinder(true);
                                         modals.setBrandRecognitionResultForDupe(undefined);
                                     }}
+                                    onOpenStylistWithPrompt={(item, prompt) => openStylistChat({
+                                        prompt,
+                                        source: 'item_detail_contextual',
+                                        surface: 'item_detail',
+                                        contextPayload: {
+                                            currentSurface: 'item_detail',
+                                            ...buildClosetSummary(closet),
+                                            selectedItem: {
+                                                id: item.id,
+                                                category: item.metadata.category,
+                                                subcategory: item.metadata.subcategory,
+                                                color_primary: item.metadata.color_primary,
+                                                description: item.metadata.description || null,
+                                            },
+                                        },
+                                    })}
                                 />
                             </Suspense>
                         )
                     }
                 </AnimatePresence>
+                {
+                    selectedItem && (
+                        <button
+                            type="button"
+                            onClick={() => openStylistChat({
+                                prompt: `Ayudame a usar esta prenda (${selectedItem.metadata.subcategory} ${selectedItem.metadata.color_primary || ''}) dentro de mi armario y decime con qué combinarla.`.trim(),
+                                source: 'item_detail_contextual',
+                                surface: 'item_detail',
+                                contextPayload: {
+                                    currentSurface: 'item_detail',
+                                    ...buildClosetSummary(closet),
+                                    selectedItem: {
+                                        id: selectedItem.id,
+                                        category: selectedItem.metadata.category,
+                                        subcategory: selectedItem.metadata.subcategory,
+                                        color_primary: selectedItem.metadata.color_primary,
+                                        description: selectedItem.metadata.description || null,
+                                    },
+                                },
+                            })}
+                            className="fixed bottom-6 left-1/2 z-[70] flex -translate-x-1/2 items-center gap-2 rounded-full border border-sky-400 bg-white/95 px-4 py-3 text-sm font-semibold text-sky-700 shadow-lg backdrop-blur-md transition hover:bg-sky-50 dark:border-sky-600 dark:bg-slate-900/95 dark:text-sky-300 dark:hover:bg-slate-800"
+                        >
+                            <span className="material-symbols-outlined text-base">forum</span>
+                            Destrabá esta prenda con Kumbi
+                        </button>
+                    )
+                }
 
                 {
                     selectedOutfit && (
@@ -1838,6 +2702,7 @@ const AppContent = () => {
                                 onBack={() => modals.setSelectedOutfitId(null)}
                                 onDelete={handleDeleteOutfitClick}
                                 onShareOutfit={setOutfitToShare}
+                                onPublishToTimeline={enableTimelinePublishing ? handlePublishOutfitToTimeline : undefined}
                                 onOpenShopLook={() => modals.setShowShopLook(true)}
                             />
                         </Suspense>
@@ -1896,6 +2761,7 @@ const AppContent = () => {
                                 onAddBorrowedItems={handleAddBorrowedItems}
                                 onTryBorrowedItems={handleTryBorrowedItems}
                                 onShowToast={showToast}
+                                onImportedFromActivity={handleImportedFromActivity}
                             />
                         </Suspense>
                     )
@@ -1984,7 +2850,15 @@ const AppContent = () => {
                             <AIStylistView
                                 key="chat-modal"
                                 closet={closet}
-                                onClose={() => modals.setShowChat(false)}
+                                surface={stylistSurface}
+                                onClose={() => {
+                                    modals.setShowChat(false);
+                                    setSelectedLookForChat(null);
+                                    setStylistSurface(inferStylistSurfaceFromPath(location.pathname));
+                                    if (location.pathname === ROUTES.KUMBI) {
+                                        navigate(ROUTES.HOME, { replace: true });
+                                    }
+                                }}
                                 conversations={chatConversations}
                                 currentConversationId={currentConversationId}
                                 onSelectConversation={selectConversation}
@@ -1994,6 +2868,36 @@ const AppContent = () => {
                                 onUpdateTitle={updateConversationTitle}
                                 userName={user?.user_metadata?.full_name || user?.email?.split('@')[0]}
                                 onUpgrade={() => setShowPricingModal(true)}
+                                savedOutfits={savedOutfits}
+                                onOutfitSaved={(outfit) => {
+                                    setSavedOutfits((prev) => {
+                                        if (prev.some((existing) => existing.id === outfit.id)) return prev;
+                                        return [outfit, ...prev];
+                                    });
+                                }}
+                                selectedLookContext={selectedLookForChat ? {
+                                    id: selectedLookForChat.id,
+                                    name: selectedLookForChat.name,
+                                    occasion: selectedLookForChat.occasion,
+                                    source: selectedLookForChat.source,
+                                    tags: selectedLookForChat.tags || [],
+                                    folder_id: selectedLookForChat.folder_id || null,
+                                    reference_summary: selectedLookForChat.reference_summary || null,
+                                    clothing_item_ids: [selectedLookForChat.top_id, selectedLookForChat.bottom_id, selectedLookForChat.shoes_id].filter(Boolean),
+                                    explanation: selectedLookForChat.explanation,
+                                } : null}
+                                onClearSelectedLookContext={() => setSelectedLookForChat(null)}
+                                professionalProfile={professionalProfile}
+                                activeRecommendation={enableChatWardrobeRecommendations ? activeRecommendation : null}
+                                onActiveRecommendationChange={(recommendation) => {
+                                    setActiveRecommendation(recommendation);
+                                }}
+                                onClosetItemAdded={(item) => {
+                                    setCloset((prev) => {
+                                        if (prev.some((existing) => existing.id === item.id)) return prev;
+                                        return [item, ...prev];
+                                    });
+                                }}
                                 onViewOutfit={(topId, bottomId, shoesId, aiGeneratedItems) => {
                                     console.log('App.tsx - Ver Outfit Completo handler called:', { topId, bottomId, shoesId, aiGeneratedItems });
 
@@ -2015,6 +2919,27 @@ const AppContent = () => {
                                 }}
                             />
                         </Suspense>
+                    )
+                }
+
+                {
+                    modals.homeShortcutIntent && (
+                        <HomeShortcutModal
+                            intent={modals.homeShortcutIntent}
+                            closet={closet}
+                            savedOutfits={savedOutfits}
+                            activeFitResult={fitResult}
+                            activeRecommendation={activeRecommendation}
+                            onClose={() => modals.setHomeShortcutIntent(null)}
+                            onViewOutfit={(result) => {
+                                setFitResult(result);
+                                setStylistView('result');
+                                startTransition(() => {
+                                    modals.setShowStylist(true);
+                                });
+                                modals.setHomeShortcutIntent(null);
+                            }}
+                        />
                     )
                 }
 
@@ -2232,6 +3157,7 @@ const AppContent = () => {
                             closet={closet}
                             savedOutfits={savedOutfits}
                             onClose={() => modals.setShowActivityFeed(false)}
+                            onImportedFromActivity={handleImportedFromActivity}
                             onViewOutfit={(outfit) => {
                                 modals.setSelectedOutfitId(outfit.id);
                                 modals.setShowActivityFeed(false);
@@ -2240,6 +3166,16 @@ const AppContent = () => {
                                 modals.setSelectedItemId(item.id);
                                 modals.setShowActivityFeed(false);
                             }}
+                            onOpenStylistWithPrompt={(prompt) => openStylistChat({
+                                prompt,
+                                source: 'activity_contextual',
+                                surface: 'activity',
+                                contextPayload: {
+                                    currentSurface: 'activity',
+                                    ...buildClosetSummary(closet),
+                                    activitySummary: 'Feed social e inspiración de looks',
+                                },
+                            })}
                         />
                     )
                 }
@@ -2258,6 +3194,16 @@ const AppContent = () => {
                             currentRecommendations={shoppingRecommendations}
                             isTyping={isShoppingTyping}
                             isAnalyzing={isShoppingAnalyzing}
+                            onOpenStylistWithPrompt={(prompt) => openStylistChat({
+                                prompt,
+                                source: 'shopping_contextual',
+                                surface: 'shopping',
+                                contextPayload: {
+                                    currentSurface: 'shopping',
+                                    ...buildClosetSummary(closet),
+                                    wishlistItemIds: closet.filter((item) => item.status === 'wishlist').map((item) => item.id),
+                                },
+                            })}
                         />
                     )
                 }
@@ -2266,6 +3212,7 @@ const AppContent = () => {
                     modals.showShopLook && (
                         <ShopLookView
                             onClose={() => modals.setShowShopLook(false)}
+                            onSaveDiscoveredItem={handleSaveDiscoveredItem}
                         />
                     )
                 }
@@ -2424,6 +3371,23 @@ const AppContent = () => {
                     }
                 </div>
 
+                <Toaster
+                    position="top-center"
+                    containerStyle={{
+                        top: 'calc(env(safe-area-inset-top) + 0.75rem)',
+                    }}
+                    toastOptions={{
+                        duration: 3500,
+                        style: {
+                            background: 'rgba(17, 24, 39, 0.96)',
+                            color: '#f8fafc',
+                            borderRadius: '16px',
+                            border: '1px solid rgba(255, 255, 255, 0.08)',
+                            boxShadow: '0 20px 40px rgba(15, 23, 42, 0.24)',
+                        },
+                    }}
+                />
+
                 {/* Network Status Indicator */}
                 <NetworkIndicator />
 
@@ -2471,6 +3435,12 @@ const AppContent = () => {
                     />
                 </Suspense>
             </div>
+
+            {/* Floating Dock Navigation — at fragment root, fully outside all stacking contexts */}
+            <FloatingDock
+                activePath={location.pathname}
+                forceHidden={isOnboardingRoute || isStudioRoute || modals.showChat}
+            />
         </>
     );
 };

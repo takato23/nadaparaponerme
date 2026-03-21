@@ -187,6 +187,7 @@ function rowToGeneratedLook(row: any): GeneratedLook {
   return {
     id: row.id,
     user_id: row.user_id,
+    outfit_id: row.outfit_id ?? null,
     image_url: row.image_url,
     thumbnail_url: row.thumbnail_url,
     storage_path: row.storage_path,
@@ -281,6 +282,7 @@ export async function saveGeneratedLook(
     title?: string;
     keepPose?: boolean;
     faceRefsUsed?: number;
+    outfitId?: string | null;
   } = {}
 ): Promise<GeneratedLook> {
   try {
@@ -318,6 +320,7 @@ export async function saveGeneratedLook(
         .from('generated_looks')
         .insert({
           user_id: user.id,
+          outfit_id: options.outfitId ?? null,
           image_url: path,
           storage_path: path,
           top_base_id: sourceItems.top_base,
@@ -463,8 +466,8 @@ export async function getGeneratedLookById(id: string): Promise<GeneratedLook | 
  */
 export async function getGeneratedLookByShareToken(token: string): Promise<SharedGeneratedLook | null> {
   try {
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    const supabaseUrl = String(import.meta.env.VITE_SUPABASE_URL || '').trim().replace(/\/+$/, '');
+    const supabaseAnonKey = String(import.meta.env.VITE_SUPABASE_ANON_KEY || '').trim();
     const normalizedToken = normalizeShareToken(token);
 
     if (!isValidShareToken(normalizedToken)) {

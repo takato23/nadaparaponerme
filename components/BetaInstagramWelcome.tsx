@@ -44,7 +44,7 @@ export default function BetaInstagramWelcome() {
             <Gift className="w-5 h-5 text-purple-500 mt-1 flex-shrink-0" />
             <div>
               <p className="font-semibold text-gray-900 dark:text-white">Límites 2x más generosos</p>
-              <p className="text-sm text-gray-600 dark:text-gray-300">200 créditos de IA + funciones premium gratis</p>
+              <p className="text-sm text-gray-600 dark:text-gray-300">Buckets ampliados de Kumbi + acceso premium temporal</p>
             </div>
           </div>
           
@@ -81,7 +81,7 @@ export default function BetaInstagramWelcome() {
         </button>
 
         <p className="text-xs text-center text-gray-500 dark:text-gray-400">
-          Beta testers de Instagram obtienen beneficios por 30 días
+          Los beneficios beta se activan según tu override server-side
         </p>
       </motion.div>
     </div>

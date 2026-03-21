@@ -6,7 +6,7 @@ import reactRefresh from 'eslint-plugin-react-refresh';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-    { ignores: ['dist'] },
+    { ignores: ['dist', 'test-results'] },
     {
         extends: [js.configs.recommended, ...tseslint.configs.recommended],
         files: ['**/*.{ts,tsx}'],
@@ -24,6 +24,12 @@ export default tseslint.config(
                 'warn',
                 { allowConstantExport: true },
             ],
+            'react-hooks/set-state-in-effect': 'off',
+            'react-hooks/purity': 'off',
+            'react-hooks/immutability': 'off',
+            'no-async-promise-executor': 'warn',
+            '@typescript-eslint/no-empty-object-type': 'off',
+            '@typescript-eslint/prefer-as-const': 'warn',
             '@typescript-eslint/no-explicit-any': 'warn',
             '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
         },

@@ -82,7 +82,7 @@ export function Hero3DImproved({
 
   const initial = (displayName?.trim()?.[0] || 'O').toUpperCase();
 
-  const Avatar = ({ sizeClassName }: { sizeClassName: string }) => {
+  const renderAvatar = (sizeClassName: string) => {
     if (avatarUrl) {
       return (
         <img
@@ -113,7 +113,7 @@ export function Hero3DImproved({
       >
         <div className="p-6 md:p-8 flex flex-col items-center text-center">
           <div className="w-20 h-20 md:w-24 md:h-24 rounded-full bg-gradient-to-br from-primary to-secondary p-1 mb-4 md:mb-6 shadow-lg">
-            <Avatar sizeClassName="w-full h-full" />
+            {renderAvatar('w-full h-full')}
           </div>
           <h2 className="text-3xl md:text-4xl font-bold text-white mb-2 tracking-tight">
             Hola, {displayName}
@@ -184,7 +184,7 @@ export function Hero3DImproved({
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
         >
-          <Avatar sizeClassName="w-full h-full" />
+          {renderAvatar('w-full h-full')}
         </motion.div>
 
         {/* Saludo */}

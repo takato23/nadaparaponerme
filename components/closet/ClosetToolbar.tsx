@@ -15,6 +15,7 @@ import type { ViewMode, ExtendedSortOption, SortProperty } from '../../types/clo
 import { getSortLabel } from '../../utils/closetUtils';
 import { motion, AnimatePresence } from 'framer-motion';
 import WardrobeGeneratorButton from './WardrobeGeneratorButton';
+import { normalizeColorValue, resolveColorSwatch } from '../../src/utils/colorUtils';
 
 interface ClosetToolbarProps {
   // Search
@@ -33,7 +34,6 @@ interface ClosetToolbarProps {
   // View mode
   viewMode: ViewMode;
   onViewModeChange: (mode: ViewMode) => void;
-  onPresentationMode?: () => void;
 
   // Actions
   onAddItem?: () => void;
@@ -55,6 +55,9 @@ interface ClosetToolbarProps {
 
   // UI
   compact?: boolean;
+  isFloating?: boolean;
+  selectionTitle?: string;
+  selectionSubtitle?: string;
 }
 
 const SORT_OPTIONS: { property: SortProperty; label: string }[] = [
@@ -75,7 +78,6 @@ export default function ClosetToolbar({
   onSortChange,
   viewMode,
   onViewModeChange,
-  onPresentationMode,
   onAddItem,
   onRefresh,
   onToggleSelection,
@@ -86,7 +88,10 @@ export default function ClosetToolbar({
   selectedColor,
   onColorFilter,
   availableColors = [],
-  compact = false
+  compact = false,
+  isFloating = false,
+  selectionTitle,
+  selectionSubtitle,
 }: ClosetToolbarProps) {
   const [showSortMenu, setShowSortMenu] = useState(false);
   const showWardrobeGenerator = import.meta.env.DEV && import.meta.env.VITE_SHOW_WARDROBE_GENERATOR === 'true';
@@ -115,31 +120,28 @@ export default function ClosetToolbar({
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -20 }}
-        className="flex items-center gap-3 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] md:py-3 bg-primary/10 border-b border-primary/20 backdrop-blur-md sticky top-0 z-20"
+        className={`sticky z-20 flex items-center gap-3 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur-md transition-all duration-300 md:py-3 ${
+          isFloating
+            ? 'top-2 mx-3 rounded-[24px] border border-white/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.72),rgba(223,231,236,0.58))] shadow-[0_18px_38px_rgba(20,52,59,0.12)]'
+            : 'top-0 border-b border-white/70 bg-[linear-gradient(180deg,rgba(202,232,234,0.74),rgba(255,255,255,0.68))]'
+        }`}
       >
         <button
           onClick={onToggleSelection}
-          className="w-10 h-10 rounded-full bg-white dark:bg-gray-800 flex items-center justify-center hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors shadow-sm"
+          className="flex h-10 w-10 items-center justify-center rounded-full bg-white/82 shadow-sm transition-colors hover:bg-white dark:bg-gray-800 dark:hover:bg-gray-700"
         >
           <span className="material-symbols-outlined">close</span>
         </button>
 
-        <div className="flex-grow">
-          <div className="font-bold text-text-primary dark:text-gray-200 text-lg">
-            {selectedCount} seleccionado{selectedCount !== 1 ? 's' : ''}
+          <div className="flex-grow">
+          <div className="text-lg font-bold text-[#14343b] dark:text-gray-200">
+            {selectionTitle || `${selectedCount} seleccionado${selectedCount !== 1 ? 's' : ''}`}
           </div>
           <div className="text-xs text-text-secondary dark:text-gray-400 font-medium">
-            {filteredCount} disponibles
+            {selectionSubtitle || `${filteredCount} disponibles`}
           </div>
         </div>
 
-        {/* Bulk Actions */}
-        <button
-          disabled={selectedCount === 0}
-          className="px-5 py-2.5 rounded-xl bg-primary text-white font-bold hover:bg-primary-dark disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-glow-accent"
-        >
-          Acciones
-        </button>
       </motion.div>
     );
   }
@@ -147,10 +149,14 @@ export default function ClosetToolbar({
   // Normal Toolbar
   return (
     <div
-      className="space-y-3 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] md:py-3 sticky top-0 z-20 border-b border-white/10 dark:border-white/5 transition-all duration-300 bg-white/70 dark:bg-gray-900/80 backdrop-blur-xl"
+      className={`sticky z-20 space-y-3 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur-xl transition-all duration-300 dark:border-white/5 dark:bg-gray-900/80 md:py-3 ${
+        isFloating
+          ? 'top-2 mx-3 rounded-[24px] border border-white/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.74),rgba(223,231,236,0.56))] shadow-[0_20px_40px_rgba(20,52,59,0.14)]'
+          : 'top-0 border-b border-white/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.82),rgba(223,231,236,0.68))]'
+      }`}
     >
       {/* Top Row: Search + Actions */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3" data-surface-tour="closet-toolbar">
         {/* Search Bar */}
         <div className="flex-grow relative group">
           <input
@@ -158,9 +164,9 @@ export default function ClosetToolbar({
             value={searchText}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder="Buscar prendas..."
-            className="w-full pl-11 pr-4 py-3 rounded-2xl bg-white/50 dark:bg-black/20 border border-transparent focus:border-primary/30 focus:bg-white dark:focus:bg-black/40 focus:ring-4 focus:ring-primary/10 transition-all outline-none text-sm font-medium shadow-sm group-hover:shadow-md"
+            className="w-full rounded-2xl border border-white/70 bg-white/72 py-3 pl-11 pr-4 text-sm font-medium shadow-sm outline-none transition-all group-hover:shadow-md focus:border-[#9fcfd2] focus:bg-white focus:ring-4 focus:ring-[#cae8ea]/50 dark:border-transparent dark:bg-black/20 dark:focus:bg-black/40"
           />
-          <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-text-secondary dark:text-gray-400 group-focus-within:text-primary transition-colors">
+          <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-text-secondary transition-colors group-focus-within:text-[#2aa1a7] dark:text-gray-400">
             search
           </span>
           <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
@@ -175,7 +181,7 @@ export default function ClosetToolbar({
             {onVisualSearch && !searchText && (
               <button
                 onClick={onVisualSearch}
-                className="w-8 h-8 rounded-full hover:bg-black/5 dark:hover:bg-white/10 flex items-center justify-center text-text-secondary dark:text-gray-400 hover:text-primary transition-colors"
+                className="flex h-8 w-8 items-center justify-center rounded-full text-text-secondary transition-colors hover:bg-black/5 hover:text-[#2aa1a7] dark:text-gray-400 dark:hover:bg-white/10"
                 title="Búsqueda visual"
               >
                 <span className="material-symbols-outlined text-xl">photo_camera</span>
@@ -188,7 +194,7 @@ export default function ClosetToolbar({
         {onAddItem && !compact && (
           <button
             onClick={onAddItem}
-            className="hidden md:flex items-center gap-2 px-5 py-3 rounded-2xl bg-gradient-to-r from-primary to-secondary text-white font-bold hover:shadow-glow-accent hover:scale-[1.02] active:scale-[0.98] transition-all"
+            className="hidden items-center gap-2 rounded-2xl bg-[#08111a] px-5 py-3 font-bold text-white transition-all hover:scale-[1.02] hover:bg-[#10202b] active:scale-[0.98] md:flex"
           >
             <span className="material-symbols-outlined">add</span>
             <span>Agregar</span>
@@ -199,7 +205,7 @@ export default function ClosetToolbar({
         {onAddItem && compact && (
           <button
             onClick={onAddItem}
-            className="md:hidden w-12 h-12 rounded-2xl bg-gradient-to-br from-primary to-secondary text-white flex items-center justify-center shadow-lg hover:shadow-glow-accent active:scale-95 transition-all"
+            className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#08111a] text-white shadow-lg transition-all hover:bg-[#10202b] active:scale-95 md:hidden"
           >
             <span className="material-symbols-outlined">add</span>
           </button>
@@ -212,30 +218,47 @@ export default function ClosetToolbar({
           <span className="text-xs font-bold text-text-secondary dark:text-gray-400 flex-shrink-0">
             Colores:
           </span>
-          {availableColors.map((color) => (
-            <motion.button
-              key={color}
-              onClick={() => onColorFilter(selectedColor === color ? null : color)}
-              className={`
-                w-8 h-8 rounded-full border-2 transition-all flex-shrink-0 shadow-sm
-                ${selectedColor === color
-                  ? 'border-primary ring-2 ring-primary/30 scale-110'
-                  : 'border-white/60 hover:border-primary/40 hover:scale-105'
-                }
-              `}
-              style={{ backgroundColor: color }}
-              whileHover={{ scale: selectedColor === color ? 1.1 : 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              title={color}
-              aria-label={`Filter by color ${color}`}
-            />
-          ))}
+          {availableColors.map((color) => {
+            const swatch = resolveColorSwatch(color);
+            const isSelected = normalizeColorValue(selectedColor) === swatch.key;
+
+            return (
+              <motion.button
+                key={`${swatch.key}-${color}`}
+                onClick={() => onColorFilter(isSelected ? null : color)}
+                className={`
+                  flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border-2 transition-all shadow-sm
+                  ${isSelected
+                    ? 'border-[#14343b] ring-2 ring-[#cae8ea] scale-110'
+                    : 'border-white/60 hover:border-[#9fcfd2] hover:scale-105'
+                  }
+                `}
+                style={{
+                  backgroundColor: swatch.cssColor,
+                  borderColor: isSelected ? undefined : swatch.borderColor
+                }}
+                whileHover={{ scale: isSelected ? 1.1 : 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                title={swatch.label}
+                aria-label={`Filtrar por color ${swatch.label}`}
+              >
+                {isSelected && (
+                  <span
+                    className="material-symbols-outlined text-sm"
+                    style={{ color: swatch.checkColor }}
+                  >
+                    check
+                  </span>
+                )}
+              </motion.button>
+            );
+          })}
           {selectedColor && (
             <motion.button
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
               onClick={() => onColorFilter(null)}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-gray-100 dark:bg-gray-800 text-xs font-medium text-text-secondary dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors flex-shrink-0"
+              className="flex flex-shrink-0 items-center gap-1 rounded-full bg-white/74 px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-white dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
             >
               <span className="material-symbols-outlined text-sm">close</span>
               <span>Limpiar</span>
@@ -248,19 +271,20 @@ export default function ClosetToolbar({
       <div className="flex items-center gap-2 flex-wrap">
         {/* Filter Button */}
         <button
+          data-surface-tour="closet-filters"
           onClick={onOpenFilters}
           className={`
             relative px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 font-medium text-sm border
             ${activeFiltersCount > 0
-              ? 'bg-primary/10 border-primary/30 text-primary'
-              : 'bg-white/50 dark:bg-black/20 border-transparent hover:bg-white/80 dark:hover:bg-black/40 text-text-secondary dark:text-gray-300'
+              ? 'border-[#9fcfd2] bg-[linear-gradient(180deg,rgba(202,232,234,0.82),rgba(223,231,236,0.74))] text-[#14343b]'
+              : 'border-white/60 bg-white/62 text-text-secondary hover:bg-white/82 dark:border-transparent dark:bg-black/20 dark:text-gray-300 dark:hover:bg-black/40'
             }
           `}
         >
           <span className={`material-symbols-outlined text-lg ${activeFiltersCount > 0 ? 'fill-current' : ''}`}>tune</span>
           <span>Filtros</span>
           {activeFiltersCount > 0 && (
-            <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-primary text-white text-xs font-bold flex items-center justify-center shadow-sm animate-bounce-small">
+            <span className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-[#14343b] text-xs font-bold text-white shadow-sm animate-bounce-small">
               {activeFiltersCount}
             </span>
           )}
@@ -270,10 +294,10 @@ export default function ClosetToolbar({
         <div className="relative">
           <button
             onClick={() => setShowSortMenu(!showSortMenu)}
-            className="px-4 py-2.5 rounded-xl bg-white/50 dark:bg-black/20 hover:bg-white/80 dark:hover:bg-black/40 transition-all flex items-center gap-2 text-sm font-medium text-text-secondary dark:text-gray-300 border border-transparent hover:border-gray-200 dark:hover:border-gray-700"
+            className="flex items-center gap-2 rounded-xl border border-white/60 bg-white/62 px-4 py-2.5 text-sm font-medium text-text-secondary transition-all hover:border-white hover:bg-white/82 dark:border-transparent dark:bg-black/20 dark:text-gray-300 dark:hover:border-gray-700 dark:hover:bg-black/40"
           >
             <span
-              className="material-symbols-outlined text-lg cursor-pointer hover:bg-black/5 dark:hover:bg-white/10 rounded p-0.5 transition-colors"
+              className="material-symbols-outlined cursor-pointer rounded p-0.5 text-lg transition-colors hover:bg-black/5 hover:text-[#2aa1a7] dark:hover:bg-white/10"
               onClick={(e) => {
                 e.stopPropagation();
                 toggleSortDirection();
@@ -301,7 +325,7 @@ export default function ClosetToolbar({
                   initial={{ opacity: 0, y: 10, scale: 0.95 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                  className="absolute top-full mt-2 right-0 z-20 glass-card rounded-2xl py-2 min-w-[200px] overflow-hidden"
+                  className="absolute right-0 top-full z-20 mt-2 min-w-[200px] overflow-hidden rounded-2xl border border-white/70 bg-white/95 py-2 shadow-2xl backdrop-blur-xl dark:border-gray-700 dark:bg-gray-900/95"
                 >
                   {SORT_OPTIONS.map((option) => (
                     <button
@@ -309,7 +333,7 @@ export default function ClosetToolbar({
                       onClick={() => handleSortChange(option.property)}
                       className={`
                         w-full px-4 py-3 text-left hover:bg-primary/5 dark:hover:bg-white/5 transition-colors flex items-center justify-between text-sm
-                        ${sortOption.property === option.property ? 'text-primary font-bold bg-primary/5' : 'text-text-primary dark:text-gray-200 font-medium'}
+                        ${sortOption.property === option.property ? 'bg-[linear-gradient(180deg,rgba(202,232,234,0.72),rgba(223,231,236,0.62))] text-[#14343b] font-bold' : 'text-text-primary dark:text-gray-200 font-medium'}
                       `}
                     >
                       <span>{option.label}</span>
@@ -325,13 +349,13 @@ export default function ClosetToolbar({
         </div>
 
         {/* View Mode Switcher */}
-        <div className="flex items-center gap-1 bg-white/50 dark:bg-black/20 rounded-xl p-1 border border-white/10">
+        <div className="flex items-center gap-1 rounded-xl border border-white/60 bg-white/62 p-1 dark:border-white/10 dark:bg-black/20">
           <button
             onClick={() => onViewModeChange('grid')}
             className={`
               p-2 rounded-lg transition-all duration-300
               ${viewMode === 'grid'
-                ? 'bg-white dark:bg-gray-700 text-primary shadow-sm'
+                ? 'bg-[#08111a] text-white shadow-sm dark:bg-gray-700'
                 : 'text-text-secondary dark:text-gray-400 hover:text-text-primary dark:hover:text-gray-200 hover:bg-black/5 dark:hover:bg-white/5'
               }
             `}
@@ -344,7 +368,7 @@ export default function ClosetToolbar({
             className={`
               p-2 rounded-lg transition-all duration-300
               ${viewMode === 'list'
-                ? 'bg-white dark:bg-gray-700 text-primary shadow-sm'
+                ? 'bg-[#08111a] text-white shadow-sm dark:bg-gray-700'
                 : 'text-text-secondary dark:text-gray-400 hover:text-text-primary dark:hover:text-gray-200 hover:bg-black/5 dark:hover:bg-white/5'
               }
             `}
@@ -357,7 +381,7 @@ export default function ClosetToolbar({
             className={`
               p-2 rounded-lg transition-all duration-300
               ${viewMode === 'carousel'
-                ? 'bg-white dark:bg-gray-700 text-primary shadow-sm'
+                ? 'bg-[#08111a] text-white shadow-sm dark:bg-gray-700'
                 : 'text-text-secondary dark:text-gray-400 hover:text-text-primary dark:hover:text-gray-200 hover:bg-black/5 dark:hover:bg-white/5'
               }
             `}
@@ -372,7 +396,7 @@ export default function ClosetToolbar({
         {onToggleSelection && (
           <button
             onClick={onToggleSelection}
-            className="hidden md:flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/50 dark:bg-black/20 hover:bg-white/80 dark:hover:bg-black/40 transition-all ml-auto text-sm font-medium text-text-secondary dark:text-gray-300 hover:text-primary"
+            className="ml-auto hidden items-center gap-2 rounded-xl border border-white/60 bg-white/62 px-4 py-2.5 text-sm font-medium text-text-secondary transition-all hover:bg-white/82 hover:text-[#14343b] dark:border-transparent dark:bg-black/20 dark:text-gray-300 dark:hover:bg-black/40 dark:hover:text-primary md:flex"
           >
             <span className="material-symbols-outlined text-lg">checklist</span>
             <span>Seleccionar</span>
@@ -387,7 +411,7 @@ export default function ClosetToolbar({
         )}
 
         {/* Item Count */}
-        <div className="text-xs font-medium text-text-secondary/70 dark:text-gray-500 ml-auto md:ml-0 px-2">
+        <div className="ml-auto px-2 text-xs font-medium text-text-secondary/70 dark:text-gray-500 md:ml-0">
           {filteredCount === totalItems ? (
             <span>{totalItems} prendas</span>
           ) : (

@@ -37,6 +37,30 @@ export default defineConfig(({ mode, command }) => {
     build: {
       target: 'es2015',
       cssCodeSplit: true,
+      modulePreload: {
+        resolveDependencies: (_filename, deps, context) => {
+          // Keep default preload behavior for non-HTML hosts.
+          if (context.hostType !== 'html') return deps;
+
+          // Avoid pulling heavyweight optional chunks into first-load preload.
+          // They remain lazy-loadable when the corresponding feature is used.
+          const deferredChunkHints = [
+            'vendor-three-',
+            'vendor-r3f-',
+            'vendor-drei-',
+            'app-3d-',
+            'vendor-ai-',
+            'vendor-motion-',
+            'app-services-',
+            'app-landing-',
+            'backgroundRemoval-',
+            'ort.bundle.min-',
+            'ort.webgpu.bundle.min-',
+          ];
+
+          return deps.filter((dep) => !deferredChunkHints.some((hint) => dep.includes(hint)));
+        },
+      },
       chunkSizeWarningLimit: 600,
       // Huge speedup on large bundles. Use `ANALYZE=true npm run build` when you need size breakdowns.
       reportCompressedSize: false,
@@ -121,35 +145,6 @@ export default defineConfig(({ mode, command }) => {
               // Other large libs
               if (id.includes('dompurify') || id.includes('marked') || id.includes('sanitize')) {
                 return 'vendor-sanitize';
-              }
-            }
-
-            // Split app services
-            if (id.includes('/services/') && !id.includes('node_modules')) {
-              // Keep AI-related service modules in the same app chunk as other services.
-              // Splitting them into a separate services chunk has caused production TDZ
-              // crashes (for example: "Cannot access 'Ve' before initialization")
-              // due circular chunk dependencies.
-              return 'app-services';
-            }
-
-            // Split heavy views
-            if (id.includes('/components/') && !id.includes('node_modules')) {
-              // 3D components
-              if (id.includes('/3d/') || id.includes('Eye3D') || id.includes('Canvas')) {
-                return 'app-3d';
-              }
-              // Closet components (heavily used)
-              if (id.includes('/closet/')) {
-                return 'app-closet';
-              }
-              // Landing page
-              if (id.includes('/landing/') || id.includes('Landing')) {
-                return 'app-landing';
-              }
-              // Studio
-              if (id.includes('/studio/') || id.includes('Studio')) {
-                return 'app-studio';
               }
             }
           }

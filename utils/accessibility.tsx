@@ -168,6 +168,95 @@ export const useAnnouncement = () => {
 };
 
 // ============================================
+// Material Symbols Accessibility
+// ============================================
+
+const MATERIAL_SYMBOL_SELECTOR = '.material-symbols-outlined, .material-symbols-rounded';
+
+const humanizeMaterialSymbol = (rawValue: string | null | undefined): string => {
+  const normalized = String(rawValue || '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!normalized) return 'Acción';
+
+  return normalized
+    .split('_')
+    .filter(Boolean)
+    .join(' ')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+};
+
+const getNonIconText = (element: HTMLElement): string => {
+  const clone = element.cloneNode(true) as HTMLElement;
+  clone.querySelectorAll(MATERIAL_SYMBOL_SELECTOR).forEach((icon) => icon.remove());
+  return (clone.textContent || '').replace(/\s+/g, ' ').trim();
+};
+
+const patchMaterialSymbolsAccessibility = (root: ParentNode = document) => {
+  const icons = root.querySelectorAll<HTMLElement>(MATERIAL_SYMBOL_SELECTOR);
+
+  icons.forEach((icon) => {
+    icon.setAttribute('aria-hidden', 'true');
+    icon.setAttribute('focusable', 'false');
+
+    const control = icon.closest<HTMLElement>('button, a, [role="button"], [role="tab"]');
+    if (!control) return;
+    if (control.getAttribute('aria-label')) return;
+    if (control.getAttribute('aria-labelledby')) return;
+
+    const visibleText = getNonIconText(control);
+    if (visibleText) return;
+
+    const iconLabel = humanizeMaterialSymbol(icon.textContent);
+    if (iconLabel) {
+      control.setAttribute('aria-label', iconLabel);
+    }
+  });
+};
+
+export const useMaterialSymbolsAccessibility = () => {
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+
+    patchMaterialSymbolsAccessibility(document);
+
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.type === 'childList') {
+          mutation.addedNodes.forEach((node) => {
+            if (!(node instanceof HTMLElement)) return;
+            if (node.matches?.(MATERIAL_SYMBOL_SELECTOR)) {
+              patchMaterialSymbolsAccessibility(node.parentElement || document);
+              return;
+            }
+            if (node.querySelector?.(MATERIAL_SYMBOL_SELECTOR)) {
+              patchMaterialSymbolsAccessibility(node);
+            }
+          });
+        }
+
+        if (
+          mutation.type === 'attributes' &&
+          mutation.target instanceof HTMLElement &&
+          mutation.target.matches(MATERIAL_SYMBOL_SELECTOR)
+        ) {
+          patchMaterialSymbolsAccessibility(mutation.target.parentElement || document);
+        }
+      });
+    });
+
+    observer.observe(document.body, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ['class'],
+    });
+
+    return () => observer.disconnect();
+  }, []);
+};
+
+// ============================================
 // Accessible Button Props
 // ============================================
 

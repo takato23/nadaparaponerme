@@ -5,6 +5,7 @@ import { useThemeContext } from '../../contexts/ThemeContext';
 
 export default function WaitlistSection() {
   const [email, setEmail] = useState('');
+  const [instagramHandle, setInstagramHandle] = useState('');
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [message, setMessage] = useState('');
   const { theme } = useThemeContext();
@@ -16,12 +17,17 @@ export default function WaitlistSection() {
 
     setStatus('loading');
 
-    const result = await joinWaitlist(email, 'landing_waitlist');
+    const result = await joinWaitlist(email, {
+      instagramHandle,
+      source: 'landing_waitlist',
+      entry_path: '/landing',
+    });
 
     if (result.success) {
       setStatus('success');
       analytics.trackWaitlistSignup();
       setEmail('');
+      setInstagramHandle('');
     } else {
       setStatus('error');
     }
@@ -59,12 +65,25 @@ export default function WaitlistSection() {
           Sé de los primeros en probar la app. Los primeros 500 usuarios tendrán acceso gratuito a features Pro por 3 meses.
         </p>
 
-        <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3 max-w-md mx-auto">
           <input
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="tu@email.com"
+            disabled={status === 'loading' || status === 'success'}
+            className={`flex-1 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 disabled:opacity-50 transition-all ${
+              isDark
+                ? 'bg-white/5 border border-white/10 text-white placeholder-white/40'
+                : 'bg-white border border-slate-200 text-slate-800 placeholder-slate-400 shadow-sm'
+            }`}
+            required
+          />
+          <input
+            type="text"
+            value={instagramHandle}
+            onChange={(e) => setInstagramHandle(e.target.value)}
+            placeholder="@tuinstagram"
             disabled={status === 'loading' || status === 'success'}
             className={`flex-1 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 disabled:opacity-50 transition-all ${
               isDark

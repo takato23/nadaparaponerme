@@ -38,7 +38,12 @@ BEGIN
   VALUES (
     NEW.id,
     COALESCE(NEW.raw_user_meta_data->>'username', 'user_' || substring(NEW.id::text, 1, 8)),
-    COALESCE(NEW.raw_user_meta_data->>'display_name', NEW.email),
+    COALESCE(
+      NULLIF(trim(NEW.raw_user_meta_data->>'display_name'), ''),
+      NULLIF(trim(NEW.raw_user_meta_data->>'full_name'), ''),
+      NULLIF(trim(NEW.raw_user_meta_data->>'username'), ''),
+      'Usuario'
+    ),
     NEW.raw_user_meta_data->>'avatar_url'
   )
   ON CONFLICT (id) DO NOTHING;

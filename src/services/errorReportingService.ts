@@ -16,6 +16,43 @@ export interface ErrorReport {
     app_version?: string;
 }
 
+type AutomaticErrorSource = 'window_error' | 'unhandled_rejection' | 'react_error_boundary';
+
+interface AutomaticErrorPayload {
+    source: AutomaticErrorSource;
+    errorName?: string;
+    message: string;
+    stack?: string;
+    componentStack?: string;
+    userComment?: string;
+}
+
+const AUTO_REPORT_DEDUPE_WINDOW_MS = 30_000;
+const recentAutomaticReports = new Map<string, number>();
+let globalErrorHandlersInstalled = false;
+
+function isBrowser(): boolean {
+    return typeof window !== 'undefined' && typeof navigator !== 'undefined';
+}
+
+function cleanupOldAutomaticReportKeys(now: number): void {
+    recentAutomaticReports.forEach((timestamp, key) => {
+        if (now - timestamp > AUTO_REPORT_DEDUPE_WINDOW_MS) {
+            recentAutomaticReports.delete(key);
+        }
+    });
+}
+
+function buildAutomaticReportKey(payload: AutomaticErrorPayload): string {
+    const stackPrefix = (payload.stack || '').slice(0, 240);
+    return [
+        payload.source,
+        payload.errorName || 'UnknownError',
+        payload.message,
+        stackPrefix,
+    ].join('::');
+}
+
 /**
  * Submit an error report to Supabase
  */
@@ -48,6 +85,102 @@ export async function submitErrorReport(report: ErrorReport): Promise<{ success:
         console.error('Error submitting report:', e);
         return { success: false, error: 'Network error' };
     }
+}
+
+/**
+ * Submit automatic client error report with deduplication.
+ */
+export async function submitAutomaticErrorReport(payload: AutomaticErrorPayload): Promise<void> {
+    if (!isBrowser()) return;
+
+    const now = Date.now();
+    cleanupOldAutomaticReportKeys(now);
+
+    const dedupeKey = buildAutomaticReportKey(payload);
+    const lastSentAt = recentAutomaticReports.get(dedupeKey);
+    if (lastSentAt && (now - lastSentAt) < AUTO_REPORT_DEDUPE_WINDOW_MS) {
+        return;
+    }
+    recentAutomaticReports.set(dedupeKey, now);
+
+    const result = await submitErrorReport({
+        error_name: payload.errorName || 'ClientRuntimeError',
+        error_message: payload.message,
+        error_stack: payload.stack,
+        component_stack: payload.componentStack,
+        url: window.location.href,
+        user_agent: navigator.userAgent,
+        user_comment: payload.userComment
+            ? `[${payload.source}] ${payload.userComment}`
+            : `[${payload.source}] automatic capture`,
+    });
+
+    if (!result.success) {
+        console.error('Automatic error report failed:', result.error);
+    }
+}
+
+/**
+ * Install global listeners for uncaught errors and unhandled promise rejections.
+ * Safe to call multiple times.
+ */
+export function initializeGlobalErrorCapture(): void {
+    if (!isBrowser() || globalErrorHandlersInstalled) return;
+
+    const onWindowError = (event: ErrorEvent): void => {
+        const capturedError = event.error;
+        const message = (event.message || capturedError?.message || 'Unhandled runtime error').toString();
+        const errorName =
+            capturedError instanceof Error
+                ? capturedError.name
+                : event.error && typeof event.error === 'object' && 'name' in event.error
+                    ? String((event.error as { name?: unknown }).name || 'WindowError')
+                    : 'WindowError';
+        const stack =
+            capturedError instanceof Error
+                ? capturedError.stack
+                : undefined;
+
+        void submitAutomaticErrorReport({
+            source: 'window_error',
+            errorName,
+            message,
+            stack,
+            userComment: `filename=${event.filename || 'unknown'} line=${event.lineno || 0} col=${event.colno || 0}`,
+        });
+    };
+
+    const onUnhandledRejection = (event: PromiseRejectionEvent): void => {
+        const reason = event.reason;
+        let message = 'Unhandled promise rejection';
+        let errorName = 'UnhandledPromiseRejection';
+        let stack: string | undefined;
+
+        if (reason instanceof Error) {
+            message = reason.message || message;
+            errorName = reason.name || errorName;
+            stack = reason.stack;
+        } else if (typeof reason === 'string') {
+            message = reason;
+        } else if (reason !== undefined) {
+            try {
+                message = JSON.stringify(reason);
+            } catch {
+                message = String(reason);
+            }
+        }
+
+        void submitAutomaticErrorReport({
+            source: 'unhandled_rejection',
+            errorName,
+            message,
+            stack,
+        });
+    };
+
+    window.addEventListener('error', onWindowError);
+    window.addEventListener('unhandledrejection', onUnhandledRejection);
+    globalErrorHandlersInstalled = true;
 }
 
 /**

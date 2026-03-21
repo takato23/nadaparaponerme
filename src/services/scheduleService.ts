@@ -104,12 +104,10 @@ export async function getTodaySchedule(): Promise<ScheduledOutfitWithDetails | n
       `)
       .eq('user_id', user.id)
       .eq('date', today)
-      .single();
+      .maybeSingle();
 
-    if (error) {
-      if (error.code === 'PGRST116') return null; // Not found
-      throw error;
-    }
+    if (error) throw error;
+    if (!data) return null;
 
     return {
       ...convertScheduleToType(data),

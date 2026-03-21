@@ -63,9 +63,9 @@ const BILLABLE_WORKFLOW_CHAT_ACTIONS = new Set([
 ]);
 
 const CATEGORY_PATTERNS: Array<{ category: GuidedLookCategory; regex: RegExp }> = [
-  { category: 'top', regex: /\b(top|remera|camisa|blusa|camiseta|shirt)\b/i },
-  { category: 'bottom', regex: /\b(bottom|pantal[oó]n|jean|falda|short|pollera)\b/i },
-  { category: 'shoes', regex: /\b(shoes|calzado|zapatillas|zapas|zapatos|botas)\b/i },
+  { category: 'top', regex: /\b(top|tops|remera|remeras|camisa|camisas|blusa|blusas|camiseta|camisetas|shirt|shirts)\b/i },
+  { category: 'bottom', regex: /\b(bottom|bottoms|pantal[oó]n|pantalones|jean|jeans|falda|faldas|short|shorts|pollera|polleras)\b/i },
+  { category: 'shoes', regex: /\b(shoes|shoe|calzado|zapatilla|zapatillas|zapas|zapato|zapatos|bota|botas)\b/i },
 ];
 
 const STYLE_PATTERNS = [
@@ -100,6 +100,20 @@ const OCCASION_PATTERNS = [
   'fin de semana',
 ];
 
+const AUTO_CATEGORY_PATTERNS = [
+  /\belegi vos\b/i,
+  /\belige vos\b/i,
+  /\blo que vos veas\b/i,
+  /\bcomo vos veas\b/i,
+  /\blo que quieras\b/i,
+  /\bsorprendeme\b/i,
+  /\bsorprendeme vos\b/i,
+  /\bdecid[ií] vos\b/i,
+  /\bconf[ií]o en vos\b/i,
+  /\bla que mejor vaya\b/i,
+  /\blo que mejor quede\b/i,
+];
+
 const COLOR_HEX_BY_KEYWORD: Array<{ keyword: string; hex: string }> = [
   { keyword: 'negro', hex: '#111111' },
   { keyword: 'negra', hex: '#111111' },
@@ -132,6 +146,12 @@ export function parseLookCreationCategory(text: string): GuidedLookCategory | nu
   return match?.category || null;
 }
 
+export function wantsAutoCategorySelection(text: string): boolean {
+  const normalized = String(text || '').trim();
+  if (!normalized) return false;
+  return AUTO_CATEGORY_PATTERNS.some((pattern) => pattern.test(normalized));
+}
+
 export function parseLookStrategy(text: string): GuidedLookStrategy | null {
   const normalized = String(text || '').trim().toLowerCase();
   if (!normalized) return null;
@@ -157,11 +177,11 @@ export function parseLookCreationFields(text: string): Partial<GuidedLookCollect
     return new RegExp(`\\b${escaped}\\b`, 'i').test(normalized);
   });
 
-  return {
-    category,
-    style: styleMatch,
-    occasion: occasionMatch,
-  };
+  const parsed: Partial<GuidedLookCollected> = {};
+  if (category) parsed.category = category;
+  if (styleMatch) parsed.style = styleMatch;
+  if (occasionMatch) parsed.occasion = occasionMatch;
+  return parsed;
 }
 
 export function getMissingLookFields(collected: GuidedLookCollected): GuidedLookMissingField[] {
@@ -179,12 +199,12 @@ export function getDirectMissingLookFields(collected: GuidedLookCollected): Guid
 
 export function getLookFieldQuestion(field: GuidedLookMissingField): string {
   if (field === 'occasion') {
-    return 'Perfecto. ¿Para qué ocasión lo querés? (ej: oficina, cita, fiesta, fin de semana)';
+    return '¿Para qué ocasión lo querés? (ej: oficina, cita, fiesta, fin de semana). Si querés, también podés decir ocasión + estilo en una sola frase.';
   }
   if (field === 'style') {
-    return 'Genial. ¿Qué estilo buscás? (ej: casual, elegante, formal, streetwear)';
+    return '¿Qué estilo buscás? (ej: casual, elegante, formal, streetwear).';
   }
-  return '¿Qué categoría querés crear? Elegí una: top, bottom o calzado.';
+  return '¿Qué categoría querés crear? Puede ser top, bottom o calzado. Si preferís, decime "elegí vos" y la elijo por contexto.';
 }
 
 export function isAffirmative(text: string): boolean {
@@ -207,8 +227,8 @@ export function getCategoryLabel(category?: GuidedLookCategory): string {
 export function buildModeChoiceMessage(): string {
   return [
     'Podemos hacerlo de dos formas:',
-    `1) Modo directo: genero rápido con lo mínimo (${GUIDED_LOOK_CREDIT_COST} créditos al confirmar).`,
-    `2) Modo guiado: te hago preguntas paso a paso (${GUIDED_LOOK_CREDIT_COST} créditos al confirmar).`,
+    `1) Modo directo: genero rápido con lo mínimo (${GUIDED_LOOK_CREDIT_COST} usos premium al confirmar).`,
+    `2) Modo guiado: te hago preguntas paso a paso (${GUIDED_LOOK_CREDIT_COST} usos premium al confirmar).`,
     '',
     'Decime "directo" o "guiado".',
   ].join('\n');
@@ -230,15 +250,15 @@ export function buildLookCostMessage(
   collected: GuidedLookCollected,
   costCredits = GUIDED_LOOK_CREDIT_COST,
 ): string {
-  return `Tengo todo para generar tu prenda:\n- Ocasión: ${collected.occasion || 'uso diario'}\n- Estilo: ${collected.style || 'casual'}\n- Categoría: ${getCategoryLabel(collected.category)}\n\nEsta generación cuesta ${costCredits} créditos. ¿Confirmás que la genere ahora?`;
+  return `Tengo todo para generar tu prenda:\n- Ocasión: ${collected.occasion || 'uso diario'}\n- Estilo: ${collected.style || 'casual'}\n- Categoría: ${getCategoryLabel(collected.category)}\n\nEsta generación premium cuesta ${costCredits} usos premium. ¿Confirmás que la genere ahora?`;
 }
 
 export function buildEditCostMessage(instruction: string): string {
-  return `Perfecto. Puedo modificar la prenda aplicando "${instruction}". Esta edición cuesta ${LOOK_EDIT_CREDIT_COST} créditos. ¿Confirmás?`;
+  return `Perfecto. Puedo modificar la prenda aplicando "${instruction}". Esta edición cuesta ${LOOK_EDIT_CREDIT_COST} usos premium. ¿Confirmás?`;
 }
 
 export function buildTryOnCostMessage(): string {
-  return `El probador virtual con selfie cuesta ${TRY_ON_CREDIT_COST} créditos. ¿Confirmás que lo genere ahora?`;
+  return `El probador virtual con selfie cuesta ${TRY_ON_CREDIT_COST} usos premium. ¿Confirmás que lo genere ahora?`;
 }
 
 export function normalizeCollected(
@@ -248,8 +268,27 @@ export function normalizeCollected(
 ): GuidedLookCollected {
   const next: GuidedLookCollected = {
     ...previous,
-    ...incoming,
   };
+
+  const nextOccasion = typeof incoming.occasion === 'string' ? incoming.occasion.trim() : '';
+  if (nextOccasion) {
+    next.occasion = nextOccasion;
+  }
+
+  const nextStyle = typeof incoming.style === 'string' ? incoming.style.trim() : '';
+  if (nextStyle) {
+    next.style = nextStyle;
+  }
+
+  if (incoming.category === 'top' || incoming.category === 'bottom' || incoming.category === 'shoes') {
+    next.category = incoming.category;
+  }
+
+  const incomingRequestText = typeof incoming.requestText === 'string' ? incoming.requestText.trim() : '';
+  if (incomingRequestText) {
+    next.requestText = incomingRequestText.slice(0, 240);
+  }
+
   if (!next.requestText && fallbackText) {
     next.requestText = fallbackText.trim().slice(0, 240);
   }
@@ -318,7 +357,8 @@ export function mapLookCategoryToTryOnSlot(category?: GuidedLookCategory): strin
 }
 
 export function shouldChargeChatCreditsForWorkflowAction(action: string): boolean {
-  return BILLABLE_WORKFLOW_CHAT_ACTIONS.has(String(action || '').trim());
+  void action;
+  return false;
 }
 
 export function buildGeneratedItemFromImage(params: {

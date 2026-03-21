@@ -1,9 +1,12 @@
-// FIX: Create component to resolve 'not a module' error.
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import type { SavedOutfit, ClothingItem } from '../types';
+import { useNavigate } from 'react-router-dom';
+import type { ClothingItem, LookFolder, SavedOutfit } from '../types';
 import { Card } from './ui/Card';
 import { EmptyState } from './ui/EmptyState';
+import { ROUTES } from '../src/routes';
+import { getLookFolders } from '../src/services/outfitService';
+import { getPreferredClothingImage } from '../src/utils/closetImages';
 
 interface SavedOutfitsViewProps {
   savedOutfits: SavedOutfit[];
@@ -12,216 +15,245 @@ interface SavedOutfitsViewProps {
 }
 
 type SortOption = 'recent' | 'oldest' | 'name';
-type FilterOption = 'all' | 'casual' | 'formal' | 'party' | 'work' | 'sport';
+type SourceFilter = 'all' | 'manual' | 'ai_recommendation';
 
-const FILTER_OPTIONS: { value: FilterOption; label: string; icon: string }[] = [
-  { value: 'all', label: 'Todos', icon: 'apps' },
-  { value: 'casual', label: 'Casual', icon: 'psychiatry' },
-  { value: 'formal', label: 'Formal', icon: 'work' },
-  { value: 'party', label: 'Fiesta', icon: 'celebration' },
-  { value: 'work', label: 'Trabajo', icon: 'business_center' },
-  { value: 'sport', label: 'Deportivo', icon: 'directions_run' },
+const SORT_OPTIONS: { value: SortOption; label: string }[] = [
+  { value: 'recent', label: 'Recientes' },
+  { value: 'oldest', label: 'Antiguos' },
+  { value: 'name', label: 'A-Z' },
 ];
 
-const SORT_OPTIONS: { value: SortOption; label: string; icon: string }[] = [
-  { value: 'recent', label: 'Recientes', icon: 'schedule' },
-  { value: 'oldest', label: 'Antiguos', icon: 'history' },
-  { value: 'name', label: 'A-Z', icon: 'sort_by_alpha' },
+const SOURCE_OPTIONS: { value: SourceFilter; label: string }[] = [
+  { value: 'all', label: 'Todos' },
+  { value: 'manual', label: 'Manual' },
+  { value: 'ai_recommendation', label: 'IA' },
 ];
 
-const SavedOutfitsView = ({ savedOutfits, closet, onSelectOutfit }: SavedOutfitsViewProps) => {
+const sourceLabel: Record<string, string> = {
+  manual: 'Manual',
+  ai_recommendation: 'IA',
+  reference_recreation: 'Referencia',
+  planner: 'Planner',
+  community_import: 'Comunidad',
+};
+
+export default function SavedOutfitsView({ savedOutfits, closet, onSelectOutfit }: SavedOutfitsViewProps) {
+  const navigate = useNavigate();
+  const [folders, setFolders] = useState<LookFolder[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterBy, setFilterBy] = useState<FilterOption>('all');
   const [sortBy, setSortBy] = useState<SortOption>('recent');
-  const [showFilters, setShowFilters] = useState(false);
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
+  const [folderFilter, setFolderFilter] = useState<string>('all');
 
-  const findItem = (id: string) => closet.find(item => item.id === id);
+  useEffect(() => {
+    let cancelled = false;
 
-  // Filter and sort outfits
+    const loadFolders = async () => {
+      try {
+        const data = await getLookFolders();
+        if (!cancelled) {
+          setFolders(data);
+        }
+      } catch (error) {
+        console.error('Failed to load look folders:', error);
+      }
+    };
+
+    void loadFolders();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const folderMap = useMemo(() => {
+    const map = new Map<string, string>();
+    folders.forEach((folder) => map.set(folder.id, folder.name));
+    return map;
+  }, [folders]);
+
+  const findItem = (id: string) => closet.find((item) => item.id === id);
+
   const filteredAndSortedOutfits = useMemo(() => {
     let filtered = [...savedOutfits];
 
-    // Apply search filter
-    if (searchQuery) {
-      filtered = filtered.filter(outfit =>
-        outfit.explanation.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-    }
-
-    // Apply category filter
-    if (filterBy !== 'all') {
-      filtered = filtered.filter(outfit => {
-        const explanation = outfit.explanation.toLowerCase();
-        switch (filterBy) {
-          case 'casual':
-            return explanation.includes('casual') || explanation.includes('cómodo') || explanation.includes('día');
-          case 'formal':
-            return explanation.includes('formal') || explanation.includes('elegante') || explanation.includes('profesional');
-          case 'party':
-            return explanation.includes('fiesta') || explanation.includes('noche') || explanation.includes('celebración');
-          case 'work':
-            return explanation.includes('trabajo') || explanation.includes('oficina') || explanation.includes('reunión');
-          case 'sport':
-            return explanation.includes('deport') || explanation.includes('gym') || explanation.includes('ejercicio');
-          default:
-            return true;
-        }
+    if (searchQuery.trim()) {
+      const query = searchQuery.trim().toLowerCase();
+      filtered = filtered.filter((outfit) => {
+        const haystack = [
+          outfit.name,
+          outfit.explanation,
+          outfit.occasion,
+          outfit.description,
+          folderMap.get(outfit.folder_id || ''),
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        return haystack.includes(query);
       });
     }
 
-    // Apply sorting
+    if (sourceFilter !== 'all') {
+      filtered = filtered.filter((outfit) => (outfit.source || 'manual') === sourceFilter);
+    }
+
+    if (folderFilter !== 'all') {
+      filtered = filtered.filter((outfit) => (outfit.folder_id || '') === folderFilter);
+    }
+
     filtered.sort((a, b) => {
       switch (sortBy) {
-        case 'recent':
-          return b.id.localeCompare(a.id); // Assuming IDs contain timestamps
         case 'oldest':
           return a.id.localeCompare(b.id);
         case 'name':
-          return a.explanation.localeCompare(b.explanation);
+          return (a.name || a.explanation).localeCompare(b.name || b.explanation);
+        case 'recent':
         default:
-          return 0;
+          return b.id.localeCompare(a.id);
       }
     });
 
     return filtered;
-  }, [savedOutfits, searchQuery, filterBy, sortBy]);
+  }, [folderFilter, folderMap, savedOutfits, searchQuery, sortBy, sourceFilter]);
 
-  const handleShare = async (outfit: SavedOutfit, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleShare = async (outfit: SavedOutfit, event: React.MouseEvent) => {
+    event.stopPropagation();
 
-    const top = findItem(outfit.top_id);
-    const bottom = findItem(outfit.bottom_id);
-    const shoes = findItem(outfit.shoes_id);
+    const payload = [outfit.name, outfit.explanation, outfit.occasion].filter(Boolean).join('\n');
+    if (!payload) return;
 
-    if (navigator.share && top && bottom && shoes) {
-      try {
+    try {
+      if (navigator.share) {
         await navigator.share({
-          title: 'Mi Outfit',
-          text: outfit.explanation,
-          // Note: Web Share API doesn't support images directly
+          title: outfit.name || 'Mi look guardado',
+          text: payload,
         });
-      } catch (error) {
-        // Fallback: copy to clipboard
-        navigator.clipboard.writeText(outfit.explanation);
-        toast.success('¡Outfit copiado al portapapeles!');
+      } else {
+        await navigator.clipboard.writeText(payload);
+        toast.success('Look copiado al portapapeles');
       }
-    } else {
-      // Fallback for browsers without Share API
-      navigator.clipboard.writeText(outfit.explanation);
-      toast.success('¡Outfit copiado al portapapeles!');
+    } catch {
+      await navigator.clipboard.writeText(payload);
+      toast.success('Look copiado al portapapeles');
     }
   };
 
   if (savedOutfits.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-full">
-        <EmptyState
-          icon="favorite"
-          title="Sin Outfits Guardados"
-          description="Usa el Estilista IA y guarda tus looks favoritos."
-        />
+      <div className="relative flex h-full min-h-full items-center justify-center overflow-hidden bg-[linear-gradient(180deg,#f7f0e8_0%,#fbf8f4_42%,#f1ece5_100%)] p-6">
+        <div className="noise-overlay opacity-[0.04]" />
+        <div className="relative flex max-w-xl flex-col items-center rounded-[2.4rem] border border-white/70 bg-white/52 px-8 py-10 text-center shadow-[0_24px_70px_rgba(24,24,27,0.12)] backdrop-blur-[24px]">
+          <div className="mb-5 rounded-full border border-black/8 bg-black/5 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.28em] text-black/55">
+            Looks
+          </div>
+          <EmptyState
+            icon="style"
+            title="Todavía no guardaste looks"
+            description="Armá combinaciones desde Armario y guardalas acá para repetirlas mejor."
+          />
+          <button
+            type="button"
+            onClick={() => navigate(ROUTES.CLOSET)}
+            className="mt-6 rounded-full bg-[#171717] px-5 py-3 text-sm font-semibold text-white shadow-[0_18px_34px_rgba(0,0,0,0.18)] transition hover:scale-[1.02]"
+          >
+            Ir a Armario
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="w-full h-full flex flex-col pt-10 animate-fade-in">
-      {/* Header */}
-      <header className="px-6 pb-4">
-        <div className="flex items-center justify-between mb-4">
-          <h1 className="text-4xl font-bold text-text-primary dark:text-gray-200">Guardados</h1>
-          <span className="text-sm text-text-secondary dark:text-gray-400">
-            {filteredAndSortedOutfits.length} outfit{filteredAndSortedOutfits.length !== 1 ? 's' : ''}
+    <div className="relative flex h-full min-h-full flex-col overflow-hidden bg-[radial-gradient(circle_at_top_left,_rgba(255,255,255,0.55),_transparent_32%),linear-gradient(180deg,#f8f2ea_0%,#fbf8f4_38%,#f2ece4_100%)]">
+      <div className="noise-overlay opacity-[0.04]" />
+
+      <header className="sticky top-0 z-20 px-6 pb-4 pt-10 backdrop-blur-xl">
+        <div className="mb-4 flex items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-black/42">Looks</p>
+            <h1 className="text-4xl font-semibold tracking-[-0.04em] text-[#171717]">Tu biblioteca de looks</h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-black/58">
+              Acá viven las combinaciones que ya resolviste desde tu armario: manuales o recomendadas por IA.
+            </p>
+          </div>
+          <span className="rounded-full border border-white/70 bg-white/45 px-3 py-1.5 text-sm font-semibold text-black/58 shadow-[0_10px_24px_rgba(0,0,0,0.06)] backdrop-blur-xl">
+            {filteredAndSortedOutfits.length} look{filteredAndSortedOutfits.length !== 1 ? 's' : ''}
           </span>
         </div>
 
-        {/* Search Bar */}
-        <div className="relative mb-3">
-          <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary dark:text-gray-400">
-            search
-          </span>
-          <input
-            type="text"
-            placeholder="Buscar looks..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 rounded-xl liquid-glass text-text-primary dark:text-white placeholder-text-secondary dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-accent"
-          />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2"
-            >
-              <span className="material-symbols-outlined text-text-secondary dark:text-gray-400">close</span>
-            </button>
-          )}
-        </div>
+        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_180px_180px_200px]">
+          <div className="relative">
+            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary">
+              search
+            </span>
+            <input
+              type="text"
+              placeholder="Buscar por nombre, ocasión o carpeta"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              className="w-full rounded-2xl border border-white/70 bg-white/60 py-3 pl-10 pr-4 text-sm font-medium text-text-primary outline-none focus:ring-2 focus:ring-[#cae8ea]"
+            />
+          </div>
 
-        {/* Filter/Sort Toggle */}
-        <div className="flex gap-2">
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all ${showFilters
-                ? 'bg-accent text-white'
-                : 'liquid-glass text-text-primary dark:text-white'
-              }`}
-          >
-            <span className="material-symbols-outlined text-lg">tune</span>
-            <span className="text-sm font-medium">Filtros</span>
-          </button>
-
-          {/* Sort Dropdown */}
           <select
             value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as SortOption)}
-            className="px-4 py-2 rounded-xl liquid-glass text-text-primary dark:text-white text-sm font-medium focus:outline-none focus:ring-2 focus:ring-accent"
+            onChange={(event) => setSortBy(event.target.value as SortOption)}
+            className="rounded-2xl border border-white/70 bg-white/60 px-4 py-3 text-sm font-medium text-text-primary outline-none"
           >
-            {SORT_OPTIONS.map(option => (
+            {SORT_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
               </option>
             ))}
           </select>
-        </div>
 
-        {/* Filter Pills */}
-        {showFilters && (
-          <div className="flex gap-2 mt-3 overflow-x-auto pb-2 scrollbar-hide">
-            {FILTER_OPTIONS.map(option => (
-              <button
-                key={option.value}
-                onClick={() => setFilterBy(option.value)}
-                className={`flex items-center gap-1.5 px-4 py-2 rounded-full whitespace-nowrap transition-all ${filterBy === option.value
-                    ? 'bg-accent text-white'
-                    : 'liquid-glass text-text-primary dark:text-white'
-                  }`}
-              >
-                <span className="material-symbols-outlined text-lg">{option.icon}</span>
-                <span className="text-sm font-medium">{option.label}</span>
-              </button>
+          <select
+            value={sourceFilter}
+            onChange={(event) => setSourceFilter(event.target.value as SourceFilter)}
+            className="rounded-2xl border border-white/70 bg-white/60 px-4 py-3 text-sm font-medium text-text-primary outline-none"
+          >
+            {SOURCE_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
             ))}
-          </div>
-        )}
+          </select>
+
+          <select
+            value={folderFilter}
+            onChange={(event) => setFolderFilter(event.target.value)}
+            className="rounded-2xl border border-white/70 bg-white/60 px-4 py-3 text-sm font-medium text-text-primary outline-none"
+          >
+            <option value="all">Todas las carpetas</option>
+            {folders.map((folder) => (
+              <option key={folder.id} value={folder.id}>
+                {folder.name}
+              </option>
+            ))}
+          </select>
+        </div>
       </header>
 
-      {/* Outfits Grid */}
-      <div className="flex-grow overflow-y-auto p-4">
+      <div className="flex-grow overflow-y-auto px-4 pb-10">
         {filteredAndSortedOutfits.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full">
+          <div className="flex h-full flex-col items-center justify-center">
             <EmptyState
               icon="search_off"
-              title="No se encontraron outfits"
-              description="Intenta con otros filtros o búsqueda."
+              title="No encontramos looks con ese filtro"
+              description="Probá ajustando la búsqueda, el origen o la carpeta."
             />
           </div>
         ) : (
-          <div className="max-w-4xl mx-auto space-y-4">
-            {filteredAndSortedOutfits.map(outfit => {
+          <div className="mx-auto grid max-w-6xl gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {filteredAndSortedOutfits.map((outfit) => {
               const top = findItem(outfit.top_id);
               const bottom = findItem(outfit.bottom_id);
               const shoes = findItem(outfit.shoes_id);
 
               if (!top || !bottom || !shoes) return null;
+
+              const coverImage = outfit.cover_image_url || getPreferredClothingImage(top);
+              const folderName = folderMap.get(outfit.folder_id || '');
 
               return (
                 <Card
@@ -229,31 +261,73 @@ const SavedOutfitsView = ({ savedOutfits, closet, onSelectOutfit }: SavedOutfits
                   variant="glass"
                   padding="sm"
                   rounded="2xl"
-                  className="w-full flex flex-col gap-3 relative group"
+                  className="group relative flex flex-col gap-4 border border-white/70 bg-white/56 shadow-[0_16px_38px_rgba(24,24,27,0.08)] backdrop-blur-[22px]"
                 >
-                  {/* Outfit Images */}
-                  <div onClick={() => onSelectOutfit(outfit.id)} className="cursor-pointer">
-                    <div className="grid grid-cols-3 gap-2">
-                      <img src={top.imageDataUrl} alt="Top" className="aspect-square w-full object-cover rounded-lg" />
-                      <img src={bottom.imageDataUrl} alt="Bottom" className="aspect-square w-full object-cover rounded-lg" />
-                      <img src={shoes.imageDataUrl} alt="Shoes" className="aspect-square w-full object-cover rounded-lg" />
+                  <button
+                    type="button"
+                    onClick={() => onSelectOutfit(outfit.id)}
+                    className="overflow-hidden rounded-[1.35rem] text-left"
+                  >
+                    <div className="relative aspect-[4/5] overflow-hidden rounded-[1.35rem] bg-[#e8e0d7]">
+                      <img
+                        src={coverImage}
+                        alt={outfit.name || 'Look guardado'}
+                        className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]"
+                      />
+                      <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-gradient-to-t from-black/55 to-transparent px-3 pb-3 pt-10">
+                        <span className="rounded-full bg-white/85 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#1d1d1d]">
+                          {sourceLabel[outfit.source || 'manual'] || 'Manual'}
+                        </span>
+                        {folderName && (
+                          <span className="rounded-full bg-[#f5efe7]/90 px-2.5 py-1 text-[11px] font-semibold text-[#5a3ca8]">
+                            {folderName}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                  </div>
+                  </button>
 
-                  {/* Explanation & Actions */}
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="text-sm text-text-secondary dark:text-gray-400 flex-1 line-clamp-2">
-                      {outfit.explanation}
-                    </p>
+                  <div className="space-y-3 px-1 pb-1">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h2 className="text-lg font-semibold text-[#171717]">
+                          {outfit.name || outfit.occasion || 'Look guardado'}
+                        </h2>
+                        <p className="mt-1 line-clamp-2 text-sm leading-6 text-black/58">
+                          {outfit.explanation}
+                        </p>
+                      </div>
+                      <button
+                        onClick={(event) => void handleShare(outfit, event)}
+                        className="rounded-xl border border-white/70 bg-white/65 p-2 text-text-secondary transition hover:bg-white hover:text-[#171717]"
+                        title="Compartir look"
+                      >
+                        <span className="material-symbols-outlined text-lg">share</span>
+                      </button>
+                    </div>
 
-                    {/* Share Button */}
-                    <button
-                      onClick={(e) => handleShare(outfit, e)}
-                      className="p-2 rounded-lg liquid-glass hover:bg-accent hover:text-white transition-all opacity-0 group-hover:opacity-100"
-                      title="Compartir outfit"
-                    >
-                      <span className="material-symbols-outlined text-lg">share</span>
-                    </button>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[top, bottom, shoes].map((item) => (
+                        <div key={item.id} className="overflow-hidden rounded-xl border border-black/5 bg-white/60">
+                          <img
+                            src={getPreferredClothingImage(item)}
+                            alt={item.metadata.subcategory}
+                            className="aspect-square w-full object-cover"
+                          />
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <span className="rounded-full bg-[#f2ece4] px-3 py-1 text-xs text-black/60">
+                        {outfit.occasion || 'Sin ocasión'}
+                      </span>
+                      {outfit.render_count ? (
+                        <span className="rounded-full bg-[#eef7ee] px-3 py-1 text-xs text-[#256d39]">
+                          {outfit.render_count} render{outfit.render_count === 1 ? '' : 's'}
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
                 </Card>
               );
@@ -263,6 +337,4 @@ const SavedOutfitsView = ({ savedOutfits, closet, onSelectOutfit }: SavedOutfits
       </div>
     </div>
   );
-};
-
-export default SavedOutfitsView;
+}

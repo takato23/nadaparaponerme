@@ -10,12 +10,29 @@ import { withRetry } from '../_shared/retry.ts';
 import { isFailClosedHighCostEnabled } from '../_shared/security.ts';
 
 const MONTH_SECONDS = 60 * 60 * 24 * 30;
+const DEFAULT_TRYON_DEV_BYPASS_EMAILS = ['sgorbalan@gmail.com'];
+
 const getMonthlyLimit = (envName: string, fallback: number) => {
     const raw = Deno.env.get(envName);
     if (!raw) return fallback;
     const parsed = Number(raw);
     return Number.isFinite(parsed) ? parsed : fallback;
 };
+
+const normalizeCsvList = (raw: string | null | undefined): string[] =>
+    String(raw || '')
+        .split(',')
+        .map((value) => value.trim().toLowerCase())
+        .filter(Boolean);
+
+function isTryOnDeveloperBypassEmail(email: string | null | undefined): boolean {
+    const normalizedEmail = String(email || '').trim().toLowerCase();
+    if (!normalizedEmail) return false;
+
+    const envEmails = normalizeCsvList(Deno.env.get('DEV_TRYON_BYPASS_EMAILS'));
+    const allowlist = new Set([...DEFAULT_TRYON_DEV_BYPASS_EMAILS, ...envEmails]);
+    return allowlist.has(normalizedEmail);
+}
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -234,6 +251,10 @@ serve(async (req) => {
             );
         }
         userId = user.id;
+        const developerBypass = isTryOnDeveloperBypassEmail(user.email);
+        if (developerBypass) {
+            console.log(`virtual-try-on developer bypass active for ${user.email}`);
+        }
 
         // Beta allowlist check
         const allowlistRaw = Deno.env.get('BETA_ALLOWLIST_EMAILS');
@@ -250,32 +271,34 @@ serve(async (req) => {
 
         // SAFETY: Strict rate limit for expensive generation
         // Max 4 requests per 2 minutes per user to prevent rapid credit drain
-        const rateLimit = await enforceRateLimit(supabase, user.id, 'virtual-try-on', {
-            maxRequests: 4,
-            windowSeconds: 120, // 2 minutes
-        });
-        if (rateLimit.guardError && isFailClosedHighCostEnabled()) {
-            return new Response(
-                JSON.stringify({ error: 'Security guard unavailable. Try again shortly.' }),
-                { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-            );
-        }
-        if (!rateLimit.allowed) {
-            const retryAfter = rateLimit.retryAfterSeconds || 60;
-            const message = rateLimit.reason === 'blocked'
-                ? 'Detectamos muchos errores seguidos. Espera unos minutos antes de intentar de nuevo.'
-                : 'Demasiadas solicitudes en poco tiempo. Espera un momento y reintenta.';
-            return new Response(
-                JSON.stringify({ error: message }),
-                {
-                    status: 429,
-                    headers: {
-                        ...corsHeaders,
-                        'Content-Type': 'application/json',
-                        'Retry-After': String(retryAfter),
-                    },
-                }
-            );
+        if (!developerBypass) {
+            const rateLimit = await enforceRateLimit(supabase, user.id, 'virtual-try-on', {
+                maxRequests: 4,
+                windowSeconds: 120, // 2 minutes
+            });
+            if (rateLimit.guardError && isFailClosedHighCostEnabled()) {
+                return new Response(
+                    JSON.stringify({ error: 'Security guard unavailable. Try again shortly.' }),
+                    { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+                );
+            }
+            if (!rateLimit.allowed) {
+                const retryAfter = rateLimit.retryAfterSeconds || 60;
+                const message = rateLimit.reason === 'blocked'
+                    ? 'Detectamos muchos errores seguidos. Espera unos minutos antes de intentar de nuevo.'
+                    : 'Demasiadas solicitudes en poco tiempo. Espera un momento y reintenta.';
+                return new Response(
+                    JSON.stringify({ error: message }),
+                    {
+                        status: 429,
+                        headers: {
+                            ...corsHeaders,
+                            'Content-Type': 'application/json',
+                            'Retry-After': String(retryAfter),
+                        },
+                    }
+                );
+            }
         }
 
         // Payload size guard
@@ -367,7 +390,7 @@ serve(async (req) => {
         const modelId = 'gemini-3.1-flash-image-preview';
 
         const monthlyLimit = getMonthlyLimit('BETA_MONTHLY_TRYON_PRO_LIMIT', 10);
-        if (monthlyLimit > 0) {
+        if (!developerBypass && monthlyLimit > 0) {
             const monthlyCap = await enforceRateLimit(supabase, user.id, 'beta-tryon-pro-monthly', {
                 windowSeconds: MONTH_SECONDS,
                 maxRequests: monthlyLimit,
@@ -383,44 +406,48 @@ serve(async (req) => {
         // Credit cost for the unified high-quality model
         const creditCost = 4;
 
-        const budgetGuard = await enforceAIBudgetGuard(supabase, user.id, 'virtual-try-on', creditCost);
-        if (budgetGuard.guardError && isFailClosedHighCostEnabled()) {
-            return new Response(
-                JSON.stringify({ error: 'Budget guard unavailable. Try again shortly.' }),
-                { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-            );
-        }
-        if (!budgetGuard.allowed) {
-            return new Response(
-                JSON.stringify({ error: getBudgetLimitMessage(budgetGuard.reason) }),
-                {
-                    status: 429,
-                    headers: {
-                        ...corsHeaders,
-                        'Content-Type': 'application/json',
-                        'Retry-After': String(budgetGuard.retryAfterSeconds || 60),
-                    },
-                }
-            );
+        if (!developerBypass) {
+            const budgetGuard = await enforceAIBudgetGuard(supabase, user.id, 'virtual-try-on', creditCost);
+            if (budgetGuard.guardError && isFailClosedHighCostEnabled()) {
+                return new Response(
+                    JSON.stringify({ error: 'Budget guard unavailable. Try again shortly.' }),
+                    { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+                );
+            }
+            if (!budgetGuard.allowed) {
+                return new Response(
+                    JSON.stringify({ error: getBudgetLimitMessage(budgetGuard.reason) }),
+                    {
+                        status: 429,
+                        headers: {
+                            ...corsHeaders,
+                            'Content-Type': 'application/json',
+                            'Retry-After': String(budgetGuard.retryAfterSeconds || 60),
+                        },
+                    }
+                );
+            }
         }
 
         // Quota check (credits)
-        const { data: canUse, error: canUseError } = await supabase.rpc('can_user_generate_outfit', {
-            p_user_id: user.id,
-            p_amount: creditCost,
-        });
-        if (canUseError) {
-            console.error('Quota check failed:', canUseError);
-            return new Response(
-                JSON.stringify({ error: 'No se pudo validar la cuota. Intentá de nuevo.' }),
-                { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-            );
-        }
-        if (!canUse) {
-            return new Response(
-                JSON.stringify({ error: 'No tenés créditos suficientes. Upgradeá tu plan para continuar.' }),
-                { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-            );
+        if (!developerBypass) {
+            const { data: canUse, error: canUseError } = await supabase.rpc('can_user_generate_outfit', {
+                p_user_id: user.id,
+                p_amount: creditCost,
+            });
+            if (canUseError) {
+                console.error('Quota check failed:', canUseError);
+                return new Response(
+                    JSON.stringify({ error: 'No se pudo validar la cuota. Intentá de nuevo.' }),
+                    { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+                );
+            }
+            if (!canUse) {
+                return new Response(
+                    JSON.stringify({ error: 'No tenés créditos suficientes. Upgradeá tu plan para continuar.' }),
+                    { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+                );
+            }
         }
 
         // Resolution for the unified high-quality model
@@ -504,14 +531,18 @@ serve(async (req) => {
         }
 
         // Increment usage
-        const { data: incremented, error: incError } = await supabase.rpc('increment_ai_generation_usage', {
-            p_user_id: user.id,
-            p_amount: creditCost,
-        });
-        if (incError) {
-            console.error('Usage increment failed:', incError);
+        let incremented = false;
+        if (!developerBypass) {
+            const { data: usageIncremented, error: incError } = await supabase.rpc('increment_ai_generation_usage', {
+                p_user_id: user.id,
+                p_amount: creditCost,
+            });
+            if (incError) {
+                console.error('Usage increment failed:', incError);
+            }
+            incremented = Boolean(usageIncremented);
+            await recordAIBudgetSuccess(supabase, user.id, 'virtual-try-on', incremented ? creditCost : 0);
         }
-        await recordAIBudgetSuccess(supabase, user.id, 'virtual-try-on', incremented ? creditCost : 0);
 
         const resultImage = `data:image/png;base64,${imagePart.inlineData.data}`;
 

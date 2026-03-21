@@ -14,6 +14,75 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-application-name',
 };
 const CLAIM_RATE_LIMIT_PER_MIN = parsePositiveIntEnv('RATE_LIMIT_CLAIM_BETA_PER_MIN', 8, 1, 240);
+const INVITE_OVERRIDE_PLAN = 'plus';
+
+async function applyInvitePlanOverride(
+  adminClient: any,
+  userId: string,
+  code: string,
+  expiresAt: string | null,
+  now: string,
+) {
+  const { error: revokeOverrideError } = await adminClient
+    .from('billing_user_overrides')
+    .update({
+      revoked_at: now,
+      updated_at: now,
+    })
+    .eq('user_id', userId)
+    .in('source', ['invite_claim', 'manual_link_email'])
+    .is('revoked_at', null);
+  if (revokeOverrideError) throw revokeOverrideError;
+
+  const { error: insertOverrideError } = await adminClient
+    .from('billing_user_overrides')
+    .insert({
+      user_id: userId,
+      override_plan_code: INVITE_OVERRIDE_PLAN,
+      feature_overrides: {},
+      bucket_overrides: {},
+      unlimited_buckets: [],
+      source: 'invite_claim',
+      reason: 'Invite claim access',
+      metadata: {
+        invite_code: code,
+        approved_via: 'invite_claim',
+      },
+      starts_at: now,
+      expires_at: expiresAt,
+      revoked_at: null,
+      updated_at: now,
+    });
+  if (insertOverrideError) throw insertOverrideError;
+
+  const { data: activeBetaRow, error: betaLookupError } = await adminClient
+    .from('beta_access')
+    .select('user_id, metadata')
+    .eq('user_id', userId)
+    .is('revoked_at', null)
+    .maybeSingle();
+  if (betaLookupError) throw betaLookupError;
+
+  if (activeBetaRow?.user_id) {
+    const betaMetadata = activeBetaRow.metadata && typeof activeBetaRow.metadata === 'object'
+      ? activeBetaRow.metadata
+      : {};
+    const { error: revokeBetaError } = await adminClient
+      .from('beta_access')
+      .update({
+        revoked_at: now,
+        updated_at: now,
+        metadata: {
+          ...betaMetadata,
+          migrated_to_plan_override: INVITE_OVERRIDE_PLAN,
+          migrated_at: now,
+        },
+      })
+      .eq('user_id', userId)
+      .is('revoked_at', null);
+    if (revokeBetaError) throw revokeBetaError;
+  }
+}
 
 serve(async (req) => {
   const requestId = getRequestId(req);
@@ -123,6 +192,9 @@ serve(async (req) => {
         },
       );
     }
+
+    const now = new Date().toISOString();
+    await applyInvitePlanOverride(adminClient, user.id, code, result.expires_at || null, now);
 
     const claimedEmail = String(user.email || '').trim().toLowerCase();
     if (claimedEmail) {

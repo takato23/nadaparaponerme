@@ -10,11 +10,13 @@ import { supabase } from '../lib/supabase';
 import { logger } from '../utils/logger';
 import {
   SUBSCRIPTION_PLANS,
+  TRYON_PACKS,
   type Subscription,
   type SubscriptionTier,
   type SubscriptionPlan,
   type MercadoPagoPreference,
   type UsageMetrics,
+  type TryOnPack,
 } from '../../types-payment';
 import {
   shouldUseRevenueCat,
@@ -115,6 +117,8 @@ export async function createFreeSubscription(): Promise<Subscription> {
       current_period_start: now.toISOString(),
       current_period_end: oneYearLater.toISOString(),
       ai_generations_used: 0,
+      tryon_used: 0,
+      tryon_bonus: 0,
     })
     .select()
     .single();
@@ -131,6 +135,10 @@ export async function createFreeSubscription(): Promise<Subscription> {
  * Get all available subscription plans
  */
 export function getSubscriptionPlans(): SubscriptionPlan[] {
+  return PLANS;
+}
+
+export function getPublicFacingPlans(_currentTier?: SubscriptionTier | null): SubscriptionPlan[] {
   return PLANS;
 }
 
@@ -236,7 +244,7 @@ export async function createMercadoPagoSubscription(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Usuario no autenticado');
 
-  if (tier !== 'pro' && tier !== 'premium') {
+  if (tier !== 'plus' && tier !== 'pro' && tier !== 'premium') {
     throw new Error('Plan inválido');
   }
 
@@ -261,7 +269,7 @@ export async function createPaddleTransaction(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Usuario no autenticado');
 
-  if (tier !== 'pro' && tier !== 'premium') {
+  if (tier !== 'plus' && tier !== 'pro' && tier !== 'premium') {
     throw new Error('Plan inválido');
   }
 
@@ -325,6 +333,53 @@ export async function startCheckout(
     }
     window.location.href = url;
   }
+}
+
+// ============================================================================
+// TRY-ON PACKS
+// ============================================================================
+
+/**
+ * Get available try-on packs
+ */
+export function getTryOnPacks(): TryOnPack[] {
+  return TRYON_PACKS;
+}
+
+/**
+ * Purchase a try-on pack
+ */
+export async function purchaseTryOnPack(
+  packId: string,
+  currency: CheckoutCurrency = 'ARS'
+): Promise<void> {
+  if (!PAYMENTS_ENABLED) {
+    throw new Error('Pagos desactivados. Próximamente vas a poder comprar packs.');
+  }
+
+  const pack = TRYON_PACKS.find(p => p.id === packId);
+  if (!pack) throw new Error('Pack inválido');
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Usuario no autenticado');
+
+  const { data, error } = await supabase.functions.invoke('create-payment-preference', {
+    body: {
+      type: 'tryon_pack',
+      pack_id: packId,
+      currency,
+      user_email: user.email,
+      user_id: user.id,
+      idempotency_key: generateIdempotencyKey(user.id, `pack_${packId}`),
+    },
+  });
+
+  if (error) throw error;
+
+  const preference = data as MercadoPagoPreference;
+  const url = preference.sandbox_init_point || preference.init_point;
+  if (!url) throw new Error('No se pudo iniciar la compra del pack.');
+  window.location.href = url;
 }
 
 /**
@@ -457,10 +512,10 @@ export async function canGenerateOutfit(): Promise<boolean> {
     if (!plan) return false;
 
     // Premium has unlimited generations
-    if (plan.limits.ai_generations_per_month === -1) return true;
+    if (plan.limits.ai_uses_per_month === -1) return true;
 
     // Check if under limit
-    return subscription.ai_generations_used < plan.limits.ai_generations_per_month;
+    return subscription.ai_generations_used < plan.limits.ai_uses_per_month;
   } catch (error) {
     logger.error('Error checking outfit generation limit:', error);
     return false;
@@ -551,7 +606,7 @@ async function initializeUsageMetrics(tier?: SubscriptionTier): Promise<UsageMet
       user_id: user.id,
       subscription_tier: subscriptionTier,
       ai_generations_used: 0,
-      ai_generations_limit: plan.limits.ai_generations_per_month,
+      ai_generations_limit: plan.limits.ai_uses_per_month,
       virtual_tryon_count: 0,
       lookbook_created_count: 0,
       period_start: periodStart.toISOString(),
@@ -580,9 +635,9 @@ export async function getRemainingGenerations(): Promise<number> {
     if (!plan) return 0;
 
     // Premium has unlimited
-    if (plan.limits.ai_generations_per_month === -1) return -1;
+    if (plan.limits.ai_uses_per_month === -1) return -1;
 
-    return Math.max(0, plan.limits.ai_generations_per_month - subscription.ai_generations_used);
+    return Math.max(0, plan.limits.ai_uses_per_month - subscription.ai_generations_used);
   } catch (error) {
     logger.error('Error getting remaining generations:', error);
     return 0;

@@ -28,6 +28,10 @@ function isAllowedImplicitOrigin(origin: string): boolean {
     if (host === 'localhost' || host === '127.0.0.1') return true;
     // Vercel preview + production default domains
     if (host.endsWith('.vercel.app')) return true;
+    // Accept any real HTTPS public domain that reached this function. Supabase
+    // Auth still validates redirect URLs server-side, so this avoids stale
+    // APP_URL secrets forcing users back to an outdated deploy.
+    if (url.protocol === 'https:') return true;
     return false;
   } catch {
     return false;
@@ -48,4 +52,3 @@ export function resolveAppUrl(req: Request): string {
 
   return 'http://localhost:5173';
 }
-

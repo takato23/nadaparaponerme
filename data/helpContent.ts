@@ -63,9 +63,9 @@ export const featureHelp: Record<string, HelpItem> = {
 
   'stylist': {
     id: 'stylist',
-    title: 'Estilista IA',
+    title: 'Kumbi',
     shortHelp: 'Generá outfits completos basados en ocasión, clima o mood',
-    fullHelp: 'El Estilista IA analiza todas las prendas de tu armario y crea combinaciones perfectas. Considerá la ocasión, el clima, y tu estilo personal para sugerencias personalizadas.',
+    fullHelp: 'Kumbi analiza todas las prendas de tu armario y crea combinaciones perfectas. Considerá la ocasión, el clima, y tu estilo personal para sugerencias personalizadas.',
     tips: [
       'Describí la ocasión con detalle: "reunión de trabajo formal" es mejor que solo "trabajo"',
       'Mencioná el clima si es relevante',
@@ -652,7 +652,7 @@ export const faqs: FAQ[] = [
 
   // AI Features
   {
-    question: '¿Cómo funciona el Estilista IA?',
+    question: '¿Cómo funciona Kumbi?',
     answer: 'El Estilista analiza todas tus prendas y usa IA avanzada para crear combinaciones que funcionan. Considera colores complementarios, estilos, ocasión, y tus preferencias anteriores.',
     category: 'ai-features'
   },

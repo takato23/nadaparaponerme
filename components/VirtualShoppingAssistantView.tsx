@@ -17,6 +17,7 @@ interface VirtualShoppingAssistantViewProps {
   currentRecommendations?: ShoppingRecommendation[];
   isTyping: boolean;
   isAnalyzing: boolean;
+  onOpenStylistWithPrompt?: (prompt: string) => void;
 }
 
 export default function VirtualShoppingAssistantView({
@@ -30,7 +31,8 @@ export default function VirtualShoppingAssistantView({
   currentGaps,
   currentRecommendations,
   isTyping,
-  isAnalyzing
+  isAnalyzing,
+  onOpenStylistWithPrompt,
 }: VirtualShoppingAssistantViewProps) {
   const [inputMessage, setInputMessage] = useState('');
   const [selectedView, setSelectedView] = useState<'chat' | 'gaps' | 'recommendations'>('chat');

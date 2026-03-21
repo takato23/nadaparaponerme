@@ -7,15 +7,28 @@
 
 import { supabase } from '../lib/supabase';
 import { logger } from '../utils/logger';
+import { getFeatureFlag } from '../config/features';
+import { getUserLocaleSafe, resolveCountryCodeFromLocale } from '../utils/localeCountry';
 import type {
   BrandRecognitionResult,
+  ChatAttachment,
+  StylistContextPayload,
+  StylistSurface,
   ChatStylistResponse,
   ClothingItemMetadata,
+  DetectedLookGarmentsPayload,
+  DetectedLookGarmentCandidate,
   DupeFinderResult,
   FitResult,
   GuidedLookWorkflowRequest,
   GuidedLookWorkflowResponse,
-  PackingListResult
+  LookAnalysisResult,
+  LookGarmentCrop,
+  PackingListResult,
+  ProfessionalProfile,
+  SavedLookContext,
+  SeparateLookGarmentsResult,
+  StylistShoppingSuggestion,
 } from '../../types';
 
 type EdgeErrorCode =
@@ -49,6 +62,21 @@ class EdgeFunctionError extends Error {
   }
 }
 
+const KNOWN_EDGE_ERROR_CODES = new Set<EdgeErrorCode>([
+  'rate_limited',
+  'blocked',
+  'forbidden_origin',
+  'invalid_url',
+  'payload_too_large',
+  'unsupported_content_type',
+  'security_guard_error',
+]);
+
+const toKnownEdgeErrorCode = (code?: string): EdgeErrorCode | undefined => {
+  if (!code) return undefined;
+  return KNOWN_EDGE_ERROR_CODES.has(code as EdgeErrorCode) ? (code as EdgeErrorCode) : undefined;
+};
+
 const parseEdgeErrorPayload = async (error: any): Promise<EdgeErrorPayload | null> => {
   const context = error?.context;
   if (!context) return null;
@@ -70,6 +98,12 @@ const formatRetryMessage = (seconds?: number): string => {
     return 'Esperá unos segundos y reintentá.';
   }
   return `Esperá ${Math.max(1, Math.floor(seconds))} segundos y reintentá.`;
+};
+
+const resolveShoppingGeoContext = (): { locale: string; countryCode: string } => {
+  const locale = getUserLocaleSafe();
+  const countryCode = resolveCountryCodeFromLocale(locale);
+  return { locale, countryCode };
 };
 
 const mapEdgeErrorMessage = (
@@ -106,7 +140,7 @@ const toEdgeFunctionError = async (error: unknown, fallbackMessage: string): Pro
   const payload = await parseEdgeErrorPayload(error);
   const message = mapEdgeErrorMessage(payload, fallbackMessage);
   return new EdgeFunctionError(message, {
-    code: payload?.code,
+    code: toKnownEdgeErrorCode(payload?.code),
     retryAfterSeconds: payload?.retry_after_seconds,
     requestId: payload?.request_id,
   });
@@ -138,28 +172,31 @@ const invokeWithTimeout = async (functionName: string, options: any, timeoutMs =
     }
   }
 
-  const timeoutPromise = new Promise<any>((_, reject) => {
-    const id = setTimeout(() => {
-      clearTimeout(id);
-      reject(new Error(`Request timed out after ${timeoutMs}ms`));
-    }, timeoutMs);
-  });
+  const abortController = new AbortController();
+  let didTimeout = false;
+  const timeoutId = setTimeout(() => {
+    didTimeout = true;
+    abortController.abort();
+  }, timeoutMs);
 
   try {
-    const result = await Promise.race([
-      supabase.functions.invoke(functionName, {
-        ...options,
-        headers: mergedHeaders,
-      }),
-      timeoutPromise
-    ]);
+    const result = await supabase.functions.invoke(functionName, {
+      ...options,
+      headers: mergedHeaders,
+      signal: abortController.signal,
+    });
     const duration = Date.now() - start;
     console.log(`[Edge Function] ${functionName} completed in ${duration}ms`);
     return result;
   } catch (error) {
     const duration = Date.now() - start;
     console.error(`[Edge Function] ${functionName} failed after ${duration}ms:`, error);
+    if (didTimeout) {
+      throw new Error(`Request timed out after ${timeoutMs}ms`);
+    }
     throw error;
+  } finally {
+    clearTimeout(timeoutId);
   }
 };
 
@@ -193,13 +230,82 @@ export async function analyzeClothingViaEdge(
   }
 }
 
+export async function analyzeLooksViaEdge(
+  imageDataUrls: string[]
+): Promise<LookAnalysisResult> {
+  try {
+    const { data, error } = await invokeWithTimeout('analyze-look', {
+      body: { imageDataUrls },
+    });
+
+    if (error) throw error;
+
+    return {
+      looks: Array.isArray(data?.looks) ? data.looks : [],
+      cross_suggestions: Array.isArray(data?.cross_suggestions) ? data.cross_suggestions : [],
+      adaptation_tip: typeof data?.adaptation_tip === 'string' ? data.adaptation_tip : null,
+    };
+  } catch (error) {
+    logger.error('Edge function analyze-look failed:', error);
+    throw new Error('No pude analizar tus looks ahora. Intentá de nuevo en unos segundos.');
+  }
+}
+
+export async function separateLookGarmentsViaEdge(
+  imageDataUrl: string,
+): Promise<SeparateLookGarmentsResult> {
+  try {
+    const { data, error } = await invokeWithTimeout('separate-look-garments', {
+      body: { imageDataUrl },
+    });
+
+    if (error) throw error;
+
+    const items = Array.isArray(data?.items)
+      ? data.items.flatMap((item: any, index: number) => {
+        const crop = item?.crop as LookGarmentCrop | undefined;
+        if (!crop) return [];
+
+        const mapped: DetectedLookGarmentCandidate = {
+          id: typeof item?.id === 'string' ? item.id : `garment-${index + 1}`,
+          label: typeof item?.label === 'string' && item.label.trim() ? item.label : (item?.subcategory || 'Prenda detectada'),
+          category: typeof item?.category === 'string' && item.category.trim() ? item.category : 'top',
+          subcategory: typeof item?.subcategory === 'string' && item.subcategory.trim()
+            ? item.subcategory
+            : (item?.label || 'Prenda detectada'),
+          color_primary: typeof item?.color_primary === 'string' && item.color_primary.trim()
+            ? item.color_primary
+            : 'por definir',
+          confidence: Number.isFinite(item?.confidence) ? Number(item.confidence) : 0.5,
+          crop,
+          visibility_note: typeof item?.visibility_note === 'string' ? item.visibility_note : null,
+        };
+
+        return [mapped];
+      })
+      : [];
+
+    return {
+      items,
+      warnings: Array.isArray(data?.warnings) ? data.warnings.filter((warning: unknown) => typeof warning === 'string') : [],
+      summary: typeof data?.summary === 'string' ? data.summary : null,
+    };
+  } catch (error) {
+    logger.error('Edge function separate-look-garments failed:', error);
+    throw await toEdgeFunctionError(
+      error,
+      'No pude separar las prendas de este look ahora. Probá de nuevo en un rato.',
+    );
+  }
+}
+
 /**
  * Generate outfit using Edge Function
  */
 export async function generateOutfitViaEdge(
   prompt: string,
   closetItemIds: string[],
-  options: { idempotencyKey?: string } = {}
+  options: { idempotencyKey?: string; systemPrompt?: string; responseSchema?: unknown } = {}
 ): Promise<FitResult> {
   try {
     const { data, error } = await invokeWithTimeout('generate-outfit', {
@@ -207,6 +313,8 @@ export async function generateOutfitViaEdge(
         prompt,
         closetItemIds,
         idempotencyKey: options.idempotencyKey || undefined,
+        systemPrompt: options.systemPrompt || undefined,
+        responseSchema: options.responseSchema || undefined,
       },
     });
 
@@ -222,8 +330,7 @@ export async function generateOutfitViaEdge(
     };
   } catch (error) {
     logger.error('Edge function generate-outfit failed:', error);
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    throw new Error(`Failed to generate outfit via Edge Function: ${message}`);
+    throw await toEdgeFunctionError(error, 'No se pudo generar el outfit');
   }
 }
 
@@ -390,13 +497,13 @@ export async function generateVirtualTryOnWithSlots(
     const normalized = rawMessage.toLowerCase();
 
     if (
-      normalized.includes('crédito')
+      normalized.includes('uso')
       || normalized.includes('credito')
       || normalized.includes('insufficient')
       || normalized.includes('402')
       || normalized.includes('upgrade')
     ) {
-      throw new Error('No tenés créditos suficientes para usar el probador virtual. Hacé upgrade o sumá créditos para continuar.');
+      throw new Error('No tenés créditos suficientes para usar el probador virtual. Hacé upgrade o comprá un pack para continuar.');
     }
 
     if (normalized.includes('timed out') || normalized.includes('timeout')) {
@@ -547,6 +654,56 @@ export async function generateShoppingRecommendationsViaEdge(
 }
 
 /**
+ * Search products by image using shopping assistant edge function.
+ */
+export async function searchProductsByImageViaEdge(
+  imageDataUrl: string
+): Promise<{ description: string; category: string; links: Array<{ web: { uri: string; title?: string } }> }> {
+  try {
+    const { data, error } = await invokeWithTimeout('shopping-assistant', {
+      body: {
+        action: 'search-products-by-image',
+        imageDataUrl,
+      },
+    }, 120000);
+
+    if (error) throw error;
+    return {
+      description: data?.description || '',
+      category: data?.category || 'unknown',
+      links: Array.isArray(data?.links) ? data.links : [],
+    };
+  } catch (error) {
+    logger.error('Edge function shopping-assistant (search-products-by-image) failed:', error);
+    throw await toEdgeFunctionError(error, 'No se pudo buscar productos por imagen');
+  }
+}
+
+/**
+ * Search products by text/item description using shopping assistant edge function.
+ */
+export async function searchProductsForItemViaEdge(
+  itemDescription: string,
+  category?: string
+): Promise<Array<{ web: { uri: string; title?: string } }>> {
+  try {
+    const { data, error } = await invokeWithTimeout('shopping-assistant', {
+      body: {
+        action: 'search-products-for-item',
+        itemDescription,
+        category,
+      },
+    }, 120000);
+
+    if (error) throw error;
+    return Array.isArray(data?.links) ? data.links : [];
+  } catch (error) {
+    logger.error('Edge function shopping-assistant (search-products-for-item) failed:', error);
+    throw await toEdgeFunctionError(error, 'No se pudo buscar productos');
+  }
+}
+
+/**
  * Recognize brand and estimate price using Edge Function
  */
 export async function recognizeBrandAndPriceViaEdge(
@@ -577,11 +734,20 @@ export async function findDupeAlternativesViaEdge(
   brandInfo?: BrandRecognitionResult
 ): Promise<DupeFinderResult> {
   try {
+    const enableV2 = getFeatureFlag('enableShoppingAssistantV2');
+    const enableLinkVerification = getFeatureFlag('enableShoppingLinkVerification');
+    const enableGeoRouting = getFeatureFlag('enableShoppingGeoRouting');
+    const geoContext = resolveShoppingGeoContext();
+
     const { data, error } = await invokeWithTimeout('shopping-assistant', {
       body: {
         action: 'find-dupes',
         item,
         brandInfo,
+        useV2Pipeline: enableV2,
+        enableLinkVerification,
+        locale: geoContext.locale,
+        countryCode: enableGeoRouting ? geoContext.countryCode : 'AR',
       },
     }, 120000);
 
@@ -650,7 +816,7 @@ export async function analyzeStyleDNAViaEdge(
   closet: Array<{ id: string; metadata: any }>
 ): Promise<any> {
   try {
-    const { data, error } = await invokeWithTimeout('analyze-style-dna', {
+    const { data, error } = await invokeWithTimeout('style-dna-analysis', {
       body: { closet },
     });
 
@@ -658,7 +824,7 @@ export async function analyzeStyleDNAViaEdge(
 
     return data;
   } catch (error) {
-    logger.error('Edge function analyze-style-dna failed:', error);
+    logger.error('Edge function style-dna-analysis failed:', error);
     throw new Error('Failed to analyze style DNA via Edge Function');
   }
 }
@@ -671,26 +837,46 @@ export async function chatWithStylistViaEdge(
   chatHistory: Array<{ role: 'user' | 'assistant'; content: string }>,
   closetContext?: Array<{ id: string; metadata: any }>,
   options: {
+    savedLookContext?: SavedLookContext[];
+    selectedLookContext?: SavedLookContext | null;
+    contextPayload?: StylistContextPayload | null;
+    attachments?: ChatAttachment[];
     responseMode?: 'text' | 'structured';
-    surface?: 'studio' | 'closet';
+    surface?: StylistSurface;
     threadId?: string | null;
     idempotencyKey?: string;
     workflow?: GuidedLookWorkflowRequest;
+    profileContext?: ProfessionalProfile;
+    recommendationContext?: {
+      explicit: boolean;
+      excludeItemIds?: string[];
+    };
+    timeoutMs?: number;
   } = {}
-): Promise<ChatStylistResponse & { validation_warnings?: string[]; workflow?: GuidedLookWorkflowResponse }> {
+): Promise<ChatStylistResponse & {
+  validation_warnings?: string[];
+  workflow?: GuidedLookWorkflowResponse;
+  shoppingSuggestions?: StylistShoppingSuggestion[];
+}> {
   try {
     const { data, error } = await invokeWithTimeout('chat-stylist', {
       body: {
         message,
         chatHistory,
         closetContext,
+        savedLookContext: options.savedLookContext || undefined,
+        selectedLookContext: options.selectedLookContext || undefined,
+        contextPayload: options.contextPayload || undefined,
+        attachments: options.attachments || undefined,
         responseMode: options.responseMode || 'text',
         surface: options.surface || 'closet',
         threadId: options.threadId || null,
         idempotencyKey: options.idempotencyKey || undefined,
         workflow: options.workflow || undefined,
+        profileContext: options.profileContext || undefined,
+        recommendationContext: options.recommendationContext || undefined,
       },
-    });
+    }, options.timeoutMs ?? 90000);
 
     if (error) throw error;
 
@@ -698,9 +884,34 @@ export async function chatWithStylistViaEdge(
       role: 'assistant',
       content: data.content || data.message || '',
       outfitSuggestion: data.outfitSuggestion || null,
+      detectedLookGarments: data.detectedLookGarments
+        ? {
+          items: Array.isArray(data.detectedLookGarments.items) ? data.detectedLookGarments.items : [],
+          warnings: Array.isArray(data.detectedLookGarments.warnings) ? data.detectedLookGarments.warnings : [],
+          summary: typeof data.detectedLookGarments.summary === 'string' ? data.detectedLookGarments.summary : null,
+        } as DetectedLookGarmentsPayload
+        : null,
+      problemItemSuggestions: Array.isArray(data.problemItemSuggestions)
+        ? data.problemItemSuggestions
+        : [],
+      billing: data.billing || {
+        charged: Number(data.credits_used || 0) > 0,
+        credits_used: Number(data.credits_used || 0),
+        reason: Number(data.credits_used || 0) > 0 ? 'new_garment_generation' : 'free_chat',
+      },
+      shoppingSuggestions: Array.isArray(data.shoppingSuggestions)
+        ? data.shoppingSuggestions
+        : [],
+      referencedItems: Array.isArray(data.referencedItems)
+        ? data.referencedItems
+        : [],
+      uiActions: Array.isArray(data.uiActions)
+        ? data.uiActions
+        : [],
+      recommendedItemCandidate: data.recommendedItemCandidate || null,
       validation_warnings: Array.isArray(data.validation_warnings) ? data.validation_warnings : [],
       threadId: data.threadId || null,
-      model: data.model || 'gemini-2.5-flash',
+      model: data.model || 'gemini-3.1-flash-lite-preview',
       credits_used: data.credits_used || 0,
       cache_hit: Boolean(data.cache_hit),
       workflow: data.workflow || undefined,
@@ -824,6 +1035,7 @@ export async function proxyImageViaEdge(url: string): Promise<string> {
 
 export async function createBetaInviteViaEdge(
   options: {
+    quantity?: number;
     maxUses?: number;
     validDays?: number;
     grantsPremium?: boolean;
@@ -838,6 +1050,16 @@ export async function createBetaInviteViaEdge(
   validDays: number;
   grantsPremium: boolean;
   grantsUnlimitedAI: boolean;
+  quantity: number;
+  invites: Array<{
+    code: string;
+    shareLink: string;
+    maxUses: number;
+    validDays: number;
+    grantsPremium: boolean;
+    grantsUnlimitedAI: boolean;
+    expiresAt: string;
+  }>;
 }> {
   try {
     const { data, error } = await invokeWithTimeout('create-beta-invite', {
@@ -856,6 +1078,16 @@ export async function createBetaInviteViaEdge(
       validDays: Number(data.validDays || 0),
       grantsPremium: Boolean(data.grantsPremium),
       grantsUnlimitedAI: Boolean(data.grantsUnlimitedAI),
+      quantity: Number(data.quantity || 1),
+      invites: Array.isArray(data?.invites) ? data.invites.map((invite: any) => ({
+        code: String(invite.code || ''),
+        shareLink: String(invite.shareLink || ''),
+        maxUses: Number(invite.maxUses || 0),
+        validDays: Number(invite.validDays || 0),
+        grantsPremium: Boolean(invite.grantsPremium),
+        grantsUnlimitedAI: Boolean(invite.grantsUnlimitedAI),
+        expiresAt: String(invite.expiresAt || ''),
+      })) : [],
     };
   } catch (error) {
     logger.error('Edge function create-beta-invite failed:', error);
@@ -917,7 +1149,35 @@ export async function listBetaInviteClaimsViaEdge(
     email: string | null;
     username: string | null;
     display_name: string | null;
+    account_created_at?: string | null;
+    last_sign_in_at?: string | null;
+    clothing_items_count?: number;
+    outfits_count?: number;
+    usage_events_count?: number;
+    last_usage_at?: string | null;
+    usage_state?: string;
   }>;
+  summary: {
+    total_invites: number;
+    total_slots: number;
+    used_slots: number;
+    remaining_slots: number;
+    claims: number;
+    claimers: number;
+    accounts_created: number;
+    signed_in: number;
+    active_users: number;
+    active_last_7d: number;
+    active_last_30d: number;
+    closet_uploaders: number;
+    look_savers: number;
+    usage_event_users: number;
+    total_clothing_items: number;
+    total_outfits: number;
+    total_usage_events: number;
+    claim_rate: number;
+    active_rate: number;
+  };
 }> {
   try {
     const { data, error } = await invokeWithTimeout('list-beta-invite-claims', {
@@ -930,9 +1190,320 @@ export async function listBetaInviteClaimsViaEdge(
     return {
       invites: Array.isArray(data?.invites) ? data.invites : [],
       claims: Array.isArray(data?.claims) ? data.claims : [],
+      summary: {
+        total_invites: Number(data?.summary?.total_invites || 0),
+        total_slots: Number(data?.summary?.total_slots || 0),
+        used_slots: Number(data?.summary?.used_slots || 0),
+        remaining_slots: Number(data?.summary?.remaining_slots || 0),
+        claims: Number(data?.summary?.claims || 0),
+        claimers: Number(data?.summary?.claimers || 0),
+        accounts_created: Number(data?.summary?.accounts_created || 0),
+        signed_in: Number(data?.summary?.signed_in || 0),
+        active_users: Number(data?.summary?.active_users || 0),
+        active_last_7d: Number(data?.summary?.active_last_7d || 0),
+        active_last_30d: Number(data?.summary?.active_last_30d || 0),
+        closet_uploaders: Number(data?.summary?.closet_uploaders || 0),
+        look_savers: Number(data?.summary?.look_savers || 0),
+        usage_event_users: Number(data?.summary?.usage_event_users || 0),
+        total_clothing_items: Number(data?.summary?.total_clothing_items || 0),
+        total_outfits: Number(data?.summary?.total_outfits || 0),
+        total_usage_events: Number(data?.summary?.total_usage_events || 0),
+        claim_rate: Number(data?.summary?.claim_rate || 0),
+        active_rate: Number(data?.summary?.active_rate || 0),
+      },
     };
   } catch (error) {
     logger.error('Edge function list-beta-invite-claims failed:', error);
     throw await toEdgeFunctionError(error, 'No se pudo obtener la trazabilidad de links beta');
+  }
+}
+
+export async function joinWaitlistViaEdge(
+  payload: {
+    email: string;
+    instagram_handle: string;
+    source?: string;
+    utm_source?: string | null;
+    utm_medium?: string | null;
+    utm_campaign?: string | null;
+    entry_path?: string | null;
+  },
+): Promise<{
+  success: boolean;
+  status: string;
+  message: string;
+  already_exists?: boolean;
+  approved?: boolean;
+  activated?: boolean;
+}> {
+  try {
+    const { data, error } = await invokeWithTimeout('join-waitlist', {
+      body: payload,
+    });
+    if (error) throw error;
+    return {
+      success: Boolean(data?.success),
+      status: String(data?.status || 'pending'),
+      message: String(data?.message || ''),
+      already_exists: Boolean(data?.already_exists),
+      approved: Boolean(data?.approved),
+      activated: Boolean(data?.activated),
+    };
+  } catch (error) {
+    logger.error('Edge function join-waitlist failed:', error);
+    throw await toEdgeFunctionError(error, 'No se pudo sumarte a la waitlist beta');
+  }
+}
+
+export async function listWaitlistViaEdge(
+  options: { status?: 'pending' | 'approved' | 'rejected'; search?: string; limit?: number } = {},
+): Promise<{
+  entries: Array<{
+    id: string;
+    email: string;
+    instagram_handle: string | null;
+    source: string;
+    status: 'pending' | 'approved' | 'rejected';
+    review_notes: string | null;
+    approved_at: string | null;
+    approved_by: string | null;
+    activated_at: string | null;
+    activated_user_id: string | null;
+    metadata: Record<string, unknown> | null;
+    created_at: string;
+    updated_at: string;
+    account_created?: boolean;
+    account_created_at?: string | null;
+    last_sign_in_at?: string | null;
+    clothing_items_count?: number;
+    outfits_count?: number;
+    usage_events_count?: number;
+    last_usage_at?: string | null;
+    usage_state?: string;
+  }>;
+  counts: {
+    pending: number;
+    approved: number;
+    rejected: number;
+  };
+  summary: {
+    total: number;
+    pending: number;
+    approved: number;
+    rejected: number;
+    activated: number;
+    accounts_created: number;
+    signed_in: number;
+    active_users: number;
+    active_last_7d: number;
+    active_last_30d: number;
+    closet_uploaders: number;
+    look_savers: number;
+    usage_event_users: number;
+    total_clothing_items: number;
+    total_outfits: number;
+    total_usage_events: number;
+    approval_rate: number;
+    activation_rate: number;
+    account_creation_rate: number;
+    sign_in_rate: number;
+    active_rate: number;
+  };
+}> {
+  try {
+    const { data, error } = await invokeWithTimeout('list-waitlist', {
+      body: {
+        status: options.status || undefined,
+        search: options.search || undefined,
+        limit: options.limit || undefined,
+      },
+    });
+    if (error) throw error;
+    return {
+      entries: Array.isArray(data?.entries) ? data.entries : [],
+      counts: {
+        pending: Number(data?.counts?.pending || 0),
+        approved: Number(data?.counts?.approved || 0),
+        rejected: Number(data?.counts?.rejected || 0),
+      },
+      summary: {
+        total: Number(data?.summary?.total || 0),
+        pending: Number(data?.summary?.pending || 0),
+        approved: Number(data?.summary?.approved || 0),
+        rejected: Number(data?.summary?.rejected || 0),
+        activated: Number(data?.summary?.activated || 0),
+        accounts_created: Number(data?.summary?.accounts_created || 0),
+        signed_in: Number(data?.summary?.signed_in || 0),
+        active_users: Number(data?.summary?.active_users || 0),
+        active_last_7d: Number(data?.summary?.active_last_7d || 0),
+        active_last_30d: Number(data?.summary?.active_last_30d || 0),
+        closet_uploaders: Number(data?.summary?.closet_uploaders || 0),
+        look_savers: Number(data?.summary?.look_savers || 0),
+        usage_event_users: Number(data?.summary?.usage_event_users || 0),
+        total_clothing_items: Number(data?.summary?.total_clothing_items || 0),
+        total_outfits: Number(data?.summary?.total_outfits || 0),
+        total_usage_events: Number(data?.summary?.total_usage_events || 0),
+        approval_rate: Number(data?.summary?.approval_rate || 0),
+        activation_rate: Number(data?.summary?.activation_rate || 0),
+        account_creation_rate: Number(data?.summary?.account_creation_rate || 0),
+        sign_in_rate: Number(data?.summary?.sign_in_rate || 0),
+        active_rate: Number(data?.summary?.active_rate || 0),
+      },
+    };
+  } catch (error) {
+    logger.error('Edge function list-waitlist failed:', error);
+    throw await toEdgeFunctionError(error, 'No se pudo obtener la waitlist beta');
+  }
+}
+
+export async function approveWaitlistEntryViaEdge(
+  ids: string | string[],
+  reviewNotes?: string,
+): Promise<{
+  success: boolean;
+  status: string;
+  processed: number;
+  approved_count: number;
+  failed_count: number;
+  matched_user_id: string | null;
+  access_granted: boolean;
+  message: string;
+  results: Array<{
+    id: string;
+    email?: string;
+    success: boolean;
+    status: string;
+    matched_user_id: string | null;
+    access_granted: boolean;
+    message: string;
+  }>;
+}> {
+  try {
+    const normalizedIds = Array.isArray(ids) ? ids : [ids];
+    const { data, error } = await invokeWithTimeout('approve-waitlist-entry', {
+      body: {
+        id: normalizedIds[0],
+        ids: normalizedIds,
+        review_notes: reviewNotes || undefined,
+      },
+    });
+    if (error) throw error;
+    return {
+      success: Boolean(data?.success),
+      status: String(data?.status || ''),
+      processed: Number(data?.processed || 0),
+      approved_count: Number(data?.approved_count || 0),
+      failed_count: Number(data?.failed_count || 0),
+      matched_user_id: data?.matched_user_id || null,
+      access_granted: Boolean(data?.access_granted),
+      message: String(data?.message || ''),
+      results: Array.isArray(data?.results) ? data.results.map((row: any) => ({
+        id: String(row.id || ''),
+        email: row.email ? String(row.email) : undefined,
+        success: Boolean(row.success),
+        status: String(row.status || ''),
+        matched_user_id: row.matched_user_id || null,
+        access_granted: Boolean(row.access_granted),
+        message: String(row.message || ''),
+      })) : [],
+    };
+  } catch (error) {
+    logger.error('Edge function approve-waitlist-entry failed:', error);
+    throw await toEdgeFunctionError(error, 'No se pudo aprobar la persona en waitlist');
+  }
+}
+
+export async function rejectWaitlistEntryViaEdge(
+  ids: string | string[],
+  reviewNotes?: string,
+): Promise<{
+  success: boolean;
+  status: string;
+  processed: number;
+  rejected_count: number;
+  failed_count: number;
+  message: string;
+  results: Array<{
+    id: string;
+    success: boolean;
+    status: string;
+    message: string;
+  }>;
+}> {
+  try {
+    const normalizedIds = Array.isArray(ids) ? ids : [ids];
+    const { data, error } = await invokeWithTimeout('reject-waitlist-entry', {
+      body: {
+        id: normalizedIds[0],
+        ids: normalizedIds,
+        review_notes: reviewNotes || undefined,
+      },
+    });
+    if (error) throw error;
+    return {
+      success: Boolean(data?.success),
+      status: String(data?.status || ''),
+      processed: Number(data?.processed || 0),
+      rejected_count: Number(data?.rejected_count || 0),
+      failed_count: Number(data?.failed_count || 0),
+      message: String(data?.message || ''),
+      results: Array.isArray(data?.results) ? data.results.map((row: any) => ({
+        id: String(row.id || ''),
+        success: Boolean(row.success),
+        status: String(row.status || ''),
+        message: String(row.message || ''),
+      })) : [],
+    };
+  } catch (error) {
+    logger.error('Edge function reject-waitlist-entry failed:', error);
+    throw await toEdgeFunctionError(error, 'No se pudo rechazar la persona en waitlist');
+  }
+}
+
+export async function activateApprovedWaitlistViaEdge(): Promise<{
+  success: boolean;
+  activated: boolean;
+  message: string;
+}> {
+  try {
+    const { data, error } = await invokeWithTimeout('activate-approved-waitlist', {
+      body: {},
+    });
+    if (error) throw error;
+    return {
+      success: Boolean(data?.success),
+      activated: Boolean(data?.activated),
+      message: String(data?.message || ''),
+    };
+  } catch (error) {
+    logger.error('Edge function activate-approved-waitlist failed:', error);
+    throw await toEdgeFunctionError(error, 'No se pudo validar la aprobación de beta');
+  }
+}
+
+export async function redeemBetaEmailViaEdge(
+  code: string,
+  email: string,
+): Promise<{
+  success: boolean;
+  existing_user: boolean;
+  message: string;
+}> {
+  try {
+    const { data, error } = await invokeWithTimeout('redeem-beta-email', {
+      body: {
+        code,
+        email,
+      },
+    });
+    if (error) throw error;
+    return {
+      success: Boolean(data?.success),
+      existing_user: Boolean(data?.existing_user),
+      message: String(data?.message || ''),
+    };
+  } catch (error) {
+    logger.error('Edge function redeem-beta-email failed:', error);
+    throw await toEdgeFunctionError(error, 'No se pudo preparar la cuenta con ese link beta');
   }
 }

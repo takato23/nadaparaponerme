@@ -1,5 +1,6 @@
-import { useState, startTransition, SetStateAction } from 'react';
+import { useState, startTransition, SetStateAction, useCallback } from 'react';
 import type { ClothingItem, CommunityUser, FitResult, SavedOutfit, PackingListResult, BrandRecognitionResult, OutfitSuggestionForEvent } from '../types';
+import type { HomeShortcutIntent } from '../src/services/homeShortcutPersistence';
 
 // Wraps useState's setter in startTransition so opening lazy-loaded modals
 // doesn't trigger React error #426 (suspending during a synchronous input).
@@ -34,8 +35,16 @@ export function useAppModals() {
   const [showAnalytics, setShowAnalytics] = useTransitionState(false);
   const [showColorPalette, setShowColorPalette] = useTransitionState(false);
   const [showTopVersatile, setShowTopVersatile] = useTransitionState(false);
-  const [showChat, setShowChat] = useTransitionState(false);
+  const [showChat, setShowChatState] = useState(false);
+  const setShowChat = useCallback((next: boolean) => {
+    if (next) {
+      startTransition(() => setShowChatState(true));
+      return;
+    }
+    setShowChatState(false);
+  }, []);
   const [showWeatherOutfit, setShowWeatherOutfit] = useTransitionState(false);
+  const [homeShortcutIntent, setHomeShortcutIntent] = useTransitionState<Exclude<HomeShortcutIntent, 'weather-look'> | null>(null);
   const [showWeeklyPlanner, setShowWeeklyPlanner] = useTransitionState(false);
   const [showLookbookCreator, setShowLookbookCreator] = useTransitionState(false);
   const [showStyleChallenges, setShowStyleChallenges] = useTransitionState(false);
@@ -116,6 +125,8 @@ export function useAppModals() {
     setShowChat,
     showWeatherOutfit,
     setShowWeatherOutfit,
+    homeShortcutIntent,
+    setHomeShortcutIntent,
     showWeeklyPlanner,
     setShowWeeklyPlanner,
     showLookbookCreator,

@@ -1,11 +1,12 @@
 /**
  * AIModalHeader - Header reutilizable para modales de funciones AI
  *
- * Muestra título, indicador de créditos y botón de cerrar de forma consistente.
+ * Muestra título, indicador de usos y botón de cerrar de forma consistente.
  */
 
-import React, { useMemo } from 'react';
-import { getCreditStatus } from '../../src/services/usageTrackingService';
+import React from 'react';
+import { useBillingSummary } from '../../hooks/useBillingSummary';
+import { getBucketSummary } from '../../src/services/billingCatalogService';
 
 interface AIModalHeaderProps {
   title: string;
@@ -26,7 +27,14 @@ export function AIModalHeader({
   variant = 'default',
   className = '',
 }: AIModalHeaderProps) {
-  const credits = useMemo(() => getCreditStatus(), []);
+  const { data } = useBillingSummary();
+  const bucket = getBucketSummary(data, 'kumbi_messages');
+  const credits = {
+    limit: bucket?.monthly_limit ?? 0,
+    used: bucket?.used ?? 0,
+    remaining: bucket ? (bucket.monthly_limit === -1 ? -1 : Math.max(0, bucket.monthly_limit - bucket.used - bucket.reserved)) : 0,
+    percentUsed: bucket && bucket.monthly_limit > 0 ? Math.min(100, (bucket.used / bucket.monthly_limit) * 100) : 0,
+  };
 
   const getCreditsColor = () => {
     if (credits.limit === -1) return 'text-emerald-500';

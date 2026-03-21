@@ -4,8 +4,10 @@ const VirtualShoppingView = () => {
     return (
         <div className="flex flex-col items-center justify-center h-full p-8 text-center">
             <span className="material-symbols-outlined text-6xl text-gray-300 mb-4">shopping_bag</span>
-            <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-2">Virtual Shopping</h2>
-            <p className="text-gray-500 dark:text-gray-400">Coming soon...</p>
+            <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-2">Compras con contexto</h2>
+            <p className="text-gray-500 dark:text-gray-400 max-w-md">
+                Esta superficie se reservará para compras guiadas por gaps del armario y completado de looks, no para browsing genérico.
+            </p>
         </div>
     );
 };

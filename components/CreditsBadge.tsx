@@ -68,12 +68,14 @@ export function CreditsBadge({
   // Tier badge colors
   const tierColors = {
     free: 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400',
+    plus: 'bg-teal-100 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400',
     pro: 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400',
     premium: 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400',
   };
 
   const tierLabels = {
     free: 'Gratis',
+    plus: 'Plus',
     pro: 'Pro',
     premium: 'Premium',
   };
@@ -89,7 +91,7 @@ export function CreditsBadge({
         border border-current/10
         ${className}
       `}
-      title={`${summary.totalUsed}/${summary.totalLimit} créditos usados este mes`}
+      title={`${summary.totalUsed}/${summary.totalLimit} usos IA este mes`}
     >
       {/* Progress Ring */}
       <svg className={config.ring} viewBox="0 0 20 20">
@@ -186,7 +188,7 @@ export function CreditsProgressBar({ className = '' }: CreditsProgressBarProps) 
         <span className="material-symbols-rounded mr-1" style={{ fontSize: '16px' }}>
           all_inclusive
         </span>
-        <span className="text-sm font-medium">Créditos ilimitados</span>
+        <span className="text-sm font-medium">Usos ilimitados</span>
       </div>
     );
   }
@@ -195,7 +197,7 @@ export function CreditsProgressBar({ className = '' }: CreditsProgressBarProps) 
     <div className={className}>
       <div className="flex justify-between items-center mb-1.5">
         <span className="text-xs text-gray-600 dark:text-gray-400">
-          Créditos del mes
+          Usos IA del mes
         </span>
         <span className="text-xs font-medium">
           {summary.totalUsed} / {summary.totalLimit}

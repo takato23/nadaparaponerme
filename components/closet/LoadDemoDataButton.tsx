@@ -25,9 +25,22 @@ export default function LoadDemoDataButton({
 }: LoadDemoDataButtonProps) {
     const [isLoading, setIsLoading] = useState(false);
     const [showSuccess, setShowSuccess] = useState(false);
+    const [pendingDemoCount, setPendingDemoCount] = useState<number | null>(null);
 
     const hasDemoData = isDemoDataLoaded(closet);
     const isEmpty = closet.length === 0;
+
+    React.useEffect(() => {
+        if (!isLoading || pendingDemoCount === null) return;
+        if (closet.length < pendingDemoCount) return;
+
+        setIsLoading(false);
+        setPendingDemoCount(null);
+        setShowSuccess(true);
+
+        const timeoutId = window.setTimeout(() => setShowSuccess(false), 2000);
+        return () => window.clearTimeout(timeoutId);
+    }, [closet.length, isLoading, pendingDemoCount]);
 
     const handleLoadDemo = async () => {
         setIsLoading(true);
@@ -40,15 +53,14 @@ export default function LoadDemoDataButton({
         const newDemoItems = sampleData.filter(item => !existingIds.has(item.id));
         const mergedCloset = [...closet, ...newDemoItems];
 
+        setPendingDemoCount(mergedCloset.length);
         onLoadDemo(mergedCloset);
-        setIsLoading(false);
-        setShowSuccess(true);
-
-        setTimeout(() => setShowSuccess(false), 2000);
     };
 
     const handleClearDemo = () => {
         const cleanedCloset = removeDemoItems(closet);
+        setPendingDemoCount(null);
+        setIsLoading(false);
         if (onClearDemo) {
             onClearDemo(cleanedCloset);
         } else {
@@ -73,13 +85,13 @@ export default function LoadDemoDataButton({
                     info
                 </span>
                 <span className="text-xs text-amber-700 dark:text-amber-300">
-                    Armario de prueba cargado
+                    Armario de prueba cargado. Lo podés borrar cuando quieras.
                 </span>
                 <button
                     onClick={handleClearDemo}
-                    className="ml-auto text-xs text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-200 underline"
+                    className="ml-auto rounded-full border border-amber-300/70 bg-white/70 px-3 py-1 text-xs font-semibold text-amber-700 transition hover:bg-white dark:border-amber-700/50 dark:bg-amber-950/30 dark:text-amber-200 dark:hover:bg-amber-950/50"
                 >
-                    Limpiar
+                    Borrar demo
                 </button>
             </motion.div>
         );
@@ -104,7 +116,7 @@ export default function LoadDemoDataButton({
                         ¿Querés probarlo primero?
                     </h3>
                     <p className="text-sm text-text-secondary dark:text-gray-400 max-w-xs">
-                        Cargá un armario de ejemplo con 13 prendas para explorar todas las funciones.
+                        Cargá un armario de ejemplo con 13 prendas para explorar todas las funciones. Después lo podés borrar fácil.
                     </p>
                 </div>
 
@@ -137,7 +149,7 @@ export default function LoadDemoDataButton({
                             ) : (
                                 <>
                                     <span className="material-symbols-outlined text-lg">download</span>
-                                    <span>Cargar Armario Demo</span>
+                                    <span>Probar armario demo</span>
                                 </>
                             )}
                         </motion.button>

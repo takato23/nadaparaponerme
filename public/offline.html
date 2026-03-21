@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#05060a" />
+  <title>Ojo de Loca | Sin conexión</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #05060a;
+      --panel: rgba(14, 17, 26, 0.82);
+      --border: rgba(255, 255, 255, 0.12);
+      --text: rgba(255, 255, 255, 0.92);
+      --muted: rgba(255, 255, 255, 0.62);
+      --accent: #ffffff;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Manrope, system-ui, sans-serif;
+      background:
+        radial-gradient(circle at 20% 20%, rgba(168, 85, 247, 0.16), transparent 26%),
+        radial-gradient(circle at 80% 18%, rgba(59, 130, 246, 0.16), transparent 28%),
+        radial-gradient(circle at 50% 100%, rgba(255, 255, 255, 0.05), transparent 35%),
+        var(--bg);
+      color: var(--text);
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+
+    .shell {
+      width: min(100%, 440px);
+      border: 1px solid var(--border);
+      background: var(--panel);
+      backdrop-filter: blur(20px);
+      border-radius: 32px;
+      padding: 28px;
+      box-shadow: 0 30px 80px rgba(0, 0, 0, 0.4);
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.04);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      color: var(--muted);
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: white;
+      box-shadow: 0 0 24px rgba(255, 255, 255, 0.45);
+    }
+
+    h1 {
+      margin: 18px 0 0;
+      font-size: clamp(2rem, 8vw, 3rem);
+      line-height: 0.92;
+      letter-spacing: -0.05em;
+    }
+
+    p {
+      margin: 16px 0 0;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .actions {
+      margin-top: 24px;
+      display: grid;
+      gap: 12px;
+    }
+
+    button,
+    a {
+      appearance: none;
+      border: 0;
+      width: 100%;
+      border-radius: 20px;
+      padding: 15px 18px;
+      font: inherit;
+      font-weight: 700;
+      text-align: center;
+      text-decoration: none;
+      cursor: pointer;
+      transition: transform 140ms ease, opacity 140ms ease, border-color 140ms ease;
+    }
+
+    button:hover,
+    a:hover {
+      transform: translateY(-1px);
+    }
+
+    .primary {
+      background: var(--accent);
+      color: #05060a;
+    }
+
+    .secondary {
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .tips {
+      margin-top: 22px;
+      padding-top: 18px;
+      border-top: 1px solid var(--border);
+      font-size: 14px;
+      color: var(--muted);
+    }
+  </style>
+</head>
+
+<body>
+  <main class="shell">
+    <div class="badge">
+      <span class="dot"></span>
+      Ojo de Loca
+    </div>
+    <h1>Te quedaste sin conexión.</h1>
+    <p>
+      Podés volver a intentar ahora o abrir de nuevo la app cuando tengas internet.
+      Si ya la instalaste, vas a volver más rápido desde la pantalla de inicio.
+    </p>
+
+    <div class="actions">
+      <button class="primary" type="button" onclick="window.location.reload()">Reintentar</button>
+      <a class="secondary" href="/">Volver al inicio</a>
+    </div>
+
+    <div class="tips">
+      La app guarda parte de la experiencia para cargar más rápido, pero funciones de IA, login y armario en la nube siguen necesitando conexión.
+    </div>
+  </main>
+</body>
+
+</html>

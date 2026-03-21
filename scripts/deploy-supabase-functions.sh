@@ -19,8 +19,16 @@ Examples:
 EOF
 }
 
-PROJECT_REF="${SUPABASE_PROJECT_REF:-${1:-}}"
-MODE="${2:-${SUPABASE_DEPLOY_MODE:-payments}}"
+FIRST_ARG="${1:-}"
+SECOND_ARG="${2:-}"
+
+if [[ "${FIRST_ARG}" =~ ^(all|payments|ai)$ ]]; then
+  PROJECT_REF="${SUPABASE_PROJECT_REF:-}"
+  MODE="${FIRST_ARG}"
+else
+  PROJECT_REF="${SUPABASE_PROJECT_REF:-${FIRST_ARG}}"
+  MODE="${SECOND_ARG:-${SUPABASE_DEPLOY_MODE:-payments}}"
+fi
 
 if [[ -z "${PROJECT_REF}" ]]; then
   usage
@@ -61,12 +69,15 @@ deploy_payments() {
 deploy_ai() {
   deploy analyze-clothing
   deploy analyze-color-palette
+  deploy analyze-look
+  deploy separate-look-garments
   deploy chat-stylist
   deploy generate-fashion-image
   deploy generate-image
   deploy generate-outfit
   deploy generate-packing-list
   deploy openai-image-generation
+  deploy prepare-closet-insights
   deploy shopping-assistant
   deploy style-dna-analysis
   deploy virtual-try-on

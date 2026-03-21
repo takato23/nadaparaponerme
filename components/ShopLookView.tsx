@@ -4,12 +4,20 @@ import { searchProductsFromImage, searchProductsForItem } from '../src/services/
 import { getShoppingLinks, getSponsoredPlacements, trackSponsorClick, ShoppingLink } from '../src/services/monetizationService';
 import Loader from './Loader';
 import { Card } from './ui/Card';
+import { useToast } from '../hooks/useToast';
 
 interface ShopLookViewProps {
   onClose: () => void;
+  onSaveDiscoveredItem?: (input: {
+    imageDataUrl?: string;
+    description: string;
+    category?: string;
+    mode: 'save' | 'wish';
+  }) => Promise<void> | void;
 }
 
-export default function ShopLookView({ onClose }: ShopLookViewProps) {
+export default function ShopLookView({ onClose, onSaveDiscoveredItem }: ShopLookViewProps) {
+  const toast = useToast();
   const [mode, setMode] = useState<'idle' | 'uploading' | 'searching' | 'results'>('idle');
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [textQuery, setTextQuery] = useState('');
@@ -20,6 +28,7 @@ export default function ShopLookView({ onClose }: ShopLookViewProps) {
     quickLinks: ShoppingLink[];
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [savingMode, setSavingMode] = useState<'save' | 'wish' | null>(null);
   const sponsoredPlacements = results ? getSponsoredPlacements(results.description) : [];
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -88,6 +97,24 @@ export default function ShopLookView({ onClose }: ShopLookViewProps) {
     setError(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
+    }
+  };
+
+  const handleSaveToCloset = async (targetMode: 'save' | 'wish') => {
+    if (!results || !onSaveDiscoveredItem) return;
+    setSavingMode(targetMode);
+    try {
+      await onSaveDiscoveredItem({
+        imageDataUrl: imagePreview || undefined,
+        description: results.description,
+        category: results.category,
+        mode: targetMode,
+      });
+      toast.success(targetMode === 'wish' ? 'Agregado a deseados' : 'Guardado en tu armario');
+    } catch (saveError) {
+      toast.error(saveError instanceof Error ? saveError.message : 'No se pudo guardar la prenda');
+    } finally {
+      setSavingMode(null);
     }
   };
 
@@ -288,6 +315,28 @@ export default function ShopLookView({ onClose }: ShopLookViewProps) {
                       </a>
                     ))}
                   </div>
+                </div>
+              )}
+
+              {/* New Search Button */}
+              {onSaveDiscoveredItem && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <button
+                    onClick={() => handleSaveToCloset('save')}
+                    disabled={savingMode !== null}
+                    className="w-full py-3 rounded-2xl bg-white/10 hover:bg-white/20 transition-all font-medium disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    <span className="material-symbols-outlined">bookmark_add</span>
+                    {savingMode === 'save' ? 'Guardando...' : 'Guardar en armario'}
+                  </button>
+                  <button
+                    onClick={() => handleSaveToCloset('wish')}
+                    disabled={savingMode !== null}
+                    className="w-full py-3 rounded-2xl bg-rose-500/20 border border-rose-500/30 hover:bg-rose-500/30 transition-all font-medium disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    <span className="material-symbols-outlined">favorite</span>
+                    {savingMode === 'wish' ? 'Agregando...' : 'Lo deseo'}
+                  </button>
                 </div>
               )}
 

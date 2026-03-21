@@ -1,7 +1,7 @@
 import { supabase } from '../lib/supabase';
 import { logger } from '../utils/logger';
 
-export type SubscriptionTier = 'free' | 'pro' | 'premium';
+export type SubscriptionTier = 'free' | 'plus' | 'pro' | 'premium';
 export type SubscriptionStatus = 'active' | 'past_due' | 'canceled' | 'trialing';
 
 export interface Subscription {
@@ -34,6 +34,7 @@ export interface UsageMetrics {
 
 export interface PlanLimits {
     aiGenerations: number;
+    tryOnLimit: number;
     closetItems: number;
     virtualTryOn: boolean;
     analytics: boolean;
@@ -44,26 +45,39 @@ export interface PlanLimits {
 
 const PLAN_LIMITS: Record<SubscriptionTier, PlanLimits> = {
     free: {
-        aiGenerations: 200,
-        closetItems: 50,
+        aiGenerations: 50,
+        tryOnLimit: 1,
+        closetItems: 100,
+        virtualTryOn: true,
+        analytics: false,
+        exportToSocial: false,
+        outfitCalendar: false,
+        prioritySupport: false,
+    },
+    plus: {
+        aiGenerations: 150,
+        tryOnLimit: 4,
+        closetItems: 250,
         virtualTryOn: true,
         analytics: true,
         exportToSocial: false,
-        outfitCalendar: false,
+        outfitCalendar: true,
         prioritySupport: false,
     },
     pro: {
-        aiGenerations: 300,
-        closetItems: -1, // unlimited
+        aiGenerations: 400,
+        tryOnLimit: 8,
+        closetItems: 600,
         virtualTryOn: true,
         analytics: true,
         exportToSocial: false,
-        outfitCalendar: false,
+        outfitCalendar: true,
         prioritySupport: false,
     },
     premium: {
-        aiGenerations: 400,
-        closetItems: -1, // unlimited
+        aiGenerations: 500,
+        tryOnLimit: 18,
+        closetItems: 1500,
         virtualTryOn: true,
         analytics: true,
         exportToSocial: true,
@@ -156,7 +170,7 @@ export async function canGenerateOutfit(): Promise<{ allowed: boolean; reason?: 
         if (usage && subscription) {
             return {
                 allowed: false,
-                reason: `Has alcanzado tu límite de ${usage.ai_generations_limit} créditos este mes. Upgradeá a ${subscription.tier === 'free' ? 'Pro' : 'Premium'} para más.`,
+                reason: `Alcanzaste tu límite de ${usage.ai_generations_limit} usos IA este mes. Upgradeá a ${subscription.tier === 'free' ? 'Plus' : subscription.tier === 'plus' ? 'Pro' : 'Premium'} para más.`,
             };
         }
 

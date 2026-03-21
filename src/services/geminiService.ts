@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type, Part, Modality } from "@google/genai";
-import type { ClothingItemMetadata, ClothingItem, FitResult, PackingListResult, GroundingChunk, ColorPaletteAnalysis, ChatMessage, WeatherData, WeatherOutfitResult, Lookbook, LookbookTheme, ChallengeType, ChallengeDifficulty, FeedbackInsights, FeedbackPatternData, OutfitRating, SavedOutfit, ShoppingGap, ShoppingRecommendation, ShoppingChatMessage } from '../../types';
+import type { ClothingItemMetadata, ClothingItem, FitResult, PackingListResult, GroundingChunk, ColorPaletteAnalysis, ChatMessage, WeatherData, WeatherOutfitResult, LookAnalysisResult, Lookbook, LookbookTheme, ChallengeType, ChallengeDifficulty, FeedbackInsights, FeedbackPatternData, OutfitRating, SavedOutfit, ShoppingGap, ShoppingRecommendation, ShoppingChatMessage } from '../../types';
 import { getSeason } from './weatherService';
 import { getToneInstructions } from './aiToneHelper';
 import { retryAIOperation, retryAIOperation as retryWithBackoff } from '../../utils/retryWithBackoff';
@@ -220,6 +220,90 @@ export async function analyzeClothingItem(imageDataUrl: string): Promise<Clothin
             'analyzeClothingItem',
             { originalMessage: error?.message }
         );
+    }
+}
+
+const lookAnalysisSchema = {
+    type: Type.OBJECT,
+    properties: {
+        looks: {
+            type: Type.ARRAY,
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    summary: { type: Type.STRING },
+                    occasion: { type: Type.STRING },
+                    style_tags: {
+                        type: Type.ARRAY,
+                        items: { type: Type.STRING },
+                    },
+                    palette: {
+                        type: Type.ARRAY,
+                        items: { type: Type.STRING },
+                    },
+                    dominant_pieces: {
+                        type: Type.ARRAY,
+                        items: { type: Type.STRING },
+                    },
+                    confidence: { type: Type.NUMBER },
+                },
+                required: ['summary', 'style_tags', 'palette', 'dominant_pieces', 'confidence'],
+            },
+        },
+        cross_suggestions: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+        },
+        adaptation_tip: { type: Type.STRING },
+    },
+    required: ['looks', 'cross_suggestions'],
+};
+
+export async function analyzeLooksFromPhotos(imageDataUrls: string[]): Promise<LookAnalysisResult> {
+    if (!Array.isArray(imageDataUrls) || imageDataUrls.length === 0) {
+        throw new Error('Necesitás al menos una foto para analizar looks.');
+    }
+
+    try {
+        const parts = imageDataUrls.map((imageDataUrl, index) => {
+            const [mimeType, base64Data] = imageDataUrl.split(';base64,');
+            const imageMimeType = mimeType?.split(':')[1];
+
+            if (!base64Data || !imageMimeType) {
+                throw new Error(`Formato inválido en la foto ${index + 1}.`);
+            }
+
+            return base64ToGenerativePart(base64Data, imageMimeType);
+        });
+
+        const response = await retryAIOperation(async () => {
+            return await getAIClient().models.generateContent({
+                model: 'gemini-2.0-flash',
+                contents: {
+                    parts: [
+                        ...parts,
+                        {
+                            text: 'Analizá estas fotos de looks completos de una misma persona. Para cada foto devolvé una lectura útil, concreta y defendible: ocasión probable, tags de estilo, paleta, piezas dominantes visibles y una confianza aproximada. Además devolvé 2 o 3 cruces entre looks y una adaptación contextual breve. No prometas identificar exactamente la misma prenda entre fotos.',
+                        },
+                    ],
+                },
+                config: {
+                    systemInstruction: 'Sos un stylist argentino. Hablá claro, útil y sin vender humo. Priorizá valor práctico en onboarding: estilo, ocasión, piezas visibles y combinaciones entre looks. Usá lenguaje rioplatense.',
+                    responseMimeType: 'application/json',
+                    responseSchema: lookAnalysisSchema,
+                },
+            });
+        });
+
+        const parsed = JSON.parse(response.text || '{}');
+        return {
+            looks: Array.isArray(parsed.looks) ? parsed.looks : [],
+            cross_suggestions: Array.isArray(parsed.cross_suggestions) ? parsed.cross_suggestions : [],
+            adaptation_tip: typeof parsed.adaptation_tip === 'string' ? parsed.adaptation_tip : null,
+        };
+    } catch (error) {
+        console.error('Error analyzing looks from photos:', error);
+        throw new Error('No pude analizar tus looks ahora. Probá de nuevo en unos segundos.');
     }
 }
 
@@ -951,7 +1035,7 @@ Tu blusa azul marino combinada con el pantalón beige y los zapatos negros. El a
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
         try {
             const response = await getAIClient().models.generateContent({
-                model: 'gemini-2.5-flash',
+                model: 'gemini-3.1-flash-lite-preview',
                 contents: [
                     ...conversationHistory,
                     { role: 'user', parts: [{ text: userMessage }] }
@@ -1215,7 +1299,7 @@ IMPORTANTE: Devuelve SIEMPRE los IDs exactos de prendas que existen en el invent
 
     try {
         const response = await getAIClient().models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-3.1-flash-lite-preview',
             contents: { parts: [{ text: `Genera el outfit perfecto para el clima de hoy` }] },
             config: {
                 systemInstruction,
@@ -1334,7 +1418,7 @@ ESTILO DE RESPUESTA:
 - Lenguaje entusiasta pero profesional`;
 
         const response = await getAIClient().models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-3.1-flash-lite-preview',
             contents: { parts: [{ text: `Crea un lookbook completo de ${themeDescription}` }] },
             config: {
                 systemInstruction,
@@ -1489,7 +1573,7 @@ IMPORTANTE:
 - Considera la diversidad del armario al crear restricciones`;
 
         const response = await getAIClient().models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-3.1-flash-lite-preview',
             contents: { parts: [{ text: `Genera un desafío de estilo personalizado y creativo` }] },
             config: {
                 systemInstruction,
@@ -1683,7 +1767,7 @@ IMPORTANTE:
 
     try {
         const response = await getAIClient().models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-3.1-flash-lite-preview',
             contents: { parts: [{ text: `Analiza los patrones de feedback del usuario` }] },
             config: {
                 systemInstruction,
@@ -1906,7 +1990,7 @@ IMPORTANTE:
 
     try {
         const response = await getAIClient().models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-3.1-flash-lite-preview',
             contents: { parts: [{ text: `Analiza el armario y genera un reporte completo de gaps` }] },
             config: {
                 systemInstruction,
@@ -2189,7 +2273,7 @@ IMPORTANTE:
         };
 
         const response = await getAIClient().models.generateContent({
-            model: 'gemini-2.5-flash', // Stable model from list
+            model: 'gemini-3.1-flash-lite-preview', // Stable model from list
             contents: {
                 parts: [
                     imagePart,
@@ -2412,7 +2496,7 @@ REGLAS CRÍTICAS:
     try {
         // Step 1: Search for dupes using Google Search grounding
         const searchResponse = await getAIClient().models.generateContent({
-            model: "gemini-2.5-flash",
+            model: "gemini-3.1-flash-lite-preview",
             contents: `Buscar productos similares más baratos: ${searchQuery} en Argentina, Buenos Aires, Mercado Libre. Devolver enlaces de shopping online locales.`,
             config: {
                 tools: [{ googleSearch: {} }],
@@ -2457,7 +2541,7 @@ ${shoppingResultsText}
 Selecciona 3-5 dupes que sean visualmente similares y significativamente más baratos. Genera análisis completo.`;
 
         const analysisResponse = await getAIClient().models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-3.1-flash-lite-preview',
             contents: {
                 parts: [
                     imagePart,
@@ -2755,7 +2839,7 @@ Responde en español con:
 
         // Call Gemini Pro with structured output
         const response = await getAIClient().models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-3.1-flash-lite-preview',
             contents: { parts: [{ text: userPrompt }] },
             config: {
                 systemInstruction: systemPrompt,
@@ -3073,7 +3157,7 @@ Responde en español con:
 
         // Call Gemini Pro with structured output
         const response = await getAIClient().models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-3.1-flash-lite-preview',
             contents: { parts: [{ text: userPrompt }] },
             config: {
                 systemInstruction: systemPrompt,
@@ -3179,7 +3263,7 @@ EJEMPLOS:
 Ahora genera el prompt optimizado para la descripción del usuario:`;
 
         const promptResult = await getAIClient().models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-3.1-flash-lite-preview',
             contents: { parts: [{ text: `Genera el prompt optimizado para la descripción: "${request.description}"` }] },
             config: {
                 systemInstruction: systemPrompt,
@@ -3418,7 +3502,7 @@ Structured JSON con todos los campos requeridos del schema StyleEvolutionTimelin
 
     try {
         const result = await getAIClient().models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-3.1-flash-lite-preview',
             contents: [{ role: 'user', parts: [{ text: systemPrompt }] }],
             config: {
                 temperature: 0.6, // Balance between creativity and consistency
@@ -3463,7 +3547,7 @@ Structured JSON con todos los campos requeridos del schema StyleEvolutionTimelin
 export async function generateContent(prompt: string): Promise<string> {
     try {
         const response = await getAIClient().models.generateContent({
-            model: "gemini-2.5-flash",
+            model: "gemini-3.1-flash-lite-preview",
             contents: { parts: [{ text: prompt }] },
             config: {
                 temperature: 0.7,
@@ -3565,7 +3649,7 @@ Retorna un análisis de gaps priorizados.`;
 
     try {
         const result = await getAIClient().models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-3.1-flash-lite-preview',
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
             config: {
                 temperature: 0.5,
@@ -3677,7 +3761,7 @@ Sugiere 2-4 productos específicos por gap prioritario. Sé realista con precios
 
     try {
         const result = await getAIClient().models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-3.1-flash-lite-preview',
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
             config: {
                 temperature: 0.6,
@@ -3788,7 +3872,7 @@ Respondé de forma conversacional, útil y accionable.`;
 
     try {
         const response = await getAIClient().models.generateContent({
-            model: "gemini-2.5-flash",
+            model: "gemini-3.1-flash-lite-preview",
             contents: { parts: [{ text: prompt }] },
             config: {
                 systemInstruction,

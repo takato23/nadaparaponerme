@@ -181,7 +181,7 @@ export function useUserCredits(): UseUserCreditsReturn {
 // ============================================================================
 
 export function useFeatureAccess(feature: FeatureType) {
-  const { checkFeature, useFeature, triggerUpgradeModal } = useUserCredits();
+  const { checkFeature, useFeature: consumeFeature, triggerUpgradeModal } = useUserCredits();
   const [status, setStatus] = useState<UsageStatus | null>(null);
 
   useEffect(() => {
@@ -189,12 +189,12 @@ export function useFeatureAccess(feature: FeatureType) {
   }, [feature, checkFeature]);
 
   const tryUse = useCallback(async (): Promise<boolean> => {
-    const result = await useFeature(feature);
+    const result = await consumeFeature(feature);
     if (result) {
       setStatus(checkFeature(feature));
     }
     return result;
-  }, [feature, useFeature, checkFeature]);
+  }, [feature, consumeFeature, checkFeature]);
 
   const showUpgrade = useCallback(() => {
     triggerUpgradeModal(feature);

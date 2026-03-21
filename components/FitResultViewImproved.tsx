@@ -197,7 +197,7 @@ const FitResultViewImproved: React.FC<FitResultViewImprovedProps> = ({
       setHasSharedForReward(true);
       setShowConfetti(true);
 
-      toast.success(`🎉 ¡+1 crédito desbloqueado! Tenés ${result.newRemaining} créditos restantes.`);
+      toast.success(`🎉 ¡+1 uso desbloqueado! Tenés ${result.newRemaining} usos restantes.`);
     };
 
     // Try Web Share API first

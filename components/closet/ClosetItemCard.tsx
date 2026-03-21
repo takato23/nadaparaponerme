@@ -13,7 +13,7 @@
  * - Premium "Modern Editorial" aesthetic
  */
 
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ClothingItem } from '../../types';
 import { useNavigate } from 'react-router-dom';
@@ -61,14 +61,14 @@ export default function ClosetItemCard({
   // Get safe image URL using centralized helper
   // preferThumbnail=true for grid views to improve performance
   const imageUrl = useMemo(() => {
-    return getImageUrl(item as any, viewMode === 'grid');
+    return getImageUrl(item, viewMode === 'grid');
   }, [item, viewMode]);
 
   const statusBadge = useMemo(() => {
     if (item.status === 'virtual') {
       return {
         label: 'Prestado',
-        className: 'bg-white/85 text-gray-700 border-white/70'
+        className: 'bg-white/88 text-gray-700 border-white/70'
       };
     }
     if (item.status === 'wishlist') {
@@ -85,32 +85,33 @@ export default function ClosetItemCard({
     if (item.aiStatus === 'ready') return null;
     if (item.aiStatus === 'processing') {
       return {
-        label: 'Analizando IA',
+        label: 'IA',
         className: 'bg-sky-100/90 text-sky-700 border-sky-200/70',
       };
     }
     if (item.aiStatus === 'failed') {
       return {
-        label: 'Error IA',
+        label: 'Error',
         className: 'bg-red-100/90 text-red-700 border-red-200/70',
       };
     }
-    return {
-      label: 'Sin analizar',
-      className: 'bg-indigo-100/90 text-indigo-700 border-indigo-200/70',
-    };
+    return null;
   }, [item.aiStatus]);
 
   // Handle click
-  const handleClick = (e: React.MouseEvent) => {
+  const activateCard = () => {
     if (isSelectionMode && onToggleSelection) {
-      e.stopPropagation();
       if (navigator.vibrate) navigator.vibrate(5);
       onToggleSelection(item.id);
     } else if (onClick) {
       if (navigator.vibrate) navigator.vibrate(5);
       onClick(item.id);
     }
+  };
+
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    activateCard();
   };
 
   // Handle long press (mobile)
@@ -142,15 +143,15 @@ export default function ClosetItemCard({
 
   // Size classes
   const sizeClasses = {
-    compact: 'h-40',
-    normal: 'h-64',
-    large: 'h-80'
+    compact: 'min-h-[15rem]',
+    normal: 'min-h-[20rem]',
+    large: 'min-h-[24rem]'
   };
 
   const imageSizeClasses = {
-    compact: 'h-28',
-    normal: 'h-48',
-    large: 'h-64'
+    compact: 'h-36',
+    normal: 'h-56',
+    large: 'h-72'
   };
 
   const entryDelay = Math.min(index, 12) * 0.04;
@@ -164,68 +165,66 @@ export default function ClosetItemCard({
         exit={{ opacity: 0, x: 20 }}
         transition={{ duration: 0.3, delay: index * 0.05, ease: "easeOut" }}
         className={`
-          flex items-center gap-4 p-3 rounded-2xl glass-card
-          hover:shadow-glow transition-all cursor-pointer group
+          flex items-center gap-3 rounded-[24px] border border-white/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.9),rgba(239,244,246,0.82))] p-3.5 shadow-sm transition-all cursor-pointer group
+          hover:-translate-y-0.5 hover:shadow-[0_16px_34px_rgba(20,52,59,0.12)]
           ${isSelected ? 'ring-2 ring-primary ring-offset-2 ring-offset-background-light dark:ring-offset-background-dark' : ''}
         `}
         onClick={handleClick}
       >
-        {/* Selection checkbox */}
-        {isSelectionMode && (
-          <div className="flex-shrink-0">
-            <input
-              type="checkbox"
-              checked={isSelected}
-              onChange={() => onToggleSelection?.(item.id)}
-              className="w-5 h-5 rounded-md border-gray-300 text-primary focus:ring-primary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
-              onClick={(e) => e.stopPropagation()}
-              aria-label={`Seleccionar ${item.metadata?.subcategory || 'prenda'}`}
-            />
-          </div>
-        )}
-
         {/* Image */}
-        <div className="flex-shrink-0 w-20 h-20 rounded-xl overflow-hidden shadow-sm relative">
+        <div className="relative h-20 w-20 flex-shrink-0 overflow-hidden rounded-[20px] border border-white/70 bg-white shadow-sm">
           {!imageLoaded && (
             <div className="absolute inset-0 bg-gray-200 dark:bg-gray-700 animate-pulse" />
           )}
           <img
-            src={item.imageDataUrl}
+            src={imageUrl}
             alt={item.metadata?.subcategory || 'Clothing item'}
-            className={`w-full h-full object-cover transition-transform duration-500 group-hover:scale-110 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
+            className={`w-full h-full object-contain p-2 transition-transform duration-500 group-hover:scale-105 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
             loading="lazy"
             onLoad={() => setImageLoaded(true)}
+            onError={(event) => {
+              if (!event.currentTarget.src.includes('data:image/svg+xml')) {
+                event.currentTarget.src = PLACEHOLDERS.error;
+              }
+              setImageLoaded(true);
+            }}
           />
         </div>
 
         {/* Info */}
         <div className="flex-grow min-w-0">
-          <h3 className="font-serif font-bold text-lg text-text-primary dark:text-gray-100 capitalize truncate group-hover:text-primary transition-colors">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-full bg-[#eef4f6] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#14343b]">
+              {item.metadata?.category || 'Prenda'}
+            </span>
+            {statusBadge && (
+              <span
+                className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${statusBadge.className}`}
+              >
+                {statusBadge.label}
+              </span>
+            )}
+            {aiStatusBadge && (
+              <span
+                className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${aiStatusBadge.className}`}
+              >
+                {aiStatusBadge.label}
+              </span>
+            )}
+          </div>
+
+          <h3 className="mt-2 text-base font-semibold text-text-primary dark:text-gray-100 capitalize truncate group-hover:text-primary transition-colors">
             {item.metadata?.subcategory || 'Sin categoría'}
           </h3>
-          <p className="text-sm text-text-secondary dark:text-gray-400 capitalize truncate font-medium">
-            {item.metadata?.color_primary || 'Sin color'}
+          <p className="mt-1 text-sm text-text-secondary dark:text-gray-400 capitalize truncate font-medium">
+            {[item.metadata?.color_primary, item.metadata?.description].filter(Boolean).join(' • ') || 'Sin detalle'}
           </p>
-          {statusBadge && (
-            <span
-              className={`mt-1 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${statusBadge.className}`}
-            >
-              {statusBadge.label}
-            </span>
-          )}
-          {aiStatusBadge && (
-            <span
-              className={`mt-1 ml-1 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${aiStatusBadge.className}`}
-            >
-              {aiStatusBadge.label}
-            </span>
-          )}
           {item.metadata?.vibe_tags && item.metadata.vibe_tags.length > 0 && (
-            <div className="flex gap-1 mt-1.5">
+            <div className="mt-2 flex flex-wrap gap-1.5">
               {item.metadata.vibe_tags.slice(0, 2).map((tag, i) => (
                 <span
                   key={i}
-                  className="text-xs uppercase tracking-wider px-2 py-0.5 rounded-full bg-surface-light dark:bg-surface-dark border border-gray-200 dark:border-gray-700 text-text-secondary dark:text-gray-400"
+                  className="rounded-full border border-black/8 bg-white/80 px-2.5 py-1 text-[11px] font-medium text-text-secondary dark:text-gray-400"
                 >
                   {tag}
                 </span>
@@ -241,17 +240,32 @@ export default function ClosetItemCard({
           </div>
         )}
 
-        {/* Quick actions */}
         <div className="flex-shrink-0">
-          <button
-            type="button"
-            onClick={(e) => handleQuickAction('edit', e)}
-            className="w-10 h-10 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center justify-center transition-colors text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
-            aria-label={`Editar ${item.metadata?.subcategory || 'prenda'}`}
-            title="Editar"
-          >
-            <span className="material-symbols-outlined text-xl" aria-hidden="true">edit</span>
-          </button>
+          {isSelectionMode ? (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                if (navigator.vibrate) navigator.vibrate(5);
+                onToggleSelection?.(item.id);
+              }}
+              className={`rounded-full px-3 py-2 text-xs font-semibold transition ${
+                isSelected
+                  ? 'bg-[#08111a] text-white shadow-sm'
+                  : 'border border-black/10 bg-white/90 text-[#14343b] hover:bg-[#f4f7f8]'
+              }`}
+              aria-label={`${isSelected ? 'Quitar' : 'Agregar'} ${item.metadata?.subcategory || 'prenda'} del look`}
+            >
+              {isSelected ? 'Quitar' : 'Agregar'}
+            </button>
+          ) : (
+            <div className="flex items-center gap-1 text-text-secondary">
+              <span className="hidden text-xs font-semibold uppercase tracking-[0.16em] text-black/40 sm:inline">
+                Ver
+              </span>
+              <span className="material-symbols-outlined text-lg" aria-hidden="true">arrow_forward_ios</span>
+            </div>
+          )}
         </div>
       </motion.div>
     );
@@ -271,7 +285,7 @@ export default function ClosetItemCard({
         layout: { duration: 0.3, ease: "easeOut" }
       }}
       className={`
-        relative rounded-2xl overflow-hidden cursor-pointer glass-card group
+        relative flex flex-col rounded-2xl overflow-hidden cursor-pointer glass-card group
         ${sizeClasses[size]}
         ${isSelected ? 'ring-2 ring-primary ring-offset-2 ring-offset-background-light dark:ring-offset-background-dark' : ''}
         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2
@@ -287,7 +301,7 @@ export default function ClosetItemCard({
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
-          handleClick(e as any);
+          activateCard();
         }
       }}
     >
@@ -322,15 +336,15 @@ export default function ClosetItemCard({
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-60 group-hover:opacity-80 transition-opacity duration-300" />
 
         {/* Prominent Center CTA for Grid */}
-        {!isSelectionMode && (
-          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">
+        {!isSelectionMode && isHovered && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center opacity-0 transition-opacity duration-300 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto">
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 if (navigator.vibrate) navigator.vibrate(5);
                 navigate(ROUTES.STUDIO, { state: { preselectedItemIds: [item.id] } });
               }}
-              className="pointer-events-auto bg-[length:200%_200%] animate-gradient-xy bg-gradient-to-r from-purple-500 via-pink-500 to-[color:var(--studio-rose)] text-white shadow-[0_8px_25px_rgba(236,72,153,0.5)] hover:shadow-[0_12px_35px_rgba(236,72,153,0.7)] active:scale-95 px-6 py-3 rounded-2xl flex items-center justify-center gap-2 transition-transform hover:-translate-y-1"
+              className="bg-[length:200%_200%] animate-gradient-xy bg-gradient-to-r from-purple-500 via-pink-500 to-[color:var(--studio-rose)] px-6 py-3 rounded-2xl flex items-center justify-center gap-2 text-white shadow-[0_8px_25px_rgba(236,72,153,0.5)] transition-transform hover:-translate-y-1 hover:shadow-[0_12px_35px_rgba(236,72,153,0.7)] active:scale-95"
               title="Probar Ahora"
             >
               <span className="material-symbols-outlined text-2xl drop-shadow-sm">auto_fix_high</span>
@@ -358,12 +372,12 @@ export default function ClosetItemCard({
 
         <div className={`absolute top-3 ${isSelectionMode ? 'left-12' : 'left-3'} z-20 flex flex-col gap-1`}>
           {statusBadge && (
-            <span className={`px-2 py-1 rounded-full text-xs font-semibold border backdrop-blur-sm ${statusBadge.className}`}>
+            <span className={`px-2 py-1 rounded-full text-[11px] font-semibold border backdrop-blur-sm ${statusBadge.className}`}>
               {statusBadge.label}
             </span>
           )}
-          {aiStatusBadge && (
-            <span className={`px-2 py-1 rounded-full text-xs font-semibold border backdrop-blur-sm ${aiStatusBadge.className}`}>
+          {aiStatusBadge && !statusBadge && (
+            <span className={`px-2 py-1 rounded-full text-[11px] font-semibold border backdrop-blur-sm ${aiStatusBadge.className}`}>
               {aiStatusBadge.label}
             </span>
           )}
@@ -507,7 +521,7 @@ export default function ClosetItemCard({
       </div>
 
       {/* Info section */}
-      <div className="relative p-4 flex flex-col justify-between flex-grow bg-white/40 dark:bg-black/40 backdrop-blur-md">
+      <div className={`relative p-4 flex flex-col justify-between flex-grow bg-white/40 dark:bg-black/40 backdrop-blur-md ${isSelectionMode ? 'min-h-[88px]' : ''}`}>
         <div>
           <h3 className="font-serif font-bold text-lg text-text-primary dark:text-gray-100 capitalize truncate leading-tight group-hover:text-primary transition-colors">
             {item.metadata?.subcategory || 'Sin categoría'}
@@ -518,7 +532,7 @@ export default function ClosetItemCard({
         </div>
 
         {/* Tags (max 2) */}
-        {item.metadata?.vibe_tags && item.metadata.vibe_tags.length > 0 && (
+        {!isSelectionMode && item.metadata?.vibe_tags && item.metadata.vibe_tags.length > 0 && (
           <div className="flex gap-1.5 mt-3 overflow-hidden">
             {item.metadata.vibe_tags.slice(0, 2).map((tag, i) => (
               <span

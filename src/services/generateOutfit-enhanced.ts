@@ -280,7 +280,7 @@ RESPONDE EN ESPAÑOL con el JSON estructurado usando SOLO IDs del inventario.`;
     try {
         const response = await retryWithBackoff(async () => {
             return await getAIClient().models.generateContent({
-                model: 'gemini-2.5-flash',
+                model: 'gemini-3.1-flash-lite-preview',
                 contents: {
                     parts: [{
                         text: `Petición del usuario: "${userPrompt}"\n\nCrea el mejor outfit posible siguiendo la metodología Chain of Thought.`
@@ -443,7 +443,7 @@ Ordena los candidatos del MEJOR al PEOR (mejor = score más alto primero).`;
     try {
         const stage1Response = await retryWithBackoff(async () => {
             return await getAIClient().models.generateContent({
-                model: 'gemini-2.5-flash',
+                model: 'gemini-3.1-flash-lite-preview',
                 contents: {
                     parts: [{ text: `Genera 3 outfit candidates para: "${userPrompt}"` }]
                 },
@@ -502,7 +502,7 @@ Sé CRÍTICO y HONESTO. Si todos los candidatos son mediocres, dilo.`;
     try {
         const stage2Response = await retryWithBackoff(async () => {
             return await getAIClient().models.generateContent({
-                model: 'gemini-2.5-flash',
+                model: 'gemini-3.1-flash-lite-preview',
                 contents: {
                     parts: [{ text: `Evalúa estos 3 outfits y selecciona el mejor.` }]
                 },
@@ -731,7 +731,7 @@ export async function generateOutfitEnhancedV3(
     try {
         const response = await retryWithBackoff(async () => {
             return await getAIClient().models.generateContent({
-                model: 'gemini-2.5-flash',
+                model: 'gemini-3.1-flash-lite-preview',
                 contents: {
                     parts: [{
                         text: `Crea el mejor outfit para ${occasionType}: "${userPrompt}"`

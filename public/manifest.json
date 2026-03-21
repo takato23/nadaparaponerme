@@ -1,11 +1,16 @@
 {
-  "name": "No Tengo Nada Para Ponerme",
+  "id": "/?source=pwa",
+  "name": "Ojo de Loca",
   "short_name": "Ojo de Loca",
-  "description": "Tu asistente personal de moda con IA",
-  "start_url": "/",
+  "description": "Tu armario digital inteligente para decidir qué ponerte, guardar looks reutilizables y dejar Studio como capa premium visual.",
+  "lang": "es-AR",
+  "dir": "ltr",
+  "start_url": "/?source=pwa",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#A8A29E",
-  "theme_color": "#0D9488",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui", "browser"],
+  "background_color": "#05060a",
+  "theme_color": "#05060a",
   "orientation": "portrait",
   "icons": [
     {
@@ -21,6 +26,30 @@
       "purpose": "any maskable"
     }
   ],
+  "shortcuts": [
+    {
+      "name": "Abrir armario",
+      "short_name": "Armario",
+      "description": "Entrá directo a tu armario digital",
+      "url": "/armario?source=pwa-shortcut"
+    },
+    {
+      "name": "Abrir looks",
+      "short_name": "Looks",
+      "description": "Entrá a tu biblioteca de looks reutilizables",
+      "url": "/guardados?source=pwa-shortcut"
+    },
+    {
+      "name": "Hablar con Kumbi",
+      "short_name": "Kumbi",
+      "description": "Consultá gratis con Kumbi sobre tu armario",
+      "url": "/?source=pwa-chat"
+    }
+  ],
+  "launch_handler": {
+    "client_mode": "navigate-existing"
+  },
+  "prefer_related_applications": false,
   "categories": ["lifestyle", "fashion", "productivity"],
   "screenshots": [
     {
@@ -28,6 +57,12 @@
       "sizes": "750x1334",
       "type": "image/png",
       "form_factor": "narrow"
+    },
+    {
+      "src": "/og-image.png",
+      "sizes": "1200x630",
+      "type": "image/png",
+      "form_factor": "wide"
     }
   ]
 }

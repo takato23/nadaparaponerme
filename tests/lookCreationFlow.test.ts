@@ -3,14 +3,22 @@ import {
   buildGarmentEditPrompt,
   buildLookCostMessage,
   buildLookCreationPrompt,
+  classifyStylistIntent,
   detectGarmentEditIntent,
+  detectItemRecommendationIntent,
   detectLookCreationIntent,
+  detectWardrobeOutfitIntent,
   getMissingLookFields,
+  isAmbiguousAICreationRequest,
   isAffirmative,
   isNegative,
   mapLookCategoryToTryOnSlot,
+  parseAppNavigationIntent,
+  parseAmbiguousLookRequestResolution,
   parseLookCreationCategory,
   parseLookCreationFields,
+  parseReferencedItemIntent,
+  wantsAutoCategorySelection,
 } from '../src/services/lookCreationFlow';
 
 describe('lookCreationFlow', () => {
@@ -28,6 +36,89 @@ describe('lookCreationFlow', () => {
     expect(detectGarmentEditIntent('armame un outfit con mi armario')).toBe(false);
   });
 
+  it('detecta intención explícita de recomendación de prenda', () => {
+    expect(detectItemRecommendationIntent('recomendame una prenda para hoy')).toBe(true);
+    expect(detectItemRecommendationIntent('que me recomendas de mi armario para una cita')).toBe(true);
+    expect(detectItemRecommendationIntent('reocmeinda una prenda para mi closet')).toBe(true);
+    expect(detectItemRecommendationIntent('aconsejame ropa de mi armario')).toBe(true);
+    expect(detectItemRecommendationIntent('que remera me pongo mostrame')).toBe(true);
+    expect(detectItemRecommendationIntent('armame un outfit con mi armario')).toBe(false);
+    expect(detectItemRecommendationIntent('recomendame una peli para hoy')).toBe(false);
+  });
+
+  it('detecta outfit con armario y pedidos ambiguos por separado', () => {
+    expect(detectWardrobeOutfitIntent('armame un outfit para una fiesta con mi armario')).toBe(true);
+    expect(isAmbiguousAICreationRequest('quiero crear un look nuevo con IA')).toBe(true);
+    expect(isAmbiguousAICreationRequest('generame una remera formal')).toBe(false);
+    expect(classifyStylistIntent('armame un outfit para oficina con mi armario')).toBe('outfit_from_wardrobe');
+    expect(classifyStylistIntent('quiero crear un look nuevo con IA')).toBe('generate_new_garment');
+  });
+
+  it('parsea resolución de pedido ambiguo y delegación', () => {
+    expect(parseAmbiguousLookRequestResolution('outfit con mi armario')).toBe('wardrobe_outfit');
+    expect(parseAmbiguousLookRequestResolution('prenda nueva')).toBe('new_garment');
+    expect(parseAmbiguousLookRequestResolution('elegí vos')).toBe('delegate');
+    expect(wantsAutoCategorySelection('sorprendeme')).toBe(true);
+  });
+
+  it('parsea intents de navegación dentro de la app', () => {
+    expect(parseAppNavigationIntent('mostrame mis looks')).toEqual({
+      type: 'open_saved_looks',
+      route: '/guardados',
+    });
+    expect(parseAppNavigationIntent('abrime la wishlist')).toEqual({
+      type: 'open_wishlist',
+      route: '/armario',
+    });
+    expect(parseAppNavigationIntent('mostrame tops negros')).toEqual({
+      type: 'open_closet_filtered',
+      route: '/armario',
+      filters: {
+        category: 'top',
+        color: 'negro',
+        occasion: undefined,
+      },
+    });
+    expect(parseAppNavigationIntent('mostrame mis remeras')).toEqual({
+      type: 'open_closet_filtered',
+      route: '/armario',
+      filters: {
+        category: 'top',
+        color: undefined,
+        occasion: undefined,
+      },
+    });
+    expect(parseAppNavigationIntent('mostrame mis zapatos')).toEqual({
+      type: 'open_closet_filtered',
+      route: '/armario',
+      filters: {
+        category: 'shoes',
+        color: undefined,
+        occasion: undefined,
+      },
+    });
+    expect(parseAppNavigationIntent('mostrame una camisa mia')).toBeNull();
+  });
+
+  it('parsea intents de aclaración sobre prendas concretas', () => {
+    expect(parseReferencedItemIntent('mostrame una camisa mia')).toEqual({
+      kind: 'item_clarification',
+      category: 'top',
+    });
+    expect(parseReferencedItemIntent('que camisa decis')).toEqual({
+      kind: 'item_clarification',
+      category: 'top',
+    });
+    expect(parseReferencedItemIntent('cual de mis tops')).toEqual({
+      kind: 'item_clarification',
+      category: 'top',
+    });
+    expect(parseReferencedItemIntent('mostrame eso en fotos')).toEqual({
+      kind: 'item_clarification',
+      category: undefined,
+    });
+  });
+
   it('parsea categoría desde texto libre', () => {
     expect(parseLookCreationCategory('Quiero un top elegante')).toBe('top');
     expect(parseLookCreationCategory('Necesito un pantalón de oficina')).toBe('bottom');
@@ -40,6 +131,11 @@ describe('lookCreationFlow', () => {
     expect(parsed.style).toBe('formal');
     expect(parsed.occasion).toBe('oficina');
     expect(parsed.category).toBe('top');
+  });
+
+  it('no sobrescribe campos con undefined en parseos parciales', () => {
+    expect(parseLookCreationFields('fiesta')).toEqual({ occasion: 'fiesta' });
+    expect(parseLookCreationFields('casual')).toEqual({ style: 'casual' });
   });
 
   it('detecta campos faltantes para el flujo guiado', () => {
@@ -65,7 +161,7 @@ describe('lookCreationFlow', () => {
     const costMessage = buildLookCostMessage(draft);
     const prompt = buildLookCreationPrompt(draft);
 
-    expect(costMessage).toContain('cuesta 2 créditos');
+    expect(costMessage).toContain('cuesta 2 usos premium');
     expect(prompt).toContain('Ocasión: fiesta');
     expect(prompt).toContain('Estilo: elegante');
     expect(prompt).toContain('Categoría: top');

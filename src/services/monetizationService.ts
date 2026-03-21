@@ -1,5 +1,6 @@
 import { ClothingItem } from '../../types';
 import { supabase } from '../lib/supabase';
+import { normalizeCountryCode } from '../utils/localeCountry';
 
 // Feature Flags Keys
 export const MONETIZATION_FLAGS = {
@@ -89,6 +90,30 @@ const AFFILIATE_TAGS: Partial<Record<ShoppingPlatform, string>> = {
     amazon: 'ojodeloca-20',
 };
 
+const ML_BASE_BY_COUNTRY: Record<string, string> = {
+    AR: 'https://listado.mercadolibre.com.ar',
+    MX: 'https://listado.mercadolibre.com.mx',
+    CL: 'https://listado.mercadolibre.cl',
+    CO: 'https://listado.mercadolibre.com.co',
+    PE: 'https://listado.mercadolibre.com.pe',
+};
+
+const AMAZON_BASE_BY_COUNTRY: Record<string, string> = {
+    AR: 'https://www.amazon.com',
+    MX: 'https://www.amazon.com.mx',
+    CL: 'https://www.amazon.com',
+    CO: 'https://www.amazon.com',
+    PE: 'https://www.amazon.com',
+};
+
+const GOOGLE_BASE_BY_COUNTRY: Record<string, string> = {
+    AR: 'https://www.google.com.ar',
+    MX: 'https://www.google.com.mx',
+    CL: 'https://www.google.cl',
+    CO: 'https://www.google.com.co',
+    PE: 'https://www.google.com.pe',
+};
+
 const SPONSORED_PLACEMENTS: SponsoredPlacement[] = [
     {
         id: 'sponsored-zara',
@@ -137,33 +162,38 @@ const SPONSORED_PLACEMENTS: SponsoredPlacement[] = [
  * Links are search URLs with optional affiliate tags
  *
  * @param searchTerm - Description of the item to search (e.g. "remera blanca básica")
+ * @param countryCode - Optional country hint for geo-targeted links (AR, MX, CL, CO, PE)
  * @returns Array of shopping links for different platforms
  */
-export function getShoppingLinks(searchTerm: string): ShoppingLink[] {
+export function getShoppingLinks(searchTerm: string, countryCode?: string): ShoppingLink[] {
     if (!getFeatureFlag(MONETIZATION_FLAGS.ENABLE_AFFILIATES)) return [];
 
+    const normalizedCountry = normalizeCountryCode(countryCode) || 'AR';
     const encodedTerm = encodeURIComponent(searchTerm);
     const mlTerm = searchTerm.replace(/ /g, '-'); // MercadoLibre uses dashes
     const amazonTag = AFFILIATE_TAGS.amazon ? `&tag=${AFFILIATE_TAGS.amazon}` : '';
+    const mlBase = ML_BASE_BY_COUNTRY[normalizedCountry] || ML_BASE_BY_COUNTRY.AR;
+    const amazonBase = AMAZON_BASE_BY_COUNTRY[normalizedCountry] || AMAZON_BASE_BY_COUNTRY.AR;
+    const googleBase = GOOGLE_BASE_BY_COUNTRY[normalizedCountry] || GOOGLE_BASE_BY_COUNTRY.AR;
 
     return [
         {
             platform: 'mercadolibre',
             name: 'Mercado Libre',
-            url: `https://listado.mercadolibre.com.ar/${encodeURIComponent(mlTerm)}`,
+            url: `${mlBase}/${encodeURIComponent(mlTerm)}`,
             icon: 'storefront'
         },
         {
             platform: 'amazon',
             name: 'Amazon',
-            url: `https://www.amazon.com/s?k=${encodedTerm}${amazonTag}`,
+            url: `${amazonBase}/s?k=${encodedTerm}${amazonTag}`,
             // Para agregar afiliados después: &tag=TU-TAG-20
             icon: 'shopping_cart'
         },
         {
             platform: 'google',
             name: 'Google Shopping',
-            url: `https://www.google.com/search?tbm=shop&q=${encodedTerm}`,
+            url: `${googleBase}/search?tbm=shop&q=${encodedTerm}`,
             icon: 'search'
         }
     ];
@@ -373,4 +403,3 @@ export function invalidateSponsorsCache(): void {
     sponsorsCache = null;
     sponsorsCacheTime = 0;
 }
-

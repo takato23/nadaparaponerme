@@ -4,11 +4,96 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { GoogleGenerativeAI } from 'npm:@google/generative-ai@0.21.0'; // Unified SDK
 import { enforceRateLimit, recordRequestResult } from '../_shared/antiAbuse.ts';
 import { withRetry } from '../_shared/retry.ts';
+import { isForbiddenHost } from '../_shared/security.ts';
+import { buildDupeFinderResultV2 } from '../_shared/shoppingDupePipeline.ts';
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-application-name',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Max-Age': '86400',
 };
+
+const IMAGE_FETCH_TIMEOUT_MS = 10_000;
+const IMAGE_FETCH_MAX_BYTES = 8_388_608;
+
+function uint8ToBase64(bytes: Uint8Array): string {
+    const chunkSize = 0x8000;
+    let binary = '';
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+        const chunk = bytes.subarray(i, i + chunkSize);
+        binary += String.fromCharCode(...chunk);
+    }
+    return btoa(binary);
+}
+
+async function parseImagePayload(input: unknown, errorMessage: string): Promise<{ base64Data: string; mimeType: string }> {
+    const value = typeof input === 'string' ? input.trim() : '';
+    if (!value) {
+        throw new Error(errorMessage);
+    }
+
+    if (value.startsWith('data:image')) {
+        const [header, base64Data] = value.split(',');
+        const mimeType = header?.match(/:(.*?);/)?.[1] || 'image/jpeg';
+        if (!base64Data || !mimeType) {
+            throw new Error(errorMessage);
+        }
+        return { base64Data, mimeType };
+    }
+
+    if (!value.startsWith('https://')) {
+        throw new Error(errorMessage);
+    }
+
+    let parsedUrl: URL;
+    try {
+        parsedUrl = new URL(value);
+    } catch {
+        throw new Error(errorMessage);
+    }
+
+    const host = parsedUrl.hostname.toLowerCase();
+    if (isForbiddenHost(host)) {
+        throw new Error(errorMessage);
+    }
+
+    const timeoutController = new AbortController();
+    const timeoutId = setTimeout(() => timeoutController.abort(), IMAGE_FETCH_TIMEOUT_MS);
+
+    const response = await fetch(parsedUrl.toString(), {
+        headers: {
+            'User-Agent': 'Mozilla/5.0 (compatible; SupabaseEdge/1.0)',
+            'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+        },
+        signal: timeoutController.signal,
+    });
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+        throw new Error(errorMessage);
+    }
+
+    const contentType = String(response.headers.get('content-type') || '').toLowerCase();
+    if (!contentType.startsWith('image/')) {
+        throw new Error(errorMessage);
+    }
+
+    const contentLength = Number(response.headers.get('content-length') || 0);
+    if (contentLength > IMAGE_FETCH_MAX_BYTES) {
+        throw new Error(errorMessage);
+    }
+
+    const buffer = new Uint8Array(await response.arrayBuffer());
+    if (buffer.byteLength > IMAGE_FETCH_MAX_BYTES) {
+        throw new Error(errorMessage);
+    }
+
+    return {
+        base64Data: uint8ToBase64(buffer),
+        mimeType: contentType.split(';')[0],
+    };
+}
 
 const parseJsonResponse = (raw: string): any => {
     const trimmed = (raw || '').trim();
@@ -22,7 +107,29 @@ const parseJsonResponse = (raw: string): any => {
             .replace(/^```\s*/i, '')
             .replace(/\s*```$/i, '')
             .trim();
-        return JSON.parse(withoutFence);
+        try {
+            return JSON.parse(withoutFence);
+        } catch {
+            const objectStart = withoutFence.indexOf('{');
+            const objectEnd = withoutFence.lastIndexOf('}');
+            if (objectStart >= 0 && objectEnd > objectStart) {
+                const objectCandidate = withoutFence.slice(objectStart, objectEnd + 1);
+                try {
+                    return JSON.parse(objectCandidate);
+                } catch {
+                    // continue to array fallback
+                }
+            }
+
+            const arrayStart = withoutFence.indexOf('[');
+            const arrayEnd = withoutFence.lastIndexOf(']');
+            if (arrayStart >= 0 && arrayEnd > arrayStart) {
+                const arrayCandidate = withoutFence.slice(arrayStart, arrayEnd + 1);
+                return JSON.parse(arrayCandidate);
+            }
+
+            throw new Error('No se pudo parsear la respuesta JSON del modelo.');
+        }
     }
 };
 
@@ -54,6 +161,20 @@ const normalizeBrandRecognitionResult = (parsed: any) => ({
     shopping_alternatives: Array.isArray(parsed?.shopping_alternatives) ? parsed.shopping_alternatives : undefined,
     analyzed_at: new Date().toISOString(),
 });
+
+const extractGroundingLinks = (result: any): Array<{ web: { uri: string; title?: string } }> => {
+    const chunks = result?.response?.candidates?.[0]?.groundingMetadata?.groundingChunks;
+    if (!Array.isArray(chunks)) return [];
+
+    return chunks
+        .filter((chunk: any) => chunk?.web?.uri)
+        .map((chunk: any) => ({
+            web: {
+                uri: String(chunk.web.uri),
+                title: chunk.web.title ? String(chunk.web.title) : undefined,
+            }
+        }));
+};
 
 const toApproxUsd = (price: number, currency: string): number => {
     if (!Number.isFinite(price) || price <= 0) return 0;
@@ -108,21 +229,103 @@ serve(async (req) => {
         const { action, ...params } = await req.json();
         const genAI = new GoogleGenerativeAI(geminiApiKey);
 
-        // Use Gemini 2.0 Flash for speed + search capabilities
-        // Note: verify if googleSearch tool is supported in this SDK version or if we need v1beta
-        const model = genAI.getGenerativeModel({
-            model: 'gemini-2.5-flash',
-            tools: [{ googleSearch: {} } as any] // Cast to any if type def is missing in 0.21.0
-        });
+        // Modelo base para respuestas estructuradas (JSON)
+        const structuredModel = genAI.getGenerativeModel({
+            model: 'gemini-3.1-flash-lite-preview',
+        } as any);
 
-        if (action === 'recognize-brand') {
-            const { imageDataUrl } = params;
-            if (!imageDataUrl || !String(imageDataUrl).startsWith('data:image')) {
-                return new Response(JSON.stringify({ error: 'La imagen no es válida.' }), { status: 400, headers: corsHeaders });
+        // Modelo con búsqueda web para shopping/chat grounding.
+        // Importante: cuando se usan tools no se puede forzar responseMimeType JSON en esta API.
+        const modelWithSearch = genAI.getGenerativeModel({
+            model: 'gemini-3.1-flash-lite-preview',
+            tools: [{ googleSearch: {} } as any] // Cast to any if type def is missing in 0.21.0
+        } as any);
+
+        if (action === 'search-products-for-item') {
+            const itemDescription = String(params?.itemDescription || '').trim();
+            const category = String(params?.category || '').trim();
+            if (!itemDescription) {
+                return new Response(JSON.stringify({ error: 'Falta descripción de prenda.' }), {
+                    status: 400,
+                    headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+                });
             }
 
-            const [header, base64Data] = String(imageDataUrl).split(',');
-            const mimeType = header?.match(/:(.*?);/)?.[1] || 'image/jpeg';
+            const categoryHint = category ? ` (${category})` : '';
+            const prompt = `Buscar tiendas online para comprar: ${itemDescription}${categoryHint}.
+            Priorizá tiendas de Argentina y Latinoamérica como Mercado Libre, Dafiti, Zara, H&M.
+            También incluir tiendas internacionales si aportan buenas opciones.`;
+
+            const result = await withRetry(() => modelWithSearch.generateContent({
+                contents: [{ role: 'user', parts: [{ text: prompt }] }],
+            }));
+
+            return new Response(JSON.stringify({ links: extractGroundingLinks(result) }), {
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
+        } else if (action === 'search-products-by-image') {
+            const { imageDataUrl } = params;
+            let imagePayload: { base64Data: string; mimeType: string };
+            try {
+                imagePayload = await parseImagePayload(imageDataUrl, 'La imagen no es válida.');
+            } catch {
+                return new Response(JSON.stringify({ error: 'La imagen no es válida.' }), {
+                    status: 400,
+                    headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+                });
+            }
+
+            const analysisPrompt = `Analizá esta imagen de una prenda y devolvé SOLO JSON:
+            {
+              "description": "descripción para buscar productos",
+              "category": "top|bottom|shoes|accessory|outerwear|unknown"
+            }`;
+
+            const analysisResult = await withRetry(() => structuredModel.generateContent({
+                contents: [{
+                    role: 'user',
+                    parts: [
+                        { inlineData: { data: imagePayload.base64Data, mimeType: imagePayload.mimeType } } as any,
+                        { text: analysisPrompt }
+                    ]
+                }],
+                generationConfig: { responseMimeType: 'application/json' }
+            }));
+
+            const analysis = parseJsonResponse(analysisResult.response.text());
+            const description = String(analysis?.description || '').trim();
+            const category = String(analysis?.category || 'unknown').trim();
+
+            if (!description) {
+                return new Response(JSON.stringify({ description: '', category: 'unknown', links: [] }), {
+                    headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+                });
+            }
+
+            const searchPrompt = `Buscar opciones para comprar esta prenda: ${description} (${category}).
+            Priorizá resultados con links de compra reales.`;
+            const searchResult = await withRetry(() => modelWithSearch.generateContent({
+                contents: [{ role: 'user', parts: [{ text: searchPrompt }] }],
+            }));
+
+            return new Response(JSON.stringify({
+                description,
+                category,
+                links: extractGroundingLinks(searchResult)
+            }), {
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
+        } else if (action === 'recognize-brand') {
+            const { imageDataUrl } = params;
+            let imagePayload: { base64Data: string; mimeType: string };
+            try {
+                imagePayload = await parseImagePayload(imageDataUrl, 'La imagen no es válida.');
+            } catch {
+                return new Response(JSON.stringify({ error: 'La imagen no es válida.' }), {
+                    status: 400,
+                    headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+                });
+            }
 
             const prompt = `
                 Analizá esta prenda y devolvé SOLO JSON con esta estructura exacta:
@@ -141,11 +344,11 @@ serve(async (req) => {
                 - No agregues texto fuera del JSON.
             `;
 
-            const result = await withRetry(() => model.generateContent({
+            const result = await withRetry(() => structuredModel.generateContent({
                 contents: [{
                     role: 'user',
                     parts: [
-                        { inlineData: { data: base64Data, mimeType } } as any,
+                        { inlineData: { data: imagePayload.base64Data, mimeType: imagePayload.mimeType } } as any,
                         { text: prompt }
                     ]
                 }],
@@ -158,10 +361,44 @@ serve(async (req) => {
             return new Response(JSON.stringify(normalized), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
         } else if (action === 'find-dupes') {
-            const { item, brandInfo } = params;
+            const {
+                item,
+                brandInfo,
+                useV2Pipeline,
+                enableLinkVerification,
+                countryCode,
+                locale,
+            } = params;
             const imageDataUrl = item?.imageDataUrl;
-            if (!imageDataUrl || !String(imageDataUrl).startsWith('data:image')) {
-                return new Response(JSON.stringify({ error: 'La imagen de la prenda no es válida.' }), { status: 400, headers: corsHeaders });
+            let imagePayload: { base64Data: string; mimeType: string };
+            try {
+                imagePayload = await parseImagePayload(imageDataUrl, 'La imagen de la prenda no es válida.');
+            } catch {
+                return new Response(JSON.stringify({ error: 'La imagen de la prenda no es válida.' }), {
+                    status: 400,
+                    headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+                });
+            }
+
+            if (useV2Pipeline !== false) {
+                try {
+                    const v2Response = await buildDupeFinderResultV2({
+                        item,
+                        brandInfo,
+                        imagePayload,
+                        modelWithSearch,
+                        countryCode: typeof countryCode === 'string' ? countryCode : undefined,
+                        locale: typeof locale === 'string' ? locale : undefined,
+                        enableLinkVerification: enableLinkVerification !== false,
+                        toApproxUsd,
+                    });
+
+                    return new Response(JSON.stringify(v2Response), {
+                        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                    });
+                } catch (v2Error) {
+                    console.error('Shopping Assistant V2 failed, falling back to legacy pipeline:', v2Error);
+                }
             }
 
             const category = item?.metadata?.category || 'unknown';
@@ -169,9 +406,6 @@ serve(async (req) => {
             const colorPrimary = item?.metadata?.color_primary || 'unknown';
             const brandName = brandInfo?.brand?.name || 'unknown';
             const originalPrice = Number(brandInfo?.price_estimate?.average_price || 0);
-
-            const [header, base64Data] = String(imageDataUrl).split(',');
-            const mimeType = header?.match(/:(.*?);/)?.[1] || 'image/jpeg';
 
             const prompt = `
                 Encontrá 3 a 5 dupes (alternativas más baratas) de esta prenda usando búsqueda web.
@@ -216,15 +450,14 @@ serve(async (req) => {
                 - No agregues texto fuera del JSON.
             `;
 
-            const result = await withRetry(() => model.generateContent({
+            const result = await withRetry(() => modelWithSearch.generateContent({
                 contents: [{
                     role: 'user',
                     parts: [
-                        { inlineData: { data: base64Data, mimeType } } as any,
+                        { inlineData: { data: imagePayload.base64Data, mimeType: imagePayload.mimeType } } as any,
                         { text: prompt }
                     ]
-                }],
-                generationConfig: { responseMimeType: 'application/json' }
+                }]
             }));
 
             const parsed = parseJsonResponse(result.response.text());
@@ -269,15 +502,18 @@ serve(async (req) => {
 
         } else if (action === 'find-similar-by-image') {
             const { searchImage, inventory } = params;
-            if (!searchImage || !String(searchImage).startsWith('data:image')) {
-                return new Response(JSON.stringify({ error: 'La imagen de búsqueda no es válida.' }), { status: 400, headers: corsHeaders });
+            let imagePayload: { base64Data: string; mimeType: string };
+            try {
+                imagePayload = await parseImagePayload(searchImage, 'La imagen de búsqueda no es válida.');
+            } catch {
+                return new Response(JSON.stringify({ error: 'La imagen de búsqueda no es válida.' }), {
+                    status: 400,
+                    headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+                });
             }
             if (!Array.isArray(inventory) || inventory.length === 0) {
                 return new Response(JSON.stringify([]), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
             }
-
-            const [header, base64Data] = String(searchImage).split(',');
-            const mimeType = header?.match(/:(.*?);/)?.[1] || 'image/jpeg';
 
             const simplifiedInventory = inventory.map((item: any) => ({
                 id: item.id,
@@ -302,11 +538,11 @@ serve(async (req) => {
                 - Sin texto fuera del JSON.
             `;
 
-            const result = await withRetry(() => model.generateContent({
+            const result = await withRetry(() => structuredModel.generateContent({
                 contents: [{
                     role: 'user',
                     parts: [
-                        { inlineData: { data: base64Data, mimeType } } as any,
+                        { inlineData: { data: imagePayload.base64Data, mimeType: imagePayload.mimeType } } as any,
                         { text: prompt }
                     ]
                 }],
@@ -332,12 +568,14 @@ serve(async (req) => {
                 Return JSON: [ { "id": "uuid", "item_name": "string", "category": "string", "reason": "string", "priority": "essential|recommended" } ]
             `;
 
-            const result = await withRetry(() => model.generateContent({
+            const result = await withRetry(() => structuredModel.generateContent({
                 contents: [{ role: 'user', parts: [{ text: prompt }] }],
                 generationConfig: { responseMimeType: 'application/json' }
             }));
 
-            return new Response(result.response.text(), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+            return new Response(JSON.stringify(parseJsonResponse(result.response.text())), {
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
 
         } else if (action === 'generate-recommendations') {
             const { gaps, budget } = params;
@@ -366,26 +604,24 @@ serve(async (req) => {
                 ]
             `;
 
-            const result = await withRetry(() => model.generateContent({
+            const result = await withRetry(() => modelWithSearch.generateContent({
                 contents: [{ role: 'user', parts: [{ text: prompt }] }],
-                generationConfig: { responseMimeType: 'application/json' }
             }));
 
-            return new Response(result.response.text(), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+            return new Response(JSON.stringify(parseJsonResponse(result.response.text())), {
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
 
         } else if (action === 'chat') {
             const { message, history } = params;
 
             // Chat with grounding
-            const chat = model.startChat({
+            const chat = modelWithSearch.startChat({
                 history: history.map((h: any) => ({
                     role: h.role === 'assistant' ? 'model' : 'user',
                     parts: [{ text: h.content }]
-                })),
-                generationConfig: {
-                    tools: [{ googleSearch: {} } as any]
-                }
-            });
+                }))
+            } as any);
 
             const systemPrompt = `
                 You are a Stylist & Shopping Assistant.
@@ -407,6 +643,10 @@ serve(async (req) => {
 
     } catch (error) {
         console.error('Shopping Assistant Error:', error);
-        return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: corsHeaders });
+        const message = error instanceof Error ? error.message : 'Unknown shopping assistant error';
+        return new Response(JSON.stringify({ error: message }), {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
     }
 });

@@ -36,7 +36,7 @@ export function StudioClosetGrid({
   onRemoveQuickItem,
 }: StudioClosetGridProps) {
   return (
-    <motion.section variants={itemVariants} className="mb-2">
+    <motion.section variants={itemVariants} data-studio-tutorial="studio-slots" className="mb-2">
       <input
         type="file"
         ref={quickItemInputRef}

@@ -1,751 +1,614 @@
-/**
- * CommunityView - Vista de Amigos (/amigos)
- *
- * Vista completa de la comunidad con:
- * 1. Lista de amigos aceptados con búsqueda
- * 2. Solicitudes pendientes (recibidas y enviadas)
- * 3. Descubrir nuevos usuarios
- * 4. Sección de amigos cercanos
- */
-
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import type { CommunityUser, ClothingItem } from '../types';
-import { Card } from './ui/Card';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import type { CommunityUser } from '../types';
 import Loader from './Loader';
 import { EmptyState } from './ui/EmptyState';
-import Skeleton, { ListItemSkeleton } from './ui/Skeleton';
+import { useToast } from '../hooks/useToast';
+import { useAuth } from '../hooks/useAuth';
 import {
+  acceptFriendRequest,
+  declineFriendRequest,
   getFriends,
   getPendingRequests,
   getSentRequests,
   getSuggestedUsers,
-  searchUsers,
-  acceptFriendRequest,
-  declineFriendRequest,
-  sendFriendRequest,
   removeFriend,
+  searchUsers,
+  sendFriendRequest,
+  type FriendProfile,
   type FriendWithProfile,
   type PendingRequest,
-  type FriendProfile,
 } from '../src/services/friendshipService';
-
-// ===== Types =====
+import { getSafePublicDisplayName } from '../src/utils/publicProfile';
 
 interface CommunityViewProps {
   friends: CommunityUser[];
   onViewFriendCloset: (friend: CommunityUser) => void;
 }
 
-type TabType = 'friends' | 'requests' | 'discover';
+type CommunityTab = 'friends' | 'requests' | 'discover';
 
-// ===== Sub-components =====
-
-interface FriendCardProps {
-  friend: FriendWithProfile;
-  onView: () => void;
-  onRemove: () => void;
-}
-
-const FriendCard = ({ friend, onView, onRemove }: FriendCardProps) => {
-  const [showMenu, setShowMenu] = useState(false);
-
-  return (
-    <div className="relative">
-      <button
-        onClick={onView}
-        className="w-full flex items-center gap-4 liquid-glass p-3 rounded-2xl hover:shadow-lg transition-all active:scale-[0.98]"
-      >
-        <div className="relative">
-          <img
-            src={friend.friend.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${friend.friend.username}`}
-            alt={friend.friend.display_name || friend.friend.username}
-            className="w-14 h-14 object-cover rounded-full ring-2 ring-white dark:ring-gray-800"
-          />
-          {friend.is_close_friend && (
-            <div className="absolute -top-1 -right-1 w-5 h-5 bg-yellow-400 rounded-full flex items-center justify-center shadow-sm">
-              <span className="material-symbols-outlined text-white text-xs">star</span>
-            </div>
-          )}
-          {/* Online indicator */}
-          <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white dark:border-gray-800 rounded-full" />
-        </div>
-        <div className="flex-1 text-left">
-          <h3 className="font-bold text-text-primary dark:text-gray-200">
-            {friend.friend.display_name || friend.friend.username}
-          </h3>
-          <p className="text-sm text-text-secondary dark:text-gray-400">
-            @{friend.friend.username}
-          </p>
-        </div>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            setShowMenu(!showMenu);
-          }}
-          className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition-colors"
-        >
-          <span className="material-symbols-outlined text-text-secondary">more_vert</span>
-        </button>
-      </button>
-
-      {/* Dropdown menu */}
-      {showMenu && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setShowMenu(false)} />
-          <div className="absolute right-0 top-full mt-1 z-50 liquid-glass rounded-xl shadow-xl overflow-hidden min-w-[160px]">
-            <button
-              onClick={() => {
-                onView();
-                setShowMenu(false);
-              }}
-              className="w-full px-4 py-2.5 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-2"
-            >
-              <span className="material-symbols-outlined text-lg">person</span>
-              Ver perfil
-            </button>
-            <button
-              onClick={() => {
-                onRemove();
-                setShowMenu(false);
-              }}
-              className="w-full px-4 py-2.5 text-left text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2"
-            >
-              <span className="material-symbols-outlined text-lg">person_remove</span>
-              Eliminar
-            </button>
-          </div>
-        </>
-      )}
-    </div>
-  );
+type SearchState = {
+  loading: boolean;
+  results: FriendProfile[];
+  error: string | null;
 };
 
-interface RequestCardProps {
-  request: PendingRequest;
-  type: 'received' | 'sent';
-  onAccept?: () => void;
-  onDecline?: () => void;
-  onCancel?: () => void;
-  isLoading?: boolean;
+const LOAD_TIMEOUT_MS = 10000;
+const SEARCH_TIMEOUT_MS = 7000;
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+  return Promise.race([
+    promise.finally(() => {
+      if (timeoutId) clearTimeout(timeoutId);
+    }),
+    new Promise<T>((_, reject) => {
+      timeoutId = setTimeout(() => reject(new Error(`${label} timed out`)), timeoutMs);
+    }),
+  ]);
 }
 
-const RequestCard = ({ request, type, onAccept, onDecline, onCancel, isLoading }: RequestCardProps) => (
-  <Card variant="glass" padding="sm" rounded="2xl" className="flex items-center gap-3">
-    <img
-      src={request.requester.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${request.requester.username}`}
-      alt={request.requester.display_name || request.requester.username}
-      className="w-12 h-12 object-cover rounded-full"
-    />
-    <div className="flex-1 min-w-0">
-      <h3 className="font-semibold text-text-primary dark:text-gray-200 truncate">
-        {request.requester.display_name || request.requester.username}
-      </h3>
-      <p className="text-xs text-text-secondary dark:text-gray-400">
-        @{request.requester.username}
-      </p>
-    </div>
-    {type === 'received' ? (
-      <div className="flex gap-2">
-        <button
-          onClick={onAccept}
-          disabled={isLoading}
-          className="px-3 py-1.5 bg-gradient-to-r from-primary to-purple-600 text-white text-sm font-semibold rounded-xl transition-transform active:scale-95 disabled:opacity-50"
-        >
-          Aceptar
-        </button>
-        <button
-          onClick={onDecline}
-          disabled={isLoading}
-          className="px-3 py-1.5 bg-gray-100 dark:bg-gray-800 text-text-secondary text-sm font-semibold rounded-xl transition-transform active:scale-95 disabled:opacity-50"
-        >
-          Rechazar
-        </button>
-      </div>
-    ) : (
-      <button
-        onClick={onCancel}
-        disabled={isLoading}
-        className="px-3 py-1.5 bg-gray-100 dark:bg-gray-800 text-text-secondary text-sm font-semibold rounded-xl transition-transform active:scale-95 disabled:opacity-50"
-      >
-        Cancelar
-      </button>
-    )}
-  </Card>
-);
-
-interface UserSuggestionCardProps {
-  user: FriendProfile;
-  onFollow: () => void;
-  isLoading?: boolean;
-  isSent?: boolean;
+function toCommunityUser(profile: FriendProfile): CommunityUser {
+  const displayName = getSafePublicDisplayName(profile.display_name, profile.username);
+  return {
+    id: profile.id,
+    name: displayName,
+    username: profile.username,
+    avatarUrl: profile.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=E5E7EB&color=1F2937`,
+    closet: [],
+    badges: profile.badges,
+  };
 }
 
-const UserSuggestionCard = ({ user, onFollow, isLoading, isSent }: UserSuggestionCardProps) => (
-  <Card variant="glass" padding="sm" rounded="2xl" className="flex items-center gap-3">
-    <img
-      src={user.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.username}`}
-      alt={user.display_name || user.username}
-      className="w-12 h-12 object-cover rounded-full"
-    />
-    <div className="flex-1 min-w-0">
-      <h3 className="font-semibold text-text-primary dark:text-gray-200 truncate">
-        {user.display_name || user.username}
-      </h3>
-      <p className="text-xs text-text-secondary dark:text-gray-400 truncate">
-        {user.bio || `@${user.username}`}
-      </p>
+function getInitials(profile: FriendProfile): string {
+  const source = getSafePublicDisplayName(profile.display_name, profile.username, 'U');
+  return source.slice(0, 1).toUpperCase();
+}
+
+function ProfileAvatar({ profile }: { profile: FriendProfile }) {
+  const [imageFailed, setImageFailed] = useState(false);
+  const displayName = getSafePublicDisplayName(profile.display_name, profile.username);
+
+  if (profile.avatar_url && !imageFailed) {
+    return (
+      <img
+        src={profile.avatar_url}
+        alt={displayName}
+        className="h-14 w-14 rounded-full object-cover"
+        onError={() => setImageFailed(true)}
+      />
+    );
+  }
+
+  return (
+    <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#101828] text-lg font-semibold text-white">
+      {getInitials(profile)}
     </div>
-    <button
-      onClick={onFollow}
-      disabled={isLoading || isSent}
-      className={`px-4 py-1.5 text-sm font-semibold rounded-xl transition-all active:scale-95 disabled:opacity-50 ${isSent
-          ? 'bg-gray-100 dark:bg-gray-800 text-text-secondary'
-          : 'bg-gradient-to-r from-primary to-purple-600 text-white'
-        }`}
-    >
-      {isSent ? 'Enviado' : 'Seguir'}
-    </button>
-  </Card>
-);
+  );
+}
 
-// ===== Main Component =====
+function getRelationLabel(
+  profileId: string,
+  friends: FriendWithProfile[],
+  pendingRequests: PendingRequest[],
+  sentRequests: PendingRequest[]
+): { label: string; disabled: boolean } {
+  if (friends.some((entry) => entry.friend.id === profileId)) {
+    return { label: 'Amigas', disabled: true };
+  }
 
-const CommunityView = ({ friends: propFriends, onViewFriendCloset }: CommunityViewProps) => {
-  // State
-  const [activeTab, setActiveTab] = useState<TabType>('friends');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [isSearching, setIsSearching] = useState(false);
+  if (pendingRequests.some((entry) => entry.requester.id === profileId)) {
+    return { label: 'Te envió solicitud', disabled: true };
+  }
 
-  // Data states
+  if (sentRequests.some((entry) => entry.requester.id === profileId)) {
+    return { label: 'Solicitud enviada', disabled: true };
+  }
+
+  return { label: 'Agregar', disabled: false };
+}
+
+export default function CommunityView({ onViewFriendCloset }: CommunityViewProps) {
+  const toast = useToast();
+  const { user, loading: authLoading } = useAuth();
+  const [activeTab, setActiveTab] = useState<CommunityTab>('friends');
+  const [query, setQuery] = useState('');
   const [friends, setFriends] = useState<FriendWithProfile[]>([]);
   const [pendingRequests, setPendingRequests] = useState<PendingRequest[]>([]);
   const [sentRequests, setSentRequests] = useState<PendingRequest[]>([]);
   const [suggestedUsers, setSuggestedUsers] = useState<FriendProfile[]>([]);
-  const [searchResults, setSearchResults] = useState<FriendProfile[]>([]);
-  const [sentRequestIds, setSentRequestIds] = useState<Set<string>>(new Set());
+  const [searchState, setSearchState] = useState<SearchState>({
+    loading: false,
+    results: [],
+    error: null,
+  });
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [actionKey, setActionKey] = useState<string | null>(null);
+  const loadRequestRef = React.useRef(0);
 
-  // Loading states
-  const [loadingFriends, setLoadingFriends] = useState(true);
-  const [loadingRequests, setLoadingRequests] = useState(true);
-  const [loadingSuggested, setLoadingSuggested] = useState(true);
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
-
-  // Load data on mount
-  useEffect(() => {
-    loadFriends();
-    loadRequests();
-    loadSuggestedUsers();
-  }, []);
-
-  // Search effect with debounce
-  useEffect(() => {
-    if (!searchQuery.trim()) {
-      setSearchResults([]);
+  const loadCommunity = useCallback(async () => {
+    if (!user) {
+      setFriends([]);
+      setPendingRequests([]);
+      setSentRequests([]);
+      setSuggestedUsers([]);
+      setLoading(false);
+      setLoadError(null);
       return;
     }
 
-    const timer = setTimeout(async () => {
-      setIsSearching(true);
-      try {
-        const results = await searchUsers(searchQuery);
-        setSearchResults(results);
-      } catch (error) {
-        console.error('Error searching users:', error);
-      } finally {
-        setIsSearching(false);
+    const requestId = loadRequestRef.current + 1;
+    loadRequestRef.current = requestId;
+    setLoading(true);
+    setLoadError(null);
+
+    const watchdog = window.setTimeout(() => {
+      if (loadRequestRef.current !== requestId) return;
+      setLoading(false);
+      setLoadError('La comunidad está tardando más de lo esperado. Reintentá en unos segundos.');
+    }, LOAD_TIMEOUT_MS);
+
+    try {
+      const [friendRows, pendingRows, sentRows, suggestedRows] = await withTimeout(
+        Promise.all([
+          getFriends(),
+          getPendingRequests(),
+          getSentRequests(),
+          getSuggestedUsers(12),
+        ]),
+        LOAD_TIMEOUT_MS,
+        'CommunityView.loadCommunity'
+      );
+
+      if (loadRequestRef.current !== requestId) return;
+      setFriends(friendRows);
+      setPendingRequests(pendingRows);
+      setSentRequests(sentRows);
+      setSuggestedUsers(suggestedRows);
+    } catch (error) {
+      if (loadRequestRef.current !== requestId) return;
+      console.error('Failed to load community view:', error);
+      setLoadError('No pude cargar amigas, solicitudes y sugerencias.');
+    } finally {
+      window.clearTimeout(watchdog);
+      if (loadRequestRef.current === requestId) {
+        setLoading(false);
       }
-    }, 300);
-
-    return () => clearTimeout(timer);
-  }, [searchQuery]);
-
-  // Data loaders
-  const loadFriends = async () => {
-    setLoadingFriends(true);
-    try {
-      const data = await getFriends();
-      setFriends(data);
-    } catch (error) {
-      console.error('Error loading friends:', error);
-    } finally {
-      setLoadingFriends(false);
     }
-  };
+  }, [user]);
 
-  const loadRequests = async () => {
-    setLoadingRequests(true);
-    try {
-      const [pending, sent] = await Promise.all([
-        getPendingRequests(),
-        getSentRequests(),
-      ]);
-      setPendingRequests(pending);
-      setSentRequests(sent);
-      setSentRequestIds(new Set(sent.map(r => r.requester.id)));
-    } catch (error) {
-      console.error('Error loading requests:', error);
-    } finally {
-      setLoadingRequests(false);
+  useEffect(() => {
+    if (authLoading) return;
+    void loadCommunity();
+  }, [authLoading, loadCommunity]);
+
+  useEffect(() => {
+    if (authLoading) return;
+    const trimmed = query.trim();
+    if (!user || trimmed.length < 2) {
+      setSearchState({ loading: false, results: [], error: null });
+      return;
     }
-  };
 
-  const loadSuggestedUsers = async () => {
-    setLoadingSuggested(true);
-    try {
-      const data = await getSuggestedUsers(15);
-      setSuggestedUsers(data);
-    } catch (error) {
-      console.error('Error loading suggested users:', error);
-    } finally {
-      setLoadingSuggested(false);
-    }
-  };
+    let cancelled = false;
+    setSearchState((prev) => ({ ...prev, loading: true, error: null }));
 
-  // Actions
-  const handleAcceptRequest = async (requestId: string) => {
-    setActionLoading(requestId);
-    try {
-      const result = await acceptFriendRequest(requestId);
-      if (result.success) {
-        // Reload both friends and requests
-        await Promise.all([loadFriends(), loadRequests()]);
-      }
-    } catch (error) {
-      console.error('Error accepting request:', error);
-    } finally {
-      setActionLoading(null);
-    }
-  };
+    const timeoutId = window.setTimeout(() => {
+      void withTimeout(searchUsers(trimmed), SEARCH_TIMEOUT_MS, 'CommunityView.searchUsers')
+        .then((results) => {
+          if (cancelled) return;
+          setSearchState({ loading: false, results, error: null });
+          setActiveTab('discover');
+        })
+        .catch((error) => {
+          if (cancelled) return;
+          console.error('Failed to search users:', error);
+          setSearchState({
+            loading: false,
+            results: [],
+            error: 'No pude completar la búsqueda ahora mismo.',
+          });
+        });
+    }, 250);
 
-  const handleDeclineRequest = async (requestId: string) => {
-    setActionLoading(requestId);
-    try {
-      const result = await declineFriendRequest(requestId);
-      if (result.success) {
-        setPendingRequests(prev => prev.filter(r => r.id !== requestId));
-      }
-    } catch (error) {
-      console.error('Error declining request:', error);
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  const handleSendRequest = async (userId: string) => {
-    setActionLoading(userId);
-    try {
-      const result = await sendFriendRequest(userId);
-      if (result.success) {
-        setSentRequestIds(prev => new Set([...prev, userId]));
-        // Reload sent requests
-        const sent = await getSentRequests();
-        setSentRequests(sent);
-      }
-    } catch (error) {
-      console.error('Error sending request:', error);
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  const handleRemoveFriend = async (friendshipId: string) => {
-    setActionLoading(friendshipId);
-    try {
-      const result = await removeFriend(friendshipId);
-      if (result.success) {
-        setFriends(prev => prev.filter(f => f.id !== friendshipId));
-      }
-    } catch (error) {
-      console.error('Error removing friend:', error);
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  // Convert FriendWithProfile to CommunityUser for onViewFriendCloset
-  const handleViewFriend = (friend: FriendWithProfile) => {
-    const communityUser: CommunityUser = {
-      id: friend.friend.id,
-      name: friend.friend.display_name || friend.friend.username,
-      username: friend.friend.username,
-      avatarUrl: friend.friend.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${friend.friend.username}`,
-      closet: [], // Will be loaded by FriendProfileView
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
     };
-    onViewFriendCloset(communityUser);
+  }, [authLoading, query, user]);
+
+  const discoverUsers = useMemo(() => {
+    const trimmed = query.trim();
+    if (trimmed.length >= 2) return searchState.results;
+    return suggestedUsers;
+  }, [query, searchState.results, suggestedUsers]);
+
+  const handleOpenProfile = useCallback((profile: FriendProfile) => {
+    onViewFriendCloset(toCommunityUser(profile));
+  }, [onViewFriendCloset]);
+
+  const handleSendRequest = useCallback(async (profile: FriendProfile) => {
+    const actionId = `send:${profile.id}`;
+    setActionKey(actionId);
+    try {
+      const result = await sendFriendRequest(profile.id);
+      if (!result.success) {
+        throw new Error(result.error || 'No se pudo enviar la solicitud');
+      }
+      toast.success('Solicitud enviada');
+      setSentRequests((prev) => [
+        {
+          id: `sent-${profile.id}`,
+          requester: profile,
+          created_at: new Date().toISOString(),
+        },
+        ...prev.filter((entry) => entry.requester.id !== profile.id),
+      ]);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'No se pudo enviar la solicitud');
+    } finally {
+      setActionKey(null);
+    }
+  }, [toast]);
+
+  const handleAcceptRequest = useCallback(async (request: PendingRequest) => {
+    const actionId = `accept:${request.id}`;
+    setActionKey(actionId);
+    try {
+      const result = await acceptFriendRequest(request.id);
+      if (!result.success) {
+        throw new Error(result.error || 'No se pudo aceptar la solicitud');
+      }
+      toast.success('Ahora son amigas');
+      setPendingRequests((prev) => prev.filter((entry) => entry.id !== request.id));
+      setFriends((prev) => [
+        {
+          id: request.id,
+          requester_id: request.requester.id,
+          addressee_id: user?.id || '',
+          status: 'accepted',
+          created_at: request.created_at,
+          updated_at: new Date().toISOString(),
+          friend: request.requester,
+          is_close_friend: false,
+        },
+        ...prev,
+      ]);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'No se pudo aceptar la solicitud');
+    } finally {
+      setActionKey(null);
+    }
+  }, [toast, user?.id]);
+
+  const handleDeclineRequest = useCallback(async (request: PendingRequest) => {
+    const actionId = `decline:${request.id}`;
+    setActionKey(actionId);
+    try {
+      const result = await declineFriendRequest(request.id);
+      if (!result.success) {
+        throw new Error(result.error || 'No se pudo rechazar la solicitud');
+      }
+      toast.success('Solicitud rechazada');
+      setPendingRequests((prev) => prev.filter((entry) => entry.id !== request.id));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'No se pudo rechazar la solicitud');
+    } finally {
+      setActionKey(null);
+    }
+  }, [toast]);
+
+  const handleRemoveFriend = useCallback(async (friendship: FriendWithProfile) => {
+    const actionId = `remove:${friendship.id}`;
+    setActionKey(actionId);
+    try {
+      const result = await removeFriend(friendship.id);
+      if (!result.success) {
+        throw new Error(result.error || 'No se pudo eliminar la amistad');
+      }
+      toast.success('Amistad eliminada');
+      setFriends((prev) => prev.filter((entry) => entry.id !== friendship.id));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'No se pudo eliminar la amistad');
+    } finally {
+      setActionKey(null);
+    }
+  }, [toast]);
+
+  const renderProfileRow = (profile: FriendProfile, contentRight: React.ReactNode, subtitle?: string) => (
+    <div
+      key={profile.id}
+      className="flex items-center gap-3 rounded-[1.5rem] border border-white/65 bg-white/70 px-4 py-3 shadow-[0_10px_30px_rgba(0,0,0,0.05)] backdrop-blur-xl"
+    >
+      <button
+        type="button"
+        onClick={() => handleOpenProfile(profile)}
+        className="flex min-w-0 flex-1 items-center gap-3 text-left"
+      >
+        <ProfileAvatar profile={profile} />
+        <div className="min-w-0">
+          <p className="truncate text-base font-semibold text-[#26364a]">{getSafePublicDisplayName(profile.display_name, profile.username)}</p>
+          <p className="truncate text-sm text-[#6c7a92]">@{profile.username}</p>
+          {subtitle ? <p className="mt-1 text-xs text-[#8a94a7]">{subtitle}</p> : null}
+        </div>
+      </button>
+      <div className="shrink-0">{contentRight}</div>
+    </div>
+  );
+
+  const renderFriendsTab = () => {
+    if (friends.length === 0) {
+      return (
+        <div className="rounded-[2.25rem] border border-white/65 bg-white/65 px-6 py-16 text-center shadow-[0_18px_40px_rgba(0,0,0,0.06)] backdrop-blur-xl">
+          <EmptyState
+            icon="groups"
+            title="Aún no tenés amigas"
+            description="Buscá usuarios o mirá las sugerencias para empezar a conectar."
+            actionLabel="Descubrir personas"
+            onAction={() => setActiveTab('discover')}
+          />
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-3">
+        {friends.map((entry) =>
+          renderProfileRow(
+            entry.friend,
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => handleOpenProfile(entry.friend)}
+                className="rounded-full border border-[#d5d8e3] px-4 py-2 text-sm font-semibold text-[#42506a] transition hover:bg-[#f4f6fb]"
+              >
+                Ver perfil
+              </button>
+              <button
+                type="button"
+                onClick={() => { void handleRemoveFriend(entry); }}
+                disabled={actionKey === `remove:${entry.id}`}
+                className="rounded-full bg-[#101828] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-92 disabled:opacity-60"
+              >
+                {actionKey === `remove:${entry.id}` ? 'Quitando...' : 'Quitar'}
+              </button>
+            </div>,
+            entry.friend.bio || 'Conectadas en la comunidad'
+          )
+        )}
+      </div>
+    );
   };
 
-  // Filtered friends based on search
-  const filteredFriends = useMemo(() => {
-    if (!searchQuery.trim()) return friends;
-    const query = searchQuery.toLowerCase();
-    return friends.filter(
-      f =>
-        f.friend.username.toLowerCase().includes(query) ||
-        (f.friend.display_name?.toLowerCase().includes(query))
-    );
-  }, [friends, searchQuery]);
-
-  // Close friends
-  const closeFriends = useMemo(() => friends.filter(f => f.is_close_friend), [friends]);
-
-  // Tab counts
-  const requestsCount = pendingRequests.length;
-
-  return (
-    <div className="w-full h-full flex flex-col pt-10 animate-fade-in">
-      {/* Header */}
-      <header className="px-6 pb-4">
-        <h1 className="text-4xl font-bold text-text-primary dark:text-gray-200">Amigos</h1>
-        <p className="text-text-secondary dark:text-gray-400 mt-1">
-          Conectá con amigas y compartí tu estilo
-        </p>
-      </header>
-
-      {/* Search Bar */}
-      <div className="px-4 pb-4">
-        <div className="relative">
-          <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary">
-            search
-          </span>
-          <input
-            type="text"
-            placeholder="Buscar por usuario o email..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-3 bg-gray-100 dark:bg-gray-800 rounded-2xl text-text-primary dark:text-gray-200 placeholder-text-secondary focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
+  const renderRequestsTab = () => {
+    if (pendingRequests.length === 0 && sentRequests.length === 0) {
+      return (
+        <div className="rounded-[2.25rem] border border-white/65 bg-white/65 px-6 py-16 text-center shadow-[0_18px_40px_rgba(0,0,0,0.06)] backdrop-blur-xl">
+          <EmptyState
+            icon="person_add"
+            title="No hay solicitudes pendientes"
+            description="Cuando alguien te mande una solicitud o envíes una nueva, la vas a ver acá."
           />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full"
-            >
-              <span className="material-symbols-outlined text-sm text-text-secondary">close</span>
-            </button>
-          )}
         </div>
-      </div>
+      );
+    }
 
-      {/* Tabs */}
-      <div className="px-4 pb-4">
-        <div className="flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-2xl">
-          {[
-            { key: 'friends' as TabType, label: 'Amigas', icon: 'group', count: friends.length },
-            { key: 'requests' as TabType, label: 'Solicitudes', icon: 'person_add', count: requestsCount },
-            { key: 'discover' as TabType, label: 'Descubrir', icon: 'explore' },
-          ].map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              className={`flex-1 py-2.5 px-3 rounded-xl font-semibold text-sm transition-all flex items-center justify-center gap-1.5 ${activeTab === tab.key
-                  ? 'bg-white dark:bg-gray-900 text-primary shadow-sm'
-                  : 'text-text-secondary hover:text-text-primary'
-                }`}
-            >
-              <span className="material-symbols-outlined text-lg">{tab.icon}</span>
-              <span className="hidden sm:inline">{tab.label}</span>
-              {tab.count !== undefined && tab.count > 0 && (
-                <span className={`text-xs px-1.5 py-0.5 rounded-full ${activeTab === tab.key
-                    ? 'bg-primary/10 text-primary'
-                    : 'bg-gray-200 dark:bg-gray-700'
-                  }`}>
-                  {tab.count}
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Content */}
-      <div className="flex-grow overflow-y-auto px-4 pb-32">
-        {/* Search Results */}
-        {searchQuery.trim() && activeTab !== 'discover' && (
-          <div className="mb-6">
-            <h2 className="text-sm font-semibold text-text-secondary mb-3 flex items-center gap-2">
-              <span className="material-symbols-outlined text-lg">search</span>
-              Resultados de búsqueda
-            </h2>
-            {isSearching ? (
-              <div className="space-y-2">
-                {[1, 2].map(i => <ListItemSkeleton key={i} />)}
-              </div>
-            ) : searchResults.length > 0 ? (
-              <div className="space-y-2">
-                {searchResults.map(user => (
-                  <UserSuggestionCard
-                    key={user.id}
-                    user={user}
-                    onFollow={() => handleSendRequest(user.id)}
-                    isLoading={actionLoading === user.id}
-                    isSent={sentRequestIds.has(user.id)}
-                  />
-                ))}
+    return (
+      <div className="space-y-6">
+        <section>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-[#6b7890]">Recibidas</h2>
+            <span className="rounded-full bg-white/80 px-3 py-1 text-xs font-semibold text-[#42506a]">
+              {pendingRequests.length}
+            </span>
+          </div>
+          <div className="space-y-3">
+            {pendingRequests.length === 0 ? (
+              <div className="rounded-[1.5rem] border border-dashed border-[#d8dce7] bg-white/60 px-5 py-8 text-center text-sm text-[#7a869c]">
+                No tenés solicitudes recibidas.
               </div>
             ) : (
-              <div className="text-text-secondary text-sm text-center py-4 space-y-2">
-                <p>No se encontraron usuarios</p>
-                <p className="text-xs opacity-70">
-                  Pediles que activen "Perfil público" para poder encontrarlos.
-                </p>
-              </div>
+              pendingRequests.map((request) =>
+                renderProfileRow(
+                  request.requester,
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => { void handleDeclineRequest(request); }}
+                      disabled={actionKey === `decline:${request.id}` || actionKey === `accept:${request.id}`}
+                      className="rounded-full border border-[#d5d8e3] px-4 py-2 text-sm font-semibold text-[#42506a] transition hover:bg-[#f4f6fb] disabled:opacity-60"
+                    >
+                      Rechazar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { void handleAcceptRequest(request); }}
+                      disabled={actionKey === `accept:${request.id}` || actionKey === `decline:${request.id}`}
+                      className="rounded-full bg-[#101828] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-92 disabled:opacity-60"
+                    >
+                      {actionKey === `accept:${request.id}` ? 'Aceptando...' : 'Aceptar'}
+                    </button>
+                  </div>,
+                  'Quiere conectar con vos'
+                )
+              )
             )}
           </div>
-        )}
+        </section>
 
-        {/* Friends Tab */}
-        {activeTab === 'friends' && (
-          <div className="space-y-6">
-            {/* Close Friends Section */}
-            {closeFriends.length > 0 && (
-              <div>
-                <h2 className="text-sm font-semibold text-text-secondary mb-3 flex items-center gap-2">
-                  <span className="material-symbols-outlined text-yellow-500 text-lg">star</span>
-                  Amigas cercanas
-                </h2>
-                <div className="space-y-2">
-                  {closeFriends.map(friend => (
-                    <FriendCard
-                      key={friend.id}
-                      friend={friend}
-                      onView={() => handleViewFriend(friend)}
-                      onRemove={() => handleRemoveFriend(friend.id)}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* All Friends */}
-            <div>
-              {closeFriends.length > 0 && (
-                <h2 className="text-sm font-semibold text-text-secondary mb-3 flex items-center gap-2">
-                  <span className="material-symbols-outlined text-lg">group</span>
-                  Todas las amigas
-                </h2>
-              )}
-
-              {loadingFriends ? (
-                <div className="space-y-2">
-                  {[1, 2, 3, 4].map(i => <ListItemSkeleton key={i} />)}
-                </div>
-              ) : filteredFriends.length > 0 ? (
-                <div className="space-y-2">
-                  {filteredFriends
-                    .filter(f => !f.is_close_friend)
-                    .map(friend => (
-                      <FriendCard
-                        key={friend.id}
-                        friend={friend}
-                        onView={() => handleViewFriend(friend)}
-                        onRemove={() => handleRemoveFriend(friend.id)}
-                      />
-                    ))}
-                </div>
-              ) : (
-                <EmptyState
-                  icon="group"
-                  title={searchQuery ? 'No se encontraron amigas' : 'Aún no tenés amigas'}
-                  description={
-                    searchQuery
-                      ? 'Probá con otros términos de búsqueda'
-                      : 'Buscá usuarios o mirá las sugerencias para empezar a conectar'
-                  }
-                  actionLabel={!searchQuery ? 'Descubrir personas' : undefined}
-                  onAction={!searchQuery ? () => setActiveTab('discover') : undefined}
-                />
-              )}
-            </div>
+        <section>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-[#6b7890]">Enviadas</h2>
+            <span className="rounded-full bg-white/80 px-3 py-1 text-xs font-semibold text-[#42506a]">
+              {sentRequests.length}
+            </span>
           </div>
-        )}
-
-        {/* Requests Tab */}
-        {activeTab === 'requests' && (
-          <div className="space-y-6">
-            {/* Received Requests */}
-            <div>
-              <h2 className="text-sm font-semibold text-text-secondary mb-3 flex items-center gap-2">
-                <span className="material-symbols-outlined text-lg">inbox</span>
-                Solicitudes recibidas
-                {pendingRequests.length > 0 && (
-                  <span className="bg-primary text-white text-xs px-2 py-0.5 rounded-full">
-                    {pendingRequests.length}
-                  </span>
-                )}
-              </h2>
-
-              {loadingRequests ? (
-                <div className="space-y-2">
-                  {[1, 2].map(i => <ListItemSkeleton key={i} />)}
-                </div>
-              ) : pendingRequests.length > 0 ? (
-                <div className="space-y-2">
-                  {pendingRequests.map(request => (
-                    <RequestCard
-                      key={request.id}
-                      request={request}
-                      type="received"
-                      onAccept={() => handleAcceptRequest(request.id)}
-                      onDecline={() => handleDeclineRequest(request.id)}
-                      isLoading={actionLoading === request.id}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <Card variant="glass" padding="md" rounded="2xl" className="text-center">
-                  <span className="material-symbols-outlined text-4xl text-gray-300 dark:text-gray-600 mb-2">
-                    inbox
-                  </span>
-                  <p className="text-text-secondary text-sm">No tenés solicitudes pendientes</p>
-                </Card>
-              )}
-            </div>
-
-            {/* Sent Requests */}
-            <div>
-              <h2 className="text-sm font-semibold text-text-secondary mb-3 flex items-center gap-2">
-                <span className="material-symbols-outlined text-lg">outbox</span>
-                Solicitudes enviadas
-                {sentRequests.length > 0 && (
-                  <span className="bg-gray-200 dark:bg-gray-700 text-text-secondary text-xs px-2 py-0.5 rounded-full">
-                    {sentRequests.length}
-                  </span>
-                )}
-              </h2>
-
-              {loadingRequests ? (
-                <div className="space-y-2">
-                  {[1].map(i => <ListItemSkeleton key={i} />)}
-                </div>
-              ) : sentRequests.length > 0 ? (
-                <div className="space-y-2">
-                  {sentRequests.map(request => (
-                    <RequestCard
-                      key={request.id}
-                      request={request}
-                      type="sent"
-                      onCancel={() => handleDeclineRequest(request.id)}
-                      isLoading={actionLoading === request.id}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <Card variant="glass" padding="md" rounded="2xl" className="text-center">
-                  <span className="material-symbols-outlined text-4xl text-gray-300 dark:text-gray-600 mb-2">
-                    send
-                  </span>
-                  <p className="text-text-secondary text-sm">No tenés solicitudes enviadas</p>
-                </Card>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Discover Tab */}
-        {activeTab === 'discover' && (
-          <div className="space-y-6">
-            {/* Search in Discover */}
-            {searchQuery.trim() && (
-              <div>
-                <h2 className="text-sm font-semibold text-text-secondary mb-3 flex items-center gap-2">
-                  <span className="material-symbols-outlined text-lg">search</span>
-                  Resultados para "{searchQuery}"
-                </h2>
-                {isSearching ? (
-                  <div className="space-y-2">
-                    {[1, 2, 3].map(i => <ListItemSkeleton key={i} />)}
-                  </div>
-                ) : searchResults.length > 0 ? (
-                  <div className="space-y-2">
-                    {searchResults.map(user => (
-                      <UserSuggestionCard
-                        key={user.id}
-                        user={user}
-                        onFollow={() => handleSendRequest(user.id)}
-                        isLoading={actionLoading === user.id}
-                        isSent={sentRequestIds.has(user.id)}
-                      />
-                    ))}
-                  </div>
-                ) : (
-                  <Card variant="glass" padding="md" rounded="2xl" className="text-center">
-                    <span className="material-symbols-outlined text-4xl text-gray-300 dark:text-gray-600 mb-2">
-                      search_off
-                    </span>
-                    <p className="text-text-secondary text-sm">No se encontraron usuarios</p>
-                    <p className="text-xs text-text-secondary/70 mt-2">
-                      Pediles que activen "Perfil público" para que aparezcan.
-                    </p>
-                  </Card>
-                )}
+          <div className="space-y-3">
+            {sentRequests.length === 0 ? (
+              <div className="rounded-[1.5rem] border border-dashed border-[#d8dce7] bg-white/60 px-5 py-8 text-center text-sm text-[#7a869c]">
+                No enviaste solicitudes todavía.
               </div>
-            )}
-
-            {/* Suggestions */}
-            {!searchQuery.trim() && (
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <h2 className="text-sm font-semibold text-text-secondary flex items-center gap-2">
-                    <span className="material-symbols-outlined text-lg">auto_awesome</span>
-                    Sugerencias para vos
-                  </h2>
-                  <button
-                    onClick={loadSuggestedUsers}
-                    className="text-xs text-primary font-semibold flex items-center gap-1"
-                  >
-                    <span className="material-symbols-outlined text-sm">refresh</span>
-                    Actualizar
-                  </button>
-                </div>
-
-                {loadingSuggested ? (
-                  <div className="space-y-2">
-                    {[1, 2, 3, 4, 5].map(i => <ListItemSkeleton key={i} />)}
-                  </div>
-                ) : suggestedUsers.length > 0 ? (
-                  <div className="space-y-2">
-                    {suggestedUsers.map(user => (
-                      <UserSuggestionCard
-                        key={user.id}
-                        user={user}
-                        onFollow={() => handleSendRequest(user.id)}
-                        isLoading={actionLoading === user.id}
-                        isSent={sentRequestIds.has(user.id)}
-                      />
-                    ))}
-                  </div>
-                ) : (
-                  <EmptyState
-                    icon="explore"
-                    title="No hay sugerencias"
-                    description="Buscá por nombre, username o email para encontrar amigas"
-                  />
-                )}
-              </div>
-            )}
-
-            {/* Quick Tips */}
-            {!searchQuery.trim() && (
-              <Card variant="glass" padding="md" rounded="2xl" className="mt-4">
-                <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center flex-shrink-0">
-                    <span className="material-symbols-outlined text-white">tips_and_updates</span>
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-sm text-text-primary dark:text-gray-200 mb-1">
-                      Conectá con más estilo
-                    </h3>
-                    <p className="text-xs text-text-secondary leading-relaxed">
-                      Seguí a personas con estilos similares para inspirarte, pedir prendas prestadas y generar outfits juntas.
-                    </p>
-                  </div>
-                </div>
-              </Card>
+            ) : (
+              sentRequests.map((request) =>
+                renderProfileRow(
+                  request.requester,
+                  <span className="rounded-full bg-[#eef1f8] px-4 py-2 text-sm font-semibold text-[#5c6780]">
+                    Pendiente
+                  </span>,
+                  'Esperando respuesta'
+                )
+              )
             )}
           </div>
-        )}
+        </section>
+      </div>
+    );
+  };
+
+  const renderDiscoverTab = () => {
+    if (searchState.error) {
+      return (
+        <div className="rounded-[2.25rem] border border-dashed border-[#d8dce7] bg-white/65 px-6 py-14 text-center shadow-[0_18px_40px_rgba(0,0,0,0.06)] backdrop-blur-xl">
+          <EmptyState
+            icon="search_off"
+            title="No pude completar la búsqueda"
+            description={searchState.error}
+          />
+        </div>
+      );
+    }
+
+    if (!searchState.loading && discoverUsers.length === 0) {
+      const hasSearch = query.trim().length >= 2;
+      return (
+        <div className="rounded-[2.25rem] border border-dashed border-[#d8dce7] bg-white/65 px-6 py-14 text-center shadow-[0_18px_40px_rgba(0,0,0,0.06)] backdrop-blur-xl">
+          <EmptyState
+            icon={hasSearch ? 'search_off' : 'travel_explore'}
+            title={hasSearch ? 'No encontré usuarias con esa búsqueda' : 'Todavía no hay sugerencias'}
+            description={hasSearch ? 'Probá buscando por usuario o email.' : 'Cuando haya más perfiles disponibles, te los voy a mostrar acá.'}
+          />
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-3">
+        {discoverUsers.map((profile) => {
+          const relation = getRelationLabel(profile.id, friends, pendingRequests, sentRequests);
+          const actionId = `send:${profile.id}`;
+          const isBusy = actionKey === actionId;
+
+          return renderProfileRow(
+            profile,
+            relation.disabled ? (
+              <span className="rounded-full bg-[#eef1f8] px-4 py-2 text-sm font-semibold text-[#5c6780]">
+                {relation.label}
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => { void handleSendRequest(profile); }}
+                disabled={isBusy}
+                className="rounded-full bg-[#5b4ff6] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-92 disabled:opacity-60"
+              >
+                {isBusy ? 'Enviando...' : relation.label}
+              </button>
+            ),
+            profile.bio || (profile.is_public ? 'Perfil público' : 'Perfil privado')
+          );
+        })}
+      </div>
+    );
+  };
+
+  if (authLoading || loading) {
+    return (
+      <div className="relative min-h-full overflow-hidden bg-[radial-gradient(circle_at_top_left,_rgba(255,255,255,0.55),_transparent_32%),linear-gradient(180deg,#f8f2ea_0%,#fbf8f4_38%,#f2ece4_100%)] text-[#171717]">
+        <div className="noise-overlay opacity-[0.04]" />
+        <div className="relative mx-auto flex max-w-6xl flex-col gap-5 px-4 pb-[7.5rem] pt-4 md:px-6 md:pb-8 md:pt-6">
+          <div className="rounded-[2.4rem] border border-white/70 bg-white/60 p-6 shadow-[0_20px_40px_rgba(18,24,27,0.08)] backdrop-blur-[26px]">
+            <Loader text="Cargando comunidad..." />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative min-h-full overflow-hidden bg-[radial-gradient(circle_at_top_left,_rgba(255,255,255,0.55),_transparent_32%),linear-gradient(180deg,#f8f2ea_0%,#fbf8f4_38%,#f2ece4_100%)] text-[#171717]">
+      <div className="noise-overlay opacity-[0.04]" />
+
+      <div className="relative mx-auto flex max-w-6xl flex-col gap-5 px-4 pb-[7.5rem] pt-4 md:px-6 md:pb-8 md:pt-6">
+        <header className="rounded-[2.4rem] border border-white/70 bg-white/60 p-5 shadow-[0_20px_40px_rgba(18,24,27,0.08)] backdrop-blur-[26px] md:p-6">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6f8690]">Comunidad</p>
+            <h1 className="mt-2 text-4xl font-semibold tracking-[-0.04em] text-[#2d4752] md:text-5xl">Amigas</h1>
+            <p className="mt-2 text-sm leading-6 text-[#6f8690] md:text-base">
+              Conectá con amigas y compartí tu estilo.
+            </p>
+          </div>
+        </header>
+
+        <section className="rounded-[2.1rem] border border-white/70 bg-white/55 p-4 shadow-[0_20px_40px_rgba(18,24,27,0.08)] backdrop-blur-[26px]">
+          <div className="flex items-center gap-3 rounded-full bg-[#f5f6fa] px-5 py-4">
+            <span className="material-symbols-outlined text-[26px] text-[#708099]">search</span>
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Buscar por usuario o email..."
+              className="w-full bg-transparent text-lg text-[#4a5568] outline-none placeholder:text-[#7f8aa3]"
+            />
+            {searchState.loading ? <Loader size="small" /> : null}
+          </div>
+        </section>
+
+        <section className="rounded-[2.1rem] border border-white/70 bg-white/55 p-2 shadow-[0_20px_40px_rgba(18,24,27,0.08)] backdrop-blur-[26px]">
+          <div className="grid gap-2 md:grid-cols-3">
+            {[
+              { id: 'friends', label: 'Amigas', icon: 'group' },
+              { id: 'requests', label: 'Solicitudes', icon: 'person_add' },
+              { id: 'discover', label: 'Descubrir', icon: 'explore' },
+            ].map((tab) => {
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveTab(tab.id as CommunityTab)}
+                  className={`flex items-center justify-center gap-3 rounded-full px-4 py-4 text-xl font-semibold transition ${
+                    isActive
+                      ? 'bg-[#051225] text-white shadow-[0_12px_28px_rgba(5,18,37,0.22)]'
+                      : 'text-[#708099] hover:bg-white/70'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-[24px]">{tab.icon}</span>
+                  <span>{tab.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
+        <section className="rounded-[2.4rem] border border-white/70 bg-white/55 p-5 shadow-[0_20px_40px_rgba(18,24,27,0.08)] backdrop-blur-[26px] md:p-6">
+          {loadError ? (
+            <EmptyState
+              icon="cloud_off"
+              title="No pude cargar la comunidad"
+              description={loadError}
+              actionLabel="Reintentar"
+              onAction={() => { void loadCommunity(); }}
+            />
+          ) : activeTab === 'friends' ? (
+            renderFriendsTab()
+          ) : activeTab === 'requests' ? (
+            renderRequestsTab()
+          ) : (
+            renderDiscoverTab()
+          )}
+        </section>
       </div>
     </div>
   );
-};
-
-export default CommunityView;
+}

@@ -5,6 +5,8 @@
 set -e
 
 PROJECT_REF="qpoojigxxswkpkfbrfiy"
+PUBLIC_APP_URL="${PUBLIC_APP_URL:-https://no-tengo-nada-para-ponerme.vercel.app}"
+VERCEL_FALLBACK_URL="${VERCEL_FALLBACK_URL:-https://no-tengo-nada-para-ponerme-baloskys-projects.vercel.app}"
 echo "🚀 Deploy para proyecto: $PROJECT_REF"
 
 # 1. Login a Supabase (si no estás logueado)
@@ -34,8 +36,11 @@ supabase secrets set SUPABASE_URL="$SUPABASE_URL"
 echo "Configurando SUPABASE_SERVICE_ROLE_KEY..."
 supabase secrets set SUPABASE_SERVICE_ROLE_KEY="$SERVICE_KEY"
 
-echo "Configurando SITE_URL..."
-supabase secrets set SITE_URL="https://no-tengo-nada-para-ponerme.vercel.app"
+echo "Configurando APP_URL, APP_URL_ALLOWLIST, ALLOWED_WEB_ORIGINS y SITE_URL..."
+supabase secrets set APP_URL="$PUBLIC_APP_URL"
+supabase secrets set APP_URL_ALLOWLIST="$PUBLIC_APP_URL,$VERCEL_FALLBACK_URL"
+supabase secrets set ALLOWED_WEB_ORIGINS="$PUBLIC_APP_URL,$VERCEL_FALLBACK_URL,http://localhost:5173,http://127.0.0.1:5173"
+supabase secrets set SITE_URL="$PUBLIC_APP_URL"
 
 echo "Configurando MERCADOPAGO_WEBHOOK_TOKEN..."
 WEBHOOK_TOKEN=$(openssl rand -hex 16)

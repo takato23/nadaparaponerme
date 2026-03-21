@@ -1,14 +1,20 @@
-import React, { useMemo, useState } from 'react';
-import type { ClothingItem, StructuredOutfitSuggestion } from '../../../types';
+import React, { useMemo, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import type { ChatReferencedItem, ChatUIAction, ClothingItem, StructuredOutfitSuggestion } from '../../../types';
+import { useFeatureFlag } from '../../../hooks/useFeatureFlag';
 import { chatWithStudioStylist } from '../../../src/services/aiService';
 import * as analytics from '../../../src/services/analyticsService';
+import { trackKumbiSurfaceOpened, trackKumbiUiActionTriggered } from '../../../src/services/analyticsService';
 import { recordStylistEvent, upsertStylistMemory } from '../../../src/services/stylistMemoryService';
+import { ROUTES } from '../../../src/routes';
 
 type AssistantMessage = {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   outfitSuggestion?: StructuredOutfitSuggestion | null;
+  referencedItems?: ChatReferencedItem[];
+  uiActions?: ChatUIAction[];
   promptRef?: string;
   threadId?: string | null;
 };
@@ -36,6 +42,8 @@ export function StylistAssistantPanel({
   onClose,
   onApplySuggestion,
 }: StylistAssistantPanelProps) {
+  const navigate = useNavigate();
+  const enableStudioKumbiActions = useFeatureFlag('enableStudioKumbiActions');
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [threadId, setThreadId] = useState<string | null>(null);
@@ -44,7 +52,7 @@ export function StylistAssistantPanel({
       id: 'welcome-studio-stylist',
       role: 'assistant',
       content:
-        'Soy tu Estilista IA. Contame ocasión, clima o mood y te armo un look aplicable al Studio.',
+        'Soy Kumbi. Contame ocasión, clima o mood y te armo un look aplicable al Studio.',
     },
   ]);
 
@@ -55,6 +63,88 @@ export function StylistAssistantPanel({
         .map((m) => ({ role: m.role, content: m.content })),
     [messages],
   );
+
+  React.useEffect(() => {
+    if (!isOpen) return;
+    trackKumbiSurfaceOpened({
+      surface: 'studio',
+      source: 'studio_panel',
+      entry_mode: 'contextual',
+      has_selected_look: false,
+      has_inferred_look: false,
+    });
+  }, [isOpen]);
+
+  const handleMessageAction = useCallback((message: AssistantMessage, action: ChatUIAction) => {
+    trackKumbiUiActionTriggered({
+      surface: 'studio',
+      thread_id: message.threadId || threadId || null,
+      action_type: action.type,
+      source: 'studio',
+    });
+
+    if (action.type === 'view_outfit' && message.outfitSuggestion) {
+      onApplySuggestion(message.outfitSuggestion, {
+        threadId: message.threadId || threadId,
+        prompt: message.promptRef || null,
+      });
+      return;
+    }
+
+    if (action.type === 'open_saved_looks') {
+      navigate(ROUTES.SAVED);
+      onClose();
+      return;
+    }
+
+    if (action.type === 'open_wishlist') {
+      navigate(ROUTES.CLOSET, {
+        state: {
+          stylistNavigation: {
+            type: 'open_wishlist',
+            filters: action.filters,
+          },
+        },
+      });
+      onClose();
+      return;
+    }
+
+    if (action.type === 'open_closet_filtered') {
+      navigate(ROUTES.CLOSET, {
+        state: {
+          stylistNavigation: {
+            type: 'open_closet_filtered',
+            filters: action.filters,
+          },
+        },
+      });
+      onClose();
+      return;
+    }
+
+    if (action.type === 'open_recommended_item' && action.item_id) {
+      navigate(ROUTES.CLOSET, {
+        state: {
+          stylistNavigation: {
+            type: 'open_recommended_item',
+            itemId: action.item_id,
+          },
+        },
+      });
+      onClose();
+      return;
+    }
+
+    if (action.type === 'open_studio_with_selection') {
+      navigate(ROUTES.STUDIO, {
+        state: {
+          preselectedItemIds: action.preselected_item_ids || [],
+        },
+      });
+      onClose();
+    }
+  }, [navigate, onApplySuggestion, onClose, threadId]);
 
   if (!isOpen) return null;
 
@@ -103,6 +193,8 @@ export function StylistAssistantPanel({
           role: 'assistant',
           content: response.content || 'No pude generar una recomendación ahora.',
           outfitSuggestion: response.outfitSuggestion || null,
+          referencedItems: response.referencedItems || [],
+          uiActions: response.uiActions || [],
           promptRef: cleanPrompt,
           threadId: response.threadId || threadId,
         },
@@ -126,7 +218,7 @@ export function StylistAssistantPanel({
       <div className="mb-2 flex items-center justify-between">
         <div>
           <p className="text-xs uppercase tracking-[0.22em] text-[color:var(--studio-ink-muted)]">Copiloto</p>
-          <h3 className="text-sm font-semibold text-[color:var(--studio-ink)]">Estilista IA</h3>
+          <h3 className="text-sm font-semibold text-[color:var(--studio-ink)]">Kumbi</h3>
         </div>
         <button
           onClick={onClose}
@@ -165,7 +257,7 @@ export function StylistAssistantPanel({
             </div>
 
             {message.role === 'assistant' && message.outfitSuggestion && (
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <button
                   onClick={() => {
                     onApplySuggestion(message.outfitSuggestion!, {
@@ -214,6 +306,37 @@ export function StylistAssistantPanel({
                 >
                   No me gusta
                 </button>
+              </div>
+            )}
+
+            {message.role === 'assistant' && Array.isArray(message.referencedItems) && message.referencedItems.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {message.referencedItems.slice(0, 3).map((item) => (
+                  <span
+                    key={`${message.id}-${item.item_id}`}
+                    className="rounded-full border border-[color:var(--studio-ink)]/10 bg-white px-2.5 py-1 text-[11px] font-medium text-[color:var(--studio-ink)]"
+                  >
+                    {item.label}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {enableStudioKumbiActions && message.role === 'assistant' && Array.isArray(message.uiActions) && message.uiActions.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {message.uiActions
+                  .filter((action) => action.type !== 'save_to_wishlist')
+                  .slice(0, 3)
+                  .map((action) => (
+                    <button
+                      key={action.id}
+                      type="button"
+                      onClick={() => handleMessageAction(message, action)}
+                      className="rounded-full border border-[color:var(--studio-ink)]/10 bg-white px-2.5 py-1 text-[11px] font-medium text-[color:var(--studio-ink)] hover:bg-gray-50"
+                    >
+                      {action.label}
+                    </button>
+                  ))}
               </div>
             )}
           </div>

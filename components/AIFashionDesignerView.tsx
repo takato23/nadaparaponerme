@@ -72,7 +72,7 @@ const AIFashionDesignerView = ({ onClose, onAddToCloset, onShowHistory }: AIFash
     }
 
     if (remainingQuota <= 0) {
-      setError('Has alcanzado tu límite diario de créditos');
+      setError('Has alcanzado tu límite diario de usos');
       return;
     }
 

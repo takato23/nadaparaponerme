@@ -13,7 +13,7 @@ const PhotoGuidanceModal = ({ onClose, onShowExample }: PhotoGuidanceModalProps)
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.9 }}
-        className="w-full max-w-lg bg-white dark:bg-gray-900 rounded-3xl shadow-2xl overflow-hidden"
+        className="w-full max-w-2xl bg-white dark:bg-gray-900 rounded-3xl shadow-2xl overflow-hidden"
       >
         {/* Header */}
         <div className="bg-gradient-to-r from-primary to-secondary p-6 text-white relative">
@@ -35,7 +35,7 @@ const PhotoGuidanceModal = ({ onClose, onShowExample }: PhotoGuidanceModalProps)
         </div>
 
         {/* Content */}
-        <div className="p-6 space-y-6 max-h-[60vh] overflow-y-auto">
+        <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
           {/* Good Photos Section */}
           <div className="space-y-3">
             <div className="flex items-center gap-2 mb-3">
@@ -106,13 +106,25 @@ const PhotoGuidanceModal = ({ onClose, onShowExample }: PhotoGuidanceModalProps)
                 {[
                   { title: 'Colgada (Recomendado)', desc: 'En una percha sobre una pared blanca.' },
                   { title: 'Plana', desc: 'Sobre una mesa o piso liso y despejado.' },
-                  { title: 'Puesta', desc: 'Frente a un espejo o alguien te saca.' }
+                  { title: 'Puesta', desc: 'Frente a un espejo o alguien te saca. Puede bajar un poco la precisión al clasificar la prenda.' }
                 ].map((item, i) => (
                   <li key={i} className="text-xs text-text-secondary dark:text-gray-400">
                     <span className="font-bold text-primary">• {item.title}:</span> {item.desc}
                   </li>
                 ))}
               </ul>
+            </div>
+
+            <div className="pt-3 border-t border-primary/10">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="material-symbols-outlined text-primary text-sm">styler</span>
+                <h3 className="text-sm font-bold text-text-primary dark:text-gray-100 uppercase tracking-wider">
+                  Foto de Look Completo
+                </h3>
+              </div>
+              <p className="text-xs text-text-secondary dark:text-gray-400">
+                Si en la foto aparecen varias prendas o la ropa está puesta, la app puede entender peor cada pieza por separado. Para sumar prendas al armario con más precisión, conviene una foto por prenda.
+              </p>
             </div>
 
             <div className="pt-3 border-t border-primary/10">

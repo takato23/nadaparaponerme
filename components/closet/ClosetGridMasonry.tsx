@@ -12,18 +12,20 @@
  * - Smooth transitions
  */
 
-import React, { useMemo, useCallback, useState, useEffect } from 'react';
+import React, { useCallback, lazy, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ClosetItemCard from './ClosetItemCard';
 import ClosetQuickActions, { useContextMenu, QuickAction } from './ClosetQuickActions';
 import type { ClothingItem } from '../../types';
-import NanoBanana from './NanoBanana';
+
+const NanoBanana = lazy(() => import('./NanoBanana'));
 
 interface ClosetGridMasonryProps {
   items: ClothingItem[];
   onItemClick: (id: string) => void;
   showVersatilityScore?: boolean;
   getItemVersatilityScore?: (itemId: string) => number;
+  recommendedItemId?: string | null;
 
   // Selection mode
   isSelectionMode?: boolean;
@@ -50,33 +52,12 @@ interface ClosetGridMasonryProps {
   emptyActionLabel?: string;
 }
 
-// Column distribution algorithm - balance column heights
-function distributeItemsToColumns(items: ClothingItem[], columnCount: number): ClothingItem[][] {
-  const columns: ClothingItem[][] = Array.from({ length: columnCount }, () => []);
-  const columnHeights: number[] = Array(columnCount).fill(0);
-
-  // Distribute items to shortest column each time
-  items.forEach(item => {
-    // Find shortest column
-    const shortestColumnIndex = columnHeights.indexOf(Math.min(...columnHeights));
-
-    // Add item to shortest column
-    columns[shortestColumnIndex].push(item);
-
-    // Estimate height increase (this is approximate, real heights will vary)
-    // Base card height + image aspect ratio estimate
-    const estimatedHeight = 260; // Default card height
-    columnHeights[shortestColumnIndex] += estimatedHeight;
-  });
-
-  return columns;
-}
-
 export default function ClosetGridMasonry({
   items,
   onItemClick,
   showVersatilityScore = false,
   getItemVersatilityScore,
+  recommendedItemId = null,
   isSelectionMode = false,
   selectedIds = new Set(),
   onToggleSelection,
@@ -93,32 +74,6 @@ export default function ClosetGridMasonry({
   emptyActionLabel = 'Agregar Prenda'
 }: ClosetGridMasonryProps) {
   const { contextMenu, openContextMenu, closeContextMenu } = useContextMenu();
-  const [containerWidth, setContainerWidth] = useState(window.innerWidth);
-
-  // Track container width for responsive columns
-  useEffect(() => {
-    const handleResize = () => {
-      setContainerWidth(window.innerWidth);
-    };
-
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  // Calculate column count
-  const columnCount = useMemo(() => {
-    if (columns === 'auto') {
-      // Calculate based on container width and minimum column width
-      const calculatedColumns = Math.floor(containerWidth / (minColumnWidth + gapSize));
-      return Math.max(1, Math.min(6, calculatedColumns)); // Between 1 and 6 columns
-    }
-    return columns;
-  }, [columns, containerWidth, minColumnWidth, gapSize]);
-
-  // Distribute items across columns
-  const columnItems = useMemo(() => {
-    return distributeItemsToColumns(items, columnCount);
-  }, [items, columnCount]);
 
   // Handle quick action
   const handleQuickActionInternal = useCallback((actionId: string, item: ClothingItem) => {
@@ -126,10 +81,6 @@ export default function ClosetGridMasonry({
       onQuickAction(actionId, item);
     }
   }, [onQuickAction]);
-
-  // Loading state (simulated or passed via props if added later)
-  // For now we don't have isLoading prop in interface, but good to have the structure ready or add it.
-  // Let's add isLoading to props first.
 
   // Empty state
   if (items.length === 0) {
@@ -141,9 +92,13 @@ export default function ClosetGridMasonry({
             src="/images/ai-assets/empty_closet_illustration.png"
             alt="Empty Closet"
             className="relative w-full h-full object-contain drop-shadow-2xl z-10"
+            loading="lazy"
+            decoding="async"
           />
           <div className="absolute -bottom-8 -right-8 z-20">
-            <NanoBanana className="scale-75 origin-bottom-right" />
+            <Suspense fallback={null}>
+              <NanoBanana className="scale-75 origin-bottom-right" />
+            </Suspense>
           </div>
         </div>
 
@@ -194,6 +149,7 @@ export default function ClosetGridMasonry({
               >
                 <ClosetItemCard
                   item={item}
+                  isRecommended={Boolean(recommendedItemId && item.id === recommendedItemId)}
                   onClick={onItemClick}
                   onLongPress={(id) => {
                     // For mobile long-press

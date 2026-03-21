@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useRef } from 'react';
+import React, { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { motion, useScroll, useTransform, useSpring } from 'framer-motion';
 import { ArrowRight, Star, Sparkles, CheckCircle2 } from 'lucide-react';
 
@@ -11,8 +11,51 @@ interface Landing3DScrollProps {
 
 const SECTION_HEIGHT = 100; // vh
 
+class SilentEyeBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
+    constructor(props: { children: React.ReactNode }) {
+        super(props);
+        this.state = { hasError: false };
+    }
+
+    static getDerivedStateFromError() {
+        return { hasError: true };
+    }
+
+    componentDidCatch(error: unknown) {
+        console.warn('[landing] Eye3D disabled after render error:', error);
+    }
+
+    render() {
+        if (this.state.hasError) {
+            return null;
+        }
+        return this.props.children;
+    }
+}
+
+function supportsWebGL(): boolean {
+    if (typeof window === 'undefined' || typeof document === 'undefined') return false;
+
+    try {
+        const canvas = document.createElement('canvas');
+        const gl =
+            canvas.getContext('webgl2') ||
+            canvas.getContext('webgl') ||
+            canvas.getContext('experimental-webgl');
+        return Boolean(gl);
+    } catch {
+        return false;
+    }
+}
+
 export default function Landing3DScroll({ onGetStarted, onLogin }: Landing3DScrollProps) {
     const containerRef = useRef<HTMLDivElement>(null);
+    const [canRenderEye3D, setCanRenderEye3D] = useState(true);
+
+    useEffect(() => {
+        setCanRenderEye3D(supportsWebGL());
+    }, []);
+
     const { scrollYProgress } = useScroll({
         target: containerRef,
         offset: ["start start", "end end"]
@@ -40,9 +83,13 @@ export default function Landing3DScroll({ onGetStarted, onLogin }: Landing3DScro
                     style={{ scale: eyeScale, y: eyeY, x: eyeX }}
                     className="absolute inset-0 z-0 flex items-center justify-center"
                 >
-                    <Suspense fallback={null}>
-                        <Eye3D variant="landing" className="w-full h-full" />
-                    </Suspense>
+                    {canRenderEye3D && (
+                        <SilentEyeBoundary>
+                            <Suspense fallback={null}>
+                                <Eye3D variant="landing" className="w-full h-full" />
+                            </Suspense>
+                        </SilentEyeBoundary>
+                    )}
                 </motion.div>
 
                 {/* Overlays/Gradients */}
@@ -61,18 +108,18 @@ export default function Landing3DScroll({ onGetStarted, onLogin }: Landing3DScro
                         initial={{ opacity: 0, y: 30 }}
                         whileInView={{ opacity: 1, y: 0 }}
                         viewport={{ once: true }}
-                        className="max-w-3xl px-6"
+                        className="max-w-3xl px-4 sm:px-6"
                     >
                         <Badge>Demo viral: probalo en 30 segundos</Badge>
-                        <h1 className="text-5xl md:text-7xl font-bold tracking-tighter mb-6 bg-clip-text text-transparent bg-gradient-to-r from-white via-purple-200 to-purple-400">
+                        <h1 className="text-4xl sm:text-5xl md:text-7xl font-bold tracking-tighter mb-5 sm:mb-6 bg-clip-text text-transparent bg-gradient-to-r from-white via-purple-200 to-purple-400">
                             No Tengo Nada<br />Que Ponerme
                         </h1>
-                        <p className="text-xl text-gray-300 mb-8 max-w-2xl mx-auto">
+                        <p className="text-base sm:text-lg md:text-xl text-gray-300 mb-7 sm:mb-8 max-w-2xl mx-auto">
                             Subí una foto, elegí prendas y mirá tu antes/después realista. Sin pagar al inicio, listo para compartir.
                         </p>
                         <button
                             onClick={onGetStarted}
-                            className="bg-white text-black px-8 py-4 rounded-full font-bold text-lg hover:bg-gray-200 transition-all flex items-center gap-2 mx-auto group"
+                            className="bg-white text-black px-6 sm:px-8 py-3 sm:py-4 rounded-full font-bold text-base sm:text-lg hover:bg-gray-200 transition-all flex items-center gap-2 mx-auto group"
                         >
                             Probar gratis ahora
                             <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -88,10 +135,10 @@ export default function Landing3DScroll({ onGetStarted, onLogin }: Landing3DScro
                     <motion.div
                         initial={{ opacity: 0, x: -50 }}
                         whileInView={{ opacity: 1, x: 0 }}
-                        className="max-w-xl px-6"
+                        className="max-w-xl px-4 sm:px-6"
                     >
-                        <h2 className="text-4xl md:text-6xl font-bold mb-6">Tu ropero, ordenado en minutos.</h2>
-                        <p className="text-2xl text-gray-400 leading-relaxed">
+                        <h2 className="text-3xl sm:text-4xl md:text-6xl font-bold mb-5 sm:mb-6">Tu ropero, ordenado en minutos.</h2>
+                        <p className="text-lg sm:text-xl md:text-2xl text-gray-400 leading-relaxed">
                             Escaneá tus prendas, armá looks completos y descubrí dónde comprar alternativas similares con mejor precio.
                         </p>
                     </motion.div>
@@ -102,14 +149,14 @@ export default function Landing3DScroll({ onGetStarted, onLogin }: Landing3DScro
                     <motion.div
                         initial={{ opacity: 0, x: 50 }}
                         whileInView={{ opacity: 1, x: 0 }}
-                        className="max-w-xl px-6"
+                        className="max-w-xl px-4 sm:px-6"
                     >
                         <div className="flex items-center justify-end gap-2 mb-4 text-purple-400">
                             <Sparkles />
                             <span className="font-bold tracking-widest text-sm uppercase">Experto en Moda</span>
                         </div>
-                        <h2 className="text-4xl md:text-6xl font-bold mb-6">Tu estilista IA, posta.</h2>
-                        <p className="text-xl text-gray-400 mb-6">
+                        <h2 className="text-3xl sm:text-4xl md:text-6xl font-bold mb-5 sm:mb-6">Tu estilista IA, posta.</h2>
+                        <p className="text-base sm:text-lg md:text-xl text-gray-400 mb-5 sm:mb-6">
                             Respeta pose, textura y proporciones. Te sugiere combinaciones usables para el día a día.
                         </p>
                         <ul className="space-y-4 inline-block text-left">
@@ -126,24 +173,24 @@ export default function Landing3DScroll({ onGetStarted, onLogin }: Landing3DScro
                     <motion.div
                         initial={{ scale: 0.9, opacity: 0 }}
                         whileInView={{ scale: 1, opacity: 1 }}
-                        className="max-w-2xl px-6 bg-white/5 backdrop-blur-3xl rounded-3xl p-12 border border-white/10"
+                        className="max-w-2xl px-4 sm:px-6 bg-white/5 backdrop-blur-3xl rounded-3xl p-6 sm:p-12 border border-white/10"
                     >
                         <Star className="w-12 h-12 text-yellow-400 mx-auto mb-6 fill-yellow-400/20" />
-                        <h2 className="text-4xl md:text-5xl font-bold mb-6">Probalo hoy y sacá tu primer look</h2>
-                        <p className="text-lg text-gray-300 mb-8">
+                        <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-5 sm:mb-6">Probalo hoy y sacá tu primer look</h2>
+                        <p className="text-base sm:text-lg text-gray-300 mb-7 sm:mb-8">
                             Entrá, probá el flujo completo y compartí el resultado.
                             El acceso inicial sigue gratuito.
                         </p>
                         <div className="flex flex-col gap-4 sm:flex-row justify-center">
                             <button
                                 onClick={onGetStarted}
-                                className="bg-purple-600 text-white px-8 py-4 rounded-xl font-bold text-lg hover:bg-purple-700 transition-all shadow-lg shadow-purple-600/25"
+                                className="bg-purple-600 text-white px-6 sm:px-8 py-3 sm:py-4 rounded-xl font-bold text-base sm:text-lg hover:bg-purple-700 transition-all shadow-lg shadow-purple-600/25"
                             >
                                 Empezar gratis
                             </button>
                             <button
                                 onClick={onLogin}
-                                className="px-8 py-4 rounded-xl font-medium text-lg text-gray-400 hover:text-white transition-colors"
+                                className="px-6 sm:px-8 py-3 sm:py-4 rounded-xl font-medium text-base sm:text-lg text-gray-400 hover:text-white transition-colors"
                             >
                                 Ya tengo cuenta
                             </button>
@@ -161,7 +208,7 @@ export default function Landing3DScroll({ onGetStarted, onLogin }: Landing3DScro
 
 // Utility Components
 const Section = ({ id, children, className = "" }: { id?: string; children: React.ReactNode; className?: string }) => (
-    <div id={id} className={`min-h-screen w-full flex flex-col justify-center relative py-20 ${className}`}>
+    <div id={id} className={`min-h-[100svh] w-full flex flex-col justify-center relative py-14 sm:py-20 ${className}`}>
         {children}
     </div>
 );

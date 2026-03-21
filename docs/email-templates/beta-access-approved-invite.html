@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tu invitación a la beta está lista</title>
+  </head>
+  <body style="margin:0;padding:0;background:#f6efe6;font-family:Georgia,'Times New Roman',serif;color:#20130d;">
+    <div style="display:none;max-height:0;overflow:hidden;opacity:0;">
+      Ya tenés acceso a la beta de Ojo de Loca. Creá tu cuenta desde este mail.
+    </div>
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f6efe6;">
+      <tr>
+        <td align="center" style="padding:32px 16px;">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:640px;">
+            <tr>
+              <td style="padding:0 0 18px 6px;font-size:12px;letter-spacing:2.4px;text-transform:uppercase;color:#8b6f61;">
+                OJO DE LOCA · BETA PRIVADA
+              </td>
+            </tr>
+            <tr>
+              <td style="background:#fffaf5;border:1px solid #ead9c9;border-radius:30px;padding:40px 34px 32px;box-shadow:0 18px 60px rgba(78,46,31,0.08);">
+                <div style="font-size:13px;line-height:1.7;letter-spacing:1.8px;text-transform:uppercase;color:#b3876a;margin-bottom:18px;">
+                  Invitación confirmada
+                </div>
+                <h1 style="margin:0 0 16px;font-size:44px;line-height:1.02;font-weight:600;color:#24140e;">
+                  Ya podés crear<br />tu cuenta beta
+                </h1>
+                <p style="margin:0 0 14px;font-size:18px;line-height:1.75;color:#4b3428;">
+                  Reservamos tu acceso a Ojo de Loca y ya quedó habilitado para {{ .Email }}.
+                </p>
+                <p style="margin:0 0 28px;font-size:18px;line-height:1.75;color:#4b3428;">
+                  Entrá desde este botón para crear tu cuenta y empezar a usar la beta.
+                </p>
+
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 28px;">
+                  <tr>
+                    <td style="border-radius:999px;background:linear-gradient(135deg,#1d7f74 0%,#15574f 100%);text-align:center;">
+                      <a
+                        href="{{ .ConfirmationURL }}"
+                        style="display:inline-block;padding:16px 28px;font-size:15px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;color:#fffaf5;text-decoration:none;border-radius:999px;"
+                      >
+                        Crear mi cuenta
+                      </a>
+                    </td>
+                  </tr>
+                </table>
+
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 24px;">
+                  <tr>
+                    <td style="padding:18px 20px;border-radius:22px;background:#f3e4d5;color:#5b4032;font-size:15px;line-height:1.7;">
+                      <strong style="display:block;margin-bottom:8px;color:#2b1912;">Acceso beta</strong>
+                      Vas a entrar a una versión temprana y viva del producto, con funciones nuevas, pruebas y mejoras en movimiento.
+                    </td>
+                  </tr>
+                </table>
+
+                <p style="margin:0 0 10px;font-size:14px;line-height:1.8;color:#7a6256;">
+                  Si el botón no abre, copiá este link:
+                </p>
+                <p style="margin:0 0 24px;font-size:13px;line-height:1.8;word-break:break-all;color:#9a7f71;">
+                  {{ .ConfirmationURL }}
+                </p>
+                <p style="margin:0;font-size:13px;line-height:1.8;color:#9a7f71;">
+                  Esta invitación está asociada a {{ .Email }}.
+                </p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:18px 8px 0;font-size:12px;line-height:1.8;color:#8f7668;text-align:center;">
+                Ojo de Loca · Beta privada<br />
+                Si no esperabas este mail, simplemente ignoralo.
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

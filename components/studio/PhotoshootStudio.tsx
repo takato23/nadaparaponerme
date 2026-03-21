@@ -35,6 +35,7 @@ import {
   STUDIO_GENERATION_STATE_KEY,
   getValidSlotsForItem,
   hasMinimumCoverage,
+  shouldShowCompatibilityWarning,
   type GeneratedImageRecord,
   type PhotoshootStudioProps,
   type StudioGenerationPayload,
@@ -93,15 +94,16 @@ const studioTheme = {
   '--studio-gold': '#f6c681',
   '--studio-shadow': 'rgba(17, 24, 39, 0.18)',
   '--studio-font-display': '"Playfair Display", serif',
-  '--studio-font-body': '"Poppins", sans-serif',
+  '--studio-font-body': '"Outfit", sans-serif',
 } as React.CSSProperties;
 
-export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
+export default function PhotoshootStudio({ closet, bottomDockInset = false }: PhotoshootStudioProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const studioLocationState = location.state as StudioLocationState;
 
   const mirroredEntryHandled = useRef(false);
+  const preselectedStateHandled = useRef<string | null>(null);
   const sessionGenerationIds = useRef<Set<string>>(new Set());
   const studioRootRef = useRef<HTMLDivElement>(null);
 
@@ -343,6 +345,14 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
     const state = location.state as StudioLocationState;
     if (!state) return;
 
+    const preselectedSignature = JSON.stringify({
+      tab: state.tab || null,
+      useVirtualModel: state.useVirtualModel ?? null,
+      fromMirror: state.fromMirror ?? false,
+      preselectedItemIds: state.preselectedItemIds || [],
+    });
+    if (preselectedStateHandled.current === preselectedSignature) return;
+
     if (state.tab) {
       setFilterStatus(state.tab === 'virtual' ? 'virtual' : 'owned');
     }
@@ -365,17 +375,20 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
       }
 
       if (newSelections.size > 0) {
+        preselectedStateHandled.current = preselectedSignature;
         setSlotSelections(newSelections);
-        toast.success(`${newSelections.size} prendas cargadas del outfit`);
+        toast.success(
+          `${newSelections.size} ${newSelections.size === 1 ? 'prenda cargada al outfit' : 'prendas cargadas al outfit'}`
+        );
         if (state.fromMirror && !mirroredEntryHandled.current) {
           toast.success('Look recibido desde Espejo. Ajustá y genera el resultado final.');
           mirroredEntryHandled.current = true;
         }
       }
 
-      window.history.replaceState({}, document.title);
+      navigate(`${location.pathname}${location.search}`, { replace: true, state: {} });
     }
-  }, [location.state, safeCloset, setFilterStatus, setSlotSelections]);
+  }, [location.pathname, location.search, location.state, navigate, safeCloset, setFilterStatus, setSlotSelections]);
 
   useEffect(() => {
     if (!enableUnifiedStudioStylist) return;
@@ -385,7 +398,7 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
     setShowStylistAssistant(true);
 
     if (query.get('entry') === 'legacy_route') {
-      toast.success('Estilista IA ahora vive dentro de Studio');
+      toast.success('Kumbi ahora vive dentro de Studio');
     }
   }, [enableUnifiedStudioStylist, location.search]);
 
@@ -460,12 +473,16 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
     if (slotCount === 0) return 'Seleccioná al menos 1 prenda para probar.';
     if (slotCount > MAX_SLOTS_PER_GENERATION) return `Máximo ${MAX_SLOTS_PER_GENERATION} prendas.`;
     if (!hasSelfie) return 'Subí una foto o activá el cuerpo virtual para generar.';
-    if (!hasCredits) return `Necesitás ${creditsNeeded} crédito${creditsNeeded > 1 ? 's' : ''} para generar.`;
+    if (!hasCredits) return `Necesitás ${creditsNeeded} uso${creditsNeeded > 1 ? 's' : ''} para generar.`;
     return 'Listo para generar tu look.';
   }, [slotCount, hasSelfie, hasCredits, creditsNeeded]);
 
-  const hasBottomOrShoes = slotSelections.has('bottom') || slotSelections.has('shoes');
-  const needsCompatibilityCheck = presetId === 'overlay' && hasBottomOrShoes;
+  const needsCompatibilityCheck = shouldShowCompatibilityWarning({
+    slots: slotSelections,
+    presetId,
+    useVirtualModel,
+    hasUserSelfie: Boolean(userBaseImage),
+  });
 
   const handleRequestBaseUpload = useCallback(() => {
     if (useVirtualModel) {
@@ -834,6 +851,27 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
 
   const { showTutorial, completeTutorial, skipTutorial, resetTutorial } = useStudioTutorial();
   const shouldShowTutorial = showTutorial && Boolean(consentPreferences);
+  const handleBack = useCallback(() => {
+    if (location.pathname === ROUTES.STUDIO_PHOTOSHOOT) {
+      navigate(ROUTES.STUDIO, { replace: true });
+      return;
+    }
+
+    const historyState = window.history.state as { idx?: number } | null;
+    if (typeof historyState?.idx === 'number' && historyState.idx > 0) {
+      navigate(-1);
+      return;
+    }
+
+    navigate(ROUTES.HOME, { replace: true });
+  }, [location.pathname, navigate]);
+
+  const mobileMainPaddingBottom = bottomDockInset
+    ? 'calc(9rem + env(safe-area-inset-bottom))'
+    : 'calc(5.5rem + env(safe-area-inset-bottom))';
+  const mobileGenerateBarBottom = bottomDockInset
+    ? 'calc(4.75rem + env(safe-area-inset-bottom))'
+    : 'calc(1rem + env(safe-area-inset-bottom))';
 
   return (
     <div
@@ -856,6 +894,7 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
       <div className="flex min-h-screen min-w-0">
         <div className="flex-1 min-w-0 flex flex-col lg:pr-96">
           <StudioHeader
+            onBack={handleBack}
             generatedImagesCount={generatedImages.length}
             onOpenLatestResult={handleOpenLatestResult}
             showResultsHint={showResultsHint}
@@ -867,6 +906,7 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
             initial="hidden"
             animate="show"
             className="mx-auto w-full max-w-5xl min-w-0-safe overflow-x-hidden contain-overflow-x px-3 pt-3 pb-[calc(5.5rem+env(safe-area-inset-bottom))] lg:pb-[calc(6rem+env(safe-area-inset-bottom))]"
+            style={{ paddingBottom: mobileMainPaddingBottom }}
           >
             {!activeBaseImage && (
               <motion.section variants={itemVariants} className="mb-1">
@@ -924,7 +964,7 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
                     className="inline-flex items-center gap-2 rounded-full border border-white/70 bg-white/70 px-3 py-1.5 text-xs font-semibold text-[color:var(--studio-ink)] shadow-sm transition hover:bg-white"
                   >
                     <span className="material-symbols-outlined text-sm">auto_awesome</span>
-                    Estilista IA
+                    Kumbi
                     <span className="material-symbols-outlined text-sm">
                       {showStylistAssistant ? 'expand_less' : 'expand_more'}
                     </span>
@@ -1032,6 +1072,7 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
               variants={itemVariants}
               data-testid="studio-generate-bar"
               className="sticky bottom-[calc(1rem+env(safe-area-inset-bottom))] z-30 w-full flex justify-center pointer-events-none px-4"
+              style={{ bottom: mobileGenerateBarBottom }}
             >
               <div className="rounded-full bg-white/85 backdrop-blur-xl border border-white/60 shadow-[0_8px_30px_rgb(0,0,0,0.12)] p-1.5 pointer-events-auto w-full sm:w-auto min-w-[min(100%,320px)] flex flex-col transition-all">
                 <div className="flex min-w-0 flex-1 items-center gap-2">
@@ -1045,6 +1086,7 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
                   )}
                   <button
                     onClick={handleGenerateWithWarningCheck}
+                    data-studio-tutorial="studio-generate-btn"
                     disabled={isGenerating && !canGenerate}
                     className={`flex-1 sm:flex-none px-6 py-3 rounded-full font-bold text-[14px] text-white flex items-center justify-center gap-2 transition-all relative overflow-hidden group border-0 ${isGenerating
                       ? 'shadow-[0_0_20px_rgba(236,72,153,0.4)] scale-[0.98]'
@@ -1120,7 +1162,7 @@ export default function PhotoshootStudio({ closet }: PhotoshootStudioProps) {
           onSaveLook={(image) => {
             void handleSaveLook(image);
           }}
-          onOpenSavedLooks={() => navigate(ROUTES.SAVED_LOOKS)}
+          onOpenSavedLooks={() => navigate(ROUTES.SAVED)}
         />
       </div>
 

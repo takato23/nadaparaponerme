@@ -10,14 +10,15 @@
  * - Item selection (bulk operations)
  */
 
-import React, { createContext, useContext, useMemo, useCallback, useState, ReactNode } from 'react';
-import type { ClothingItem } from '../types';
+import React, { createContext, useContext, useMemo, useCallback, useState, useEffect, ReactNode } from 'react';
+import type { ActiveWardrobeRecommendation, ClothingItem } from '../types';
 import type { ExtendedSortOption, BulkSelectionState } from '../types/closet';
 import { useClosetFilters } from '../hooks/useClosetFilters';
 import { useCollections } from '../hooks/useCollections';
 import { useClosetStats } from '../hooks/useClosetStats';
 import { useViewPreferences } from '../hooks/useViewPreferences';
 import { filterAndSortItems } from '../utils/closetUtils';
+import { normalizeColorValue } from '../src/utils/colorUtils';
 
 interface ClosetContextValue {
   // Data
@@ -62,6 +63,8 @@ interface ClosetContextValue {
   onToggleFavorite?: (id: string) => void;
   onExportItems?: (ids: string[]) => void;
   onShareItems?: (ids: string[]) => void;
+  activeRecommendation?: ActiveWardrobeRecommendation | null;
+  onDismissRecommendation?: () => void;
 
   // Computed values
   hasSelection: boolean;
@@ -82,6 +85,8 @@ interface ClosetProviderProps {
   onToggleFavorite?: (id: string) => void;
   onExportItems?: (ids: string[]) => void;
   onShareItems?: (ids: string[]) => void;
+  activeRecommendation?: ActiveWardrobeRecommendation | null;
+  onDismissRecommendation?: () => void;
 }
 
 export function ClosetProvider({
@@ -91,7 +96,9 @@ export function ClosetProvider({
   onDeleteItems,
   onToggleFavorite,
   onExportItems,
-  onShareItems
+  onShareItems,
+  activeRecommendation,
+  onDismissRecommendation,
 }: ClosetProviderProps) {
   // Initialize all hooks
   const filters = useClosetFilters(items);
@@ -110,14 +117,27 @@ export function ClosetProvider({
 
   // Extract unique colors from items
   const availableColors = useMemo(() => {
-    const colors = new Set<string>();
+    const colors = new Map<string, string>();
     items.forEach(item => {
-      if (item.metadata?.color_primary || item.color_primary) {
-        colors.add(item.metadata?.color_primary || item.color_primary);
+      const rawColor = item.metadata?.color_primary || item.color_primary;
+      const normalizedColor = normalizeColorValue(rawColor);
+      if (!normalizedColor || !rawColor) return;
+
+      if (!colors.has(normalizedColor)) {
+        colors.set(normalizedColor, rawColor);
       }
     });
-    return Array.from(colors);
+    return Array.from(colors.values());
   }, [items]);
+
+  useEffect(() => {
+    if (!selectedColor) return;
+    const selectedColorKey = normalizeColorValue(selectedColor);
+    const colorStillExists = availableColors.some((color) => normalizeColorValue(color) === selectedColorKey);
+    if (!colorStillExists) {
+      setSelectedColor(null);
+    }
+  }, [availableColors, selectedColor]);
 
   // Bulk selection state
   const [selection, setSelection] = useState<BulkSelectionState>({
@@ -136,9 +156,10 @@ export function ClosetProvider({
     // Apply color filter first if selected
     let filteredByColor = baseItems;
     if (selectedColor) {
+      const selectedColorKey = normalizeColorValue(selectedColor);
       filteredByColor = baseItems.filter(item => {
         const itemColor = item.metadata?.color_primary || item.color_primary;
-        return itemColor === selectedColor;
+        return normalizeColorValue(itemColor) === selectedColorKey;
       });
     }
 
@@ -273,6 +294,8 @@ export function ClosetProvider({
     onToggleFavorite,
     onExportItems,
     onShareItems,
+    activeRecommendation: activeRecommendation || null,
+    onDismissRecommendation,
 
     // Computed values
     hasSelection,
@@ -304,6 +327,8 @@ export function ClosetProvider({
     onToggleFavorite,
     onExportItems,
     onShareItems,
+    activeRecommendation,
+    onDismissRecommendation,
     hasSelection,
     selectedCount,
     selectedItems

@@ -186,7 +186,7 @@ serve(async (req) => {
         // Analyze with Gemini
         const response = await withRetry(() =>
             ai.models.generateContent({
-                model: 'gemini-2.5-flash',
+                model: 'gemini-3.1-flash-lite-preview',
                 contents: { parts: [{ text: 'Analiza la paleta de colores de mi armario' }] },
                 config: {
                     systemInstruction,

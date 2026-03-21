@@ -26,7 +26,7 @@ const GenerateFitView = ({ onGenerate, onBack, isGenerating, error }: GenerateFi
         <button onClick={onBack} className="p-2 dark:text-gray-200">
           <span className="material-symbols-outlined">close</span>
         </button>
-        <h1 className="text-xl font-bold text-text-primary dark:text-gray-200">Estilista IA</h1>
+        <h1 className="text-xl font-bold text-text-primary dark:text-gray-200">Kumbi</h1>
         <div className="w-10"></div>
       </header>
       

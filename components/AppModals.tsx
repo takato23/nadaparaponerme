@@ -1,6 +1,7 @@
 import React, { Suspense, lazy } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import LazyLoader from './LazyLoader';
+import AIStylistView from './AIStylistView';
 import type {
   ClothingItem,
   ClothingItemMetadata,
@@ -42,7 +43,6 @@ const ConfirmDeleteModal = lazy(() => import('./ui/ConfirmDeleteModal'));
 const ClosetAnalyticsView = lazy(() => import('./ClosetAnalyticsView'));
 const ColorPaletteView = lazy(() => import('./ColorPaletteView'));
 const TopVersatileView = lazy(() => import('./TopVersatileView'));
-const AIStylistView = lazy(() => import('./AIStylistView'));
 const WeatherOutfitView = lazy(() => import('./WeatherOutfitView'));
 const WeeklyPlannerView = lazy(() => import('./WeeklyPlannerView'));
 const LookbookCreatorView = lazy(() => import('./LookbookCreatorView'));
@@ -552,6 +552,7 @@ export const AppModals: React.FC<AppModalsProps> = ({
             onDeleteConversation={handlers.onDeleteConversation}
             onMessagesUpdate={handlers.onMessagesUpdate}
             onUpdateTitle={handlers.onUpdateTitle}
+            professionalProfile={professionalProfile}
             onViewOutfit={handlers.onViewOutfitFromChat}
           />
         )}

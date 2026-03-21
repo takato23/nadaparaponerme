@@ -1,16 +1,19 @@
-import React, { useState, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import type { ClothingItem, ClothingItemMetadata } from '../types';
 import Loader from './Loader';
 import MetadataEditModal from './MetadataEditModal';
 import { compressDataUrl, formatFileSize, type CompressionResult } from '../src/utils/imageCompression';
 import { addClothingItem, getClothingItems } from '../src/services/closetService';
+import * as analytics from '../src/services/analyticsService';
+import { aiStorage } from '../src/utils/aiStorage';
 
 interface BulkUploadViewProps {
   onClose: () => void;
   onAddItemsLocal: (items: ClothingItem[]) => void;
   onClosetSync: (items: ClothingItem[]) => void;
   useSupabaseCloset: boolean;
+  embedded?: boolean;
 }
 
 interface UploadItem {
@@ -29,19 +32,140 @@ const MAX_FILES = 30;
 const CONCURRENT_ANALYSIS = 3;
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const BATCH_SIZE = 5; // Analyze 5 images per batch (optimal for Gemini)
+const BULK_UPLOAD_SESSION_KEY = 'bulk-upload-session-v1';
 
-export default function BulkUploadView({ onClose, onAddItemsLocal, onClosetSync, useSupabaseCloset }: BulkUploadViewProps) {
+type PersistedUploadItem = Omit<UploadItem, 'progress'>;
+
+export default function BulkUploadView({
+  onClose,
+  onAddItemsLocal,
+  onClosetSync,
+  useSupabaseCloset,
+  embedded = false,
+}: BulkUploadViewProps) {
   const [uploadItems, setUploadItems] = useState<UploadItem[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [editingItem, setEditingItem] = useState<UploadItem | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const wakeLockRef = useRef<WakeLockSentinel | null>(null);
+  const [hasRestoredSession, setHasRestoredSession] = useState(false);
+  const [didRestoreItems, setDidRestoreItems] = useState(false);
 
   // Debug: Log cuando cambia uploadItems
   React.useEffect(() => {
     console.log('📸 Upload items changed:', uploadItems.length, uploadItems);
   }, [uploadItems]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const restoreSession = async () => {
+      const persistedItems = await aiStorage.get<PersistedUploadItem[]>(BULK_UPLOAD_SESSION_KEY);
+      if (cancelled) return;
+
+      if (persistedItems && persistedItems.length > 0) {
+        const restoredItems = persistedItems.map((item) => ({
+          ...item,
+          status: item.status === 'analyzing' ? 'pending' : item.status,
+          progress: undefined,
+          error: item.status === 'analyzing' ? undefined : item.error,
+        })) satisfies UploadItem[];
+
+        setUploadItems(restoredItems);
+        setDidRestoreItems(true);
+      }
+
+      setHasRestoredSession(true);
+    };
+
+    void restoreSession();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!hasRestoredSession) return undefined;
+
+    const persistSession = async () => {
+      if (uploadItems.length === 0) {
+        await aiStorage.remove(BULK_UPLOAD_SESSION_KEY);
+        return;
+      }
+
+      const payload: PersistedUploadItem[] = uploadItems.map(({ progress, ...item }) => item);
+      await aiStorage.set(BULK_UPLOAD_SESSION_KEY, payload);
+    };
+
+    const timeoutId = window.setTimeout(() => {
+      void persistSession();
+    }, 250);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [hasRestoredSession, uploadItems]);
+
+  useEffect(() => {
+    if (!didRestoreItems) return;
+    toast.success('Recuperamos tu carga anterior para que no tengas que empezar de cero.');
+    setDidRestoreItems(false);
+  }, [didRestoreItems]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('wakeLock' in navigator)) {
+      return undefined;
+    }
+
+    const shouldKeepAwake = uploadItems.length > 0 || isProcessing || isSaving;
+
+    const releaseWakeLock = async () => {
+      if (!wakeLockRef.current) return;
+      try {
+        await wakeLockRef.current.release();
+      } catch (error) {
+        console.warn('Could not release wake lock:', error);
+      } finally {
+        wakeLockRef.current = null;
+      }
+    };
+
+    const requestWakeLock = async () => {
+      if (!shouldKeepAwake || document.visibilityState !== 'visible' || wakeLockRef.current) return;
+      try {
+        wakeLockRef.current = await navigator.wakeLock.request('screen');
+        wakeLockRef.current.addEventListener('release', () => {
+          wakeLockRef.current = null;
+        }, { once: true });
+      } catch (error) {
+        console.warn('Could not acquire wake lock:', error);
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        void requestWakeLock();
+        return;
+      }
+
+      void releaseWakeLock();
+    };
+
+    if (shouldKeepAwake) {
+      void requestWakeLock();
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+    } else {
+      void releaseWakeLock();
+    }
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      void releaseWakeLock();
+    };
+  }, [isProcessing, isSaving, uploadItems.length]);
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -184,6 +308,10 @@ export default function BulkUploadView({ onClose, onAddItemsLocal, onClosetSync,
       setEditingItem(null);
     }
   };
+
+  const clearPersistedSession = useCallback(async () => {
+    await aiStorage.remove(BULK_UPLOAD_SESSION_KEY);
+  }, []);
 
   const startBulkAnalysis = async () => {
     setIsProcessing(true);
@@ -347,7 +475,13 @@ export default function BulkUploadView({ onClose, onAddItemsLocal, onClosetSync,
         }
 
         const updatedCloset = await getClothingItems();
+        const ownedCount = updatedCloset.filter((item) => (item.status || 'owned') === 'owned').length;
         onClosetSync(updatedCloset);
+        analytics.trackOwnedItemAdded(ownedCount);
+        if (ownedCount >= 8) {
+          analytics.trackFirstEightItemsReached(ownedCount);
+        }
+        await clearPersistedSession();
         onClose();
       } catch (error) {
         console.error('Error saving items to Supabase:', error);
@@ -366,6 +500,16 @@ export default function BulkUploadView({ onClose, onAddItemsLocal, onClosetSync,
         metadata: item.metadata!,
       }))
     );
+    analytics.trackOwnedItemAdded(successItems.length);
+    await clearPersistedSession();
+    onClose();
+  };
+
+  const handleClose = async () => {
+    if (!isProcessing && !isSaving) {
+      await clearPersistedSession();
+      setUploadItems([]);
+    }
     onClose();
   };
 
@@ -391,9 +535,17 @@ export default function BulkUploadView({ onClose, onAddItemsLocal, onClosetSync,
     ? Math.round((totalCompressionMetrics.savedBytes / totalCompressionMetrics.originalSize) * 100)
     : 0;
 
+  const shellClassName = embedded
+    ? 'relative min-h-full w-full bg-[radial-gradient(circle_at_top_left,_rgba(255,255,255,0.52),_transparent_34%),linear-gradient(180deg,#eef2f3_0%,#e6ecef_100%)] px-4 py-4 md:px-6 md:py-6'
+    : 'fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm';
+
+  const panelClassName = embedded
+    ? 'liquid-glass mx-auto flex w-full max-w-5xl min-h-[calc(100dvh-2rem)] md:min-h-[calc(100dvh-3rem)] flex-col overflow-hidden rounded-[2rem]'
+    : 'liquid-glass flex w-full max-w-4xl max-h-[90vh] flex-col overflow-hidden rounded-3xl';
+
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="liquid-glass rounded-3xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+    <div className={shellClassName}>
+      <div className={panelClassName}>
         {/* Header */}
         <div className="flex justify-between items-center p-6 border-b border-white/10">
           <div className="flex-1">
@@ -408,6 +560,20 @@ export default function BulkUploadView({ onClose, onAddItemsLocal, onClosetSync,
                 </span>
               )}
             </p>
+            <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
+              Empezá cargando prendas propias. Este paso activa el armario y prepara el primer look útil.
+            </p>
+            <div className="mt-3 rounded-2xl border border-primary/15 bg-primary/5 px-4 py-3 text-sm text-gray-700 dark:border-primary/20 dark:bg-primary/10 dark:text-gray-200">
+              Funciona como escaneo masivo: subís varias fotos, tocás <span className="font-semibold">Analizar</span> y después <span className="font-semibold">Guardar</span> para mandar todas juntas al armario.
+              <div className="mt-1 text-xs text-gray-600 dark:text-gray-300">
+                Mejor con una prenda por foto. Si la ropa está puesta dentro de un look completo, la clasificación puede bajar.
+              </div>
+              {'wakeLock' in navigator && (
+                <div className="mt-1 text-xs text-gray-600 dark:text-gray-300">
+                  Mientras haya una carga activa intentamos mantener la pantalla despierta para que el proceso no se corte.
+                </div>
+              )}
+            </div>
 
             {/* Global Progress Bar */}
             {isProcessing && totalItems > 0 && (
@@ -426,7 +592,9 @@ export default function BulkUploadView({ onClose, onAddItemsLocal, onClosetSync,
             )}
           </div>
           <button
-            onClick={onClose}
+            onClick={() => {
+              void handleClose();
+            }}
             className="p-2 hover:bg-white/10 rounded-full transition-colors"
             disabled={isProcessing}
           >
@@ -457,7 +625,7 @@ export default function BulkUploadView({ onClose, onAddItemsLocal, onClosetSync,
               <p className="text-gray-500 dark:text-gray-400 mb-6">
                 {isDragging
                   ? `Hasta ${MAX_FILES} prendas a la vez`
-                  : 'Arrastra fotos aquí o haz click para seleccionar'
+                  : 'Arrastra fotos aquí o elegí varias juntas desde Fotos/Archivos'
                 }
               </p>
               {!isDragging && (
@@ -465,7 +633,7 @@ export default function BulkUploadView({ onClose, onAddItemsLocal, onClosetSync,
                   onClick={() => fileInputRef.current?.click()}
                   className="bg-primary text-white px-8 py-3 rounded-2xl font-bold hover:scale-105 transition-transform"
                 >
-                  Seleccionar Fotos
+                  Elegir varias fotos
                 </button>
               )}
             </div>
@@ -620,7 +788,9 @@ export default function BulkUploadView({ onClose, onAddItemsLocal, onClosetSync,
             )}
 
             <button
-              onClick={onClose}
+              onClick={() => {
+                void handleClose();
+              }}
               disabled={isProcessing}
               className="w-full bg-white/10 font-bold py-4 rounded-2xl hover:bg-white/20 transition-colors disabled:opacity-50"
             >

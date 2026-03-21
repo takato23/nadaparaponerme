@@ -2,12 +2,17 @@ export type StructuredOutfitSuggestion = {
   top_id: string;
   bottom_id: string;
   shoes_id: string;
+  outerwear_id?: string | null;
+  accessory_ids?: string[];
   explanation: string;
   confidence?: number;
   missing_piece_suggestion?: { item_name: string; reason: string };
+  look_goal?: 'occasion' | 'reference_recreation' | 'improvement' | 'gap_fill';
+  similarity_score?: number;
+  styling_notes?: string[];
 };
 
-export type NormalizedCategory = 'top' | 'bottom' | 'shoes' | 'other';
+export type NormalizedCategory = 'top' | 'bottom' | 'shoes' | 'outerwear' | 'accessory' | 'other';
 
 export const MAX_CLOSET_ITEMS = 250;
 
@@ -57,6 +62,32 @@ export function normalizeCategory(rawCategory: unknown, rawSubcategory: unknown)
   }
 
   if (
+    value.includes('outerwear') ||
+    value.includes('abrigo') ||
+    value.includes('campera') ||
+    value.includes('jacket') ||
+    value.includes('blazer') ||
+    value.includes('tapado')
+  ) {
+    return 'outerwear';
+  }
+
+  if (
+    value.includes('accessory') ||
+    value.includes('accesorio') ||
+    value.includes('cartera') ||
+    value.includes('bolso') ||
+    value.includes('cinto') ||
+    value.includes('cinturon') ||
+    value.includes('collar') ||
+    value.includes('aro') ||
+    value.includes('lente') ||
+    value.includes('bufanda')
+  ) {
+    return 'accessory';
+  }
+
+  if (
     value.includes('top') ||
     value.includes('remera') ||
     value.includes('camisa') ||
@@ -64,9 +95,7 @@ export function normalizeCategory(rawCategory: unknown, rawSubcategory: unknown)
     value.includes('hoodie') ||
     value.includes('buzo') ||
     value.includes('sweater') ||
-    value.includes('outerwear') ||
-    value.includes('campera') ||
-    value.includes('jacket')
+    value.includes('cardigan')
   ) {
     return 'top';
   }
@@ -98,6 +127,13 @@ export function validateOutfitSuggestion(
   const topId = String(suggestion?.top_id || '').trim();
   const bottomId = String(suggestion?.bottom_id || '').trim();
   const shoesId = String(suggestion?.shoes_id || '').trim();
+  const outerwearId = suggestion?.outerwear_id == null ? null : String(suggestion?.outerwear_id || '').trim();
+  const accessoryIds = Array.isArray(suggestion?.accessory_ids)
+    ? suggestion.accessory_ids
+      .map((value: unknown) => String(value || '').trim())
+      .filter(Boolean)
+      .slice(0, 2)
+    : [];
   const explanation = String(suggestion?.explanation || '').trim();
 
   if (!topId || !bottomId || !shoesId) {
@@ -105,8 +141,9 @@ export function validateOutfitSuggestion(
     return { suggestion: null, warnings };
   }
 
-  const distinctIds = new Set([topId, bottomId, shoesId]);
-  if (distinctIds.size !== 3) {
+  const distinctIds = new Set([topId, bottomId, shoesId, ...(outerwearId ? [outerwearId] : []), ...accessoryIds]);
+  const providedIds = [topId, bottomId, shoesId, ...(outerwearId ? [outerwearId] : []), ...accessoryIds];
+  if (distinctIds.size !== providedIds.length) {
     warnings.push('El estilista devolvió IDs repetidos. Se descartó la sugerencia.');
     return { suggestion: null, warnings };
   }
@@ -114,9 +151,19 @@ export function validateOutfitSuggestion(
   const topCategory = categoryById.get(topId);
   const bottomCategory = categoryById.get(bottomId);
   const shoesCategory = categoryById.get(shoesId);
+  const outerwearCategory = outerwearId ? categoryById.get(outerwearId) : null;
+  const accessoryCategories = accessoryIds.map((id: string) => ({ id, category: categoryById.get(id) }));
 
   if (!topCategory || !bottomCategory || !shoesCategory) {
     warnings.push('El estilista devolvió IDs inexistentes en el armario.');
+    return { suggestion: null, warnings };
+  }
+  if (outerwearId && !outerwearCategory) {
+    warnings.push('outerwear_id no existe en el armario.');
+    return { suggestion: null, warnings };
+  }
+  if (accessoryCategories.some(({ category }: { id: string; category: NormalizedCategory | undefined }) => !category)) {
+    warnings.push('accessory_ids contiene IDs inexistentes en el armario.');
     return { suggestion: null, warnings };
   }
 
@@ -129,6 +176,14 @@ export function validateOutfitSuggestion(
   if (shoesCategory !== 'shoes') {
     warnings.push(`shoes_id ${shoesId} no pertenece a categoría shoes.`);
   }
+  if (outerwearId && outerwearCategory !== 'outerwear') {
+    warnings.push(`outerwear_id ${outerwearId} no pertenece a categoría outerwear.`);
+  }
+  for (const accessory of accessoryCategories) {
+    if (accessory.category !== 'accessory') {
+      warnings.push(`accessory_id ${accessory.id} no pertenece a categoría accessory.`);
+    }
+  }
 
   if (warnings.length > 0) {
     return { suggestion: null, warnings };
@@ -140,9 +195,35 @@ export function validateOutfitSuggestion(
     shoes_id: shoesId,
     explanation,
   };
+  if (outerwearId) {
+    normalized.outerwear_id = outerwearId;
+  }
+  if (accessoryIds.length > 0) {
+    normalized.accessory_ids = accessoryIds;
+  }
 
   if (typeof suggestion?.confidence === 'number') {
     normalized.confidence = Math.max(0, Math.min(1, suggestion.confidence));
+  }
+  if (
+    suggestion?.look_goal === 'occasion'
+    || suggestion?.look_goal === 'reference_recreation'
+    || suggestion?.look_goal === 'improvement'
+    || suggestion?.look_goal === 'gap_fill'
+  ) {
+    normalized.look_goal = suggestion.look_goal;
+  }
+  if (typeof suggestion?.similarity_score === 'number') {
+    normalized.similarity_score = Math.max(0, Math.min(1, suggestion.similarity_score));
+  }
+  if (Array.isArray(suggestion?.styling_notes)) {
+    const notes = suggestion.styling_notes
+      .map((note: unknown) => String(note || '').trim())
+      .filter(Boolean)
+      .slice(0, 4);
+    if (notes.length > 0) {
+      normalized.styling_notes = notes;
+    }
   }
   if (
     suggestion?.missing_piece_suggestion &&

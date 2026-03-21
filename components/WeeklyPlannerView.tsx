@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
-import type { SavedOutfit, ClothingItem, ScheduledOutfitWithDetails } from '../types';
+import type { SavedOutfit, ClothingItem, OutfitWearFeedback, ScheduledOutfitWithDetails } from '../types';
 import * as scheduleService from '../src/services/scheduleService';
+import { buildFeedbackLookup, getFeedbackForWeek } from '../src/services/outfitWearFeedbackService';
 import Loader from './Loader';
 import { Card } from './ui/Card';
+import WearCheckinSheet from './WearCheckinSheet';
 
 interface WeeklyPlannerViewProps {
   savedOutfits: SavedOutfit[];
@@ -23,6 +25,13 @@ interface DayCell {
 const WeeklyPlannerView = ({ savedOutfits, closet, onClose, onViewOutfit }: WeeklyPlannerViewProps) => {
   const [currentWeekStart, setCurrentWeekStart] = useState<Date>(getWeekStart(new Date()));
   const [schedule, setSchedule] = useState<ScheduledOutfitWithDetails[]>([]);
+  const [feedbackEntries, setFeedbackEntries] = useState<OutfitWearFeedback[]>([]);
+  const [selectedCheckin, setSelectedCheckin] = useState<{
+    date: string;
+    outfitId: string;
+    label: string;
+    feedback: OutfitWearFeedback | null;
+  } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -36,6 +45,9 @@ const WeeklyPlannerView = ({ savedOutfits, closet, onClose, onViewOutfit }: Week
   }
 
   // Generate week cells
+  const feedbackLookup = useMemo(() => buildFeedbackLookup(feedbackEntries), [feedbackEntries]);
+  const todayIso = new Date().toISOString().split('T')[0];
+
   const weekCells: DayCell[] = useMemo(() => {
     const cells: DayCell[] = [];
     const today = new Date().toISOString().split('T')[0];
@@ -71,14 +83,34 @@ const WeeklyPlannerView = ({ savedOutfits, closet, onClose, onViewOutfit }: Week
 
     try {
       const startDateStr = currentWeekStart.toISOString().split('T')[0];
-      const weekSchedule = await scheduleService.getWeekSchedule(startDateStr);
+      const [weekSchedule, weekFeedback] = await Promise.all([
+        scheduleService.getWeekSchedule(startDateStr),
+        getFeedbackForWeek(startDateStr),
+      ]);
       setSchedule(weekSchedule);
+      setFeedbackEntries(weekFeedback);
     } catch (err) {
       console.error('Error loading schedule:', err);
       setError('Error al cargar el calendario. Intentá de nuevo.');
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const getFeedbackForSchedule = (entry: ScheduledOutfitWithDetails | null) => {
+    if (!entry) return null;
+    return feedbackLookup[`${entry.date}::${entry.outfit_id}`] ?? null;
+  };
+
+  const isFeedbackEligible = (date: string) => date <= todayIso;
+
+  const handleFeedbackSaved = (nextFeedback: OutfitWearFeedback) => {
+    const feedbackKey = `${nextFeedback.date}::${nextFeedback.outfit_id}`;
+
+    setFeedbackEntries((current) => [
+      ...current.filter((entry) => `${entry.date}::${entry.outfit_id}` !== feedbackKey),
+      nextFeedback,
+    ].sort((left, right) => left.date.localeCompare(right.date)));
   };
 
   // Handle drag end
@@ -350,6 +382,14 @@ const WeeklyPlannerView = ({ savedOutfits, closet, onClose, onViewOutfit }: Week
                               <div className="space-y-2">
                                 {(() => {
                                   const preview = getOutfitPreview(day.scheduledOutfit.outfit);
+                                  const feedback = getFeedbackForSchedule(day.scheduledOutfit);
+                                  const canCheckIn = isFeedbackEligible(day.date);
+                                  const feedbackLabel = feedback?.status === 'worn'
+                                    ? 'Usado'
+                                    : feedback?.status === 'not_worn'
+                                      ? 'No usado'
+                                      : 'Pendiente';
+
                                   return (
                                     <>
                                       <div className="grid grid-cols-3 gap-1">
@@ -369,6 +409,9 @@ const WeeklyPlannerView = ({ savedOutfits, closet, onClose, onViewOutfit }: Week
                                           </div>
                                         )}
                                       </div>
+                                      <div className={`rounded-lg px-2 py-1 text-[11px] font-semibold ${feedback?.status === 'worn' ? 'bg-emerald-100 text-emerald-700' : feedback?.status === 'not_worn' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>
+                                        {canCheckIn ? feedbackLabel : 'Futuro'}
+                                      </div>
                                       <div className="flex gap-1">
                                         <button
                                           onClick={() => onViewOutfit(day.scheduledOutfit!.outfit)}
@@ -376,6 +419,19 @@ const WeeklyPlannerView = ({ savedOutfits, closet, onClose, onViewOutfit }: Week
                                         >
                                           Ver
                                         </button>
+                                        {canCheckIn && (
+                                          <button
+                                            onClick={() => setSelectedCheckin({
+                                              date: day.date,
+                                              outfitId: day.scheduledOutfit!.outfit_id,
+                                              label: day.scheduledOutfit!.outfit.name || day.scheduledOutfit!.outfit.explanation || 'Look planificado',
+                                              feedback,
+                                            })}
+                                            className="flex-1 px-2 py-1 bg-slate-900 text-white rounded-lg text-xs transition-transform active:scale-95"
+                                          >
+                                            {feedback ? 'Editar' : 'Registrar'}
+                                          </button>
+                                        )}
                                         <button
                                           onClick={() => handleRemoveOutfit(day.date)}
                                           className="px-2 py-1 bg-red-500 text-white rounded-lg text-xs transition-transform active:scale-95"
@@ -406,6 +462,19 @@ const WeeklyPlannerView = ({ savedOutfits, closet, onClose, onViewOutfit }: Week
           )}
 
         </div>
+        <WearCheckinSheet
+          isOpen={Boolean(selectedCheckin)}
+          date={selectedCheckin?.date || todayIso}
+          outfitId={selectedCheckin?.outfitId || ''}
+          contextLabel={selectedCheckin?.label || 'Look planificado'}
+          feedback={selectedCheckin?.feedback || null}
+          sourceSurface="planner"
+          onClose={() => setSelectedCheckin(null)}
+          onSaved={(nextFeedback) => {
+            handleFeedbackSaved(nextFeedback);
+            setSelectedCheckin(null);
+          }}
+        />
       </div>
     </div>
   );

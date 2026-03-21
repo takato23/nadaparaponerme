@@ -2,30 +2,58 @@
  * PostHog Analytics Service
  * 
  * Advanced analytics with funnels, feature flags, and session replay.
- * Works alongside Google Analytics for comprehensive tracking.
+ * Acts as the primary product analytics layer during the beta.
  */
 
 import posthog from 'posthog-js';
 
-const POSTHOG_KEY = import.meta.env.VITE_POSTHOG_KEY || '';
-const POSTHOG_HOST = import.meta.env.VITE_POSTHOG_HOST || 'https://app.posthog.com';
+function parseEnvBoolean(value: string | boolean | undefined, fallback = false): boolean {
+    if (typeof value === 'boolean') return value;
+    if (typeof value !== 'string') return fallback;
+    const normalized = value.trim().toLowerCase();
+    if (normalized === 'true' || normalized === '1' || normalized === 'yes' || normalized === 'on') return true;
+    if (normalized === 'false' || normalized === '0' || normalized === 'no' || normalized === 'off') return false;
+    return fallback;
+}
+
+const POSTHOG_KEY = String(import.meta.env.VITE_POSTHOG_KEY || '').trim();
+const POSTHOG_HOST = String(import.meta.env.VITE_POSTHOG_HOST || 'https://app.posthog.com').trim();
+const ENABLE_POSTHOG_IN_DEV = parseEnvBoolean(import.meta.env.VITE_ENABLE_POSTHOG_DEV, false);
+const POSTHOG_DEBUG = parseEnvBoolean(import.meta.env.VITE_POSTHOG_DEBUG, false);
 
 let isInitialized = false;
+let disabledReason: 'missing_key' | 'dev_disabled' | 'non_browser' | null = null;
+
+export type PostHogStatus = {
+    initialized: boolean;
+    configured: boolean;
+    host: string;
+    disabledReason: 'missing_key' | 'dev_disabled' | 'non_browser' | null;
+};
 
 /**
  * Initialize PostHog
  * Call this once on app startup
  */
 export function initPostHog(): void {
-    if (isInitialized || !POSTHOG_KEY) {
-        if (!POSTHOG_KEY && import.meta.env.DEV) {
+    if (isInitialized) return;
+
+    if (typeof window === 'undefined') {
+        disabledReason = 'non_browser';
+        return;
+    }
+
+    if (!POSTHOG_KEY) {
+        disabledReason = 'missing_key';
+        if (import.meta.env.DEV) {
             console.log('[PostHog] No API key configured, skipping initialization');
         }
         return;
     }
 
     // Don't track in development unless explicitly enabled
-    if (import.meta.env.DEV && !import.meta.env.VITE_ENABLE_POSTHOG_DEV) {
+    if (import.meta.env.DEV && !ENABLE_POSTHOG_IN_DEV) {
+        disabledReason = 'dev_disabled';
         console.log('[PostHog] Disabled in development');
         return;
     }
@@ -37,8 +65,8 @@ export function initPostHog(): void {
             maskAllInputs: true,
             maskTextSelector: '.sensitive-data',
         },
-        // Capture page views automatically
-        capture_pageview: true,
+        // Page views are tracked manually from analyticsService to keep one source of truth
+        capture_pageview: false,
         // Capture page leaves
         capture_pageleave: true,
         // Autocapture clicks, form submissions, etc.
@@ -51,10 +79,18 @@ export function initPostHog(): void {
         bootstrap: {
             featureFlags: {},
         },
+        loaded: () => {
+            if (POSTHOG_DEBUG && import.meta.env.DEV) {
+                console.log('[PostHog] Loaded');
+            }
+        },
     });
 
     isInitialized = true;
-    console.log('[PostHog] Initialized');
+    disabledReason = null;
+    if (import.meta.env.DEV) {
+        console.log('[PostHog] Initialized');
+    }
 }
 
 /**
@@ -221,6 +257,15 @@ export function setUserPropertiesOnce(properties: Record<string, unknown>): void
     if (!isInitialized) return;
 
     posthog.people.set_once(properties);
+}
+
+export function getPostHogStatus(): PostHogStatus {
+    return {
+        initialized: isInitialized,
+        configured: Boolean(POSTHOG_KEY),
+        host: POSTHOG_HOST,
+        disabledReason,
+    };
 }
 
 // ============================================================================

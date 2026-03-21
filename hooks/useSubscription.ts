@@ -8,6 +8,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../src/lib/supabase';
 import { PAYMENTS_ENABLED, V1_SAFE_MODE } from '../src/config/runtime';
+import { getSessionSnapshot } from '../src/services/authService';
 import {
   SUBSCRIPTION_PLANS,
   type SubscriptionTier,
@@ -16,10 +17,13 @@ import {
 import {
   recordCreditUsage as recordLocalUsage,
   canUseFeature as canUseLocalFeature,
+  isFreeStylistAction,
   setUserTier,
   type FeatureType,
 } from '../src/services/usageTrackingService';
 import { isAdminUser } from '../src/services/accessControlService';
+import { fetchBillingSummary, readBillingSummaryCache } from '../src/services/billingCatalogService';
+import { activateApprovedWaitlistViaEdge } from '../src/services/edgeFunctionClient';
 
 // ============================================================================
 // TYPES
@@ -31,6 +35,9 @@ export interface SubscriptionState {
   aiGenerationsUsed: number;
   aiGenerationsLimit: number;
   currentPeriodEnd: Date | null;
+  hasBetaAccess: boolean;
+  hasPaidAccess: boolean;
+  hasAppAccess: boolean;
   isLoading: boolean;
   error: string | null;
 }
@@ -42,7 +49,9 @@ export interface UseSubscriptionReturn extends SubscriptionState {
   isAtLimit: boolean;
   isPro: boolean;
   isPremium: boolean;
+  isPlus: boolean;
   isFree: boolean;
+  isAdmin: boolean;
   daysUntilRenewal: number;
 
   // Methods
@@ -71,18 +80,58 @@ export type FeatureName =
 
 const PLANS: SubscriptionPlan[] = SUBSCRIPTION_PLANS;
 const FREE_PLAN = PLANS.find((plan) => plan.id === 'free') || PLANS[0];
+const initialBillingCache = readBillingSummaryCache();
+const initialKumbiBucket = initialBillingCache?.usage?.buckets?.kumbi_messages;
+const initialTier = (initialBillingCache?.current?.plan?.code || 'free') as SubscriptionTier;
+const initialLimit = typeof initialKumbiBucket?.monthly_limit === 'number' ? initialKumbiBucket.monthly_limit : FREE_PLAN.limits.ai_uses_per_month;
+const initialUsed = typeof initialKumbiBucket?.used === 'number' ? initialKumbiBucket.used : 0;
+const initialCycleEnd = initialBillingCache?.usage?.cycle?.end || initialBillingCache?.current?.cycle?.end || null;
+const SUBSCRIPTION_REQUEST_TIMEOUT_MS = 8000;
+
+function createTimeoutError(label: string): Error {
+  return new Error(`${label} timed out`);
+}
+
+async function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  label: string
+): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timeoutId = setTimeout(() => reject(createTimeoutError(label)), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+}
+
+const isLocalhostDevAccessFallback = () =>
+  typeof window !== 'undefined'
+  && import.meta.env.DEV
+  && /^(localhost|127\.0\.0\.1)$/.test(window.location.hostname);
 
 // ============================================================================
 // HOOK
 // ============================================================================
 
 export function useSubscription(): UseSubscriptionReturn {
+  const isLocalDevOpenAccess = isLocalhostDevAccessFallback();
+
   const [state, setState] = useState<SubscriptionState>({
-    tier: 'free',
+    tier: isLocalDevOpenAccess ? 'premium' : initialTier,
     status: 'active',
-    aiGenerationsUsed: 0,
-    aiGenerationsLimit: FREE_PLAN.limits.ai_generations_per_month,
-    currentPeriodEnd: null,
+    aiGenerationsUsed: initialUsed,
+    aiGenerationsLimit: isLocalDevOpenAccess ? -1 : initialLimit,
+    currentPeriodEnd: initialCycleEnd ? new Date(initialCycleEnd) : null,
+    hasBetaAccess: isLocalDevOpenAccess,
+    hasPaidAccess: isLocalDevOpenAccess,
+    hasAppAccess: isLocalDevOpenAccess,
     isLoading: true,
     error: null,
   });
@@ -94,17 +143,20 @@ export function useSubscription(): UseSubscriptionReturn {
     try {
       setState(prev => ({ ...prev, isLoading: true, error: null }));
 
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = (await getSessionSnapshot())?.user ?? null;
 
       if (!user) {
-        setUserTier('free');
+        setUserTier(isLocalDevOpenAccess ? 'premium' : 'free');
         setIsAdmin(false);
         setState({
-          tier: 'free',
+          tier: isLocalDevOpenAccess ? 'premium' : initialTier,
           status: 'active',
-          aiGenerationsUsed: 0,
-          aiGenerationsLimit: FREE_PLAN.limits.ai_generations_per_month,
-          currentPeriodEnd: null,
+          aiGenerationsUsed: initialUsed,
+          aiGenerationsLimit: isLocalDevOpenAccess ? -1 : initialLimit,
+          currentPeriodEnd: initialCycleEnd ? new Date(initialCycleEnd) : null,
+          hasBetaAccess: isLocalDevOpenAccess,
+          hasPaidAccess: isLocalDevOpenAccess,
+          hasAppAccess: isLocalDevOpenAccess,
           isLoading: false,
           error: null,
         });
@@ -115,18 +167,45 @@ export function useSubscription(): UseSubscriptionReturn {
       const userIsAdmin = isAdminUser(user);
       setIsAdmin(userIsAdmin);
 
-      // Fetch subscription
-      const { data: subscription, error: subError } = await supabase
-        .from('subscriptions')
-        .select('*')
-        .eq('user_id', user.id)
-        .single();
+      if (!userIsAdmin) {
+        try {
+          await activateApprovedWaitlistViaEdge();
+        } catch (error) {
+          console.warn('Approved waitlist activation check failed:', error);
+        }
+      }
 
-      const { data: betaAccess, error: betaError } = await supabase
-        .from('beta_access')
-        .select('premium_override, unlimited_ai, expires_at, revoked_at')
-        .eq('user_id', user.id)
-        .maybeSingle();
+      // Fetch subscription + billing summary
+      const [subscriptionResult, betaResult, billingSummary] = await Promise.all([
+        withTimeout(
+          supabase
+            .from('subscriptions')
+            .select('*')
+            .eq('user_id', user.id)
+            .single(),
+          SUBSCRIPTION_REQUEST_TIMEOUT_MS,
+          'useSubscription.subscriptions'
+        ),
+        withTimeout(
+          supabase
+            .from('beta_access')
+            .select('premium_override, unlimited_ai, expires_at, revoked_at')
+            .eq('user_id', user.id)
+            .maybeSingle(),
+          SUBSCRIPTION_REQUEST_TIMEOUT_MS,
+          'useSubscription.betaAccess'
+        ),
+        fetchBillingSummary().catch((error) => {
+          const message = error instanceof Error ? error.message : String(error || '');
+          if (!message.includes('Failed to send a request to the Edge Function') && !message.includes('billing-summary disabled on localhost dev')) {
+            console.warn('billing-summary unavailable in useSubscription, falling back to legacy limits:', error);
+          }
+          return null;
+        }),
+      ]);
+
+      const { data: subscription, error: subError } = subscriptionResult;
+      const { data: betaAccess, error: betaError } = betaResult;
 
       if (subError && subError.code !== 'PGRST116') {
         throw subError;
@@ -142,49 +221,81 @@ export function useSubscription(): UseSubscriptionReturn {
       const betaUnlimitedAI = betaIsActive && betaAccess?.unlimited_ai === true;
 
       // If no subscription, use defaults
+      const billingTier = (billingSummary?.current?.plan?.code || null) as SubscriptionTier | null;
+      const billingKumbiBucket = billingSummary?.usage?.buckets?.kumbi_messages;
+      const billingCycleEnd = billingSummary?.usage?.cycle?.end || billingSummary?.current?.cycle?.end || null;
+
       if (!subscription) {
-        const tierFromBeta = betaPremium ? 'premium' : 'free';
-        setUserTier(tierFromBeta);
+        const tierFromBeta = isLocalDevOpenAccess ? 'premium' : (betaPremium ? 'premium' : 'free');
+        const effectiveTier = (billingTier || tierFromBeta) as SubscriptionTier;
+        const billingLimit = typeof billingKumbiBucket?.monthly_limit === 'number' ? billingKumbiBucket.monthly_limit : null;
+        const billingUsed = typeof billingKumbiBucket?.used === 'number' ? billingKumbiBucket.used : 0;
+        setUserTier(effectiveTier);
         setState({
-          tier: tierFromBeta,
+          tier: effectiveTier,
           status: 'active',
-          aiGenerationsUsed: 0,
-          aiGenerationsLimit: betaUnlimitedAI ? -1 : (PLANS.find((plan) => plan.id === tierFromBeta)?.limits.ai_generations_per_month ?? FREE_PLAN.limits.ai_generations_per_month),
-          currentPeriodEnd: null,
+          aiGenerationsUsed: billingUsed,
+          aiGenerationsLimit: isLocalDevOpenAccess ? -1 : (betaUnlimitedAI ? -1 : (billingLimit ?? (PLANS.find((plan) => plan.id === effectiveTier)?.limits.ai_uses_per_month ?? FREE_PLAN.limits.ai_uses_per_month))),
+          currentPeriodEnd: billingCycleEnd ? new Date(billingCycleEnd) : null,
+          hasBetaAccess: isLocalDevOpenAccess || betaIsActive,
+          hasPaidAccess: isLocalDevOpenAccess || effectiveTier !== 'free',
+          hasAppAccess: isLocalDevOpenAccess || userIsAdmin || betaIsActive || effectiveTier !== 'free',
           isLoading: false,
           error: null,
         });
         return;
       }
 
-      // Get plan limits
       const isPaidActive = subscription.status === 'active' || subscription.status === 'trialing';
       const baseTier = (isPaidActive ? subscription.tier : 'free') as SubscriptionTier;
-      const effectiveTier = (betaPremium ? 'premium' : baseTier) as SubscriptionTier;
+      const hasPaidAccess = isPaidActive && baseTier !== 'free';
+      const effectiveTier = (billingTier || (betaPremium ? 'premium' : baseTier)) as SubscriptionTier;
       const plan = PLANS.find(p => p.id === effectiveTier) || PLANS[0];
+      const billingLimit = typeof billingKumbiBucket?.monthly_limit === 'number' ? billingKumbiBucket.monthly_limit : null;
+      const billingUsed = typeof billingKumbiBucket?.used === 'number' ? billingKumbiBucket.used : null;
       setUserTier(effectiveTier);
 
       setState({
         tier: effectiveTier,
         status: subscription.status,
-        aiGenerationsUsed: subscription.ai_generations_used || 0,
-        aiGenerationsLimit: betaUnlimitedAI ? -1 : plan.limits.ai_generations_per_month,
-        currentPeriodEnd: subscription.current_period_end
-          ? new Date(subscription.current_period_end)
-          : null,
+        aiGenerationsUsed: billingUsed ?? (subscription.ai_generations_used || 0),
+        aiGenerationsLimit: isLocalDevOpenAccess ? -1 : (betaUnlimitedAI ? -1 : (billingLimit ?? plan.limits.ai_uses_per_month)),
+        currentPeriodEnd: billingCycleEnd
+          ? new Date(billingCycleEnd)
+          : subscription.current_period_end
+            ? new Date(subscription.current_period_end)
+            : null,
+        hasBetaAccess: isLocalDevOpenAccess || betaIsActive,
+        hasPaidAccess: isLocalDevOpenAccess || hasPaidAccess || effectiveTier !== 'free',
+        hasAppAccess: isLocalDevOpenAccess || userIsAdmin || betaIsActive || hasPaidAccess || effectiveTier !== 'free',
         isLoading: false,
         error: null,
       });
 
     } catch (error) {
       console.error('Error fetching subscription:', error);
+      if (isLocalhostDevAccessFallback()) {
+        console.warn('Falling back to open access for localhost dev after subscription lookup failure.');
+        setState(prev => ({
+          ...prev,
+          tier: prev.tier || 'premium',
+          status: prev.status || 'active',
+          aiGenerationsLimit: -1,
+          hasBetaAccess: true,
+          hasPaidAccess: true,
+          hasAppAccess: true,
+          isLoading: false,
+          error: error instanceof Error ? error.message : 'Error al cargar suscripción',
+        }));
+        return;
+      }
       setState(prev => ({
         ...prev,
         isLoading: false,
         error: error instanceof Error ? error.message : 'Error al cargar suscripción',
       }));
     }
-  }, []);
+  }, [isLocalDevOpenAccess]);
 
   // Initial fetch
   useEffect(() => {
@@ -269,11 +380,12 @@ export function useSubscription(): UseSubscriptionReturn {
    */
   const incrementUsage = useCallback(async (feature: FeatureType = 'outfit_generation'): Promise<boolean> => {
     if (isAdmin) return true;
+    if (isFreeStylistAction(feature)) return true;
 
     let userId: string | null = null;
     let serverIncremented = false;
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = (await getSessionSnapshot())?.user ?? null;
       userId = user?.id ?? null;
     } catch {
       userId = null;
@@ -332,6 +444,9 @@ export function useSubscription(): UseSubscriptionReturn {
    */
   const canUseAIFeature = useCallback((_feature: FeatureType): { canUse: boolean; reason?: string } => {
     if (isAdmin) return { canUse: true };
+    if (isFreeStylistAction(_feature)) {
+      return { canUse: true };
+    }
 
     if (state.aiGenerationsLimit !== -1 && state.aiGenerationsUsed >= state.aiGenerationsLimit) {
       return {
@@ -353,7 +468,9 @@ export function useSubscription(): UseSubscriptionReturn {
     isAtLimit,
     isPro: state.tier === 'pro',
     isPremium: state.tier === 'premium',
+    isPlus: state.tier === 'plus',
     isFree: state.tier === 'free',
+    isAdmin,
     daysUntilRenewal,
 
     // Methods

@@ -2,9 +2,14 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import type { ClothingItem, WeatherData, WeatherOutfitResult } from '../types';
 import { getCurrentWeather, getWeatherEmoji, getTempDescription, getUserCity, saveUserCity } from '../src/services/weatherService';
-import { generateWeatherOutfit } from '../src/services/aiService';
 import Loader from './Loader';
 import { getCreditStatus } from '../src/services/usageTrackingService';
+import { useAIGeneration } from '../contexts/AIGenerationContext';
+import {
+  clearShortcutRequestId,
+  persistShortcutRequestId,
+  readShortcutRequestId,
+} from '../src/services/homeShortcutPersistence';
 
 interface WeatherOutfitViewProps {
   closet: ClothingItem[];
@@ -13,17 +18,47 @@ interface WeatherOutfitViewProps {
 }
 
 const WeatherOutfitView = ({ closet, onClose, onViewOutfit }: WeatherOutfitViewProps) => {
+  const {
+    activeRequest,
+    queue,
+    completedRequests,
+    enqueueOutfitGeneration,
+    clearCompletedRequest,
+    retryRequest,
+  } = useAIGeneration();
   const [weather, setWeather] = useState<WeatherData | null>(null);
-  const [outfitResult, setOutfitResult] = useState<WeatherOutfitResult | null>(null);
   const [isLoadingWeather, setIsLoadingWeather] = useState(true);
-  const [isGeneratingOutfit, setIsGeneratingOutfit] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [city, setCity] = useState(getUserCity());
   const [isEditingCity, setIsEditingCity] = useState(false);
   const [cityInput, setCityInput] = useState(city);
+  const [requestId, setRequestId] = useState<string | null>(() => readShortcutRequestId('weather-look'));
 
   // Credits status
-  const creditsStatus = useMemo(() => getCreditStatus(), [outfitResult]);
+  const creditsStatus = useMemo(() => getCreditStatus(), [requestId, completedRequests.length]);
+
+  const request = useMemo(() => {
+    if (!requestId) return null;
+    if (activeRequest?.id === requestId) return activeRequest;
+    return queue.find((item) => item.id === requestId) ?? completedRequests.find((item) => item.id === requestId) ?? null;
+  }, [activeRequest, completedRequests, queue, requestId]);
+
+  const isGeneratingOutfit =
+    request?.type === 'outfit' && (request.status === 'queued' || request.status === 'processing' || request.status === 'retrying');
+  const generationError = request?.type === 'outfit' && request.status === 'failed' ? request.error || 'Error al generar outfit' : null;
+  const outfitResult = useMemo<WeatherOutfitResult | null>(() => {
+    if (request?.type !== 'outfit' || request.status !== 'completed' || !request.result || !weather) return null;
+
+    return {
+      outfit: {
+        top_id: request.result.top_id,
+        bottom_id: request.result.bottom_id,
+        shoes_id: request.result.shoes_id,
+      },
+      explanation: request.result.explanation,
+      weather_context: `${weather.description} · ${weather.temp}°C en ${weather.city}`,
+    };
+  }, [request, weather]);
 
   // Load weather on mount
   useEffect(() => {
@@ -48,18 +83,27 @@ const WeatherOutfitView = ({ closet, onClose, onViewOutfit }: WeatherOutfitViewP
   const handleGenerateOutfit = async () => {
     if (!weather || closet.length === 0) return;
 
-    setIsGeneratingOutfit(true);
-    setError(null);
-
-    try {
-      const result = await generateWeatherOutfit(weather, closet);
-      setOutfitResult(result);
-    } catch (err) {
-      console.error('Error generating outfit:', err);
-      setError(err instanceof Error ? err.message : 'Error al generar outfit');
-    } finally {
-      setIsGeneratingOutfit(false);
+    if (request?.status === 'completed' || request?.status === 'failed') {
+      clearCompletedRequest(request.id);
     }
+
+    const nextRequestId = enqueueOutfitGeneration({
+      closet,
+      occasion: 'vestirme hoy según el clima actual',
+      style: 'usable, coherente, fácil de armar y con criterio',
+      weather: `${weather.city}, ${weather.country}. ${weather.temp}°C, sensación ${weather.feels_like}°C, ${weather.description}. Mín ${weather.temp_min}°C, máx ${weather.temp_max}°C.`,
+    });
+
+    setRequestId(nextRequestId);
+    persistShortcutRequestId('weather-look', nextRequestId);
+  };
+
+  const clearCurrentRequest = () => {
+    if (request?.status === 'completed' || request?.status === 'failed') {
+      clearCompletedRequest(request.id);
+    }
+    clearShortcutRequestId('weather-look');
+    setRequestId(null);
   };
 
   const handleChangeCity = async () => {
@@ -68,7 +112,7 @@ const WeatherOutfitView = ({ closet, onClose, onViewOutfit }: WeatherOutfitViewP
     saveUserCity(cityInput);
     setCity(cityInput);
     setIsEditingCity(false);
-    setOutfitResult(null);
+    clearCurrentRequest();
 
     // Reload weather with new city
     setIsLoadingWeather(true);
@@ -237,6 +281,11 @@ const WeatherOutfitView = ({ closet, onClose, onViewOutfit }: WeatherOutfitViewP
                       Agregá prendas a tu armario para generar outfits
                     </p>
                   )}
+                  {closet.length > 0 && (
+                    <p className="mt-2 text-sm text-text-secondary dark:text-gray-400">
+                      Si cerrás el modal, la generación sigue en segundo plano.
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -247,6 +296,32 @@ const WeatherOutfitView = ({ closet, onClose, onViewOutfit }: WeatherOutfitViewP
                   <p className="text-text-secondary dark:text-gray-400 mt-4">
                     Creando tu outfit perfecto...
                   </p>
+                  <p className="mt-2 text-sm text-text-secondary dark:text-gray-500">
+                    Podés cerrar este modal y volver después.
+                  </p>
+                </div>
+              )}
+
+              {generationError && !isGeneratingOutfit && (
+                <div className="space-y-3 rounded-2xl bg-red-50 p-5 dark:bg-red-900/20">
+                  <p className="font-semibold text-red-700 dark:text-red-300">No pude generar el outfit para este clima.</p>
+                  <p className="text-sm text-red-600 dark:text-red-200">{generationError}</p>
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      onClick={() => request && retryRequest(request.id)}
+                      className="flex-1 rounded-xl bg-primary px-4 py-3 font-semibold text-white transition-transform active:scale-95"
+                    >
+                      Reintentar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={clearCurrentRequest}
+                      className="flex-1 rounded-xl liquid-glass px-4 py-3 font-semibold text-text-primary transition-transform active:scale-95 dark:text-gray-200"
+                    >
+                      Empezar de nuevo
+                    </button>
+                  </div>
                 </div>
               )}
 
@@ -274,7 +349,7 @@ const WeatherOutfitView = ({ closet, onClose, onViewOutfit }: WeatherOutfitViewP
                   {/* Action Buttons */}
                   <div className="flex gap-3">
                     <button
-                      onClick={() => setOutfitResult(null)}
+                      onClick={clearCurrentRequest}
                       className="flex-1 px-6 py-3 liquid-glass rounded-xl font-semibold transition-transform active:scale-95 text-text-primary dark:text-gray-200"
                     >
                       Generar Otro

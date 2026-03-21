@@ -76,7 +76,7 @@
             "title": "Tu Estrategia está Lista",
             "subtitle": "Hemos generado un plan único para tu tipo de cuerpo {{bodyShape}} y colores.",
             "recommended": "RECOMENDADO",
-            "planName": "Plan Stylist Pro",
+            "planName": "Plan Kumbi Pro",
             "planDescription": "Acceso ilimitado a tu IA personal",
             "perMonth": "/mes",
             "features": {
@@ -112,7 +112,7 @@
         }
     },
     "stylist": {
-        "title": "Estilista IA",
+        "title": "Kumbi",
         "occasion": "¿Para qué ocasión?",
         "style": "¿Qué estilo buscás?",
         "generate": "Crear mi Outfit",

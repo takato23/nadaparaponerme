@@ -4,9 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import type { ClothingItem, ClothingItemMetadata } from '../types';
 import * as aiService from '../src/services/aiService';
 import { addClothingItem, getClothingItems } from '../src/services/closetService';
-import Loader from './Loader';
 import { validateImageDataUri } from '../utils/imageValidation';
-import CameraCaptureButton from './CameraCaptureButton';
 import PhotoGuidanceModal from './PhotoGuidanceModal';
 import { analyzePhotoQuality } from '../utils/photoQualityValidation';
 import { removeImageBackground } from '../src/utils/backgroundRemoval';
@@ -20,6 +18,7 @@ import { CreditsIndicator } from './CreditsIndicator';
 import { SuccessFeedback, useSuccessFeedback } from './ui/SuccessFeedback';
 import { ROUTES } from '../src/routes';
 import QuickEraserModal from './QuickEraserModal';
+import * as analytics from '../src/services/analyticsService';
 
 interface AddItemViewProps {
   onAddLocalItem: (item: ClothingItem) => void;
@@ -28,7 +27,7 @@ interface AddItemViewProps {
   useSupabaseCloset: boolean;
 }
 
-type ViewState = 'capture' | 'camera' | 'preview' | 'generate' | 'analyzing' | 'editing';
+type ViewState = 'capture' | 'preview' | 'generate' | 'analyzing' | 'editing';
 
 // Reusable Chip Component
 const Chip = ({ label, selected, onClick }: { label: string; selected: boolean; onClick: () => void }) => (
@@ -62,7 +61,8 @@ const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }
   const [showQuickEraser, setShowQuickEraser] = useState(false);
   const [wasAnalyzedByAI, setWasAnalyzedByAI] = useState(false);
   const [analysisLabel, setAnalysisLabel] = useState<'auto' | 'manual'>('auto');
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const [showLimitModal, setShowLimitModal] = useState(false);
 
   // Subscription hook for tracking usage
@@ -195,8 +195,24 @@ const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }
     setViewState('capture');
   };
 
+  const openGalleryPicker = (options?: { back?: boolean }) => {
+    setCapturingBack(Boolean(options?.back));
+    galleryInputRef.current?.click();
+  };
+
+  const openCameraPicker = (options?: { back?: boolean }) => {
+    setCapturingBack(Boolean(options?.back));
+    cameraInputRef.current?.click();
+  };
+
+  const openBulkUpload = () => {
+    onBack();
+    navigate(ROUTES.BULK_UPLOAD);
+  };
+
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
+    event.target.value = '';
     if (file) {
       setImageFile(file);
       const reader = new FileReader();
@@ -206,10 +222,6 @@ const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }
       };
       reader.readAsDataURL(file);
     }
-  };
-
-  const handleCameraCapture = async (imageDataUrl: string) => {
-    await processImageDataUrl(imageDataUrl);
   };
 
   const handleGenerateImage = async () => {
@@ -247,6 +259,7 @@ const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }
     try {
       setIsSaving(true);
       let newItemId: string | null = null;
+      let nextClosetSize = closetSizeBaseline() + 1;
 
       if (useSupabaseCloset) {
         const response = await fetch(imageDataUrl);
@@ -264,6 +277,7 @@ const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }
         newItemId = savedItem.id;
 
         const updatedCloset = await getClothingItems();
+        nextClosetSize = updatedCloset.filter(item => (item.status || 'owned') === 'owned').length;
         onClosetSync(updatedCloset);
       } else {
         const newItem: ClothingItem = {
@@ -284,6 +298,13 @@ const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }
           ? 'En wishlist'
           : '¡Prenda guardada!';
       successFeedback.show(successMessage, 'checkroom');
+
+      if (itemStatus === 'owned') {
+        analytics.trackOwnedItemAdded(nextClosetSize);
+        if (nextClosetSize >= 8) {
+          analytics.trackFirstEightItemsReached(nextClosetSize);
+        }
+      }
 
       // Wait for animation then close or navigate
       setTimeout(() => {
@@ -329,101 +350,113 @@ const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }
     updateMetadataField(field, newArray);
   };
 
+  const closetSizeBaseline = () => {
+    try {
+      const raw = localStorage.getItem('ojodeloca-closet');
+      if (!raw) return 0;
+      const parsed = JSON.parse(raw) as ClothingItem[];
+      if (!Array.isArray(parsed)) return 0;
+      return parsed.filter((item) => (item.status || 'owned') === 'owned').length;
+    } catch {
+      return 0;
+    }
+  };
+
   const renderContent = () => {
     switch (viewState) {
-      case 'camera':
-        return (
-          <CameraCaptureButton
-            onCapture={handleCameraCapture}
-            onClose={() => {
-              setViewState(capturingBack ? 'editing' : 'capture');
-              setCapturingBack(false);
-            }}
-          />
-        );
-
       case 'capture':
         return (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="flex flex-col items-center justify-center h-full text-center p-8 space-y-6"
+            className="flex min-h-[34rem] flex-col items-center justify-center p-6 text-center sm:p-8"
           >
-            <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mb-2 animate-pulse-glow">
+            <div className="mb-3 flex h-20 w-20 items-center justify-center rounded-full bg-primary/10 animate-pulse-glow">
               <span className="material-symbols-outlined text-4xl text-primary">checkroom</span>
             </div>
-            <div>
-              <h2 className="text-3xl font-serif font-bold text-text-primary dark:text-gray-100 mb-2">
-                Nueva Prenda
+            <div className="max-w-md">
+              <h2 className="mb-2 text-3xl font-serif font-bold text-text-primary dark:text-gray-100">
+                Agregar prenda
               </h2>
-              <p className="text-text-secondary dark:text-gray-400 max-w-xs mx-auto">
-                Sube una foto o describe tu prenda para agregarla a tu armario virtual.
+              <p className="mx-auto max-w-sm text-text-secondary dark:text-gray-400">
+                Elegí una foto desde tu biblioteca o sacá una nueva. En iPad conviene priorizar Fotos para adjuntar imágenes que ya tenés.
               </p>
             </div>
 
-            {/* Photo Tips Button */}
             <button
               onClick={() => setShowGuidance(true)}
-              className="px-4 py-2 rounded-xl bg-primary/10 text-primary hover:bg-primary/20 transition-colors flex items-center gap-2 text-sm font-medium"
+              className="mt-5 flex items-center gap-2 rounded-xl bg-primary/10 px-4 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/20"
             >
               <span className="material-symbols-outlined text-lg">help</span>
               Tips para Fotos Perfectas
             </button>
 
             {error && (
-              <div className="p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl text-sm">
+              <div className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">
                 {error}
               </div>
             )}
 
-            <div className="w-full space-y-3">
-              <TooltipWrapper content="Usá la cámara para sacar una foto de tu prenda sobre fondo blanco" position="bottom">
+            <div className="mt-6 w-full max-w-lg space-y-3">
+              <TooltipWrapper content="Elegí una imagen existente desde Fotos o Archivos" position="bottom">
                 <button
-                  onClick={() => setViewState('camera')}
-                  className="w-full bg-primary hover:bg-primary-dark text-white font-bold py-4 px-6 rounded-2xl shadow-glow-accent transition-all transform hover:scale-[1.02] flex items-center justify-center gap-2"
+                  onClick={() => openGalleryPicker()}
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-primary px-6 py-4 font-bold text-white shadow-glow-accent transition-all hover:scale-[1.02] hover:bg-primary-dark"
                 >
-                  <span className="material-symbols-outlined">photo_camera</span>
-                  Tomar Foto
+                  <span className="material-symbols-outlined">photo_library</span>
+                  Elegir foto
                 </button>
               </TooltipWrapper>
 
-              <TooltipWrapper content="Seleccioná una imagen existente de tu galería o archivos" position="bottom">
+              <TooltipWrapper content="Abrí la cámara del dispositivo para sacar una foto nueva" position="bottom">
                 <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-text-primary dark:text-gray-200 font-bold py-4 px-6 rounded-2xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-all transform hover:scale-[1.02] flex items-center justify-center gap-2"
+                  onClick={() => openCameraPicker()}
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl border border-gray-200 bg-white px-6 py-4 font-bold text-text-primary transition-all hover:scale-[1.02] hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
                 >
-                  <span className="material-symbols-outlined">add_a_photo</span>
-                  Subir Archivo
+                  <span className="material-symbols-outlined">photo_camera</span>
+                  Abrir cámara
                 </button>
               </TooltipWrapper>
+
+              <TooltipWrapper content="Subí varias fotos, analizalas juntas y guardalas de una sola vez" position="bottom">
+                <button
+                  onClick={openBulkUpload}
+                  className="flex w-full items-center justify-between rounded-2xl border border-dashed border-primary/25 bg-primary/5 px-5 py-4 text-left transition-colors hover:bg-primary/10"
+                >
+                  <div>
+                    <p className="text-sm font-semibold text-text-primary dark:text-gray-100">Escaneo masivo</p>
+                    <p className="mt-1 text-xs text-text-secondary dark:text-gray-400">
+                      Sacá varias fotos, subilas juntas y después analizá/guardá todo en lote.
+                    </p>
+                  </div>
+                  <span className="material-symbols-outlined text-primary">auto_awesome</span>
+                </button>
+              </TooltipWrapper>
+
+              <input
+                type="file"
+                accept="image/*"
+                ref={galleryInputRef}
+                onChange={handleFileChange}
+                className="hidden"
+              />
               <input
                 type="file"
                 accept="image/*"
                 capture="environment"
-                ref={fileInputRef}
+                ref={cameraInputRef}
                 onChange={handleFileChange}
                 className="hidden"
               />
 
-              <div className="relative py-2">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-gray-200 dark:border-gray-700"></div>
-                </div>
-                <div className="relative flex justify-center text-sm">
-                  <span className="px-2 bg-white dark:bg-gray-900 text-gray-500">o</span>
-                </div>
+              <div className="rounded-2xl border border-amber-200/70 bg-amber-50/80 px-4 py-3 text-left text-sm text-amber-900 dark:border-amber-700/50 dark:bg-amber-900/20 dark:text-amber-100">
+                Si la foto es de un look completo o la ropa está puesta, la clasificación de cada prenda puede bajar un poco. Para guardar prendas separadas sigue funcionando mejor una foto por prenda.
               </div>
 
-              <TooltipWrapper content="Describí una prenda y la IA la creará desde cero con imagen realista" position="bottom">
-        <button
-          onClick={() => setViewState('generate')}
-                  className="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-text-primary dark:text-gray-200 font-bold py-4 px-6 rounded-2xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-all transform hover:scale-[1.02] flex items-center justify-center gap-2"
-                >
-                  <span className="material-symbols-outlined text-secondary">auto_awesome</span>
-                  Generar con IA
-                </button>
-              </TooltipWrapper>
+              <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50/80 px-4 py-3 text-left text-sm text-text-secondary dark:border-gray-700 dark:bg-gray-800/40 dark:text-gray-400">
+                Primero cargá tus prendas reales. El escaneo masivo ya permite subir hasta 30 fotos y procesarlas antes de guardar.
+              </div>
             </div>
           </motion.div>
         );
@@ -535,14 +568,11 @@ const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }
                 </div>
                 {!backImageDataUrl && (
                   <button
-                    onClick={() => {
-                      setCapturingBack(true);
-                      setViewState('camera');
-                    }}
+                    onClick={() => openGalleryPicker({ back: true })}
                     className="p-3 rounded-full bg-white/20 backdrop-blur-md text-white hover:bg-white/30 transition-colors flex flex-col items-center gap-1 group"
                   >
                     <span className="material-symbols-outlined group-hover:scale-110 transition-transform">add_a_photo</span>
-                    <span className="text-xs font-bold">VISTA ATRÁS</span>
+                    <span className="text-xs font-bold">ESPALDA</span>
                   </button>
                 )}
               </div>
@@ -550,6 +580,29 @@ const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }
 
             {/* Form Content */}
             <div className="flex-grow overflow-y-auto p-6 space-y-6 bg-white dark:bg-gray-900 rounded-t-3xl -mt-6 relative z-10 shadow-[0_-8px_30px_rgb(0,0,0,0.12)]">
+              <div className="rounded-2xl border border-amber-200/70 bg-amber-50/80 p-4 text-left dark:border-amber-700/50 dark:bg-amber-900/20">
+                <div className="flex items-start gap-3">
+                  <span className="material-symbols-outlined mt-0.5 text-amber-700 dark:text-amber-300">info</span>
+                  <div className="space-y-2">
+                    <p className="text-sm font-bold text-amber-900 dark:text-amber-100">
+                      Precisión de clasificación
+                    </p>
+                    <p className="text-xs text-amber-800 dark:text-amber-200">
+                      Si la prenda está puesta en una foto de look completo, la lectura de categoría y detalles puede perder precisión. Para sumar prendas separadas al armario, sigue rindiendo mejor una foto por prenda.
+                    </p>
+                    {photoQualityWarnings.length > 0 && (
+                      <ul className="space-y-1 pt-1 text-xs text-amber-800 dark:text-amber-200">
+                        {photoQualityWarnings.map((warning) => (
+                          <li key={warning} className="flex items-start gap-2">
+                            <span className="mt-0.5 block h-1.5 w-1.5 shrink-0 rounded-full bg-amber-600 dark:bg-amber-300" />
+                            <span>{warning}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              </div>
 
               {!backImageDataUrl && (
                 <div className="bg-primary/5 border border-primary/10 rounded-2xl p-4 flex items-start gap-3">
@@ -557,15 +610,20 @@ const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }
                   <div className="space-y-1">
                     <p className="text-sm font-bold text-gray-800 dark:text-white">¿Tenés la espalda de esta prenda?</p>
                     <p className="text-xs text-text-secondary dark:text-gray-400">Sumar la vista trasera ayuda a la IA a que los looks de espalda sean perfectos y realistas.</p>
-                    <button
-                      onClick={() => {
-                        setCapturingBack(true);
-                        setViewState('camera');
-                      }}
-                      className="mt-2 text-xs font-bold text-primary hover:underline flex items-center gap-1"
-                    >
-                      Tomar foto de espalda <span className="material-symbols-outlined text-sm">arrow_forward</span>
-                    </button>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button
+                        onClick={() => openGalleryPicker({ back: true })}
+                        className="rounded-xl bg-primary px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-primary-dark"
+                      >
+                        Elegir foto
+                      </button>
+                      <button
+                        onClick={() => openCameraPicker({ back: true })}
+                        className="rounded-xl border border-primary/20 px-3 py-2 text-xs font-bold text-primary transition-colors hover:bg-primary/5"
+                      >
+                        Abrir cámara
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
@@ -678,57 +736,19 @@ const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }
 
               {/* Save Buttons */}
               <div className="pt-4 pb-8 space-y-3">
-                <div className="grid grid-cols-3 gap-2">
-                  <button
-                    onClick={() => setItemStatus('owned')}
-                    className={`py-3 rounded-xl border text-sm font-medium transition-all ${itemStatus === 'owned'
-                      ? 'bg-primary/10 border-primary text-primary'
-                      : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:bg-gray-50'
-                      }`}
-                  >
-                    Es Mío
-                  </button>
-                  <button
-                    onClick={() => setItemStatus('virtual')}
-                    className={`py-3 rounded-xl border text-sm font-medium transition-all ${itemStatus === 'virtual'
-                      ? 'bg-purple-500/10 border-purple-500 text-purple-600'
-                      : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:bg-gray-50'
-                      }`}
-                  >
-                    Probar / Ajeno
-                  </button>
-                  <button
-                    onClick={() => setItemStatus('wishlist')}
-                    className={`py-3 rounded-xl border text-sm font-medium transition-all ${itemStatus === 'wishlist'
-                      ? 'bg-amber-500/10 border-amber-500 text-amber-600'
-                      : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:bg-gray-50'
-                      }`}
-                  >
-                    Wishlist
-                  </button>
+                <div className="rounded-2xl border border-primary/10 bg-primary/5 px-4 py-3 text-sm text-text-secondary dark:text-gray-300">
+                  Se guardará como prenda propia dentro de tu armario. Los modos virtuales y wishlist quedan fuera del primer flujo de carga.
                 </div>
 
                 <button
                   onClick={handleSave}
                   disabled={isSaving}
-                  className={`
-                    w-full text-white font-bold py-4 px-6 rounded-2xl shadow-glow-accent hover:scale-[1.02] transition-transform disabled:opacity-70 disabled:scale-100 flex items-center justify-center gap-2
-                    ${itemStatus === 'virtual'
-                      ? 'bg-gradient-to-r from-purple-600 to-pink-600'
-                      : itemStatus === 'wishlist'
-                        ? 'bg-gradient-to-r from-amber-500 to-orange-500'
-                        : 'bg-primary'}
-                  `}
+                  className="w-full bg-primary text-white font-bold py-4 px-6 rounded-2xl shadow-glow-accent hover:scale-[1.02] transition-transform disabled:opacity-70 disabled:scale-100 flex items-center justify-center gap-2"
                 >
                   {isSaving ? (
                     <>
                       <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                       Guardando...
-                    </>
-                  ) : itemStatus === 'virtual' || itemStatus === 'wishlist' ? (
-                    <>
-                      <span className="material-symbols-outlined">checkroom</span>
-                      Guardar y Probar Ahora
                     </>
                   ) : (
                     <>
@@ -746,12 +766,23 @@ const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 md:p-6">
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+        style={{
+          padding: 'max(0.75rem, env(safe-area-inset-top)) max(0.75rem, env(safe-area-inset-right)) max(1rem, env(safe-area-inset-bottom)) max(0.75rem, env(safe-area-inset-left))',
+        }}
+      >
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.95 }}
-          className="w-full max-w-md bg-white dark:bg-gray-900 rounded-3xl shadow-2xl overflow-hidden h-[85vh] md:h-[800px] flex flex-col relative"
+          className="relative flex w-full max-w-[42rem] flex-col overflow-hidden bg-white/95 shadow-2xl liquid-glass dark:bg-gray-900 md:max-w-2xl"
+          style={{
+            maxHeight: 'min(92vh, calc(100dvh - 1.5rem))',
+            height: viewState === 'editing' || viewState === 'generate' || viewState === 'analyzing'
+              ? 'min(92vh, calc(100dvh - 1.5rem))'
+              : 'auto',
+          }}
         >
           {/* Header (only show back button if not in capture mode or if needed) */}
           {viewState !== 'capture' && viewState !== 'preview' && (

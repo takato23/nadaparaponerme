@@ -33,7 +33,7 @@ function mapGenerateImageErrorCode(errorCode?: string, fallbackMessage?: string)
   switch (errorCode) {
     case 'QUOTA_EXCEEDED':
     case 'DAILY_BUDGET_LIMIT':
-      return fallbackMessage || 'No tenés créditos suficientes para generar esta prenda. Hacé upgrade para continuar.';
+      return fallbackMessage || 'No tenés usos suficientes para generar esta prenda. Hacé upgrade para continuar.';
     case 'RATE_LIMIT':
       return fallbackMessage || 'Demasiadas solicitudes. Esperá un momento e intentá nuevamente.';
     case 'INVALID_PROMPT':
@@ -77,7 +77,7 @@ export const aiImageService = {
     // const quotaCheck = await this.checkDailyQuota();
     // if (quotaCheck.remaining <= 0) {
     //   throw new Error(
-    //     `Has alcanzado tu límite diario de ${quotaCheck.limit} créditos. Volvé mañana o actualiza a Premium.`
+    //     `Has alcanzado tu límite diario de ${quotaCheck.limit} usos IA. Volvé mañana o actualiza a Premium.`
     //   );
     // }
 

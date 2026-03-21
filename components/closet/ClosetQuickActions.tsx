@@ -81,17 +81,15 @@ export default function ClosetQuickActions({
   }, [isOpen, onClose]);
 
   // Smart positioning (avoid screen edges)
-  const getSmartPosition = () => {
-    if (!position || !menuRef.current) return position;
-
-    const menuWidth = 200;
-    const menuHeight = menuRef.current.scrollHeight || 300;
+  const getSmartPosition = (rawPosition: { x: number; y: number }) => {
+    const menuWidth = 224;
+    const menuHeight = 320;
     const padding = 10;
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
 
-    let x = position.x;
-    let y = position.y;
+    let x = rawPosition.x;
+    let y = rawPosition.y;
 
     // Adjust horizontal position
     if (x + menuWidth + padding > viewportWidth) {
@@ -132,7 +130,7 @@ export default function ClosetQuickActions({
 
   if (!isOpen || !position || !item) return null;
 
-  const smartPosition = getSmartPosition();
+  const smartPosition = getSmartPosition(position);
 
   return (
     <AnimatePresence>

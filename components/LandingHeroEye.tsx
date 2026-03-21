@@ -65,7 +65,9 @@ interface LandingHeroEyeProps {
 }
 
 export default function LandingHeroEye({ onGetStarted, onLogin }: LandingHeroEyeProps) {
-    const prefersReducedMotion = useReducedMotion() || useMatchMedia('(prefers-reduced-motion: reduce)');
+    const framerReducedMotion = useReducedMotion();
+    const mediaReducedMotion = useMatchMedia('(prefers-reduced-motion: reduce)');
+    const prefersReducedMotion = framerReducedMotion || mediaReducedMotion;
     const isSmallScreen = useMatchMedia('(max-width: 640px)');
     const [transitioningTo, setTransitioningTo] = useState<null | 'login' | 'signup'>(null);
     const [isLoaded, setIsLoaded] = useState(false);

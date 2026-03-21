@@ -83,7 +83,7 @@ Deno.test('build look copy and prompt includes canonical credit wording', () => 
   const collected = { occasion: 'fiesta', style: 'elegante', category: 'top' as const };
   const costMessage = buildLookCostMessage(collected);
   const prompt = buildLookCreationPrompt(collected);
-  assertStringIncludes(costMessage, 'cuesta 2 créditos');
+  assertStringIncludes(costMessage, 'cuesta 2 usos premium');
   assertStringIncludes(prompt, 'Ocasión: fiesta');
 });
 
@@ -94,15 +94,15 @@ Deno.test('direct mode only requires category as critical field', () => {
 
 Deno.test('mode chooser and action costs render spanish UX copy', () => {
   assertStringIncludes(buildModeChoiceMessage(), 'directo');
-  assertStringIncludes(buildEditCostMessage('cambiar color a negro'), 'cuesta 2 créditos');
-  assertStringIncludes(buildTryOnCostMessage(), 'cuesta 4 créditos');
+  assertStringIncludes(buildEditCostMessage('cambiar color a negro'), 'cuesta 2 usos premium');
+  assertStringIncludes(buildTryOnCostMessage(), 'cuesta 4 usos premium');
 });
 
 Deno.test('workflow action billing keeps chat policy for conversational turns', () => {
-  assertEquals(shouldChargeChatCreditsForWorkflowAction('start'), true);
-  assertEquals(shouldChargeChatCreditsForWorkflowAction('submit'), true);
-  assertEquals(shouldChargeChatCreditsForWorkflowAction('select_strategy'), true);
-  assertEquals(shouldChargeChatCreditsForWorkflowAction('request_edit'), true);
+  assertEquals(shouldChargeChatCreditsForWorkflowAction('start'), false);
+  assertEquals(shouldChargeChatCreditsForWorkflowAction('submit'), false);
+  assertEquals(shouldChargeChatCreditsForWorkflowAction('select_strategy'), false);
+  assertEquals(shouldChargeChatCreditsForWorkflowAction('request_edit'), false);
   assertEquals(shouldChargeChatCreditsForWorkflowAction('confirm_generate'), false);
   assertEquals(shouldChargeChatCreditsForWorkflowAction('confirm_edit'), false);
   assertEquals(shouldChargeChatCreditsForWorkflowAction('confirm_tryon'), false);

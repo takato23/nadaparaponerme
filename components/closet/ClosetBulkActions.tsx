@@ -36,11 +36,19 @@ interface ClosetBulkActionsProps {
 
   // Collections (for move/add to collection)
   collections?: Collection[];
+  onCreateCollection?: (name: string, options?: {
+    description?: string;
+    color?: string;
+    icon?: string;
+    itemIds?: string[];
+  }) => Collection | void;
 
   // Custom actions
   actions?: BulkAction[];
   extraActions?: BulkAction[];
   helperText?: string;
+  selectedLabel?: string;
+  availableLabel?: string;
 
   // Position
   position?: 'top' | 'bottom' | 'floating';
@@ -90,15 +98,19 @@ export default function ClosetBulkActions({
   onCancel,
   onAction,
   collections = [],
+  onCreateCollection,
   actions = DEFAULT_ACTIONS,
   extraActions = [],
   helperText,
+  selectedLabel,
+  availableLabel,
   position = 'bottom'
 }: ClosetBulkActionsProps) {
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [confirmationAction, setConfirmationAction] = useState<BulkAction | null>(null);
   const [showCollectionPicker, setShowCollectionPicker] = useState(false);
   const [collectionPickerAction, setCollectionPickerAction] = useState<'add' | 'move'>('add');
+  const [newCollectionName, setNewCollectionName] = useState('');
 
   const handleActionClick = (action: BulkAction) => {
     // Handle collection-related actions
@@ -133,6 +145,19 @@ export default function ClosetBulkActions({
       : `move-to-collection-${collectionId}`;
     onAction(actionId);
     setShowCollectionPicker(false);
+  };
+
+  const handleCreateCollection = () => {
+    const name = newCollectionName.trim();
+    if (!name || !onCreateCollection) return;
+    const created = onCreateCollection(name, {
+      color: '#6B7280',
+      icon: 'folder',
+    });
+    setNewCollectionName('');
+    if (created && typeof created === 'object' && 'id' in created && created.id) {
+      handleCollectionSelect(created.id);
+    }
   };
 
   const getVariantClasses = (variant: BulkAction['variant']) => {
@@ -181,10 +206,10 @@ export default function ClosetBulkActions({
 
                   <div>
                   <div className="font-semibold text-text-primary dark:text-gray-200">
-                    {selectedCount} seleccionado{selectedCount !== 1 ? 's' : ''}
+                    {selectedLabel || `${selectedCount} seleccionado${selectedCount !== 1 ? 's' : ''}`}
                   </div>
                   <div className="text-xs text-text-secondary dark:text-gray-400">
-                    {totalCount} disponibles
+                    {availableLabel || `${totalCount} disponibles`}
                   </div>
                   {helperText && (
                     <div className="text-xs text-text-secondary dark:text-gray-400 mt-1">
@@ -206,24 +231,41 @@ export default function ClosetBulkActions({
               {/* Actions */}
               <div className="flex items-center gap-2 p-3 overflow-x-auto">
                 {resolvedActions.map((action, index) => (
-                  <motion.button
-                    key={action.id}
-                    initial={{ scale: 0, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    transition={{ delay: index * 0.05, duration: 0.2 }}
-                    onClick={() => handleActionClick(action)}
-                    className={`
-                      flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all flex-shrink-0
-                      ${getVariantClasses(action.variant)}
-                    `}
-                  >
-                    <span className="material-symbols-outlined text-lg">
-                      {action.icon}
-                    </span>
-                    <span className="text-sm font-medium hidden md:inline">
-                      {action.label}
-                    </span>
-                  </motion.button>
+                  action.variant === 'danger' ? (
+                    <motion.button
+                      key={action.id}
+                      initial={{ scale: 0, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      transition={{ delay: index * 0.05, duration: 0.2 }}
+                      onClick={() => handleActionClick(action)}
+                      className="flex h-11 w-11 items-center justify-center rounded-xl bg-red-500 text-white transition-all hover:bg-red-600 flex-shrink-0"
+                      aria-label={action.label}
+                      title={action.label}
+                    >
+                      <span className="material-symbols-outlined text-lg">
+                        {action.icon}
+                      </span>
+                    </motion.button>
+                  ) : (
+                    <motion.button
+                      key={action.id}
+                      initial={{ scale: 0, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      transition={{ delay: index * 0.05, duration: 0.2 }}
+                      onClick={() => handleActionClick(action)}
+                      className={`
+                        flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all flex-shrink-0
+                        ${getVariantClasses(action.variant)}
+                      `}
+                    >
+                      <span className="material-symbols-outlined text-lg">
+                        {action.icon}
+                      </span>
+                      <span className="text-sm font-medium hidden md:inline">
+                        {action.label}
+                      </span>
+                    </motion.button>
+                  )
                 ))}
               </div>
             </div>
@@ -317,6 +359,23 @@ export default function ClosetBulkActions({
               </div>
 
               <div className="flex-1 overflow-y-auto space-y-2">
+                <div className="rounded-xl border border-dashed border-gray-300 bg-white/40 p-3 dark:border-gray-600 dark:bg-black/10">
+                  <div className="flex gap-2">
+                    <input
+                      value={newCollectionName}
+                      onChange={(event) => setNewCollectionName(event.target.value)}
+                      placeholder="Nueva colección"
+                      className="flex-1 rounded-xl border border-gray-200 bg-white/70 px-3 py-2 text-sm outline-none dark:border-gray-700 dark:bg-black/20"
+                    />
+                    <button
+                      onClick={handleCreateCollection}
+                      disabled={!onCreateCollection || !newCollectionName.trim()}
+                      className="rounded-xl bg-[#08111a] px-3 py-2 text-sm font-semibold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Crear
+                    </button>
+                  </div>
+                </div>
                 {collections.filter(c => !c.isDefault).map(collection => (
                   <button
                     key={collection.id}

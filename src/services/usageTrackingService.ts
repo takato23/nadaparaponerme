@@ -2,14 +2,16 @@
  * Usage Tracking Service - SIMPLIFIED
  *
  * Single pool of AI credits per month.
- * Free: 200 credits/month | Pro: 300 credits/month | Premium: 400 credits/month
+ * Source of truth for client-side credit messaging and local fallbacks.
  */
+
+import { readBillingSummaryCache } from './billingCatalogService';
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
-export type UserTier = 'free' | 'pro' | 'premium';
+export type UserTier = 'free' | 'plus' | 'pro' | 'premium';
 
 export interface CreditUsage {
   month: string;           // YYYY-MM format
@@ -48,16 +50,48 @@ export type FeatureType =
   | 'weather_outfit'
   | 'similar_items'
   | 'shopping_suggestions'
-  | 'brand_recognition';
+  | 'brand_recognition'
+  | 'free_chat'
+  | 'wardrobe_recommendation'
+  | 'saved_look_creation'
+  | 'wardrobe_gap_detection'
+  | 'navigation'
+  | 'external_link_suggestions'
+  | 'external_search_enriched'
+  | 'new_garment_generation'
+  | 'studio_render'
+  | 'try_on';
+
+const FREE_STYLIST_ACTIONS = new Set<FeatureType>([
+  'fashion_chat',
+  'free_chat',
+  'wardrobe_recommendation',
+  'saved_look_creation',
+  'wardrobe_gap_detection',
+  'navigation',
+  'external_link_suggestions',
+]);
+
+export function isFreeStylistAction(feature: FeatureType): boolean {
+  return FREE_STYLIST_ACTIONS.has(feature);
+}
 
 // ============================================================================
 // CREDIT LIMITS BY TIER
 // ============================================================================
 
 export const CREDIT_LIMITS: Record<UserTier, number> = {
-  free: 200,
-  pro: 300,
-  premium: 400,
+  free: 50,
+  plus: 150,
+  pro: 400,
+  premium: 500,
+};
+
+export const TRYON_LIMITS: Record<UserTier, number> = {
+  free: 1,
+  plus: 4,
+  pro: 8,
+  premium: 18,
 };
 
 // ============================================================================
@@ -179,6 +213,7 @@ export function recordShareReward(userId?: string): void {
 // STORAGE KEYS
 // ============================================================================
 
+const TRYON_STORAGE_KEY = 'ojodeloca-tryon-usage';
 const STORAGE_KEY = 'ojodeloca-credits';
 const TIER_KEY = 'ojodeloca-user-tier';
 const FEATURE_STORAGE_KEY = 'ojodeloca-credits-by-feature';
@@ -245,6 +280,19 @@ function getDaysUntilReset(): number {
   return Math.ceil((nextMonth.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 }
 
+function getBillingSummaryBucket(bucketKey: string): any | null {
+  const cached = readBillingSummaryCache();
+  return cached?.usage?.buckets?.[bucketKey] || null;
+}
+
+function getBillingDaysUntilReset(): number | null {
+  const cached = readBillingSummaryCache();
+  const cycleEnd = cached?.usage?.cycle?.end || cached?.current?.cycle?.end;
+  if (!cycleEnd) return null;
+  const diff = new Date(cycleEnd).getTime() - Date.now();
+  return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+}
+
 // ============================================================================
 // CORE FUNCTIONS
 // ============================================================================
@@ -253,8 +301,12 @@ function getDaysUntilReset(): number {
  * Get current user tier from localStorage
  */
 export function getUserTier(): UserTier {
+  const billingTier = readBillingSummaryCache()?.current?.plan?.code;
+  if (billingTier && ['free', 'plus', 'pro', 'premium'].includes(String(billingTier))) {
+    return billingTier as UserTier;
+  }
   const stored = readStorage(TIER_KEY);
-  if (stored && ['free', 'pro', 'premium'].includes(stored)) {
+  if (stored && ['free', 'plus', 'pro', 'premium'].includes(stored)) {
     return stored as UserTier;
   }
   return 'free';
@@ -349,22 +401,31 @@ function saveCreditUsage(usage: CreditUsage): void {
  */
 export function getCreditStatus(): CreditStatus {
   const tier = getUserTier();
+  const billingBucket = getBillingSummaryBucket('kumbi_messages');
+  if (billingBucket) {
+    const used = Number(billingBucket.used || 0);
+    const limit = Number(billingBucket.monthly_limit ?? 0);
+    const reserved = Number(billingBucket.reserved || 0);
+    const remaining = limit === -1 ? -1 : Math.max(0, limit - used - reserved);
+    const percentUsed = limit === -1 ? 0 : Math.min(100, (used / Math.max(limit, 1)) * 100);
+    const canUse = limit === -1 || remaining > 0;
+    return {
+      used,
+      limit,
+      remaining,
+      percentUsed,
+      canUse,
+      tier,
+      daysUntilReset: getBillingDaysUntilReset() ?? getDaysUntilReset(),
+    };
+  }
+
   const usage = getCreditUsage();
   const limit = CREDIT_LIMITS[tier];
-
   const remaining = limit === -1 ? -1 : Math.max(0, limit - usage.used);
   const percentUsed = limit === -1 ? 0 : Math.min(100, (usage.used / limit) * 100);
   const canUse = limit === -1 || usage.used < limit;
-
-  return {
-    used: usage.used,
-    limit,
-    remaining,
-    percentUsed,
-    canUse,
-    tier,
-    daysUntilReset: getDaysUntilReset(),
-  };
+  return { used: usage.used, limit, remaining, percentUsed, canUse, tier, daysUntilReset: getDaysUntilReset() };
 }
 
 /**
@@ -448,6 +509,155 @@ export function grantBonusCredit(amount: number = 1): { success: boolean; newRem
 }
 
 // ============================================================================
+// TRY-ON TRACKING (SEPARATE FROM AI CREDITS)
+// ============================================================================
+
+export interface TryOnUsage {
+  month: string;
+  used: number;
+  bonus: number; // Extra try-ons from packs
+  lastUpdated: string;
+}
+
+function getTryOnUsage(): TryOnUsage {
+  const currentMonth = getCurrentMonth();
+
+  try {
+    const stored = readStorage(TRYON_STORAGE_KEY);
+    if (stored) {
+      const data = JSON.parse(stored) as TryOnUsage;
+      if (data.month === currentMonth) {
+        return data;
+      }
+      // New month: reset used but keep bonus (packs don't expire monthly)
+      return {
+        month: currentMonth,
+        used: 0,
+        bonus: data.bonus || 0,
+        lastUpdated: new Date().toISOString(),
+      };
+    }
+  } catch (e) {
+    console.warn('Error reading try-on usage:', e);
+  }
+
+  return {
+    month: currentMonth,
+    used: 0,
+    bonus: 0,
+    lastUpdated: new Date().toISOString(),
+  };
+}
+
+function saveTryOnUsage(usage: TryOnUsage): void {
+  try {
+    usage.lastUpdated = new Date().toISOString();
+    writeStorage(TRYON_STORAGE_KEY, JSON.stringify(usage));
+  } catch (e) {
+    console.warn('Error saving try-on usage:', e);
+  }
+}
+
+export interface TryOnStatus {
+  used: number;
+  monthlyLimit: number;
+  bonus: number;
+  totalAvailable: number;
+  remaining: number;
+  canUse: boolean;
+  tier: UserTier;
+}
+
+/**
+ * Get current try-on status
+ */
+export function getTryOnStatus(): TryOnStatus {
+  const tier = getUserTier();
+  const billingBucket = getBillingSummaryBucket('tryons');
+  if (billingBucket) {
+    const used = Number(billingBucket.used || 0);
+    const monthlyLimit = Number(billingBucket.monthly_limit ?? 0);
+    const reserved = Number(billingBucket.reserved || 0);
+    const remaining = monthlyLimit === -1 ? -1 : Math.max(0, monthlyLimit - used - reserved);
+    return {
+      used,
+      monthlyLimit,
+      bonus: 0,
+      totalAvailable: monthlyLimit,
+      remaining,
+      canUse: monthlyLimit === -1 || remaining > 0,
+      tier,
+    };
+  }
+
+  const usage = getTryOnUsage();
+  const monthlyLimit = TRYON_LIMITS[tier];
+  const totalAvailable = monthlyLimit + usage.bonus;
+  const remaining = Math.max(0, totalAvailable - usage.used);
+  return { used: usage.used, monthlyLimit, bonus: usage.bonus, totalAvailable, remaining, canUse: remaining > 0, tier };
+}
+
+/**
+ * Check if user can do a try-on
+ */
+export function canUseTryOn(): boolean {
+  return getTryOnStatus().canUse;
+}
+
+/**
+ * Consume one try-on usage
+ */
+export function consumeTryOn(): boolean {
+  const status = getTryOnStatus();
+  if (!status.canUse) {
+    console.warn('No try-ons remaining');
+    return false;
+  }
+
+  const usage = getTryOnUsage();
+  usage.used += 1;
+  saveTryOnUsage(usage);
+  return true;
+}
+
+/**
+ * Refund a try-on (for failed generations)
+ */
+export function refundTryOn(): void {
+  const usage = getTryOnUsage();
+  if (usage.used > 0) {
+    usage.used -= 1;
+    saveTryOnUsage(usage);
+    console.log('🔄 Try-on refunded');
+  }
+}
+
+/**
+ * Grant bonus try-ons from pack purchase
+ */
+export function grantBonusTryOns(amount: number): { success: boolean; newRemaining: number } {
+  const usage = getTryOnUsage();
+  usage.bonus += amount;
+  saveTryOnUsage(usage);
+
+  const status = getTryOnStatus();
+  console.log(`✅ Pack de ${amount} probadas activado. Disponibles: ${status.remaining}`);
+  return { success: true, newRemaining: status.remaining };
+}
+
+/**
+ * Reset try-on usage (admin/testing only)
+ */
+export function resetTryOnUsage(): void {
+  saveTryOnUsage({
+    month: getCurrentMonth(),
+    used: 0,
+    bonus: 0,
+    lastUpdated: new Date().toISOString(),
+  });
+}
+
+// ============================================================================
 // BACKWARDS COMPATIBILITY - These functions keep the old API working
 // ============================================================================
 
@@ -471,6 +681,7 @@ export function canUseFeature(_feature: FeatureType): UsageStatus {
   const status = getCreditStatus();
   const nextMonth = new Date();
   nextMonth.setMonth(nextMonth.getMonth() + 1, 1);
+  const isFreeAction = isFreeStylistAction(_feature);
 
   return {
     feature: _feature,
@@ -478,7 +689,7 @@ export function canUseFeature(_feature: FeatureType): UsageStatus {
     limit: status.limit,
     remaining: status.remaining,
     percentUsed: status.percentUsed,
-    canUse: status.canUse,
+    canUse: isFreeAction ? true : status.canUse,
     isPremiumLocked: false,
     nextResetDate: nextMonth.toISOString(),
   };
@@ -488,6 +699,9 @@ export function canUseFeature(_feature: FeatureType): UsageStatus {
  * @deprecated Use consumeCredit() instead
  */
 export function recordCreditUsage(_feature: FeatureType): boolean {
+  if (isFreeStylistAction(_feature)) {
+    return true;
+  }
   const ok = consumeCredit();
   if (!ok) return false;
 
@@ -504,7 +718,7 @@ export function recordCreditUsage(_feature: FeatureType): boolean {
  * @deprecated No longer needed with unified credits
  */
 export function getFeatureDisplayName(_feature: FeatureType): string {
-  return 'Créditos IA';
+  return 'Usos IA';
 }
 
 /**

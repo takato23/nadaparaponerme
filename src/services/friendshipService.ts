@@ -9,6 +9,8 @@
  */
 
 import { supabase } from '../lib/supabase';
+import { getSessionUser } from './authService';
+import { getSafePublicDisplayName } from '../utils/publicProfile';
 
 export interface FriendProfile {
   id: string;
@@ -17,6 +19,7 @@ export interface FriendProfile {
   avatar_url: string | null;
   bio: string | null;
   is_public: boolean;
+  badges?: string[];
 }
 
 export interface FriendshipStatus {
@@ -39,6 +42,13 @@ export interface PendingRequest {
   created_at: string;
 }
 
+function sanitizeFriendProfile(profile: FriendProfile): FriendProfile {
+  return {
+    ...profile,
+    display_name: getSafePublicDisplayName(profile.display_name, profile.username),
+  };
+}
+
 // ===== FRIEND REQUESTS =====
 
 /**
@@ -46,7 +56,7 @@ export interface PendingRequest {
  */
 export async function sendFriendRequest(addresseeId: string): Promise<{ success: boolean; error?: string }> {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getSessionUser();
     if (!user) {
       return { success: false, error: 'No autenticado' };
     }
@@ -99,7 +109,7 @@ export async function sendFriendRequest(addresseeId: string): Promise<{ success:
  */
 export async function acceptFriendRequest(friendshipId: string): Promise<{ success: boolean; error?: string }> {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getSessionUser();
     if (!user) {
       return { success: false, error: 'No autenticado' };
     }
@@ -128,7 +138,7 @@ export async function acceptFriendRequest(friendshipId: string): Promise<{ succe
  */
 export async function declineFriendRequest(friendshipId: string): Promise<{ success: boolean; error?: string }> {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getSessionUser();
     if (!user) {
       return { success: false, error: 'No autenticado' };
     }
@@ -157,7 +167,7 @@ export async function declineFriendRequest(friendshipId: string): Promise<{ succ
  */
 export async function removeFriend(friendshipId: string): Promise<{ success: boolean; error?: string }> {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getSessionUser();
     if (!user) {
       return { success: false, error: 'No autenticado' };
     }
@@ -187,7 +197,7 @@ export async function removeFriend(friendshipId: string): Promise<{ success: boo
  */
 export async function getFriends(): Promise<FriendWithProfile[]> {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getSessionUser();
     if (!user) return [];
 
     // Get all accepted friendships where user is requester or addressee
@@ -242,14 +252,14 @@ export async function getFriends(): Promise<FriendWithProfile[]> {
 
       return {
         ...f,
-        friend: profile || {
+        friend: sanitizeFriendProfile(profile || {
           id: friendId,
           username: 'Usuario',
           display_name: null,
           avatar_url: null,
           bio: null,
           is_public: false
-        },
+        }),
         is_close_friend: closeFriendIds.has(friendId)
       };
     });
@@ -264,7 +274,7 @@ export async function getFriends(): Promise<FriendWithProfile[]> {
  */
 export async function getPendingRequests(): Promise<PendingRequest[]> {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getSessionUser();
     if (!user) return [];
 
     const { data: requests, error } = await supabase
@@ -299,14 +309,14 @@ export async function getPendingRequests(): Promise<PendingRequest[]> {
 
     return requests.map(r => ({
       id: r.id,
-      requester: profiles.find(p => p.id === r.requester_id) || {
+      requester: sanitizeFriendProfile(profiles.find(p => p.id === r.requester_id) || {
         id: r.requester_id,
         username: 'Usuario',
         display_name: null,
         avatar_url: null,
         bio: null,
         is_public: false
-      },
+      }),
       created_at: r.created_at
     }));
   } catch (error) {
@@ -320,7 +330,7 @@ export async function getPendingRequests(): Promise<PendingRequest[]> {
  */
 export async function getSentRequests(): Promise<PendingRequest[]> {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getSessionUser();
     if (!user) return [];
 
     const { data: requests, error } = await supabase
@@ -355,14 +365,14 @@ export async function getSentRequests(): Promise<PendingRequest[]> {
 
     return requests.map(r => ({
       id: r.id,
-      requester: profiles.find(p => p.id === r.addressee_id) || {
+      requester: sanitizeFriendProfile(profiles.find(p => p.id === r.addressee_id) || {
         id: r.addressee_id,
         username: 'Usuario',
         display_name: null,
         avatar_url: null,
         bio: null,
         is_public: false
-      },
+      }),
       created_at: r.created_at
     }));
   } catch (error) {
@@ -381,7 +391,7 @@ export async function searchUsers(query: string): Promise<FriendProfile[]> {
     const normalizedQuery = query.trim().replace(/^@/, '');
     if (!normalizedQuery || normalizedQuery.length < 2) return [];
 
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getSessionUser();
     if (!user) return [];
 
     const { data: rpcProfiles, error: rpcError } = await supabase.rpc('search_profiles_for_friendship', {
@@ -391,7 +401,7 @@ export async function searchUsers(query: string): Promise<FriendProfile[]> {
     });
 
     if (!rpcError) {
-      return rpcProfiles || [];
+      return (rpcProfiles || []).map((profile: FriendProfile) => sanitizeFriendProfile(profile));
     }
 
     // Compatibility fallback while migration is rolling out.
@@ -421,7 +431,7 @@ export async function searchUsers(query: string): Promise<FriendProfile[]> {
     (usernameRes.data || []).forEach((profile: FriendProfile) => mergedProfiles.set(profile.id, profile));
     (displayNameRes.data || []).forEach((profile: FriendProfile) => mergedProfiles.set(profile.id, profile));
 
-    return Array.from(mergedProfiles.values()).slice(0, 20);
+    return Array.from(mergedProfiles.values()).slice(0, 20).map((profile) => sanitizeFriendProfile(profile));
   } catch (error) {
     console.error('Error in searchUsers:', error);
     return [];
@@ -433,7 +443,7 @@ export async function searchUsers(query: string): Promise<FriendProfile[]> {
  */
 export async function getFriendshipStatus(otherUserId: string): Promise<FriendshipStatus | null> {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getSessionUser();
     if (!user) return null;
 
     const { data, error } = await supabase
@@ -465,7 +475,7 @@ export async function getFriendshipStatus(otherUserId: string): Promise<Friendsh
  */
 export async function addCloseFriend(friendId: string): Promise<{ success: boolean; error?: string }> {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getSessionUser();
     if (!user) {
       return { success: false, error: 'No autenticado' };
     }
@@ -498,7 +508,7 @@ export async function addCloseFriend(friendId: string): Promise<{ success: boole
  */
 export async function removeCloseFriend(friendId: string): Promise<{ success: boolean; error?: string }> {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getSessionUser();
     if (!user) {
       return { success: false, error: 'No autenticado' };
     }
@@ -526,7 +536,7 @@ export async function removeCloseFriend(friendId: string): Promise<{ success: bo
  */
 export async function getCloseFriends(): Promise<FriendProfile[]> {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getSessionUser();
     if (!user) return [];
 
     const { data: closeFriends, error } = await supabase
@@ -566,7 +576,7 @@ export async function getCloseFriends(): Promise<FriendProfile[]> {
  */
 export async function getSuggestedUsers(limit: number = 10): Promise<FriendProfile[]> {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getSessionUser();
     if (!user) return [];
 
     // Get current friends to exclude

@@ -9,8 +9,12 @@
     "preview": "vite preview",
     "test": "vitest run",
     "verify-setup": "node scripts/verify-setup.js",
+    "db:check:migrations": "bash scripts/check-supabase-migrations.sh",
     "remotion:studio": "remotion studio src/remotion/index.ts",
-    "remotion:render": "remotion render src/remotion/index.ts LookReveal out/look-reveal.mp4"
+    "remotion:render": "remotion render src/remotion/index.ts LookReveal out/look-reveal.mp4",
+    "supabase:types": "bash scripts/generate-supabase-types.sh",
+    "smoke:seed-checkin": "node scripts/seed-smoke-checkin-user.mjs",
+    "smoke:test-checkin": "node scripts/smoke-checkin-flow.mjs"
   },
   "dependencies": {
     "@google/genai": "^1.27.0",
@@ -36,6 +40,7 @@
     "html-to-image": "^1.11.13",
     "html2canvas": "^1.4.1",
     "jspdf": "^4.0.0",
+    "liquid-glass-react": "^1.1.1",
     "lucide-react": "^0.417.0",
     "maath": "^0.10.8",
     "mercadopago": "^2.10.0",

@@ -15,30 +15,22 @@ export const BETA_MODE = true;
 
 // Features a mostrar en modo beta (las más importantes y probadas)
 const SAFE_V1_FEATURE_IDS = [
-  'studio',        // Generar look (flujo principal)
-  'stylist',       // Estilista IA (Edge)
   'closet',        // Armario
-  'community',     // Comunidad
   'bulk-upload',   // Onboarding rápido
-  'virtual-tryon', // Probador IA
-  'chat',          // Chat de Moda
   'weather',       // Outfit del Día
-  'smart-packer',  // Maleta Inteligente
+  'gap-analysis',  // Faltantes reales
+  'calendar',      // Planner
 ] as const;
 
 export const BETA_FEATURE_IDS = V1_SAFE_MODE
   ? [...SAFE_V1_FEATURE_IDS]
   : [
-    'studio',            // Generar look - Core
-    'stylist',           // Estilista IA - Core
-    'chat',              // Chat de Moda - Engagement
     'closet',            // Mi Armario - Core
-    'community',         // Comunidad - Social
     'weather',           // Outfit del Día - Valor diario
     'bulk-upload',       // Carga Múltiple - Onboarding rápido
-    'virtual-tryon',     // Probador Virtual - Wow factor
-    'smart-packer',      // Maleta Inteligente - Popular
-    'style-dna',         // ADN de Estilo - Diferenciador
+    'gap-analysis',      // Faltantes reales
+    'calendar',          // Planner
+    'capsule',           // Organización futura
   ];
 
 export type FeatureCategory = 'essential' | 'create' | 'social' | 'intelligence';
@@ -129,7 +121,7 @@ const ESSENTIAL_FEATURES: FeatureConfig[] = [
   {
     id: 'stylist',
     icon: 'auto_awesome',
-    title: 'Estilista IA',
+    title: 'Kumbi',
     description: 'Copiloto de Studio para sugerir looks',
     category: 'essential',
     keywords: ['outfit', 'look', 'estilista', 'generar', 'crear'],
@@ -487,7 +479,7 @@ const _QUICK_ACTIONS: (QuickActionConfig & { isPro?: boolean; inBeta?: boolean }
   {
     id: 'chat',
     icon: 'chat_bubble',
-    label: 'Chat IA',
+    label: 'Kumbi',
     color: 'text-purple-500',
     bg: 'bg-purple-50 dark:bg-purple-900/20',
     handlerKey: 'onStartChat',

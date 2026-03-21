@@ -3,151 +3,13 @@
 // Generated types for No Tengo Nada Para Ponerme
 // =====================================================
 
-// ==================== Database Types ====================
+import type { Database as GeneratedDatabase, Json } from './api.generated';
 
-export interface Database {
-  public: {
-    Tables: {
-      profiles: {
-        Row: Profile;
-        Insert: ProfileInsert;
-        Update: ProfileUpdate;
-      };
-      clothing_items: {
-        Row: ClothingItem;
-        Insert: ClothingItemInsert;
-        Update: ClothingItemUpdate;
-      };
-      outfits: {
-        Row: Outfit;
-        Insert: OutfitInsert;
-        Update: OutfitUpdate;
-      };
-      friendships: {
-        Row: Friendship;
-        Insert: FriendshipInsert;
-        Update: FriendshipUpdate;
-      };
-      outfit_likes: {
-        Row: OutfitLike;
-        Insert: OutfitLikeInsert;
-        Update: OutfitLikeUpdate;
-      };
-      outfit_comments: {
-        Row: OutfitComment;
-        Insert: OutfitCommentInsert;
-        Update: OutfitCommentUpdate;
-      };
-      borrowed_items: {
-        Row: BorrowedItem;
-        Insert: BorrowedItemInsert;
-        Update: BorrowedItemUpdate;
-      };
-      packing_lists: {
-        Row: PackingList;
-        Insert: PackingListInsert;
-        Update: PackingListUpdate;
-      };
-      outfit_schedule: {
-        Row: OutfitScheduleRow;
-        Insert: OutfitScheduleInsert;
-        Update: OutfitScheduleUpdate;
-      };
-      activity_feed: {
-        Row: ActivityFeedItem;
-        Insert: ActivityFeedInsert;
-        Update: ActivityFeedUpdate;
-      };
-      style_challenges: {
-        Row: StyleChallengeRow;
-        Insert: StyleChallengeInsert;
-        Update: StyleChallengeUpdate;
-      };
-      outfit_ratings: {
-        Row: OutfitRatingRow;
-        Insert: OutfitRatingInsert;
-        Update: OutfitRatingUpdate;
-      };
-      close_friends: {
-        Row: CloseFriend;
-        Insert: CloseFriendInsert;
-        Update: CloseFriendUpdate;
-      };
-      communities: {
-        Row: Community;
-        Insert: CommunityInsert;
-        Update: CommunityUpdate;
-      };
-      community_members: {
-        Row: CommunityMember;
-        Insert: CommunityMemberInsert;
-        Update: CommunityMemberUpdate;
-      };
-    };
-    Views: {
-      [_ in never]: never;
-    };
-    Functions: {
-      get_user_feed: {
-        Args: {
-          p_user_id: string;
-          p_filter_type?: string;
-          p_limit?: number;
-          p_offset?: number;
-          p_target_actor_id?: string | null;
-        };
-        Returns: {
-          id: string;
-          user_id: string;
-          actor_id: string;
-          activity_type: string;
-          target_type: string;
-          target_id: string;
-          metadata: any;
-          created_at: string;
-          actor_username: string;
-          actor_avatar: string;
-          actor_display_name: string;
-        }[];
-      };
-      get_suggested_users: {
-        Args: {
-          p_user_id: string;
-          p_limit?: number;
-        };
-        Returns: {
-          id: string;
-          username: string;
-          display_name: string;
-          avatar_url: string;
-          similarity_score: number;
-          common_preferences: string[];
-        }[];
-      };
-      search_profiles_for_friendship: {
-        Args: {
-          p_user_id: string;
-          p_query: string;
-          p_limit?: number;
-        };
-        Returns: {
-          id: string;
-          username: string;
-          display_name: string | null;
-          avatar_url: string | null;
-          bio: string | null;
-          is_public: boolean;
-        }[];
-      };
-    };
-    Enums: {
-      [_ in never]: never;
-    };
-    CompositeTypes: {
-      [_ in never]: never;
-    };
-  };
-}
+// Database now comes from the generated remote snapshot.
+// The named interfaces below remain as compatibility wrappers used by the app.
+export type Database = GeneratedDatabase;
+export type { Json };
+type PublicTables = Database['public']['Tables'];
 
 // ==================== Core Types ====================
 
@@ -155,7 +17,25 @@ export type ClothingCategory = 'top' | 'bottom' | 'shoes' | 'accessory' | 'outer
 export type Season = 'spring' | 'summer' | 'fall' | 'winter';
 export type FriendshipStatus = 'pending' | 'accepted' | 'declined' | 'blocked';
 export type BorrowStatus = 'requested' | 'approved' | 'borrowed' | 'returned' | 'declined';
-export type ActivityType = 'like' | 'comment' | 'follow' | 'borrow_request' | 'borrow_approved' | 'outfit_shared';
+export type OutfitWearStatus = 'worn' | 'not_worn';
+export type OutfitWearSkipReason = 'weather' | 'comfort' | 'occasion' | 'changed_mind';
+export type OutfitWearFeedbackSource = 'home' | 'planner';
+export type ActivityType =
+  | 'like'
+  | 'comment'
+  | 'follow'
+  | 'borrow_request'
+  | 'borrow_approved'
+  | 'borrow_declined'
+  | 'item_returned'
+  | 'outfit_shared'
+  | 'item_added'
+  | 'challenge_completed'
+  | 'outfit_saved'
+  | 'capsule_created'
+  | 'style_milestone'
+  | 'lookbook_created'
+  | 'rating_given';
 
 // ==================== Profiles ====================
 
@@ -219,6 +99,12 @@ export interface ClothingItem {
   color_primary: string;
   image_url: string;
   thumbnail_url: string | null;
+  normalized_image_url: string | null;
+  normalized_thumbnail_url: string | null;
+  normalization_status: 'pending' | 'processing' | 'ready' | 'failed' | null;
+  normalization_mode: 'none' | 'local_remove_background' | 'local_white_background' | 'premium_refine' | null;
+  normalization_background: 'transparent' | 'white' | null;
+  normalization_error: string | null;
   back_image_url: string | null;
   back_thumbnail_url: string | null;
   ai_metadata: AIMetadata;
@@ -231,6 +117,8 @@ export interface ClothingItem {
   times_worn: number;
   last_worn_at: string | null;
   is_favorite: boolean;
+  link_mode: 'copy' | 'linked';
+  source_ref: Record<string, any>;
   ai_status: 'pending' | 'processing' | 'ready' | 'failed' | null;
   ai_analyzed_at: string | null;
   ai_metadata_version: number;
@@ -249,6 +137,12 @@ export interface ClothingItemInsert {
   color_primary: string;
   image_url: string;
   thumbnail_url?: string | null;
+  normalized_image_url?: string | null;
+  normalized_thumbnail_url?: string | null;
+  normalization_status?: 'pending' | 'processing' | 'ready' | 'failed' | null;
+  normalization_mode?: 'none' | 'local_remove_background' | 'local_white_background' | 'premium_refine' | null;
+  normalization_background?: 'transparent' | 'white' | null;
+  normalization_error?: string | null;
   back_image_url?: string | null;
   back_thumbnail_url?: string | null;
   ai_metadata?: AIMetadata;
@@ -264,6 +158,8 @@ export interface ClothingItemInsert {
   ai_last_error?: string | null;
   status?: 'owned' | 'wishlist' | 'virtual' | null;
   is_favorite?: boolean;
+  link_mode?: 'copy' | 'linked';
+  source_ref?: Record<string, any>;
 }
 
 export interface ClothingItemUpdate {
@@ -271,6 +167,12 @@ export interface ClothingItemUpdate {
   category?: ClothingCategory;
   subcategory?: string | null;
   color_primary?: string;
+  normalized_image_url?: string | null;
+  normalized_thumbnail_url?: string | null;
+  normalization_status?: 'pending' | 'processing' | 'ready' | 'failed' | null;
+  normalization_mode?: 'none' | 'local_remove_background' | 'local_white_background' | 'premium_refine' | null;
+  normalization_background?: 'transparent' | 'white' | null;
+  normalization_error?: string | null;
   back_image_url?: string | null;
   back_thumbnail_url?: string | null;
   ai_metadata?: AIMetadata;
@@ -284,6 +186,8 @@ export interface ClothingItemUpdate {
   ai_last_error?: string | null;
   status?: 'owned' | 'wishlist' | 'virtual' | null;
   is_favorite?: boolean;
+  link_mode?: 'copy' | 'linked';
+  source_ref?: Record<string, any>;
   times_worn?: number;
   last_worn_at?: string | null;
   deleted_at?: string | null;
@@ -299,6 +203,17 @@ export interface Outfit {
   clothing_item_ids: string[];
   occasion: string | null;
   season: string | null;
+  source: 'manual' | 'ai_recommendation' | 'reference_recreation' | 'planner' | 'community_import' | null;
+  style_notes: string | null;
+  weather_context: string | null;
+  chat_thread_id: string | null;
+  hero_item_id: string | null;
+  folder_id: string | null;
+  tags: string[] | null;
+  cover_image_url: string | null;
+  reference_summary: string | null;
+  share_token: string | null;
+  context_json: Record<string, any> | null;
   is_public: boolean;
   ai_generated: boolean;
   ai_reasoning: string | null;
@@ -316,6 +231,17 @@ export interface OutfitInsert {
   clothing_item_ids: string[];
   occasion?: string | null;
   season?: string | null;
+  source?: 'manual' | 'ai_recommendation' | 'reference_recreation' | 'planner' | 'community_import' | null;
+  style_notes?: string | null;
+  weather_context?: string | null;
+  chat_thread_id?: string | null;
+  hero_item_id?: string | null;
+  folder_id?: string | null;
+  tags?: string[] | null;
+  cover_image_url?: string | null;
+  reference_summary?: string | null;
+  share_token?: string | null;
+  context_json?: Record<string, any> | null;
   is_public?: boolean;
   ai_generated?: boolean;
   ai_reasoning?: string | null;
@@ -327,9 +253,26 @@ export interface OutfitUpdate {
   clothing_item_ids?: string[];
   occasion?: string | null;
   season?: string | null;
+  source?: 'manual' | 'ai_recommendation' | 'reference_recreation' | 'planner' | 'community_import' | null;
+  style_notes?: string | null;
+  weather_context?: string | null;
+  chat_thread_id?: string | null;
+  hero_item_id?: string | null;
+  folder_id?: string | null;
+  tags?: string[] | null;
+  cover_image_url?: string | null;
+  reference_summary?: string | null;
+  share_token?: string | null;
+  context_json?: Record<string, any> | null;
   is_public?: boolean;
   deleted_at?: string | null;
 }
+
+export type LookFolderRow = PublicTables['look_folders']['Row'];
+
+export type LookFolderInsert = PublicTables['look_folders']['Insert'];
+
+export type LookFolderUpdate = PublicTables['look_folders']['Update'];
 
 // ==================== Friendships ====================
 
@@ -419,46 +362,59 @@ export interface CommunityMemberUpdate {
   role?: 'admin' | 'moderator' | 'member';
 }
 
-// ==================== Outfit Likes ====================
+// ==================== Followers / Blocks ====================
 
-export interface OutfitLike {
+export interface UserFollow {
   id: string;
-  outfit_id: string;
-  user_id: string;
+  follower_id: string;
+  followee_id: string;
+  status: 'active' | 'blocked';
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UserFollowInsert {
+  follower_id: string;
+  followee_id: string;
+  status?: 'active' | 'blocked';
+}
+
+export interface UserFollowUpdate {
+  status?: 'active' | 'blocked';
+  updated_at?: string;
+}
+
+export interface UserBlock {
+  id: string;
+  blocker_id: string;
+  blocked_id: string;
   created_at: string;
 }
 
-export interface OutfitLikeInsert {
-  outfit_id: string;
-  user_id: string;
+export interface UserBlockInsert {
+  blocker_id: string;
+  blocked_id: string;
 }
 
-export interface OutfitLikeUpdate {
+export interface UserBlockUpdate {
   [key: string]: never;
 }
 
+// ==================== Outfit Likes ====================
+
+export type OutfitLike = PublicTables['outfit_likes']['Row'];
+
+export type OutfitLikeInsert = PublicTables['outfit_likes']['Insert'];
+
+export type OutfitLikeUpdate = PublicTables['outfit_likes']['Update'];
+
 // ==================== Outfit Comments ====================
 
-export interface OutfitComment {
-  id: string;
-  outfit_id: string;
-  user_id: string;
-  content: string;
-  created_at: string;
-  updated_at: string;
-  deleted_at: string | null;
-}
+export type OutfitComment = PublicTables['outfit_comments']['Row'];
 
-export interface OutfitCommentInsert {
-  outfit_id: string;
-  user_id: string;
-  content: string;
-}
+export type OutfitCommentInsert = PublicTables['outfit_comments']['Insert'];
 
-export interface OutfitCommentUpdate {
-  content?: string;
-  deleted_at?: string | null;
-}
+export type OutfitCommentUpdate = PublicTables['outfit_comments']['Update'];
 
 // ==================== Borrowed Items ====================
 
@@ -531,25 +487,19 @@ export interface PackingListUpdate {
 
 // ==================== Outfit Schedule ====================
 
-export interface OutfitScheduleRow {
-  id: string;
-  user_id: string;
-  date: string; // Date in ISO format (YYYY-MM-DD)
-  outfit_id: string;
-  created_at: string;
-  updated_at: string;
-}
+export type OutfitScheduleRow = PublicTables['outfit_schedule']['Row'];
 
-export interface OutfitScheduleInsert {
-  user_id: string;
-  date: string;
-  outfit_id: string;
-}
+export type OutfitScheduleInsert = PublicTables['outfit_schedule']['Insert'];
 
-export interface OutfitScheduleUpdate {
-  date?: string;
-  outfit_id?: string;
-}
+export type OutfitScheduleUpdate = PublicTables['outfit_schedule']['Update'];
+
+// ==================== Outfit Wear Feedback ====================
+
+export type OutfitWearFeedbackRow = PublicTables['outfit_wear_feedback']['Row'];
+
+export type OutfitWearFeedbackInsert = PublicTables['outfit_wear_feedback']['Insert'];
+
+export type OutfitWearFeedbackUpdate = PublicTables['outfit_wear_feedback']['Update'];
 
 // ==================== Activity Feed ====================
 
@@ -577,6 +527,96 @@ export interface ActivityFeedInsert {
 
 export interface ActivityFeedUpdate {
   is_read?: boolean;
+}
+
+export type ActivityCommentRow = PublicTables['activity_comments']['Row'];
+
+export type ActivityCommentInsert = PublicTables['activity_comments']['Insert'];
+
+export type ActivityCommentUpdate = PublicTables['activity_comments']['Update'];
+
+export interface ActivityReaction {
+  id: string;
+  activity_id: string;
+  user_id: string;
+  reaction_type: 'like' | 'share';
+  created_at: string;
+}
+
+export interface ActivityReactionInsert {
+  activity_id: string;
+  user_id: string;
+  reaction_type: 'like' | 'share';
+}
+
+export interface ActivityReactionUpdate {
+  [key: string]: never;
+}
+
+export type ActivityCommentLike = PublicTables['activity_comment_likes']['Row'];
+
+export type ActivityCommentLikeInsert = PublicTables['activity_comment_likes']['Insert'];
+
+export type ActivityCommentLikeUpdate = PublicTables['activity_comment_likes']['Update'];
+
+export interface SocialNotification {
+  id: string;
+  user_id: string;
+  actor_id: string;
+  event_type:
+  | 'follow'
+  | 'post_like'
+  | 'post_comment'
+  | 'comment_reply'
+  | 'post_shared'
+  | 'challenge_invite'
+  | 'challenge_voted'
+  | 'report_status';
+  entity_type: 'activity' | 'comment' | 'challenge' | 'profile';
+  entity_id: string | null;
+  metadata: Record<string, any>;
+  read_at: string | null;
+  created_at: string;
+}
+
+export interface SocialNotificationInsert {
+  user_id: string;
+  actor_id: string;
+  event_type: SocialNotification['event_type'];
+  entity_type: SocialNotification['entity_type'];
+  entity_id?: string | null;
+  metadata?: Record<string, any>;
+  read_at?: string | null;
+}
+
+export interface SocialNotificationUpdate {
+  read_at?: string | null;
+}
+
+export interface ContentReport {
+  id: string;
+  reporter_id: string;
+  target_type: 'activity' | 'comment' | 'profile';
+  target_id: string;
+  reason: 'spam' | 'abuse' | 'sexual' | 'copyright' | 'other';
+  details: string | null;
+  status: 'open' | 'reviewed' | 'dismissed' | 'actioned';
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ContentReportInsert {
+  reporter_id: string;
+  target_type: 'activity' | 'comment' | 'profile';
+  target_id: string;
+  reason: 'spam' | 'abuse' | 'sexual' | 'copyright' | 'other';
+  details?: string | null;
+  status?: 'open' | 'reviewed' | 'dismissed' | 'actioned';
+}
+
+export interface ContentReportUpdate {
+  status?: 'open' | 'reviewed' | 'dismissed' | 'actioned';
+  details?: string | null;
 }
 
 // ==================== Style Challenges ====================
@@ -625,27 +665,11 @@ export interface StyleChallengeUpdate {
 
 // ==================== Outfit Ratings ====================
 
-export interface OutfitRatingRow {
-  id: string;
-  user_id: string;
-  outfit_id: string;
-  rating: number; // 1-5 stars
-  notes: string | null;
-  created_at: string;
-  updated_at: string;
-}
+export type OutfitRatingRow = PublicTables['outfit_ratings']['Row'];
 
-export interface OutfitRatingInsert {
-  user_id: string;
-  outfit_id: string;
-  rating: number;
-  notes?: string | null;
-}
+export type OutfitRatingInsert = PublicTables['outfit_ratings']['Insert'];
 
-export interface OutfitRatingUpdate {
-  rating?: number;
-  notes?: string | null;
-}
+export type OutfitRatingUpdate = PublicTables['outfit_ratings']['Update'];
 
 // ==================== Enhanced Types with Relations ====================
 

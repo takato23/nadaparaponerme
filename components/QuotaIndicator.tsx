@@ -125,7 +125,7 @@ export function QuotaIndicator({
             onClick={onUpgradeClick}
             className="mt-2 text-xs text-purple-600 dark:text-purple-400 hover:underline"
           >
-            Upgrade para más créditos →
+            Upgrade para más usos →
           </button>
         )}
       </div>
@@ -320,8 +320,8 @@ export function LimitReachedModal({
 
         {/* Description */}
         <p className="text-gray-500 dark:text-gray-400 mb-6">
-          Has usado todos tus créditos de IA este mes.
-          Hacé upgrade a <strong>{nextTier}</strong> para obtener {nextLimit} créditos.
+          Has usado todos tus usos de IA este mes.
+          Hacé upgrade a <strong>{nextTier}</strong> para obtener {nextLimit} usos.
         </p>
 
         {/* Buttons */}

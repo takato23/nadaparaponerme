@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence, useMotionValue, useTransform, PanInfo } from 'framer-motion';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { motion, AnimatePresence, PanInfo } from 'framer-motion';
 import type { ClothingItem } from '../../types';
+import { getImageUrl, PLACEHOLDERS } from '../../src/utils/imagePlaceholder';
 
 interface CoverFlowCarouselProps {
     items: ClothingItem[];
@@ -11,10 +12,23 @@ interface CoverFlowCarouselProps {
 export const CoverFlowCarousel = ({ items, onItemClick, initialIndex = 0 }: CoverFlowCarouselProps) => {
     const [activeIndex, setActiveIndex] = useState(initialIndex);
     const containerRef = useRef<HTMLDivElement>(null);
+    const touchStartXRef = useRef<number | null>(null);
+    const touchDeltaXRef = useRef(0);
+
+    useEffect(() => {
+        if (items.length === 0) {
+            setActiveIndex(0);
+            return;
+        }
+        if (activeIndex > items.length - 1) {
+            setActiveIndex(items.length - 1);
+        }
+    }, [activeIndex, items.length]);
 
     // Handle keyboard navigation
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
+            if (items.length === 0) return;
             if (e.key === 'ArrowLeft') {
                 setActiveIndex(prev => Math.max(0, prev - 1));
             } else if (e.key === 'ArrowRight') {
@@ -26,13 +40,37 @@ export const CoverFlowCarousel = ({ items, onItemClick, initialIndex = 0 }: Cove
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [items.length]);
 
-    const handleDragEnd = (event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
-        const threshold = 50;
-        if (info.offset.x > threshold) {
+    const handleDragEnd = (_event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
+        const threshold = 35;
+        const swipePower = Math.abs(info.offset.x) * Math.abs(info.velocity.x);
+        if (info.offset.x > threshold || (info.offset.x > 0 && swipePower > 450)) {
             setActiveIndex(prev => Math.max(0, prev - 1));
-        } else if (info.offset.x < -threshold) {
+        } else if (info.offset.x < -threshold || (info.offset.x < 0 && swipePower > 450)) {
             setActiveIndex(prev => Math.min(items.length - 1, prev + 1));
         }
+    };
+
+    const handleTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
+        touchStartXRef.current = event.touches[0]?.clientX ?? null;
+        touchDeltaXRef.current = 0;
+    };
+
+    const handleTouchMove = (event: React.TouchEvent<HTMLDivElement>) => {
+        if (touchStartXRef.current === null) return;
+        const currentX = event.touches[0]?.clientX ?? touchStartXRef.current;
+        touchDeltaXRef.current = currentX - touchStartXRef.current;
+    };
+
+    const handleTouchEnd = () => {
+        const threshold = 42;
+        if (touchDeltaXRef.current > threshold) {
+            setActiveIndex(prev => Math.max(0, prev - 1));
+        } else if (touchDeltaXRef.current < -threshold) {
+            setActiveIndex(prev => Math.min(items.length - 1, prev + 1));
+        }
+
+        touchStartXRef.current = null;
+        touchDeltaXRef.current = 0;
     };
 
     // Calculate visible range to optimize rendering
@@ -49,11 +87,23 @@ export const CoverFlowCarousel = ({ items, onItemClick, initialIndex = 0 }: Cove
         return () => window.removeEventListener('resize', checkMobile);
     }, []);
 
+    if (items.length === 0) {
+        return (
+            <div className="relative w-full h-full flex items-center justify-center">
+                <p className="text-sm text-text-secondary dark:text-gray-400">No hay prendas para mostrar en carrusel.</p>
+            </div>
+        );
+    }
+
     return (
         <div
             ref={containerRef}
             className="relative w-full h-full flex items-center justify-center overflow-hidden perspective-1000"
             style={{ perspective: '1000px' }}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            onTouchCancel={handleTouchEnd}
         >
             {/* Glass Background */}
             <div className="absolute inset-0 backdrop-blur-md bg-white/5 dark:bg-black/20 pointer-events-none" />
@@ -65,7 +115,7 @@ export const CoverFlowCarousel = ({ items, onItemClick, initialIndex = 0 }: Cove
                 dragConstraints={{ left: 0, right: 0 }}
                 dragElastic={0.2}
                 onDragEnd={handleDragEnd}
-                style={{ touchAction: 'pan-y' }} // Allow vertical scrolling
+                style={{ touchAction: 'none' }}
             />
 
             <div className="relative w-full max-w-4xl h-[50vh] sm:h-[60vh] flex items-center justify-center preserve-3d pointer-events-none">
@@ -149,13 +199,15 @@ interface CarouselItemProps {
 }
 
 const CarouselItem = ({ item, offset, isActive, onClick, isMobile }: CarouselItemProps) => {
+    const imageUrl = useMemo(() => getImageUrl(item as any, false), [item]);
     // 3D Transform calculations tuned for mobile/desktop
-    const spacing = isMobile ? 45 : 55; // Tighter spacing on mobile
+    const spacing = isMobile ? 52 : 62;
     const x = offset * spacing;
-    const z = Math.abs(offset) * (isMobile ? -150 : -250); // Less depth on mobile to keep items visible
-    const rotateY = offset * (isMobile ? -25 : -35); // Less rotation on mobile
-    const scale = isActive ? (isMobile ? 1.05 : 1.1) : (isMobile ? 0.9 : 0.85);
-    const opacity = Math.max(0, 1 - Math.abs(offset) * 0.3);
+    const z = Math.abs(offset) * (isMobile ? -180 : -290);
+    const rotateY = offset * (isMobile ? -34 : -42);
+    const rotateZ = isActive ? 0 : offset * (isMobile ? 1.5 : 2);
+    const scale = isActive ? (isMobile ? 1.06 : 1.12) : (isMobile ? 0.86 : 0.8);
+    const opacity = Math.max(0.28, 1 - Math.abs(offset) * 0.26);
     const zIndex = 100 - Math.abs(offset);
 
     return (
@@ -171,6 +223,7 @@ const CarouselItem = ({ item, offset, isActive, onClick, isMobile }: CarouselIte
                 x: `calc(-50% + ${x}%)`,
                 z,
                 rotateY,
+                rotateZ,
                 scale,
                 opacity,
             }}
@@ -193,10 +246,13 @@ const CarouselItem = ({ item, offset, isActive, onClick, isMobile }: CarouselIte
                 <div className="w-full h-full relative flex items-center justify-center p-4 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900">
                     {/* Image */}
                     <img
-                        src={item.imageDataUrl}
+                        src={imageUrl}
                         alt={item.metadata?.subcategory || 'Prenda'}
                         className="w-full h-full object-contain drop-shadow-xl"
                         draggable={false}
+                        onError={(event) => {
+                            event.currentTarget.src = PLACEHOLDERS.error;
+                        }}
                     />
                 </div>
             </div>
@@ -211,9 +267,12 @@ const CarouselItem = ({ item, offset, isActive, onClick, isMobile }: CarouselIte
                 }}
             >
                 <img
-                    src={item.imageDataUrl}
+                    src={imageUrl}
                     alt=""
                     className="w-full h-full object-contain blur-[2px]"
+                    onError={(event) => {
+                        event.currentTarget.src = PLACEHOLDERS.error;
+                    }}
                 />
             </div>
         </motion.div>

@@ -5,6 +5,8 @@
 
 import { supabase } from '../lib/supabase';
 
+const SUPABASE_FUNCTIONS_BASE_URL = String(import.meta.env.VITE_SUPABASE_URL || '').trim().replace(/\/+$/, '');
+
 export interface GenerateImageRequest {
   prompt: string;
   model_type?: 'flash' | 'pro';
@@ -60,7 +62,7 @@ export async function generateFashionImage(
     }
 
     const response = await fetch(
-      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-fashion-image`,
+      `${SUPABASE_FUNCTIONS_BASE_URL}/functions/v1/generate-fashion-image`,
       {
         method: 'POST',
         headers: {

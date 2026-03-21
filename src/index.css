@@ -32,7 +32,6 @@
   /* Optimize touch scrolling on iOS */
   body {
     -webkit-overflow-scrolling: touch;
-    overscroll-behavior: none;
     overflow-y: auto;
     /* Only show scrollbar when needed */
     overflow-x: hidden;
@@ -107,32 +106,59 @@
   /* Glass morphism with better performance */
   .liquid-glass {
     @apply relative overflow-hidden;
-
-    /* Dynamic Glass Effect */
-    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
-    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
-
-    /* Dynamic Background & Radius */
-    background-color: rgba(255, 255, 255, var(--glass-opacity));
+    background:
+      linear-gradient(135deg, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0.04) 50%, rgba(255, 255, 255, 0.08) 100%);
+    backdrop-filter: blur(22px) saturate(165%);
+    -webkit-backdrop-filter: blur(22px) saturate(165%);
     border-radius: var(--glass-radius);
-
-    @apply border border-white/50 dark:border-white/10;
-    box-shadow: inset 0 2px 3px rgba(255, 255, 255, 0.7), inset 0 -3px 4px rgba(0, 0, 0, 0.15), 0 10px 30px rgba(0, 0, 0, 0.1);
+    @apply border border-white/20 dark:border-white/10;
+    box-shadow:
+      inset 0 1px 1px 0 rgba(255, 255, 255, 0.15),
+      inset 0 -10px 20px -10px rgba(255, 255, 255, 0.05),
+      0 20px 40px -20px rgba(0, 0, 0, 0.24);
     will-change: transform;
     transform: translateZ(0);
-    transition: border-radius 0.3s ease, background-color 0.3s ease, backdrop-filter 0.3s ease;
+    transition: border-radius 0.3s ease, background 0.3s ease, backdrop-filter 0.3s ease, box-shadow 0.3s ease;
   }
 
   .liquid-glass::before {
     content: '';
-    @apply absolute top-0 left-0 w-[150%] h-[80%] pointer-events-none z-[2];
-    background: radial-gradient(ellipse at 50% 0%, rgba(255, 255, 255, 0.5) 0%, rgba(255, 255, 255, 0) 50%);
-    transform: translateY(-50%) translateX(-15%) rotate(-20deg);
+    @apply absolute top-0 left-0 w-[160%] h-[82%] pointer-events-none z-[2];
+    background: radial-gradient(ellipse at 50% 0%, rgba(255, 255, 255, 0.46) 0%, rgba(255, 255, 255, 0) 54%);
+    transform: translateY(-50%) translateX(-18%) rotate(-20deg);
   }
 
   .dark .liquid-glass {
-    background-color: rgba(15, 23, 42, var(--glass-opacity));
-    box-shadow: inset 0 2px 3px rgba(255, 255, 255, 0.15), inset 0 -3px 4px rgba(0, 0, 0, 0.35), 0 10px 30px rgba(0, 0, 0, 0.3);
+    background:
+      linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.02) 48%, rgba(255, 255, 255, 0.05) 100%);
+    box-shadow:
+      inset 0 2px 4px 0 rgba(255, 255, 255, 0.12),
+      inset 0 -8px 18px rgba(0, 0, 0, 0.18),
+      0 24px 48px -24px rgba(0, 0, 0, 0.36);
+  }
+
+  .liquid-glass-intense {
+    @apply relative overflow-hidden;
+    background: linear-gradient(135deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.02) 52%, rgba(255,255,255,0.06) 100%);
+    backdrop-filter: blur(36px) saturate(190%);
+    -webkit-backdrop-filter: blur(36px) saturate(190%);
+    border-radius: calc(var(--glass-radius) + 4px);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    box-shadow:
+      inset 0 2px 4px 0 rgba(255, 255, 255, 0.2),
+      inset 0 -5px 15px rgba(0,0,0,0.08),
+      0 30px 60px -30px rgba(0, 0, 0, 0.34);
+  }
+
+  .dark .liquid-glass-intense {
+    background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.02) 52%, rgba(255,255,255,0.05) 100%);
+    border-color: rgba(255, 255, 255, 0.12);
+  }
+
+  .chromatic-text {
+    text-shadow:
+      -1px 0px 2px rgba(0, 255, 255, 0.32),
+      1px 0px 2px rgba(255, 0, 255, 0.28);
   }
 
   /* Smooth fade in animation */
@@ -699,21 +725,6 @@ html.theme-transitioning * {
   }
 }
 
-/* Hide scrollbar but keep scroll functionality - Cross-browser */
-/* For Firefox */
-html,
-body {
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-
-/* For Chrome, Safari, and Edge */
-html::-webkit-scrollbar,
-body::-webkit-scrollbar {
-  display: none;
-  width: 0;
-  height: 0;
-}
 
 /* Custom scrollbar for elements with overflow (modals, etc.) */
 .custom-scrollbar::-webkit-scrollbar {

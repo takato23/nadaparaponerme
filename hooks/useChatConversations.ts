@@ -1,17 +1,40 @@
-import { useState, useCallback } from 'react';
-import useLocalStorage from './useLocalStorage';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import type { ChatConversation, ChatMessage } from '../types';
+import {
+  loadPersistedChatConversations,
+  persistChatConversations,
+} from '../src/services/chatConversationStorage';
 
 /**
  * Hook for managing chat conversations
  * Extracts chat logic from App.tsx for better separation of concerns
  */
 export function useChatConversations() {
-  const [conversations, setConversations] = useLocalStorage<ChatConversation[]>(
-    'ojodeloca-chat-conversations',
-    []
-  );
+  const [conversations, setConversations] = useState<ChatConversation[]>([]);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
+  const hasHydratedRef = useRef(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void (async () => {
+      const storedConversations = await loadPersistedChatConversations();
+      if (cancelled) return;
+
+      setConversations((current) => current.length > 0 ? current : storedConversations);
+      setCurrentConversationId((current) => current ?? storedConversations[0]?.id ?? null);
+      hasHydratedRef.current = true;
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!hasHydratedRef.current && conversations.length === 0) return;
+    void persistChatConversations(conversations);
+  }, [conversations]);
 
   // Create a new conversation with welcome message
   const createConversation = useCallback(() => {

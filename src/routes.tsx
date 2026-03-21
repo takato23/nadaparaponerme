@@ -8,11 +8,19 @@ export const ROUTES = {
   // Main views
   HOME: '/',
   CLOSET: '/armario',
-  COMMUNITY: '/amigos',
+  PLANNER: '/planificador',
+  COMMUNITY: '/comunidad',
+  COMMUNITY_LEGACY: '/amigos',
   SAVED: '/guardados',
   STYLIST: '/estilista',
+  KUMBI: '/kumbi',
   PROFILE: '/perfil',
   ONBOARDING_STYLIST: '/stylist-onboarding',
+  ONBOARDING_LAB: '/onboarding-lab',
+  ONBOARDING_MOCK: '/onboarding-mock',
+  ENTRY_MOCK: '/entry-mock',
+  ENTRY_EYE_MOCK: '/entry-eye-mock',
+  DASHBOARD_MOCKUP: '/dashboard-mockup',
 
   // Feature views
   VIRTUAL_TRY_ON: '/prueba-virtual',
@@ -38,6 +46,7 @@ export const ROUTES = {
   PRICING: '/pricing',
   PLANES: '/planes',
   PAY: '/pay',
+  BETA_INVITE: '/invitacion',
 
 } as const;
 

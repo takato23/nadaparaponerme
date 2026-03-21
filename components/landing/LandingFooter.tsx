@@ -27,13 +27,13 @@ export default function LandingFooter() {
                 <div className="flex flex-wrap justify-center gap-8">
                     <div className="flex flex-col gap-3 items-center md:items-start text-sm">
                         <h4 className={`font-bold mb-1 ${isDark ? 'text-white' : 'text-slate-800'}`}>Producto</h4>
-                        <a href="#funcionalidades" className={`hover:text-primary transition-colors ${isDark ? 'text-gray-500' : 'text-slate-500'}`}>Características</a>
+                        <a href={`${ROUTES.HOME}?entry=preview`} className={`hover:text-primary transition-colors ${isDark ? 'text-gray-500' : 'text-slate-500'}`}>Características</a>
                         <a href={ROUTES.PRICING} className={`hover:text-primary transition-colors ${isDark ? 'text-gray-500' : 'text-slate-500'}`}>Precio</a>
-                        <a href={ROUTES.ONBOARDING_STYLIST} className={`hover:text-primary transition-colors ${isDark ? 'text-gray-500' : 'text-slate-500'}`}>IA Stylist</a>
+                        <a href={`${ROUTES.HOME}?entry=preview`} className={`hover:text-primary transition-colors ${isDark ? 'text-gray-500' : 'text-slate-500'}`}>Kumbi</a>
                     </div>
                     <div className="flex flex-col gap-3 items-center md:items-start text-sm">
                         <h4 className={`font-bold mb-1 ${isDark ? 'text-white' : 'text-slate-800'}`}>Compañía</h4>
-                        <a href="#hero" className={`hover:text-primary transition-colors ${isDark ? 'text-gray-500' : 'text-slate-500'}`}>Sobre nosotros</a>
+                        <a href={ROUTES.HOME} className={`hover:text-primary transition-colors ${isDark ? 'text-gray-500' : 'text-slate-500'}`}>Sobre nosotros</a>
                         <a href="mailto:hola@ojodeloca.app" className={`hover:text-primary transition-colors ${isDark ? 'text-gray-500' : 'text-slate-500'}`}>Contacto</a>
                         <a href="https://instagram.com/santiagobalosky" target="_blank" rel="noopener noreferrer" className={`hover:text-primary transition-colors ${isDark ? 'text-gray-500' : 'text-slate-500'}`}>Blog</a>
                     </div>

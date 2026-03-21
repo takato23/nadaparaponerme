@@ -7,7 +7,26 @@
  * Includes subscription limits enforcement for AI generations.
  */
 
-import type { ClothingItem, ClothingItemMetadata, FitResult, PackingListResult, GenerationPreset } from '../../types';
+import type {
+  ChatAttachment,
+  ProblemItemSuggestionPath,
+  ChatReferencedItem,
+  ChatUIAction,
+  ClothingItem,
+  ClothingItemMetadata,
+  DetectedLookGarmentsPayload,
+  SeparateLookGarmentsResult,
+  FitResult,
+  GenerationPreset,
+  LookAnalysisResult,
+  PackingListResult,
+  ProfessionalProfile,
+  StylistContextPayload,
+  StylistSurface,
+  StylistRecommendedItemCandidate,
+  StructuredOutfitSuggestion,
+  StylistShoppingSuggestion,
+} from '../../types';
 import { getFeatureFlag } from '../config/features';
 import { V1_SAFE_MODE } from '../config/runtime';
 import * as edgeClient from './edgeFunctionClient';
@@ -107,6 +126,30 @@ export async function analyzeBatchClothingItems(
   return await geminiService.analyzeBatchClothingItems(imageDataUrls);
 }
 
+export async function analyzeLooksFromPhotos(
+  imageDataUrls: string[]
+): Promise<LookAnalysisResult> {
+  const useSupabaseAI = getFeatureFlag('useSupabaseAI');
+
+  if (useSupabaseAI) {
+    return await edgeClient.analyzeLooksViaEdge(imageDataUrls);
+  }
+
+  return await geminiServiceFull.analyzeLooksFromPhotos(imageDataUrls);
+}
+
+export async function separateLookGarments(
+  imageDataUrl: string,
+): Promise<SeparateLookGarmentsResult> {
+  const useSupabaseAI = getFeatureFlag('useSupabaseAI');
+
+  if (useSupabaseAI) {
+    return await edgeClient.separateLookGarmentsViaEdge(imageDataUrl);
+  }
+
+  throw new Error('La separación de prendas necesita la capa segura del servidor.');
+}
+
 /**
  * Generate an outfit
  *
@@ -121,7 +164,7 @@ export async function generateOutfit(
   const canGenerate = await canGenerateOutfit();
 
   if (!canGenerate.allowed) {
-    throw new Error(canGenerate.reason || 'Has alcanzado tu límite de créditos. Upgradeá tu plan para continuar.');
+    throw new Error(canGenerate.reason || 'Has alcanzado tu límite de usos IA. Upgradeá tu plan para continuar.');
   }
 
   // 🛡️ Safe Mode
@@ -144,12 +187,11 @@ export async function generateOutfit(
 
   // ✅ STEP 2: Generate outfit (with retry)
   const useSupabaseAI = getFeatureFlag('useSupabaseAI');
-  let result: FitResult;
   const idempotencyKey = buildIdempotencyKey('mix');
 
   await prepareClosetIfNeeded('mix', prompt, closet);
 
-  result = await retryAIOperation(async () => {
+  const result = await retryAIOperation(async () => {
     if (useSupabaseAI) {
       // Extract IDs for Edge Function
       const closetItemIds = closet.map(item => item.id);
@@ -177,7 +219,7 @@ export async function generatePackingList(
   const canGenerate = await canGenerateOutfit();
 
   if (!canGenerate.allowed) {
-    throw new Error(canGenerate.reason || 'Has alcanzado tu límite de créditos. Upgradeá tu plan para continuar.');
+    throw new Error(canGenerate.reason || 'Has alcanzado tu límite de usos IA. Upgradeá tu plan para continuar.');
   }
 
   // 🛡️ Safe Mode
@@ -195,9 +237,7 @@ export async function generatePackingList(
 
   // ✅ STEP 2: Generate packing list (with retry)
   const useSupabaseAI = getFeatureFlag('useSupabaseAI');
-  let result: PackingListResult;
-
-  result = await retryAIOperation(async () => {
+  const result = await retryAIOperation(async () => {
     if (useSupabaseAI) {
       // Extract IDs for Edge Function
       const closetItemIds = closet.map(item => item.id);
@@ -349,7 +389,17 @@ export async function generateOutfitWithCustomPrompt(...args: Parameters<typeof 
   if (V1_SAFE_MODE) {
     throw new Error('Stylist profesional no disponible en Safe Mode.');
   }
-  if (getFeatureFlag('useSupabaseAI')) return assertFeatureAvailable('Stylist profesional');
+
+  if (getFeatureFlag('useSupabaseAI')) {
+    const [userPrompt, inventory, customSystemPrompt, responseSchema] = args;
+    const closetItemIds = inventory.map(item => item.id);
+    return await edgeClient.generateOutfitViaEdge(userPrompt, closetItemIds, {
+      idempotencyKey: buildIdempotencyKey('pro-mix'),
+      systemPrompt: customSystemPrompt,
+      responseSchema,
+    });
+  }
+
   return await geminiServiceFull.generateOutfitWithCustomPrompt(...args);
 }
 
@@ -463,14 +513,20 @@ export async function searchShoppingSuggestions(...args: Parameters<typeof gemin
 // Search Products for Specific Item
 export async function searchProductsForItem(...args: Parameters<typeof geminiServiceFull.searchProductsForItem>) {
   if (V1_SAFE_MODE) return [];
-  if (getFeatureFlag('useSupabaseAI')) return assertFeatureAvailable('Búsqueda de productos');
+  if (getFeatureFlag('useSupabaseAI')) {
+    const [itemDescription, category] = args;
+    return await edgeClient.searchProductsForItemViaEdge(itemDescription, category);
+  }
   return await geminiServiceFull.searchProductsForItem(...args);
 }
 
 // Search Products from Image
 export async function searchProductsFromImage(...args: Parameters<typeof geminiServiceFull.searchProductsFromImage>) {
   if (V1_SAFE_MODE) return { description: '', category: '', links: [] };
-  if (getFeatureFlag('useSupabaseAI')) return assertFeatureAvailable('Búsqueda de productos por imagen');
+  if (getFeatureFlag('useSupabaseAI')) {
+    const [imageDataUrl] = args;
+    return await edgeClient.searchProductsByImageViaEdge(imageDataUrl);
+  }
   return await geminiServiceFull.searchProductsFromImage(...args);
 }
 
@@ -494,7 +550,7 @@ export async function analyzeColorPalette(...args: Parameters<typeof geminiServi
 
 // Chat Services
 export async function chatWithFashionAssistant(...args: Parameters<typeof geminiServiceFull.chatWithFashionAssistant>) {
-  if (V1_SAFE_MODE) return { role: 'assistant', content: 'Safe Mode enabled.' };
+  if (V1_SAFE_MODE) return 'Safe Mode enabled.';
   const useSupabaseAI = getFeatureFlag('useSupabaseAI');
 
   if (useSupabaseAI) {
@@ -518,23 +574,20 @@ export async function chatWithFashionAssistant(...args: Parameters<typeof gemini
 
     await prepareClosetIfNeeded('chat', userMessage, inventory);
 
-    // Add timeout to prevent hanging indefinitely
-    const timeoutPromise = new Promise((resolve) =>
-      setTimeout(() => resolve({ content: "¡Ups! Mi cerebro de fashionista se fue de shopping 🛍️. Probá de nuevo en un ratito 💅" }), 25000)
-    );
-
     try {
-      const response: any = await Promise.race([
-        edgeClient.chatWithStylistViaEdge(userMessage, chatHistoryForEdge, closetContext, {
-          responseMode: 'text',
-          surface: 'closet',
-          idempotencyKey,
-        }),
-        timeoutPromise
-      ]);
+      const response = await edgeClient.chatWithStylistViaEdge(userMessage, chatHistoryForEdge, closetContext, {
+        responseMode: 'text',
+        surface: 'closet',
+        idempotencyKey,
+        timeoutMs: 25000,
+      });
       return response.content;
     } catch (error) {
       console.error('Error in chatWithFashionAssistant via Edge:', error);
+      const rawMessage = error instanceof Error ? error.message : String(error);
+      if (rawMessage.toLowerCase().includes('timed out')) {
+        return '¡Ups! Mi cerebro de fashionista se fue de shopping. Probá de nuevo en un ratito.';
+      }
       throw error;
     }
   }
@@ -597,18 +650,30 @@ export async function chatWithStudioStylist(
   message: string,
   inventory: ClothingItem[],
   chatHistory: Array<{ role: 'user' | 'assistant'; content: string }>,
-  options: { threadId?: string | null; surface?: 'studio' | 'closet' } = {}
+  options: {
+    attachments?: ChatAttachment[];
+    threadId?: string | null;
+    surface?: StylistSurface;
+    profileContext?: ProfessionalProfile | null;
+    savedLookContext?: import('../../types').SavedLookContext[];
+    selectedLookContext?: import('../../types').SavedLookContext | null;
+    contextPayload?: StylistContextPayload | null;
+    recommendationContext?: {
+      explicit: boolean;
+      excludeItemIds?: string[];
+    };
+  } = {}
 ): Promise<{
   role: 'assistant';
   content: string;
-  outfitSuggestion?: {
-    top_id: string;
-    bottom_id: string;
-    shoes_id: string;
-    explanation: string;
-    confidence?: number;
-    missing_piece_suggestion?: { item_name: string; reason: string };
-  } | null;
+  outfitSuggestion?: StructuredOutfitSuggestion | null;
+  detectedLookGarments?: DetectedLookGarmentsPayload | null;
+  problemItemSuggestions?: ProblemItemSuggestionPath[];
+  billing?: import('../../types').ChatBilling;
+  shoppingSuggestions?: StylistShoppingSuggestion[];
+  uiActions?: ChatUIAction[];
+  referencedItems?: ChatReferencedItem[];
+  recommendedItemCandidate?: StylistRecommendedItemCandidate | null;
   threadId?: string | null;
   model: string;
 }> {
@@ -617,6 +682,13 @@ export async function chatWithStudioStylist(
       role: 'assistant',
       content: 'Safe Mode enabled.',
       outfitSuggestion: null,
+      detectedLookGarments: null,
+      problemItemSuggestions: [],
+      billing: {
+        charged: false,
+        credits_used: 0,
+        reason: 'free_chat',
+      },
       threadId: options.threadId || null,
       model: 'safe-mode',
     };
@@ -637,10 +709,16 @@ export async function chatWithStudioStylist(
 
   if (useSupabaseAI) {
     return edgeClient.chatWithStylistViaEdge(message, chatHistoryForEdge, closetContext, {
+      attachments: options.attachments || undefined,
       responseMode: 'structured',
       surface: options.surface || 'studio',
       threadId: options.threadId || null,
       idempotencyKey,
+      profileContext: options.profileContext || undefined,
+      savedLookContext: options.savedLookContext || undefined,
+      selectedLookContext: options.selectedLookContext || undefined,
+      contextPayload: options.contextPayload || undefined,
+      recommendationContext: options.recommendationContext || undefined,
     });
   }
 
@@ -655,13 +733,21 @@ export async function chatWithStudioStylist(
     role: 'assistant',
     content,
     outfitSuggestion: outfitSuggestion
-      ? {
-        ...outfitSuggestion,
-        explanation: 'Sugerencia parseada desde respuesta legacy.',
-      }
+      ? { ...outfitSuggestion }
       : null,
+    detectedLookGarments: null,
+    problemItemSuggestions: [],
+    billing: {
+      charged: false,
+      credits_used: 0,
+      reason: 'free_chat',
+    },
+    shoppingSuggestions: [],
+    uiActions: [],
+    referencedItems: [],
+    recommendedItemCandidate: null,
     threadId: options.threadId || null,
-    model: 'gemini-2.5-flash',
+    model: 'gemini-3.1-flash-lite-preview',
   };
 }
 

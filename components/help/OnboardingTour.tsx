@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { onboardingTourSteps, type OnboardingStep } from '../../data/helpContent';
 
 interface OnboardingTourProps {
@@ -7,6 +7,80 @@ interface OnboardingTourProps {
   onSkip: () => void;
   onAction?: (handler: string) => void;
 }
+
+const TOUR_VIEWPORT_PADDING = 12;
+const TOUR_TOOLTIP_GAP = 14;
+const TOUR_TOOLTIP_MAX_WIDTH = 380;
+const TOUR_TOOLTIP_ESTIMATED_HEIGHT = 300;
+
+const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
+
+const buildTooltipStyle = (
+  highlightRect: DOMRect | null,
+  position: OnboardingStep['position']
+): React.CSSProperties => {
+  if (typeof window === 'undefined') {
+    return {
+      position: 'fixed',
+      top: '50%',
+      left: '50%',
+      transform: 'translate(-50%, -50%)',
+    };
+  }
+
+  const tooltipWidth = Math.min(TOUR_TOOLTIP_MAX_WIDTH, window.innerWidth - TOUR_VIEWPORT_PADDING * 2);
+
+  if (!highlightRect || position === 'center') {
+    return {
+      position: 'fixed',
+      width: `${tooltipWidth}px`,
+      maxWidth: `calc(100vw - ${TOUR_VIEWPORT_PADDING * 2}px)`,
+      top: '50%',
+      left: '50%',
+      transform: 'translate(-50%, -50%)',
+    };
+  }
+
+  const minLeft = TOUR_VIEWPORT_PADDING;
+  const maxLeft = Math.max(minLeft, window.innerWidth - tooltipWidth - TOUR_VIEWPORT_PADDING);
+  const minTop = TOUR_VIEWPORT_PADDING;
+  const maxTop = Math.max(minTop, window.innerHeight - TOUR_TOOLTIP_ESTIMATED_HEIGHT - TOUR_VIEWPORT_PADDING);
+
+  let left = highlightRect.left + highlightRect.width / 2 - tooltipWidth / 2;
+  let top = highlightRect.bottom + TOUR_TOOLTIP_GAP;
+
+  if (position === 'top') {
+    top = highlightRect.top - TOUR_TOOLTIP_ESTIMATED_HEIGHT - TOUR_TOOLTIP_GAP;
+  }
+  if (position === 'left') {
+    left = highlightRect.left - tooltipWidth - TOUR_TOOLTIP_GAP;
+    top = highlightRect.top + highlightRect.height / 2 - TOUR_TOOLTIP_ESTIMATED_HEIGHT / 2;
+  }
+  if (position === 'right') {
+    left = highlightRect.right + TOUR_TOOLTIP_GAP;
+    top = highlightRect.top + highlightRect.height / 2 - TOUR_TOOLTIP_ESTIMATED_HEIGHT / 2;
+  }
+
+  if (position === 'top' && top < minTop) {
+    top = highlightRect.bottom + TOUR_TOOLTIP_GAP;
+  } else if (position === 'bottom' && top > maxTop) {
+    top = highlightRect.top - TOUR_TOOLTIP_ESTIMATED_HEIGHT - TOUR_TOOLTIP_GAP;
+  }
+
+  if (position === 'left' && left < minLeft) {
+    left = highlightRect.right + TOUR_TOOLTIP_GAP;
+  } else if (position === 'right' && left > maxLeft) {
+    left = highlightRect.left - tooltipWidth - TOUR_TOOLTIP_GAP;
+  }
+
+  return {
+    position: 'fixed',
+    width: `${tooltipWidth}px`,
+    maxWidth: `calc(100vw - ${TOUR_VIEWPORT_PADDING * 2}px)`,
+    left: `${clamp(left, minLeft, maxLeft)}px`,
+    top: `${clamp(top, minTop, maxTop)}px`,
+  };
+};
 
 const OnboardingTour: React.FC<OnboardingTourProps> = ({
   isOpen,
@@ -21,6 +95,10 @@ const OnboardingTour: React.FC<OnboardingTourProps> = ({
   const step = onboardingTourSteps[currentStep];
   const isLastStep = currentStep === onboardingTourSteps.length - 1;
   const progress = ((currentStep + 1) / onboardingTourSteps.length) * 100;
+  const tooltipStyle = useMemo(
+    () => buildTooltipStyle(highlightRect, step.position),
+    [highlightRect, step.position]
+  );
 
   // Update highlight position when step changes
   useEffect(() => {
@@ -29,30 +107,85 @@ const OnboardingTour: React.FC<OnboardingTourProps> = ({
       return;
     }
 
+    let frameId: number | null = null;
+    let scrollTimeoutId: number | null = null;
+    let retryTimeoutId: number | null = null;
+    let animationTimeoutId: number | null = null;
+    let resizeObserver: ResizeObserver | null = null;
+
+    const resolveTarget = () => document.querySelector<HTMLElement>(step.targetSelector!);
+
     const updateHighlight = () => {
-      const element = document.querySelector(step.targetSelector!);
-      if (element) {
-        const rect = element.getBoundingClientRect();
+      const element = resolveTarget();
+      if (!element) {
+        setHighlightRect(null);
+        return;
+      }
+      setHighlightRect(element.getBoundingClientRect());
+    };
+
+    const syncTarget = () => {
+      const element = resolveTarget();
+      if (!element) {
+        setHighlightRect(null);
+        return;
+      }
+
+      const rect = element.getBoundingClientRect();
+      const viewportPadding = 24;
+      const isOutsideViewport = rect.top < viewportPadding || rect.bottom > window.innerHeight - viewportPadding;
+
+      if (isOutsideViewport) {
+        element.scrollIntoView({
+          behavior: 'smooth',
+          block: step.position === 'top' ? 'end' : 'center',
+          inline: 'nearest',
+        });
+        scrollTimeoutId = window.setTimeout(() => {
+          frameId = window.requestAnimationFrame(updateHighlight);
+        }, 220);
+      } else {
         setHighlightRect(rect);
-        // Scroll element into view if needed
-        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+
+      if ('ResizeObserver' in window) {
+        resizeObserver = new ResizeObserver(updateHighlight);
+        resizeObserver.observe(element);
       }
     };
 
-    // Small delay for smooth transition
-    setIsAnimating(true);
-    const timeout = setTimeout(() => {
-      updateHighlight();
-      setIsAnimating(false);
-    }, 300);
-
-    // Update on resize
-    window.addEventListener('resize', updateHighlight);
-    return () => {
-      clearTimeout(timeout);
-      window.removeEventListener('resize', updateHighlight);
+    const handleViewportChange = () => {
+      if (frameId !== null) {
+        window.cancelAnimationFrame(frameId);
+      }
+      frameId = window.requestAnimationFrame(updateHighlight);
     };
-  }, [isOpen, currentStep, step?.targetSelector]);
+
+    setIsAnimating(true);
+    syncTarget();
+    retryTimeoutId = window.setTimeout(updateHighlight, 250);
+    window.addEventListener('resize', handleViewportChange);
+    window.addEventListener('scroll', handleViewportChange, true);
+    animationTimeoutId = window.setTimeout(() => setIsAnimating(false), 280);
+
+    return () => {
+      if (frameId !== null) {
+        window.cancelAnimationFrame(frameId);
+      }
+      if (scrollTimeoutId !== null) {
+        window.clearTimeout(scrollTimeoutId);
+      }
+      if (retryTimeoutId !== null) {
+        window.clearTimeout(retryTimeoutId);
+      }
+      if (animationTimeoutId !== null) {
+        window.clearTimeout(animationTimeoutId);
+      }
+      resizeObserver?.disconnect();
+      window.removeEventListener('resize', handleViewportChange);
+      window.removeEventListener('scroll', handleViewportChange, true);
+    };
+  }, [isOpen, currentStep, step?.targetSelector, step?.position]);
 
   const handleNext = useCallback(() => {
     if (isLastStep) {
@@ -98,45 +231,6 @@ const OnboardingTour: React.FC<OnboardingTourProps> = ({
 
   if (!isOpen) return null;
 
-  // Calculate tooltip position based on step.position and highlightRect
-  const getTooltipStyle = (): React.CSSProperties => {
-    if (!highlightRect || step.position === 'center') {
-      return {
-        position: 'fixed',
-        top: '50%',
-        left: '50%',
-        transform: 'translate(-50%, -50%)'
-      };
-    }
-
-    const padding = 16;
-    const tooltipWidth = 360;
-    const tooltipHeight = 280;
-
-    const style: React.CSSProperties = { position: 'fixed' };
-
-    switch (step.position) {
-      case 'top':
-        style.bottom = `${window.innerHeight - highlightRect.top + padding}px`;
-        style.left = `${Math.min(Math.max(highlightRect.left + highlightRect.width / 2 - tooltipWidth / 2, padding), window.innerWidth - tooltipWidth - padding)}px`;
-        break;
-      case 'bottom':
-        style.top = `${highlightRect.bottom + padding}px`;
-        style.left = `${Math.min(Math.max(highlightRect.left + highlightRect.width / 2 - tooltipWidth / 2, padding), window.innerWidth - tooltipWidth - padding)}px`;
-        break;
-      case 'left':
-        style.right = `${window.innerWidth - highlightRect.left + padding}px`;
-        style.top = `${Math.min(Math.max(highlightRect.top + highlightRect.height / 2 - tooltipHeight / 2, padding), window.innerHeight - tooltipHeight - padding)}px`;
-        break;
-      case 'right':
-        style.left = `${highlightRect.right + padding}px`;
-        style.top = `${Math.min(Math.max(highlightRect.top + highlightRect.height / 2 - tooltipHeight / 2, padding), window.innerHeight - tooltipHeight - padding)}px`;
-        break;
-    }
-
-    return style;
-  };
-
   return (
     <div className="fixed inset-0 z-[200]">
       {/* Backdrop with spotlight */}
@@ -158,11 +252,11 @@ const OnboardingTour: React.FC<OnboardingTourProps> = ({
       {/* Tooltip Card */}
       <div
         className={`
-          w-[360px] max-w-[calc(100vw-32px)] bg-white dark:bg-slate-900 rounded-3xl shadow-2xl overflow-hidden
+          bg-white dark:bg-slate-900 rounded-3xl shadow-2xl overflow-hidden
           transition-all duration-300 ease-out
           ${isAnimating ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}
         `}
-        style={getTooltipStyle()}
+        style={tooltipStyle}
       >
         {/* Progress bar */}
         <div className="h-1 bg-gray-200 dark:bg-slate-700">

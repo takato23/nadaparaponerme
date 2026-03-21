@@ -58,13 +58,16 @@ const OutfitRatingView: React.FC<OutfitRatingViewProps> = ({ closet, savedOutfit
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-fade-in">
-      <div className="relative w-full max-w-lg h-[90vh] flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-3 sm:p-4 animate-fade-in">
+      <div
+        className="relative w-full max-w-lg flex flex-col"
+        style={{ height: 'min(92dvh, 48rem)' }}
+      >
 
         {/* Header */}
-        <div className="flex justify-between items-center mb-6">
+        <div className="flex justify-between items-center mb-4 sm:mb-6">
           <div>
-            <h2 className="text-2xl font-bold text-white">Califica Outfits</h2>
+            <h2 className="text-xl sm:text-2xl font-bold text-white">Califica Outfits</h2>
             <p className="text-gray-400 text-sm">{cards.length} pendientes</p>
           </div>
           <button
@@ -76,8 +79,11 @@ const OutfitRatingView: React.FC<OutfitRatingViewProps> = ({ closet, savedOutfit
         </div>
 
         {/* Card Stack */}
-        <div className="relative flex-grow flex items-center justify-center">
-          <div className="relative w-full max-w-sm h-[600px]">
+        <div className="relative flex-grow flex items-center justify-center min-h-0">
+          <div
+            className="relative w-full max-w-sm"
+            style={{ height: 'min(66dvh, 36rem)' }}
+          >
             <AnimatePresence>
               {cards.map((card, index) => (
                 <SwipeCard
@@ -108,24 +114,24 @@ const OutfitRatingView: React.FC<OutfitRatingViewProps> = ({ closet, savedOutfit
 
         {/* Controls */}
         {cards.length > 0 && (
-          <div className="flex justify-center gap-6 mt-8">
+          <div className="flex justify-center gap-4 sm:gap-6 mt-5 sm:mt-8 pb-[max(0.25rem,env(safe-area-inset-bottom))]">
             <button
               onClick={() => cards[0] && removeCard(cards[0].id, 1)}
-              className="w-16 h-16 rounded-full bg-white/10 backdrop-blur-md shadow-lg flex items-center justify-center text-red-500 hover:bg-red-500/20 transition-all border border-red-500/30 hover:scale-110 active:scale-95"
+              className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-white/10 backdrop-blur-md shadow-lg flex items-center justify-center text-red-500 hover:bg-red-500/20 transition-all border border-red-500/30 hover:scale-110 active:scale-95"
             >
-              <span className="material-symbols-outlined text-3xl">close</span>
+              <span className="material-symbols-outlined text-[28px] sm:text-3xl">close</span>
             </button>
             <button
               onClick={() => cards[0] && removeCard(cards[0].id, 3)}
-              className="w-16 h-16 rounded-full bg-white/10 backdrop-blur-md shadow-lg flex items-center justify-center text-yellow-400 hover:bg-yellow-400/20 transition-all border border-yellow-400/30 hover:scale-110 active:scale-95"
+              className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-white/10 backdrop-blur-md shadow-lg flex items-center justify-center text-yellow-400 hover:bg-yellow-400/20 transition-all border border-yellow-400/30 hover:scale-110 active:scale-95"
             >
-              <span className="material-symbols-outlined text-3xl">star</span>
+              <span className="material-symbols-outlined text-[28px] sm:text-3xl">star</span>
             </button>
             <button
               onClick={() => cards[0] && removeCard(cards[0].id, 5)}
-              className="w-16 h-16 rounded-full bg-white/10 backdrop-blur-md shadow-lg flex items-center justify-center text-green-500 hover:bg-green-500/20 transition-all border border-green-500/30 hover:scale-110 active:scale-95"
+              className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-white/10 backdrop-blur-md shadow-lg flex items-center justify-center text-green-500 hover:bg-green-500/20 transition-all border border-green-500/30 hover:scale-110 active:scale-95"
             >
-              <span className="material-symbols-outlined text-3xl">favorite</span>
+              <span className="material-symbols-outlined text-[28px] sm:text-3xl">favorite</span>
             </button>
           </div>
         )}
@@ -145,6 +151,8 @@ const SwipeCard: React.FC<SwipeCardProps> = ({ card, index, total, onRemove }) =
   const x = useMotionValue(0);
   const rotate = useTransform(x, [-200, 200], [-25, 25]);
   const opacity = useTransform(x, [-200, -150, 0, 150, 200], [0, 1, 1, 1, 0]);
+  const nopeOpacity = useTransform(x, [-150, -50], [1, 0]);
+  const likeOpacity = useTransform(x, [50, 150], [0, 1]);
 
   const handleDragEnd = (_: any, info: any) => {
     if (Math.abs(info.offset.x) > 150) {
@@ -170,7 +178,7 @@ const SwipeCard: React.FC<SwipeCardProps> = ({ card, index, total, onRemove }) =
       initial={{ scale: 1 - index * 0.05, y: index * 10 }}
       animate={{ scale: 1 - index * 0.05, y: index * 10 }}
       exit={{ x: 300, opacity: 0, transition: { duration: 0.3 } }}
-      className="absolute inset-0 cursor-grab active:cursor-grabbing"
+      className="absolute inset-0 cursor-grab active:cursor-grabbing touch-pan-y"
     >
       <div className="w-full h-full bg-gray-800 rounded-3xl overflow-hidden shadow-2xl border border-gray-700">
 
@@ -215,14 +223,14 @@ const SwipeCard: React.FC<SwipeCardProps> = ({ card, index, total, onRemove }) =
 
         {/* Swipe Indicators */}
         <motion.div
-          className="absolute top-8 left-8 px-6 py-3 bg-red-500 text-white font-bold text-2xl rounded-2xl border-4 border-white shadow-2xl rotate-[-20deg]"
-          style={{ opacity: useTransform(x, [-150, -50], [1, 0]) }}
+          className="absolute top-5 left-4 sm:top-8 sm:left-8 px-3 sm:px-6 py-1.5 sm:py-3 bg-red-500 text-white font-bold text-lg sm:text-2xl rounded-2xl border-2 sm:border-4 border-white shadow-2xl rotate-[-20deg]"
+          style={{ opacity: nopeOpacity }}
         >
           NOPE
         </motion.div>
         <motion.div
-          className="absolute top-8 right-8 px-6 py-3 bg-green-500 text-white font-bold text-2xl rounded-2xl border-4 border-white shadow-2xl rotate-[20deg]"
-          style={{ opacity: useTransform(x, [50, 150], [0, 1]) }}
+          className="absolute top-5 right-4 sm:top-8 sm:right-8 px-3 sm:px-6 py-1.5 sm:py-3 bg-green-500 text-white font-bold text-lg sm:text-2xl rounded-2xl border-2 sm:border-4 border-white shadow-2xl rotate-[20deg]"
+          style={{ opacity: likeOpacity }}
         >
           LIKE
         </motion.div>

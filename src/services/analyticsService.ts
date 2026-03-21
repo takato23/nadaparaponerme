@@ -1,47 +1,88 @@
 /**
  * Analytics Service
  *
- * Google Analytics 4 integration for tracking key events
+ * Unified analytics wrapper.
+ * PostHog is the primary product analytics layer for beta,
+ * while GA4 remains available for marketing/page view support.
  */
 
+import {
+  capture as capturePostHog,
+  getPostHogStatus,
+  identify as identifyPostHog,
+  initPostHog,
+  reset as resetPostHog,
+} from './posthogService';
+
 // GA4 Measurement ID (set via environment variable)
-const GA_MEASUREMENT_ID = import.meta.env.VITE_GA_MEASUREMENT_ID || '';
+const GA_MEASUREMENT_ID = String(import.meta.env.VITE_GA_MEASUREMENT_ID || '').trim();
+
+function parseEnvBoolean(value: string | boolean | undefined, fallback = false): boolean {
+  if (typeof value === 'boolean') return value;
+  if (typeof value !== 'string') return fallback;
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'true' || normalized === '1' || normalized === 'yes' || normalized === 'on') return true;
+  if (normalized === 'false' || normalized === '0' || normalized === 'no' || normalized === 'off') return false;
+  return fallback;
+}
+
+const ENABLE_ANALYTICS = parseEnvBoolean(import.meta.env.VITE_ENABLE_ANALYTICS, true);
+const ENABLE_ANALYTICS_IN_DEV = parseEnvBoolean(import.meta.env.VITE_ENABLE_ANALYTICS_DEV, false);
+const analyticsEnabledInRuntime = ENABLE_ANALYTICS && (!import.meta.env.DEV || ENABLE_ANALYTICS_IN_DEV);
+let gaInitialized = false;
 
 // Check if GA is loaded
 const isGALoaded = (): boolean => {
   return typeof window !== 'undefined' && typeof window.gtag === 'function';
 };
 
-// Initialize GA4 (called once on app load)
-export function initAnalytics(): void {
-  if (!GA_MEASUREMENT_ID) {
-    console.log('📊 Analytics: No GA_MEASUREMENT_ID configured, skipping');
+function initGA4(): void {
+  if (gaInitialized || !GA_MEASUREMENT_ID || typeof window === 'undefined') {
     return;
   }
 
-  // Don't load in development unless explicitly enabled
-  if (import.meta.env.DEV && !import.meta.env.VITE_ENABLE_ANALYTICS_DEV) {
-    console.log('📊 Analytics: Disabled in development');
-    return;
+  const existingScript = document.querySelector(`script[src="https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}"]`);
+  if (!existingScript) {
+    const script = document.createElement('script');
+    script.async = true;
+    script.src = `https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`;
+    document.head.appendChild(script);
   }
 
-  // Load GA4 script
-  const script = document.createElement('script');
-  script.async = true;
-  script.src = `https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`;
-  document.head.appendChild(script);
-
-  // Initialize gtag
   window.dataLayer = window.dataLayer || [];
-  window.gtag = function gtag(...args: unknown[]) {
-    window.dataLayer.push(args);
-  };
+  if (!window.gtag) {
+    window.gtag = function gtag(...args: unknown[]) {
+      window.dataLayer.push(args);
+    };
+  }
+
   window.gtag('js', new Date());
   window.gtag('config', GA_MEASUREMENT_ID, {
-    send_page_view: false, // We'll handle page views manually
+    send_page_view: false,
+    anonymize_ip: true,
   });
+  gaInitialized = true;
+}
 
-  console.log('📊 Analytics: Initialized');
+// Initialize GA4 (called once on app load)
+export function initAnalytics(): void {
+  if (!analyticsEnabledInRuntime) {
+    if (import.meta.env.DEV) {
+      console.log('📊 Analytics: Disabled by environment flags');
+    }
+    return;
+  }
+
+  initPostHog();
+  initGA4();
+
+  if (!GA_MEASUREMENT_ID && import.meta.env.DEV) {
+    console.log('📊 Analytics: No GA_MEASUREMENT_ID configured, skipping GA4');
+  }
+
+  if (import.meta.env.DEV) {
+    console.log('📊 Analytics: Initialized');
+  }
 }
 
 // ============================================================================
@@ -55,9 +96,13 @@ export function trackEvent(
   eventName: string,
   params?: Record<string, string | number | boolean>
 ): void {
-  if (!isGALoaded()) return;
+  if (!analyticsEnabledInRuntime) return;
 
-  window.gtag('event', eventName, params);
+  capturePostHog(eventName, params);
+
+  if (isGALoaded()) {
+    window.gtag('event', eventName, params);
+  }
 
   if (import.meta.env.DEV) {
     console.log('📊 Event:', eventName, params);
@@ -68,12 +113,58 @@ export function trackEvent(
  * Track page view
  */
 export function trackPageView(pagePath: string, pageTitle?: string): void {
-  if (!isGALoaded()) return;
+  if (!analyticsEnabledInRuntime) return;
 
-  window.gtag('event', 'page_view', {
+  const payload = {
     page_path: pagePath,
     page_title: pageTitle || document.title,
-  });
+  };
+
+  capturePostHog('$pageview', payload);
+
+  if (isGALoaded()) {
+    window.gtag('event', 'page_view', payload);
+  }
+}
+
+export function identifyUser(userId: string, properties?: Record<string, unknown>): void {
+  if (!analyticsEnabledInRuntime) return;
+  identifyPostHog(userId, properties);
+}
+
+export function resetUserTracking(): void {
+  if (!analyticsEnabledInRuntime) return;
+  resetPostHog();
+}
+
+export type AnalyticsStatus = {
+  enabled: boolean;
+  gaConfigured: boolean;
+  gaInitialized: boolean;
+  posthog: ReturnType<typeof getPostHogStatus>;
+};
+
+export function getAnalyticsStatus(): AnalyticsStatus {
+  return {
+    enabled: analyticsEnabledInRuntime,
+    gaConfigured: Boolean(GA_MEASUREMENT_ID),
+    gaInitialized,
+    posthog: getPostHogStatus(),
+  };
+}
+
+type InteractionTimingParams = {
+  screen_name: string;
+  metric_name: 'route_ready_ms' | 'first_interaction_ms';
+  value_ms: number;
+  interaction_type?: string;
+};
+
+/**
+ * Track UI responsiveness metrics for critical surfaces.
+ */
+export function trackInteractionTiming(params: InteractionTimingParams): void {
+  trackEvent('ui_interaction_timing', params);
 }
 
 // ============================================================================
@@ -108,11 +199,24 @@ export function trackFirstItem(): void {
   trackEvent('first_item_added');
 }
 
+export function trackOwnedItemAdded(totalOwnedItems: number): void {
+  trackEvent('owned_item_added', {
+    total_owned_items: totalOwnedItems,
+  });
+}
+
+export function trackFirstEightItemsReached(totalOwnedItems: number): void {
+  trackEvent('first_8_items_reached', {
+    total_owned_items: totalOwnedItems,
+  });
+}
+
 /**
  * User generated first outfit
  */
 export function trackFirstOutfit(): void {
   trackEvent('first_outfit_generated');
+  trackEvent('first_look_generated');
 }
 
 /**
@@ -124,11 +228,59 @@ export function trackOutfitGenerated(closetSize: number): void {
   });
 }
 
+export function trackOutfitSaved(source: 'saved_outfits' | 'planner' | 'stylist', totalSavedOutfits: number): void {
+  trackEvent('outfit_saved', {
+    source,
+    total_saved_outfits: totalSavedOutfits,
+  });
+  trackEvent('look_saved', {
+    source,
+    total_saved_outfits: totalSavedOutfits,
+  });
+  if (totalSavedOutfits === 1) {
+    trackEvent('first_look_saved', { source });
+  }
+}
+
 /**
  * User used virtual try-on
  */
 export function trackVirtualTryOn(): void {
   trackEvent('virtual_tryon_used');
+}
+
+export function trackPlannerUsed(action: string, source: string): void {
+  trackEvent('planner_used', {
+    action,
+    source,
+  });
+}
+
+type OutfitFeedbackAnalyticsParams = {
+  source_surface: 'home' | 'planner';
+  mode?: 'create' | 'edit';
+  status?: 'worn' | 'not_worn';
+  skip_reason?: 'weather' | 'comfort' | 'occasion' | 'changed_mind';
+};
+
+export function trackOutfitFeedbackOpened(params: OutfitFeedbackAnalyticsParams): void {
+  trackEvent('outfit_feedback_opened', params);
+}
+
+export function trackOutfitFeedbackSubmitted(params: OutfitFeedbackAnalyticsParams): void {
+  trackEvent('outfit_feedback_submitted', params);
+}
+
+export function trackOutfitFeedbackEdited(params: OutfitFeedbackAnalyticsParams): void {
+  trackEvent('outfit_feedback_edited', params);
+}
+
+export function trackWeeklyWearInsightsViewed(params: { source_surface: 'planner'; pending_count: number }): void {
+  trackEvent('weekly_wear_insights_viewed', params);
+}
+
+export function trackGapViewed(source: string): void {
+  trackEvent('gap_viewed', { source });
 }
 
 /**
@@ -141,8 +293,12 @@ export function trackUpgradeModalView(trigger: string): void {
 /**
  * User started checkout
  */
-export function trackCheckoutStart(tier: 'pro' | 'premium', currency: 'ARS' | 'USD'): void {
+export function trackCheckoutStart(tier: 'plus' | 'pro' | 'premium', currency: 'ARS' | 'USD'): void {
   trackEvent('begin_checkout', {
+    tier,
+    currency,
+  });
+  trackEvent('checkout_started', {
     tier,
     currency,
   });
@@ -162,7 +318,7 @@ export function trackPurchase(tier: 'pro' | 'premium', currency: 'ARS' | 'USD', 
 /**
  * User hit generation limit
  */
-export function trackLimitReached(tier: 'free' | 'pro'): void {
+export function trackLimitReached(tier: 'free' | 'plus' | 'pro' | 'premium'): void {
   trackEvent('limit_reached', { tier });
 }
 
@@ -277,6 +433,198 @@ export function trackGuidedLookUpgradeCTAClick(params: GuidedLookAnalyticsParams
 
 export function trackGuidedLookTryOn(params: GuidedLookAnalyticsParams): void {
   trackEvent('guided_look_tryon', params);
+}
+
+export type StylistActionAnalyticsParams = {
+  action_type:
+    | 'free_chat'
+    | 'wardrobe_recommendation'
+    | 'saved_look_creation'
+    | 'wardrobe_gap_detection'
+    | 'navigation'
+    | 'external_link_suggestions'
+    | 'external_search_enriched'
+    | 'new_garment_generation'
+    | 'studio_render'
+    | 'try_on';
+  charged?: boolean;
+  credits_used?: number;
+  surface?: 'closet' | 'studio';
+  source?: 'chat' | 'home' | 'looks' | 'closet';
+  used_external_search?: boolean;
+  thread_id?: string | null;
+  outcome?: 'success' | 'failure';
+};
+
+export function trackStylistActionRequested(params: StylistActionAnalyticsParams): void {
+  trackEvent('stylist_action_requested', params);
+}
+
+export function trackStylistActionCompleted(params: StylistActionAnalyticsParams): void {
+  trackEvent('stylist_action_completed', params);
+}
+
+export function trackStylistActionFailed(params: StylistActionAnalyticsParams): void {
+  trackEvent('stylist_action_failed', params);
+}
+
+type StylistRecommendationAnalyticsParams = {
+  thread_id?: string;
+  item_id?: string;
+  surface?: 'closet' | 'studio';
+  source?: 'chat';
+  score_total?: number;
+  expires_in_hours?: number;
+};
+
+export function trackStylistRecommendationRequested(params: StylistRecommendationAnalyticsParams): void {
+  trackEvent('stylist_reco_requested', params);
+}
+
+export function trackStylistRecommendationCandidateShown(params: StylistRecommendationAnalyticsParams): void {
+  trackEvent('stylist_reco_candidate_shown', params);
+}
+
+export function trackStylistRecommendationConfirmed(params: StylistRecommendationAnalyticsParams): void {
+  trackEvent('stylist_reco_confirmed', params);
+}
+
+export function trackStylistRecommendationRejected(params: StylistRecommendationAnalyticsParams): void {
+  trackEvent('stylist_reco_rejected', params);
+}
+
+export function trackStylistRecommendationExpired(params: StylistRecommendationAnalyticsParams): void {
+  trackEvent('stylist_reco_expired', params);
+}
+
+export function trackStylistRecommendationDismissed(params: StylistRecommendationAnalyticsParams): void {
+  trackEvent('stylist_reco_dismissed', params);
+}
+
+type KumbiSurfaceOpenedParams = {
+  surface?: string;
+  source?: string;
+  entry_mode?: 'looks' | 'items' | 'contextual';
+  has_selected_look?: boolean;
+  has_inferred_look?: boolean;
+};
+
+export function trackKumbiSurfaceOpened(params: KumbiSurfaceOpenedParams): void {
+  trackEvent('kumbi_surface_opened', params);
+}
+
+type KumbiResponseRenderedParams = {
+  surface?: string;
+  thread_id?: string | null;
+  has_outfit?: boolean;
+  has_actions?: boolean;
+  has_references?: boolean;
+  has_shopping?: boolean;
+};
+
+export function trackKumbiResponseRendered(params: KumbiResponseRenderedParams): void {
+  trackEvent('kumbi_response_rendered', params);
+}
+
+type KumbiUiActionTriggeredParams = {
+  surface?: string;
+  thread_id?: string | null;
+  action_type?: string;
+  source?: 'chat' | 'studio';
+};
+
+export function trackKumbiUiActionTriggered(params: KumbiUiActionTriggeredParams): void {
+  trackEvent('kumbi_ui_action_triggered', params);
+}
+
+type KumbiLookExtractionParams = {
+  surface?: string;
+  thread_id?: string | null;
+  attachment_kind?: 'reference_look' | 'extractable_look';
+  detected_count?: number;
+  selected_count?: number;
+  followup_type?: 'variants' | 'gap_fill' | 'open_closet';
+};
+
+export function trackKumbiLookExtractionStarted(params: KumbiLookExtractionParams): void {
+  trackEvent('kumbi_look_extraction_started', params);
+}
+
+export function trackKumbiLookExtractionCompleted(params: KumbiLookExtractionParams): void {
+  trackEvent('kumbi_look_extraction_completed', params);
+}
+
+export function trackKumbiLookExtractionSaved(params: KumbiLookExtractionParams): void {
+  trackEvent('kumbi_look_extraction_saved', params);
+}
+
+export function trackKumbiLookExtractionFollowupSelected(params: KumbiLookExtractionParams): void {
+  trackEvent('kumbi_look_extraction_followup_selected', params);
+}
+
+type KumbiLookSaveParams = {
+  surface?: string;
+  thread_id?: string | null;
+  look_goal?: string;
+  folder_id?: string | null;
+  tag_count?: number;
+  followup_type?: 'variant' | 'occasion' | 'open_looks';
+};
+
+export function trackKumbiLookSaveStarted(params: KumbiLookSaveParams): void {
+  trackEvent('kumbi_look_save_started', params);
+}
+
+export function trackKumbiLookSaveCompleted(params: KumbiLookSaveParams): void {
+  trackEvent('kumbi_look_save_completed', params);
+}
+
+export function trackKumbiLookSaveFailed(params: KumbiLookSaveParams): void {
+  trackEvent('kumbi_look_save_failed', params);
+}
+
+export function trackKumbiLookSaveFollowupSelected(params: KumbiLookSaveParams): void {
+  trackEvent('kumbi_look_save_followup_selected', params);
+}
+
+type ShoppingDupesAnalyticsParams = {
+  country_code: string;
+  item_category?: string;
+  source_mix?: string;
+  result_count?: number;
+  latency_ms?: number;
+  verified_count?: number;
+  error_code?: string;
+};
+
+export function trackShoppingDupesRequested(params: ShoppingDupesAnalyticsParams): void {
+  trackEvent('shopping_dupes_requested', params);
+}
+
+export function trackShoppingDupesCompleted(params: ShoppingDupesAnalyticsParams): void {
+  trackEvent('shopping_dupes_completed', params);
+}
+
+export function trackShoppingDupesFailed(params: ShoppingDupesAnalyticsParams): void {
+  trackEvent('shopping_dupes_failed', params);
+}
+
+export function trackShoppingDupesResultCount(params: ShoppingDupesAnalyticsParams): void {
+  trackEvent('shopping_dupes_result_count', params);
+}
+
+export function trackShoppingLinkClicked(params: ShoppingDupesAnalyticsParams & {
+  shop_name?: string;
+  source?: string;
+  link_verified?: boolean;
+}): void {
+  trackEvent('shopping_link_clicked', params);
+}
+
+export function trackShoppingFallbackLinkClicked(params: ShoppingDupesAnalyticsParams & {
+  platform?: string;
+}): void {
+  trackEvent('shopping_fallback_link_clicked', params);
 }
 
 // ============================================================================

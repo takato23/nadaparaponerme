@@ -194,7 +194,7 @@ export const StudioToolbar: React.FC<StudioToolbarProps> = ({
     return (
         <motion.section variants={itemVariants} className="mb-1 flex flex-col gap-1">
 
-            <div className="rounded-2xl border border-white/70 bg-white/45 p-2.5 shadow-sm sm:p-3">
+            <div data-studio-tutorial="studio-selfie-upload" className="rounded-2xl border border-white/70 bg-white/45 p-2.5 shadow-sm sm:p-3">
                 <div className="mb-2 flex items-center justify-between px-0.5">
                     <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--studio-ink-muted)]">
                         Imagen Base
@@ -344,7 +344,7 @@ export const StudioToolbar: React.FC<StudioToolbarProps> = ({
 
                         <div className="grid grid-cols-1 gap-1.5">
                             {/* Preset Dropdown */}
-                            <div ref={presetPickerRef} className="relative min-w-0">
+                            <div ref={presetPickerRef} data-studio-tutorial="studio-presets" className="relative min-w-0">
                                 <button
                                     type="button"
                                     onClick={() => setShowPresetPicker(!showPresetPicker)}
@@ -418,6 +418,7 @@ export const StudioToolbar: React.FC<StudioToolbarProps> = ({
 
                                 <button
                                     onClick={() => setShowAdvanced(!showAdvanced)}
+                                    data-studio-tutorial="studio-quality"
                                     className="shrink-0 flex h-9 w-full sm:w-auto items-center justify-center gap-1 px-2.5 rounded-xl bg-white/70 border border-white/90 text-xs shadow-sm transition hover:bg-white whitespace-nowrap"
                                 >
                                     <span className="material-symbols-outlined text-[14px] text-[color:var(--studio-ink-muted)]">tune</span>

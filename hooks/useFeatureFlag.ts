@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getFeatureFlag, type FeatureFlags } from '../src/config/features';
+import { FEATURE_FLAGS_UPDATED_EVENT, getFeatureFlag, type FeatureFlags } from '../src/config/features';
 
 /**
  * React hook to use feature flags with reactive updates
@@ -26,9 +26,24 @@ export const useFeatureFlag = (flag: keyof FeatureFlags): boolean => {
       }
     };
 
+    const handleLocalUpdate = () => {
+      setValue(getFeatureFlag(flag));
+    };
+
     window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
+    window.addEventListener(FEATURE_FLAGS_UPDATED_EVENT, handleLocalUpdate);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener(FEATURE_FLAGS_UPDATED_EVENT, handleLocalUpdate);
+    };
   }, [flag]);
+
+  useEffect(() => {
+    const currentValue = getFeatureFlag(flag);
+    if (currentValue !== value) {
+      setValue(currentValue);
+    }
+  }, [flag, value]);
 
   // Also check for changes in the current tab
   useEffect(() => {
@@ -61,6 +76,22 @@ export const useFeatureFlags = (): FeatureFlags => {
   const enableHybridTryOn = useFeatureFlag('enableHybridTryOn');
   const enableUnifiedStudioStylist = useFeatureFlag('enableUnifiedStudioStylist');
   const enableOnDemandClosetAI = useFeatureFlag('enableOnDemandClosetAI');
+  const enableGuidedLookCreationBackend = useFeatureFlag('enableGuidedLookCreationBackend');
+  const enableShoppingAssistantV2 = useFeatureFlag('enableShoppingAssistantV2');
+  const enableShoppingLinkVerification = useFeatureFlag('enableShoppingLinkVerification');
+  const enableShoppingGeoRouting = useFeatureFlag('enableShoppingGeoRouting');
+  const enableTimelinePublishing = useFeatureFlag('enableTimelinePublishing');
+  const enableActivitySaveToCloset = useFeatureFlag('enableActivitySaveToCloset');
+  const enableLinkedSourceItems = useFeatureFlag('enableLinkedSourceItems');
+  const enableSocialCommentsThreaded = useFeatureFlag('enableSocialCommentsThreaded');
+  const enableSocialNotificationsCenter = useFeatureFlag('enableSocialNotificationsCenter');
+  const enableFollowersGraph = useFeatureFlag('enableFollowersGraph');
+  const enableSocialModeration = useFeatureFlag('enableSocialModeration');
+  const enableChatWardrobeRecommendations = useFeatureFlag('enableChatWardrobeRecommendations');
+  const enableLooksFirstUpload = useFeatureFlag('enableLooksFirstUpload');
+  const enableAnalyzeLookEntry = useFeatureFlag('enableAnalyzeLookEntry');
+  const enableKumbiReferenceLookSeeding = useFeatureFlag('enableKumbiReferenceLookSeeding');
+  const enableStudioKumbiActions = useFeatureFlag('enableStudioKumbiActions');
 
   return {
     useSupabaseAuth,
@@ -72,5 +103,21 @@ export const useFeatureFlags = (): FeatureFlags => {
     enableHybridTryOn,
     enableUnifiedStudioStylist,
     enableOnDemandClosetAI,
+    enableGuidedLookCreationBackend,
+    enableShoppingAssistantV2,
+    enableShoppingLinkVerification,
+    enableShoppingGeoRouting,
+    enableTimelinePublishing,
+    enableActivitySaveToCloset,
+    enableLinkedSourceItems,
+    enableSocialCommentsThreaded,
+    enableSocialNotificationsCenter,
+    enableFollowersGraph,
+    enableSocialModeration,
+    enableChatWardrobeRecommendations,
+    enableLooksFirstUpload,
+    enableAnalyzeLookEntry,
+    enableKumbiReferenceLookSeeding,
+    enableStudioKumbiActions,
   };
 };

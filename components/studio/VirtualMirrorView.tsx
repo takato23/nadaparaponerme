@@ -212,6 +212,7 @@ const VirtualMirrorView: React.FC<VirtualMirrorViewProps> = ({ closet = [], onOp
   const modals = useAppModals();
   const toast = useToast();
   const { user } = useAuth();
+  const userId = user?.id ?? null;
   const enableHybridTryOn = useFeatureFlag('enableHybridTryOn');
   const { enqueue, results, activeRequest, clearResult } = useStudioGeneration();
 
@@ -292,10 +293,10 @@ const VirtualMirrorView: React.FC<VirtualMirrorViewProps> = ({ closet = [], onOp
     slotSignature: Record<string, string>,
     quality: 'pro',
   ) => {
-    if (!user?.id) return;
+    if (!userId) return;
 
     try {
-      const stored = await saveRenderImageToStorage(resultImage, user.id, renderHash);
+      const stored = await saveRenderImageToStorage(resultImage, userId, renderHash);
       imageByHashRef.current.set(renderHash, stored.imageUrl);
       await upsertTryOnCacheEntry({
         renderHash,
@@ -313,27 +314,27 @@ const VirtualMirrorView: React.FC<VirtualMirrorViewProps> = ({ closet = [], onOp
     } catch (error) {
       console.error('Failed to persist mirror cache:', error);
     }
-  }, [faceRefsSignature, user?.id]);
+  }, [faceRefsSignature, userId]);
 
   useEffect(() => {
-    const profile = loadTwinProfile(user?.id || null);
+    const profile = loadTwinProfile(userId);
     if (profile) {
       setTwinProfile(profile);
     } else {
       console.error('[VirtualMirrorView] Error parsing profile');
     }
-  }, []);
+  }, [userId]);
 
   useEffect(() => {
     if (!modals.showDigitalTwinSetup) {
-      const profile = loadTwinProfile(user?.id || null);
+      const profile = loadTwinProfile(userId);
       if (profile) {
         setTwinProfile(profile);
       } else {
         console.error('[VirtualMirrorView] Error parsing profile after modal close');
       }
     }
-  }, [modals.showDigitalTwinSetup, user?.id]);
+  }, [modals.showDigitalTwinSetup, userId]);
 
   useEffect(() => {
     if (!enableHybridTryOn) return;
@@ -570,7 +571,7 @@ const VirtualMirrorView: React.FC<VirtualMirrorViewProps> = ({ closet = [], onOp
       if (result.status === 'failed') {
         processedResultIdsRef.current.add(result.id);
         clearResult(result.id);
-        toast.error('No pudimos generar el look HD. Probá otra vez o revisá tus créditos.');
+        toast.error('No pudimos generar el look HD. Probá otra vez o revisá tus usos.');
         if (resultPayload?.renderHash) {
           requestedHashesRef.current.delete(resultPayload.renderHash);
         }

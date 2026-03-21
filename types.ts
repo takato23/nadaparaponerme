@@ -28,6 +28,38 @@ export interface ClothingItemMetadata {
 
 export type ItemAIStatus = 'pending' | 'processing' | 'ready' | 'failed';
 
+export interface ClothingItemSourceRef {
+  originType: string;
+  originActivityId?: string;
+  originUserId?: string;
+  originItemId?: string;
+  originOutfitId?: string;
+  originUrl?: string;
+  dedupeKey?: string;
+}
+
+export type NormalizationStatus =
+  | 'pending'
+  | 'processing'
+  | 'ready'
+  | 'failed';
+
+export type NormalizationMode =
+  | 'none'
+  | 'local_remove_background'
+  | 'local_white_background'
+  | 'premium_refine';
+
+export interface NormalizedImageVariant {
+  image_url?: string | null;
+  thumbnail_url?: string | null;
+  status: NormalizationStatus;
+  mode: NormalizationMode;
+  background?: 'transparent' | 'white';
+  error?: string | null;
+  updated_at?: string | null;
+}
+
 export interface ClothingItem {
   id: string;
   imageDataUrl: string;
@@ -39,6 +71,10 @@ export interface ClothingItem {
   aiLastError?: string | null;
   // Status tracking: 'owned' (default), 'wishlist' (store/external), 'virtual' (try-on draft)
   status?: 'owned' | 'wishlist' | 'virtual' | 'quick';
+  isFavorite?: boolean;
+  linkMode?: 'copy' | 'linked';
+  sourceRef?: ClothingItemSourceRef;
+  normalizedImage?: NormalizedImageVariant;
   // Legacy flat color field still consumed in some enhanced closet flows.
   color_primary?: string;
   store_info?: {
@@ -68,10 +104,89 @@ export interface FitResult {
   }; // AI-generated items to fill missing pieces
 }
 
+export type OutfitSuggestionGoal =
+  | 'occasion'
+  | 'reference_recreation'
+  | 'improvement'
+  | 'gap_fill';
+
+export type ChatAttachmentKind = 'reference_look' | 'extractable_look';
+
+export interface ChatAttachment {
+  kind: ChatAttachmentKind;
+  imageDataUrl: string;
+}
+
+export type StylistSurface =
+  | 'home'
+  | 'closet'
+  | 'saved_looks'
+  | 'shopping'
+  | 'planner'
+  | 'activity'
+  | 'item_detail'
+  | 'profile'
+  | 'studio'
+  | 'kumbi';
+
+export interface StylistSelectedItemContext {
+  id: string;
+  category?: string | null;
+  subcategory?: string | null;
+  color_primary?: string | null;
+  description?: string | null;
+}
+
+export interface StylistClosetSummary {
+  totalItems: number;
+  categories?: string[];
+  dominantColors?: string[];
+}
+
+export interface StylistContextPayload {
+  currentSurface?: StylistSurface;
+  selectedLook?: SavedLookContext | null;
+  selectedInferredLook?: InferredLookContext | null;
+  selectedItem?: StylistSelectedItemContext | null;
+  entryMode?: 'looks' | 'items' | null;
+  lookUploadSessionId?: string | null;
+  closetSummary?: StylistClosetSummary | null;
+  closetItemIds?: string[];
+  filters?: {
+    categories?: string[];
+    colors?: string[];
+    searchText?: string;
+  } | null;
+  occasion?: string | null;
+  weather?: string | null;
+  wishlistItemIds?: string[];
+  activitySummary?: string | null;
+}
+
+export type StylistBillingReason =
+  | 'free_chat'
+  | 'wardrobe_recommendation'
+  | 'saved_look_creation'
+  | 'wardrobe_gap_detection'
+  | 'navigation'
+  | 'external_link_suggestions'
+  | 'external_search_enriched'
+  | 'new_garment_generation'
+  | 'studio_render'
+  | 'try_on';
+
+export interface ChatBilling {
+  charged: boolean;
+  credits_used: number;
+  reason: StylistBillingReason;
+}
+
 export interface StructuredOutfitSuggestion {
   top_id: string;
   bottom_id: string;
   shoes_id: string;
+  outerwear_id?: string | null;
+  accessory_ids?: string[];
   explanation?: string;
   missing_piece_suggestion?: MissingPieceSuggestion;
   aiGeneratedItems?: {
@@ -80,28 +195,220 @@ export interface StructuredOutfitSuggestion {
     shoes?: ClothingItem;
   };
   confidence?: number;
+  look_goal?: OutfitSuggestionGoal;
+  similarity_score?: number;
+  styling_notes?: string[];
+}
+
+export interface StylistShoppingSuggestion {
+  id: string;
+  title: string;
+  store_name: string;
+  shop_url: string;
+  price_label?: string;
+  reason?: string;
+  image_url?: string;
+}
+
+export interface ChatReferencedItem {
+  item_id: string;
+  label: string;
+  reason: string;
+}
+
+export interface ProblemItemSuggestionPath {
+  id: string;
+  title: string;
+  summary: string;
+  reason: string;
+  pathType: 'base_segura' | 'mas_elevada' | 'mas_relajada' | 'mas_jugada';
+  referencedItems?: ChatReferencedItem[];
+  outfitSuggestion?: StructuredOutfitSuggestion | null;
+}
+
+export type ChatUIActionType =
+  | 'view_outfit'
+  | 'save_to_wishlist'
+  | 'save_look_to_library'
+  | 'open_saved_looks'
+  | 'open_look_folder'
+  | 'open_wishlist'
+  | 'open_closet_filtered'
+  | 'open_recommended_item'
+  | 'open_studio_with_selection'
+  | 'use_saved_look_context'
+  | 'send_prompt';
+
+export interface ChatUIAction {
+  id: string;
+  type: ChatUIActionType;
+  label: string;
+  suggestion_id?: string;
+  folder_id?: string;
+  look_id?: string;
+  prompt?: string;
+  route?: string;
+  filters?: {
+    category?: string;
+    color?: string;
+    occasion?: string;
+    status?: 'wishlist';
+  };
+  item_id?: string;
+  preselected_item_ids?: string[];
+}
+
+export type RecommendationStatus = 'active' | 'dismissed' | 'applied' | 'expired';
+
+export interface RecommendationScoreBreakdown {
+  colorimetry: number;
+  occasion_style: number;
+  season_climate: number;
+  usage: number;
+}
+
+export interface StylistRecommendedItemCandidate {
+  item_id: string;
+  reason: string;
+  score_total: number;
+  score_breakdown: RecommendationScoreBreakdown;
+}
+
+export interface ActiveWardrobeRecommendation {
+  id: string;
+  user_id: string;
+  item_id: string;
+  thread_id?: string | null;
+  reason: string;
+  score_total: number;
+  score_breakdown: RecommendationScoreBreakdown;
+  status: RecommendationStatus;
+  expires_at: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface ChatStylistRequest {
   message: string;
   chatHistory: Array<{ role: 'user' | 'assistant'; content: string }>;
   closetContext: Array<{ id: string; metadata: any }>;
+  savedLookContext?: SavedLookContext[];
+  selectedLookContext?: SavedLookContext | null;
+  contextPayload?: StylistContextPayload | null;
+  attachments?: ChatAttachment[];
   responseMode?: 'text' | 'structured';
-  surface?: 'studio' | 'closet';
+  surface?: StylistSurface;
   threadId?: string | null;
   idempotencyKey?: string;
   workflow?: GuidedLookWorkflowRequest;
+  recommendationContext?: {
+    explicit: boolean;
+    excludeItemIds?: string[];
+  };
 }
 
 export interface ChatStylistResponse {
   role: 'assistant';
   content: string;
   outfitSuggestion?: StructuredOutfitSuggestion | null;
+  detectedLookGarments?: DetectedLookGarmentsPayload | null;
+  problemItemSuggestions?: ProblemItemSuggestionPath[] | null;
+  billing?: ChatBilling;
+  shoppingSuggestions?: StylistShoppingSuggestion[];
+  referencedItems?: ChatReferencedItem[];
+  uiActions?: ChatUIAction[];
+  recommendedItemCandidate?: StylistRecommendedItemCandidate | null;
   threadId?: string | null;
   model: string;
   credits_used?: number;
   cache_hit?: boolean;
   workflow?: GuidedLookWorkflowResponse;
+}
+
+export interface SavedLookContext {
+  id: string;
+  name?: string;
+  occasion?: string | null;
+  source?: SavedOutfit['source'];
+  tags?: string[];
+  folder_id?: string | null;
+  reference_summary?: string | null;
+  clothing_item_ids?: string[];
+}
+
+export interface SelectedLookContext extends SavedLookContext {
+  explanation?: string | null;
+}
+
+export interface InferredLookContext {
+  id: string;
+  session_id: string;
+  name?: string;
+  summary: string;
+  image_data_url?: string;
+  occasion?: string | null;
+  style_tags: string[];
+  palette: string[];
+  dominant_pieces: string[];
+  confidence: number;
+}
+
+export interface LookGarmentCrop {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface DetectedLookGarmentCandidate {
+  id: string;
+  label: string;
+  category: string;
+  subcategory: string;
+  color_primary: string;
+  confidence: number;
+  crop: LookGarmentCrop;
+  visibility_note?: string | null;
+}
+
+export interface SeparateLookGarmentsResult {
+  items: DetectedLookGarmentCandidate[];
+  warnings: string[];
+  summary?: string | null;
+}
+
+export interface DetectedLookGarmentsPayload {
+  items: DetectedLookGarmentCandidate[];
+  warnings: string[];
+  summary?: string | null;
+}
+
+export interface ReviewableLookGarmentItem {
+  id: string;
+  imageDataUrl: string;
+  metadata: ClothingItemMetadata;
+  selected: boolean;
+  confidence?: number;
+  visibility_note?: string | null;
+}
+
+export interface ChatDetectedLookGarments {
+  items: ReviewableLookGarmentItem[];
+  warnings: string[];
+  summary?: string | null;
+  saveState?: 'idle' | 'saving' | 'saved' | 'error';
+  saveError?: string | null;
+}
+
+export interface ChatSaveLookDraft {
+  status: 'idle' | 'editing' | 'saving' | 'saved' | 'error';
+  name: string;
+  occasion?: string | null;
+  folderId?: string | null;
+  tags: string[];
+  note?: string | null;
+  error?: string | null;
+  outfitSuggestion?: StructuredOutfitSuggestion | null;
 }
 
 export type GuidedLookStatus =
@@ -144,18 +451,18 @@ export interface GuidedLookWorkflowRequest {
   mode: 'guided_look_creation';
   sessionId?: string | null;
   action?: 'start'
-    | 'submit'
-    | 'select_strategy'
-    | 'confirm_generate'
-    | 'confirm_edit'
-    | 'confirm_tryon'
-    | 'cancel'
-    | 'toggle_autosave'
-    | 'request_outfit'
-    | 'request_edit'
-    | 'upload_selfie'
-    | 'request_tryon'
-    | 'save_generated_item';
+  | 'submit'
+  | 'select_strategy'
+  | 'confirm_generate'
+  | 'confirm_edit'
+  | 'confirm_tryon'
+  | 'cancel'
+  | 'toggle_autosave'
+  | 'request_outfit'
+  | 'request_edit'
+  | 'upload_selfie'
+  | 'request_tryon'
+  | 'save_generated_item';
   payload?: {
     message?: string;
     strategy?: GuidedLookStrategy;
@@ -193,6 +500,72 @@ export interface SavedOutfit {
   bottom_id: string;
   shoes_id: string;
   explanation: string;
+  name?: string;
+  description?: string | null;
+  occasion?: string | null;
+  style_notes?: string | null;
+  weather_context?: string | null;
+  source?: 'manual' | 'ai_recommendation' | 'reference_recreation' | 'planner' | 'community_import';
+  chat_thread_id?: string | null;
+  hero_item_id?: string | null;
+  context_json?: Record<string, unknown> | null;
+  ai_generated?: boolean;
+  folder_id?: string | null;
+  tags?: string[];
+  cover_image_url?: string | null;
+  reference_summary?: string | null;
+  render_count?: number;
+  is_public?: boolean;
+  share_token?: string | null;
+}
+
+export interface InferredLook extends InferredLookContext {
+  image_data_url: string;
+  created_at: string;
+}
+
+export interface LookUploadSession {
+  id: string;
+  source: 'home' | 'public_entry' | 'saved_looks';
+  status: 'draft' | 'analyzed' | 'failed';
+  looks: InferredLook[];
+  cross_suggestions: string[];
+  adaptation_tip?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LookAnalysisResult {
+  looks: Array<{
+    summary: string;
+    occasion?: string | null;
+    style_tags: string[];
+    palette: string[];
+    dominant_pieces: string[];
+    confidence: number;
+  }>;
+  cross_suggestions: string[];
+  adaptation_tip?: string | null;
+}
+
+export interface LookFolder {
+  id: string;
+  user_id?: string;
+  name: string;
+  description?: string | null;
+  color?: string | null;
+  icon?: string | null;
+  sort_order?: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface LookLibraryFilter {
+  folderId?: string | null;
+  source?: SavedOutfit['source'] | 'all';
+  search?: string;
+  tags?: string[];
+  hasRender?: boolean;
 }
 
 export interface PackingListResult {
@@ -206,6 +579,7 @@ export interface CommunityUser {
   username: string;
   avatarUrl: string;
   closet: ClothingItem[];
+  badges?: string[];
 }
 
 export interface WebSource {
@@ -253,7 +627,15 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   timestamp: number;
+  attachments?: ChatAttachment[];
   outfitSuggestion?: StructuredOutfitSuggestion;
+  detectedLookGarments?: ChatDetectedLookGarments;
+  problemItemSuggestions?: ProblemItemSuggestionPath[];
+  saveLookDraft?: ChatSaveLookDraft;
+  billing?: ChatBilling;
+  shoppingSuggestions?: StylistShoppingSuggestion[];
+  referencedItems?: ChatReferencedItem[];
+  uiActions?: ChatUIAction[];
 }
 
 export interface ChatState {
@@ -303,6 +685,38 @@ export interface OutfitSchedule {
 
 export interface ScheduledOutfitWithDetails extends OutfitSchedule {
   outfit: SavedOutfit;
+}
+
+export type OutfitWearStatus = 'worn' | 'not_worn';
+
+export type OutfitWearSkipReason = 'weather' | 'comfort' | 'occasion' | 'changed_mind';
+
+export type OutfitWearFeedbackSource = 'home' | 'planner';
+
+export interface OutfitWearFeedback {
+  id: string;
+  user_id: string;
+  date: string;
+  outfit_id: string;
+  status: OutfitWearStatus;
+  confidence_positive?: boolean | null;
+  comfort_positive?: boolean | null;
+  skip_reason?: OutfitWearSkipReason | null;
+  source_surface: OutfitWearFeedbackSource;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface WeeklyWearInsights {
+  start_date: string;
+  end_date: string;
+  planned_count: number;
+  feedback_count: number;
+  worn_count: number;
+  not_worn_count: number;
+  pending_count: number;
+  strongest_outfit_id?: string | null;
+  strongest_score?: number;
 }
 
 export type LookbookTheme = 'office' | 'weekend' | 'date_night' | 'casual' | 'formal' | 'travel' | 'custom';
@@ -511,6 +925,9 @@ export interface DupeItem {
   savings_amount: number; // price difference from original (original_price - dupe_price)
   savings_percentage: number; // % saved compared to original
   estimated_quality: 'high' | 'medium' | 'low' | 'unknown'; // AI estimate based on price/brand
+  source?: 'ml_api' | 'gemini_grounded' | 'manual_fallback';
+  link_verified?: boolean;
+  country_code?: string;
 }
 
 export interface VisualComparison {
@@ -849,11 +1266,17 @@ export type ActivityType =
   | 'borrow_request'         // Someone requested to borrow an item
   | 'borrow_approved'        // Borrow request was approved
   | 'borrow_declined'        // Borrow request was declined
-  | 'item_returned';         // Borrowed item was returned
+  | 'item_returned'          // Borrowed item was returned
+  | 'like'
+  | 'comment'
+  | 'follow';
+
+export type TimelineVisibility = 'followers' | 'community';
 
 export interface ActivityFeedItem {
   id: string;                           // Unique activity ID (timestamp-based)
   user_id: string;                      // ID of user who performed action
+  actor_id?: string;                    // Actor user id (backend field)
   user_name: string;                    // Display name of user
   user_avatar?: string;                 // Avatar URL or data URL
   activity_type: ActivityType;          // Type of activity
@@ -879,6 +1302,9 @@ export interface ActivityFeedItem {
   // Current user interaction state
   is_liked: boolean;                    // Has current user liked this?
   is_shared: boolean;                   // Has current user shared this?
+  isLikedByMe?: boolean;                // Persisted alias for current user like state
+  isSharedByMe?: boolean;               // Persisted alias for current user share state
+  metadata_payload?: Record<string, any>; // Raw payload from backend for import/share extensions
 }
 
 export interface ActivityComment {
@@ -888,8 +1314,55 @@ export interface ActivityComment {
   user_name: string;                    // Display name of commenter
   user_avatar?: string;                 // Avatar of commenter
   content: string;                      // Comment text
+  parent_comment_id?: string | null;    // Parent comment (reply thread)
+  replies_count?: number;               // Number of direct replies
+  is_deleted?: boolean;                 // Soft delete status
   timestamp: string;                    // ISO 8601 datetime
   likes_count?: number;                 // Optional: comment likes
+  is_liked?: boolean;                   // Has current user liked this comment
+}
+
+export interface SocialNotification {
+  id: string;
+  user_id: string;
+  actor_id: string;
+  actor_username?: string | null;
+  actor_display_name?: string | null;
+  actor_avatar?: string | null;
+  event_type:
+  | 'follow'
+  | 'post_like'
+  | 'post_comment'
+  | 'comment_reply'
+  | 'post_shared'
+  | 'challenge_invite'
+  | 'challenge_voted'
+  | 'report_status';
+  entity_type: 'activity' | 'comment' | 'challenge' | 'profile';
+  entity_id?: string | null;
+  metadata?: Record<string, any>;
+  read_at?: string | null;
+  created_at: string;
+}
+
+export interface FollowRelation {
+  id: string;
+  follower_id: string;
+  followee_id: string;
+  status: 'active' | 'blocked';
+  created_at: string;
+}
+
+export interface ContentReport {
+  id: string;
+  reporter_id: string;
+  target_type: 'activity' | 'comment' | 'profile';
+  target_id: string;
+  reason: 'spam' | 'abuse' | 'sexual' | 'copyright' | 'other';
+  details?: string | null;
+  status: 'open' | 'reviewed' | 'dismissed' | 'actioned';
+  created_at: string;
+  updated_at: string;
 }
 
 export interface ActivityEngagement {
@@ -1497,6 +1970,7 @@ export interface SlotSelection {
 export interface GeneratedLook {
   id: string;
   user_id: string;
+  outfit_id?: string | null;
 
   // Storage
   image_url: string;

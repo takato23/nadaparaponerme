@@ -1,14 +1,18 @@
 /**
  * Payment & Subscription Types
  *
- * Types for MercadoPago integration and subscription management
+ * Types for MercadoPago integration and subscription management.
+ *
+ * 4-tier hybrid model: Free / Plus / Pro / Premium
+ * - Subscription for continuous value (closet, planner, stylist)
+ * - Try-on packs for burst / expensive usage
  */
 
 // ============================================================================
 // SUBSCRIPTION TIERS
 // ============================================================================
 
-export type SubscriptionTier = 'free' | 'pro' | 'premium';
+export type SubscriptionTier = 'free' | 'plus' | 'pro' | 'premium';
 
 export interface SubscriptionPlan {
   id: SubscriptionTier;
@@ -18,7 +22,8 @@ export interface SubscriptionPlan {
   price_monthly_usd: number;  // Price in USD
   features: string[];
   limits: {
-    ai_generations_per_month: number;
+    ai_uses_per_month: number;
+    tryon_per_month: number;
     max_closet_items: number;
     max_saved_outfits: number;
     can_use_virtual_tryon: boolean;
@@ -29,6 +34,48 @@ export interface SubscriptionPlan {
   };
   popular?: boolean;  // Badge for most popular plan
 }
+
+// ============================================================================
+// TRY-ON PACKS
+// ============================================================================
+
+export interface TryOnPack {
+  id: string;
+  name: string;
+  description: string;
+  tryon_count: number;
+  price_ars: number;
+  price_usd: number;
+  popular?: boolean;
+}
+
+export const TRYON_PACKS: TryOnPack[] = [
+  {
+    id: 'pack_basic',
+    name: 'Pack Básico',
+    description: '3 probadas extra',
+    tryon_count: 3,
+    price_ars: 2990,
+    price_usd: 1.99,
+  },
+  {
+    id: 'pack_pro',
+    name: 'Pack Pro',
+    description: '5 probadas extra',
+    tryon_count: 5,
+    price_ars: 4490,
+    price_usd: 2.99,
+    popular: true,
+  },
+  {
+    id: 'pack_evento',
+    name: 'Pack Evento',
+    description: '10 probadas para tu evento o viaje',
+    tryon_count: 10,
+    price_ars: 7990,
+    price_usd: 4.99,
+  },
+];
 
 // ============================================================================
 // SUBSCRIPTION STATUS
@@ -61,6 +108,8 @@ export interface Subscription {
 
   // Usage tracking
   ai_generations_used: number;
+  tryon_used: number;
+  tryon_bonus: number; // Extra try-ons from packs
 
   // Metadata
   created_at: string;
@@ -109,6 +158,8 @@ export type PaymentStatus =
   | 'refunded'
   | 'cancelled';
 
+export type PaymentType = 'subscription' | 'tryon_pack';
+
 export interface PaymentTransaction {
   id: string;
   user_id: string;
@@ -117,6 +168,7 @@ export interface PaymentTransaction {
   amount: number;
   currency: 'ARS' | 'USD';
   status: PaymentStatus;
+  type: PaymentType;
 
   // Payment provider details
   provider: 'mercadopago' | 'stripe' | 'paddle';
@@ -214,9 +266,9 @@ export const PAYWALL_FEATURES: PaywallFeature[] = [
   {
     id: 'virtual_tryon',
     name: 'Probador Virtual',
-    description: 'Probate outfits con tu foto',
+    description: 'Probate looks con tu foto',
     icon: 'checkroom',
-    required_tier: 'pro',
+    required_tier: 'plus',
     is_premium: false,
   },
   {
@@ -232,14 +284,14 @@ export const PAYWALL_FEATURES: PaywallFeature[] = [
     name: 'Style DNA Profile',
     description: 'Análisis profundo de tu estilo',
     icon: 'psychology',
-    required_tier: 'premium',
-    is_premium: true,
+    required_tier: 'pro',
+    is_premium: false,
   },
   {
-    id: 'unlimited_ai',
-    name: 'Créditos IA',
-    description: '400 créditos IA por mes',
-    icon: 'all_inclusive',
+    id: 'export_lookbooks',
+    name: 'Exportación HD',
+    description: 'Exportá lookbooks en alta resolución',
+    icon: 'download',
     required_tier: 'premium',
     is_premium: true,
   },
@@ -256,6 +308,11 @@ export interface UsageMetrics {
   // Monthly limits
   ai_generations_used: number;
   ai_generations_limit: number;
+
+  // Try-on tracking
+  tryon_used: number;
+  tryon_limit: number;
+  tryon_bonus: number;
 
   // Feature usage
   virtual_tryon_count: number;
@@ -275,76 +332,101 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
   {
     id: 'free',
     name: 'Free',
-    description: 'Para empezar a organizar tu armario',
+    description: 'Para probar y armar tu armario',
     price_monthly_ars: 0,
     price_monthly_usd: 0,
     features: [
-      'Hasta 50 prendas en tu armario',
-      '200 créditos IA por mes (Rápido)',
-      'Análisis básico de color',
-      'Outfits guardados ilimitados',
-      'Compartir en comunidad',
+      'Hasta 100 prendas en tu armario',
+      'Outfits básicos',
+      'Asistente de estilo incluido',
+      '1 probada de bienvenida',
     ],
     limits: {
-      ai_generations_per_month: 200,
-      max_closet_items: 50,
+      ai_uses_per_month: 50,
+      tryon_per_month: 1,
+      max_closet_items: 100,
       max_saved_outfits: -1,  // Unlimited
-      can_use_virtual_tryon: true,  // Enabled during testing phase
-      can_use_ai_designer: true,  // Enabled for all tiers
+      can_use_virtual_tryon: true,
+      can_use_ai_designer: false,
       can_use_lookbook: false,
       can_use_style_dna: false,
       can_export_lookbooks: false,
     },
   },
   {
-    id: 'pro',
-    name: 'Pro',
-    description: 'Para fashionistas serios',
-    price_monthly_ars: 2999,
-    price_monthly_usd: 9.99,
+    id: 'plus',
+    name: 'Plus',
+    description: 'Desbloqueá shopping real para completar tus looks',
+    price_monthly_ars: 7990,
+    price_monthly_usd: 7.99,
     features: [
-      'Todo lo de Free +',
-      'Prendas ilimitadas',
-      '300 créditos IA por mes',
-      'Probador virtual Rápido',
-      'Ultra habilitado',
-      'AI Fashion Designer',
-      'Lookbook Creator',
-      'Exportar lookbooks en HD',
-      'Análisis avanzado de gaps',
-      'Sin anuncios',
+      'Hasta 250 prendas',
+      '150 análisis de prendas por mes',
+      '600 mensajes de Kumbi por mes',
+      '8 búsquedas de shopping real por mes',
+      '4 try-ons por mes',
     ],
     limits: {
-      ai_generations_per_month: 300,
-      max_closet_items: -1,  // Unlimited
-      max_saved_outfits: -1,  // Unlimited
+      ai_uses_per_month: 150,
+      tryon_per_month: 4,
+      max_closet_items: 250,
+      max_saved_outfits: -1,
       can_use_virtual_tryon: true,
-      can_use_ai_designer: true,
-      can_use_lookbook: true,
+      can_use_ai_designer: false,
+      can_use_lookbook: false,
       can_use_style_dna: false,
-      can_export_lookbooks: true,
+      can_export_lookbooks: false,
     },
     popular: true,
   },
   {
+    id: 'pro',
+    name: 'Pro',
+    description: 'Para uso intensivo de Kumbi, shopping real y capa visual premium',
+    price_monthly_ars: 10990,
+    price_monthly_usd: 10.99,
+    features: [
+      'Hasta 600 prendas',
+      '400 análisis de prendas por mes',
+      '1500 mensajes de Kumbi por mes',
+      '20 búsquedas de shopping real por mes',
+      '8 try-ons por mes',
+      'AI Fashion Designer',
+      'Style DNA completo',
+      'Lookbook Creator',
+    ],
+    limits: {
+      ai_uses_per_month: 400,
+      tryon_per_month: 8,
+      max_closet_items: 600,
+      max_saved_outfits: -1,
+      can_use_virtual_tryon: true,
+      can_use_ai_designer: true,
+      can_use_lookbook: true,
+      can_use_style_dna: true,
+      can_export_lookbooks: false,
+    },
+  },
+  {
     id: 'premium',
     name: 'Premium',
-    description: 'Experiencia completa con IA avanzada',
-    price_monthly_ars: 4999,
-    price_monthly_usd: 16.99,
+    description: 'La experiencia completa sin límites',
+    price_monthly_ars: 17990,
+    price_monthly_usd: 11.99,
     features: [
-      'Todo lo de Pro +',
-      '400 créditos IA por mes',
-      'Style DNA Profile completo',
-      'Análisis de evolución de estilo',
-      'Recomendaciones personalizadas diarias',
+      'Hasta 1.500 prendas',
+      'Todo lo de Pro',
+      '18 probadas por mes',
+      'Exportación HD de lookbooks',
+      'Style DNA + evolución de estilo',
       'Acceso anticipado a features',
       'Soporte prioritario',
     ],
     limits: {
-      ai_generations_per_month: 400,
-      max_closet_items: -1,  // Unlimited
-      max_saved_outfits: -1,  // Unlimited
+      ai_uses_per_month: 500,
+      tryon_per_month: 18,
+      max_closet_items: 1500,
+      max_saved_outfits: -1,
       can_use_virtual_tryon: true,
       can_use_ai_designer: true,
       can_use_lookbook: true,

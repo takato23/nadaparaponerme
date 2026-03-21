@@ -1,6 +1,16 @@
 import { useState } from 'react';
 import type { ClothingItem, FitResult } from '../types';
-import * as aiService from '../src/services/aiService';
+
+type AIServiceModule = typeof import('../src/services/aiService');
+
+let aiServicePromise: Promise<AIServiceModule> | null = null;
+
+const loadAiService = (): Promise<AIServiceModule> => {
+    if (!aiServicePromise) {
+        aiServicePromise = import('../src/services/aiService');
+    }
+    return aiServicePromise;
+};
 
 export const useOutfitGeneration = (closet: ClothingItem[]) => {
     const [isGenerating, setIsGenerating] = useState(false);
@@ -30,6 +40,7 @@ export const useOutfitGeneration = (closet: ClothingItem[]) => {
         setFitResult(null);
 
         try {
+            const aiService = await loadAiService();
             const result = await withTimeout(aiService.generateOutfit(prompt, closet));
             setFitResult(result);
             return result;

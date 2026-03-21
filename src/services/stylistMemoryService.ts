@@ -1,3 +1,4 @@
+import type { StylistSurface } from '../../types';
 import { supabase } from '../lib/supabase';
 
 const MEMORY_CACHE_KEY = 'ojodeloca-stylist-memory-cache';
@@ -12,11 +13,11 @@ export type StylistMemoryRecord = {
   updated_at?: string;
 };
 
-export type StylistEventAction = 'accepted' | 'rejected' | 'generated' | 'saved';
+export type StylistEventAction = 'accepted' | 'rejected' | 'generated' | 'saved' | 'wore' | 'did_not_wear';
 
 export type StylistEventInput = {
   thread_id?: string | null;
-  surface?: 'studio' | 'closet';
+  surface?: StylistSurface;
   prompt?: string | null;
   suggestion_json?: Record<string, any> | null;
   action: StylistEventAction;
