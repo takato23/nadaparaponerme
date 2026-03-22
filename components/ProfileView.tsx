@@ -237,6 +237,7 @@ const ProfileView = ({
     onViewUserProfile
 }: ProfileViewProps) => {
     const { theme, toggleTheme } = useThemeContext();
+    const isDarkTheme = theme === 'dark';
     const [pendingRequests, setPendingRequests] = useState(0);
     const [activeBorrows, setActiveBorrows] = useState(0);
     const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -625,24 +626,36 @@ const ProfileView = ({
     }, [currentWaitlistEntries]);
 
     return (
-        <div className="relative h-full w-full overflow-y-auto animate-fade-in bg-[radial-gradient(circle_at_top_left,_rgba(255,255,255,0.62),_transparent_34%),linear-gradient(180deg,#f7f0e8_0%,#fbf8f4_38%,#f2ece4_100%)] p-6">
+        <div className={`relative h-full w-full overflow-y-auto animate-fade-in p-6 ${
+            isDarkTheme
+                ? 'bg-[radial-gradient(circle_at_top_left,_rgba(255,255,255,0.06),_transparent_34%),linear-gradient(180deg,#08111a_0%,#10212b_42%,#0d1721_100%)]'
+                : 'bg-[radial-gradient(circle_at_top_left,_rgba(255,255,255,0.62),_transparent_34%),linear-gradient(180deg,#f7f0e8_0%,#fbf8f4_38%,#f2ece4_100%)]'
+        }`}>
             <div className="noise-overlay opacity-[0.04]" />
-            <div className="absolute -left-24 top-10 h-72 w-72 rounded-full bg-[radial-gradient(circle,_rgba(255,255,255,0.72)_0%,_transparent_70%)] blur-3xl" />
-            <div className="absolute -right-24 top-1/3 h-80 w-80 rounded-full bg-[radial-gradient(circle,_rgba(154,212,192,0.18)_0%,_transparent_70%)] blur-3xl" />
+            <div className={`absolute -left-24 top-10 h-72 w-72 rounded-full blur-3xl ${
+                isDarkTheme
+                    ? 'bg-[radial-gradient(circle,_rgba(42,161,167,0.18)_0%,_transparent_70%)]'
+                    : 'bg-[radial-gradient(circle,_rgba(255,255,255,0.72)_0%,_transparent_70%)]'
+            }`} />
+            <div className={`absolute -right-24 top-1/3 h-80 w-80 rounded-full blur-3xl ${
+                isDarkTheme
+                    ? 'bg-[radial-gradient(circle,_rgba(154,212,192,0.12)_0%,_transparent_70%)]'
+                    : 'bg-[radial-gradient(circle,_rgba(154,212,192,0.18)_0%,_transparent_70%)]'
+            }`} />
 
             <div className="relative mx-auto max-w-4xl space-y-8">
 
                 {/* Header Profile */}
-                <div className="relative overflow-hidden rounded-[2.6rem] border border-white/70 bg-white/56 px-6 py-8 text-center shadow-[0_24px_70px_rgba(24,24,27,0.12)] backdrop-blur-[24px]">
-                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.72),transparent_42%)]" />
+                <div className="relative overflow-hidden rounded-[2.6rem] border border-white/70 bg-white/56 px-6 py-8 text-center shadow-[0_24px_70px_rgba(24,24,27,0.12)] backdrop-blur-[24px] dark:border-white/10 dark:bg-[linear-gradient(180deg,rgba(8,17,26,0.84),rgba(20,52,59,0.74))]">
+                    <div className={`absolute inset-0 ${isDarkTheme ? 'bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.1),transparent_42%)]' : 'bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.72),transparent_42%)]'}`} />
                     <div className="absolute top-0 right-0 flex items-center gap-2 m-4">
                         <SocialNotificationsBell
                             onClick={() => setShowNotifications(true)}
-                            className="relative rounded-full border border-white/50 bg-white/35 p-3 shadow-sm backdrop-blur-md transition-colors hover:bg-white/55"
+                            className="relative rounded-full border border-white/50 bg-white/35 p-3 shadow-sm backdrop-blur-md transition-colors hover:bg-white/55 dark:border-white/10 dark:bg-white/10 dark:hover:bg-white/16"
                         />
                         <button
                             onClick={toggleTheme}
-                            className="rounded-full border border-white/50 bg-white/35 p-3 shadow-sm backdrop-blur-md transition-colors hover:bg-white/55"
+                            className="rounded-full border border-white/50 bg-white/35 p-3 shadow-sm backdrop-blur-md transition-colors hover:bg-white/55 dark:border-white/10 dark:bg-white/10 dark:hover:bg-white/16"
                         >
                             <span className="material-symbols-outlined text-gray-900 dark:text-white">
                                 {theme === 'dark' ? 'light_mode' : 'dark_mode'}
@@ -669,23 +682,23 @@ const ProfileView = ({
                         </div>
                     </div>
 
-                    <p className="relative z-10 text-[11px] font-bold uppercase tracking-[0.28em] text-black/42">Perfil</p>
+                    <p className="relative z-10 text-[11px] font-bold uppercase tracking-[0.28em] text-black/42 dark:text-white/45">Perfil</p>
                     <h2 className="relative z-10 mt-3 text-4xl font-semibold tracking-[-0.04em] text-gray-900 dark:text-white">{displayName}</h2>
-                    <p className="relative z-10 text-gray-500 dark:text-gray-400">@{displayName.toLowerCase().replace(/\s+/g, '_')}</p>
+                    <p className="relative z-10 text-gray-500 dark:text-gray-300">@{displayName.toLowerCase().replace(/\s+/g, '_')}</p>
                     <div className="relative z-10 mt-4 flex items-center gap-6 text-sm">
                         <button
                             onClick={() => void openSocialList('followers')}
-                            className="rounded-2xl border border-white/55 bg-white/36 px-4 py-3 text-center shadow-[0_10px_24px_rgba(0,0,0,0.05)] backdrop-blur-xl transition hover:bg-white/56"
+                            className="rounded-2xl border border-white/55 bg-white/36 px-4 py-3 text-center shadow-[0_10px_24px_rgba(0,0,0,0.05)] backdrop-blur-xl transition hover:bg-white/56 dark:border-white/10 dark:bg-white/10 dark:hover:bg-white/16"
                         >
                             <p className="font-bold text-gray-900 dark:text-white">{socialSummary.followers_count}</p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 uppercase">Seguidores</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-300 uppercase">Seguidores</p>
                         </button>
                         <button
                             onClick={() => void openSocialList('following')}
-                            className="rounded-2xl border border-white/55 bg-white/36 px-4 py-3 text-center shadow-[0_10px_24px_rgba(0,0,0,0.05)] backdrop-blur-xl transition hover:bg-white/56"
+                            className="rounded-2xl border border-white/55 bg-white/36 px-4 py-3 text-center shadow-[0_10px_24px_rgba(0,0,0,0.05)] backdrop-blur-xl transition hover:bg-white/56 dark:border-white/10 dark:bg-white/10 dark:hover:bg-white/16"
                         >
                             <p className="font-bold text-gray-900 dark:text-white">{socialSummary.following_count}</p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 uppercase">Siguiendo</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-300 uppercase">Siguiendo</p>
                         </button>
                     </div>
 

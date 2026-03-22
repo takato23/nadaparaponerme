@@ -5,6 +5,44 @@ export const CHAT_CONVERSATIONS_STORAGE_KEY = 'ojodeloca-chat-conversations';
 
 const MAX_LOCAL_FALLBACK_CONVERSATIONS = 12;
 const MAX_LOCAL_FALLBACK_MESSAGES = 12;
+const TRANSIENT_ASSISTANT_ERROR_PATTERNS = [
+  /^¡Ups! Algo salió mal\./i,
+  /^No pude hablar con Kumbi/i,
+  /^⏱️ Kumbi tardó más de lo esperado\./i,
+];
+
+function isTransientAssistantErrorMessage(message: ChatMessage): boolean {
+  return message.role === 'assistant'
+    && typeof message.content === 'string'
+    && TRANSIENT_ASSISTANT_ERROR_PATTERNS.some((pattern) => pattern.test(message.content.trim()));
+}
+
+function sanitizeConversation(conversation: ChatConversation): ChatConversation | null {
+  if (conversation.messages.some((message) => message.role === 'user')) {
+    return conversation;
+  }
+
+  const messages = conversation.messages.filter((message) => !isTransientAssistantErrorMessage(message));
+  if (messages.length === 0) {
+    return null;
+  }
+
+  if (messages.length === conversation.messages.length) {
+    return conversation;
+  }
+
+  return {
+    ...conversation,
+    messages,
+    updatedAt: Date.now(),
+  };
+}
+
+function sanitizeConversations(conversations: ChatConversation[]): ChatConversation[] {
+  return conversations
+    .map((conversation) => sanitizeConversation(conversation))
+    .filter((conversation): conversation is ChatConversation => Boolean(conversation));
+}
 
 function stripOutfitSuggestion(
   outfitSuggestion?: ChatMessage['outfitSuggestion'],
@@ -42,7 +80,7 @@ function toLocalFallbackMessage(message: ChatMessage): ChatMessage {
 }
 
 export function buildChatConversationsLocalFallback(conversations: ChatConversation[]): ChatConversation[] {
-  return conversations
+  return sanitizeConversations(conversations)
     .slice(0, MAX_LOCAL_FALLBACK_CONVERSATIONS)
     .map((conversation) => ({
       ...conversation,
@@ -85,12 +123,12 @@ export async function loadPersistedChatConversations(): Promise<ChatConversation
     CHAT_CONVERSATIONS_STORAGE_KEY,
   );
   if (Array.isArray(storedFromIndexedDb?.conversations)) {
-    return storedFromIndexedDb.conversations;
+    return sanitizeConversations(storedFromIndexedDb.conversations);
   }
 
-  const legacyConversations = parseStoredConversations(
+  const legacyConversations = sanitizeConversations(parseStoredConversations(
     window.localStorage.getItem(CHAT_CONVERSATIONS_STORAGE_KEY),
-  );
+  ));
 
   if (legacyConversations.length > 0) {
     await aiStorage.set(CHAT_CONVERSATIONS_STORAGE_KEY, {
@@ -116,9 +154,11 @@ export async function persistChatConversations(conversations: ChatConversation[]
     return;
   }
 
+  const sanitizedConversations = sanitizeConversations(conversations);
+
   try {
     await aiStorage.set(CHAT_CONVERSATIONS_STORAGE_KEY, {
-      conversations,
+      conversations: sanitizedConversations,
       updatedAt: Date.now(),
     });
   } catch (error) {
@@ -126,14 +166,14 @@ export async function persistChatConversations(conversations: ChatConversation[]
   }
 
   try {
-    const fallback = buildChatConversationsLocalFallback(conversations);
+    const fallback = buildChatConversationsLocalFallback(sanitizedConversations);
     window.localStorage.setItem(
       CHAT_CONVERSATIONS_STORAGE_KEY,
       JSON.stringify(fallback),
     );
   } catch (error) {
     try {
-      const emergencyFallback = buildChatConversationsLocalFallback(conversations)
+      const emergencyFallback = buildChatConversationsLocalFallback(sanitizedConversations)
         .slice(0, 4)
         .map((conversation) => ({
           ...conversation,

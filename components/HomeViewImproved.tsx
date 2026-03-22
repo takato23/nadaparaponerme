@@ -282,9 +282,15 @@ export default function HomeViewImproved({
       <div className="relative mx-auto flex max-w-7xl flex-col gap-4 px-3 pb-[7.5rem] pt-3 md:gap-4 md:px-6 md:pb-6 md:pt-4">
         <div className="liquid-glass rounded-[2rem] px-4 py-3 md:px-5 md:py-4">
           <div className="flex items-center justify-between gap-3 md:grid md:grid-cols-[auto_minmax(0,1fr)_auto_auto_auto] md:items-center md:gap-3">
-            <div className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-white/56 shadow-[0_10px_18px_rgba(0,0,0,0.05)] backdrop-blur-xl md:h-14 md:w-14">
+            <button
+              type="button"
+              onClick={onNavigateToActivity}
+              aria-label="Abrir actividad"
+              title="Abrir actividad"
+              className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-white/56 shadow-[0_10px_18px_rgba(0,0,0,0.05)] backdrop-blur-xl transition hover:-translate-y-0.5 hover:bg-white/72 md:h-14 md:w-14"
+            >
               <span className="material-symbols-outlined text-[22px] text-[#2aa1a7]">apps</span>
-            </div>
+            </button>
             <h1 className="flex-1 font-serif text-left text-[clamp(1.9rem,7vw,3.4rem)] font-semibold leading-none tracking-[-0.05em] text-[color:var(--home-ink)] md:text-[clamp(2.5rem,4.2vw,4.3rem)]">
               ¿Qué te ponés hoy?
             </h1>

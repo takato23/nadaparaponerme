@@ -88,4 +88,35 @@ describe('chatConversationStorage', () => {
     expect(snapshot[0].messages[1].outfitSuggestion?.aiGeneratedItems).toBeUndefined();
     expect(snapshot[0].messages[1].saveLookDraft?.outfitSuggestion?.aiGeneratedItems).toBeUndefined();
   });
+
+  it('removes transient assistant errors when the user never sent a message', () => {
+    const conversations: ChatConversation[] = [
+      {
+        id: 'chat-2',
+        title: 'Sin interacción',
+        createdAt: 1,
+        updatedAt: 2,
+        messages: [
+          {
+            id: 'assistant-welcome',
+            role: 'assistant',
+            content: '¡Hola! Soy tu asistente de moda personal.',
+            timestamp: 1,
+          },
+          {
+            id: 'assistant-error',
+            role: 'assistant',
+            content: '¡Ups! Algo salió mal. Intentá de nuevo en unos segundos.',
+            timestamp: 2,
+          },
+        ],
+      },
+    ];
+
+    const snapshot = buildChatConversationsLocalFallback(conversations);
+
+    expect(snapshot).toHaveLength(1);
+    expect(snapshot[0].messages).toHaveLength(1);
+    expect(snapshot[0].messages[0].content).toContain('¡Hola!');
+  });
 });

@@ -64,6 +64,20 @@ export default function ClosetItemCard({
     return getImageUrl(item, viewMode === 'grid');
   }, [item, viewMode]);
 
+  const displayTitle = useMemo(() => {
+    const candidates = [
+      item.metadata?.subcategory,
+      (item as ClothingItem & { name?: string }).name,
+      item.metadata?.category,
+    ];
+
+    const sanitized = candidates
+      .map((value) => value?.trim())
+      .find((value) => value && !/^auto-generated test item:?/i.test(value));
+
+    return sanitized || 'Prenda';
+  }, [item]);
+
   const statusBadge = useMemo(() => {
     if (item.status === 'virtual') {
       return {
@@ -178,7 +192,7 @@ export default function ClosetItemCard({
           )}
           <img
             src={imageUrl}
-            alt={item.metadata?.subcategory || 'Clothing item'}
+            alt={displayTitle}
             className={`w-full h-full object-contain p-2 transition-transform duration-500 group-hover:scale-105 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
             loading="lazy"
             onLoad={() => setImageLoaded(true)}
@@ -214,7 +228,7 @@ export default function ClosetItemCard({
           </div>
 
           <h3 className="mt-2 text-base font-semibold text-text-primary dark:text-gray-100 capitalize truncate group-hover:text-primary transition-colors">
-            {item.metadata?.subcategory || 'Sin categoría'}
+            {displayTitle}
           </h3>
           <p className="mt-1 text-sm text-text-secondary dark:text-gray-400 capitalize truncate font-medium">
             {[item.metadata?.color_primary, item.metadata?.description].filter(Boolean).join(' • ') || 'Sin detalle'}
@@ -254,7 +268,7 @@ export default function ClosetItemCard({
                   ? 'bg-[#08111a] text-white shadow-sm'
                   : 'border border-black/10 bg-white/90 text-[#14343b] hover:bg-[#f4f7f8]'
               }`}
-              aria-label={`${isSelected ? 'Quitar' : 'Agregar'} ${item.metadata?.subcategory || 'prenda'} del look`}
+              aria-label={`${isSelected ? 'Quitar' : 'Agregar'} ${displayTitle} del look`}
             >
               {isSelected ? 'Quitar' : 'Agregar'}
             </button>
@@ -297,7 +311,7 @@ export default function ClosetItemCard({
       onTouchEnd={handleTouchEnd}
       role="button"
       tabIndex={0}
-      aria-label={`${item.metadata?.subcategory || 'Prenda'} - ${item.metadata?.color_primary || 'sin color'}${isSelected ? ' - Seleccionada' : ''}`}
+      aria-label={`${displayTitle} - ${item.metadata?.color_primary || 'sin color'}${isSelected ? ' - Seleccionada' : ''}`}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
@@ -314,7 +328,7 @@ export default function ClosetItemCard({
 
         <img
           src={imageUrl}
-          alt={item.metadata?.subcategory || 'Clothing item'}
+          alt={displayTitle}
           className={`
             w-full h-full object-cover transition-all duration-300 ease-out
             ${imageLoaded ? 'opacity-100 shimmer-effect' : 'opacity-0'}
@@ -451,7 +465,7 @@ export default function ClosetItemCard({
 
               <div className="relative">
                 <h4 className="font-bold text-base text-gray-900 capitalize mb-1 line-clamp-1">
-                  {item.metadata?.subcategory || 'Sin categoría'}
+                  {displayTitle}
                 </h4>
                 <p className="text-sm text-gray-700 capitalize mb-2">
                   {item.metadata?.category || 'Prenda'}
