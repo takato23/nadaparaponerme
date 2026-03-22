@@ -22,6 +22,7 @@ import { getSessionUser } from './authService';
 import * as analytics from './analyticsService';
 import * as closetService from './closetService';
 import * as outfitService from './outfitService';
+import { getSafePublicDisplayName } from '../utils/publicProfile';
 
 type TimelineVisibilityInput = TimelineVisibility | 'friends';
 type ImportMode = 'save' | 'wish';
@@ -318,7 +319,7 @@ function mapFeedRows(data: any[]): ActivityFeedItem[] {
       id: item.id,
       user_id: item.actor_id || item.user_id,
       actor_id: item.actor_id,
-      user_name: item.actor_display_name || item.actor_username || 'Usuario',
+      user_name: getSafePublicDisplayName(item.actor_display_name, item.actor_username, 'Usuario'),
       user_avatar: item.actor_avatar,
       activity_type: normalizeActivityType(item.activity_type),
       timestamp: item.created_at,

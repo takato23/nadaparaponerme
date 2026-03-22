@@ -4,6 +4,14 @@ export function isEmailLike(value: string | null | undefined): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized);
 }
 
+export function getEmailLocalPart(value: string | null | undefined): string | null {
+  const normalized = (value || '').trim();
+  if (!isEmailLike(normalized)) return null;
+
+  const localPart = normalized.split('@')[0]?.trim();
+  return localPart || null;
+}
+
 export function getSafePublicDisplayName(
   displayName: string | null | undefined,
   username: string | null | undefined,
@@ -17,6 +25,11 @@ export function getSafePublicDisplayName(
   const normalizedUsername = username?.trim();
   if (normalizedUsername && !isEmailLike(normalizedUsername)) {
     return normalizedUsername;
+  }
+
+  const emailLocalPart = getEmailLocalPart(normalizedDisplayName) || getEmailLocalPart(normalizedUsername);
+  if (emailLocalPart) {
+    return emailLocalPart;
   }
 
   return fallback;

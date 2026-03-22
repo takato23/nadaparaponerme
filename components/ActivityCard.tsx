@@ -48,6 +48,7 @@ const ActivityCard = ({
   const [didTapSave, setDidTapSave] = useState(false);
   const [didTapWish, setDidTapWish] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [avatarLoadError, setAvatarLoadError] = useState(false);
 
   useEffect(() => {
     if (!didTapSave) return;
@@ -64,6 +65,11 @@ const ActivityCard = ({
   const activityIcon = getActivityIcon(activity.activity_type);
   const activityDescription = getActivityDescription(activity);
   const relativeTime = formatRelativeTime(activity.timestamp);
+  const safeUserName = activity.user_name?.trim() || 'Usuario';
+  const avatarUrl = typeof activity.user_avatar === 'string' && /^https?:\/\//i.test(activity.user_avatar)
+    ? activity.user_avatar
+    : null;
+  const avatarInitial = safeUserName.slice(0, 1).toUpperCase() || 'U';
 
   const outfitBundle = activity.metadata_payload?.outfit_bundle as {
     top?: ClothingItem;
@@ -282,13 +288,22 @@ const ActivityCard = ({
           onClick={() => onViewUser?.(activity)}
           className="flex min-w-0 items-center gap-3 text-left"
         >
-          <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-accent-primary to-accent-secondary text-xl">
-            {activity.user_avatar || '👤'}
+          <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-accent-primary to-accent-secondary text-xl text-white">
+            {avatarUrl && !avatarLoadError ? (
+              <img
+                src={avatarUrl}
+                alt={safeUserName}
+                className="h-full w-full object-cover"
+                onError={() => setAvatarLoadError(true)}
+              />
+            ) : (
+              <span className="text-sm font-semibold uppercase tracking-[0.12em]">{avatarInitial}</span>
+            )}
           </div>
 
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <p className="truncate text-[15px] font-semibold text-text-primary dark:text-gray-200">{activity.user_name}</p>
+              <p className="truncate text-[15px] font-semibold text-text-primary dark:text-gray-200">{safeUserName}</p>
               <span className="text-xs text-text-secondary dark:text-gray-400">•</span>
               <span className="whitespace-nowrap text-xs text-text-secondary dark:text-gray-400">{relativeTime}</span>
             </div>
