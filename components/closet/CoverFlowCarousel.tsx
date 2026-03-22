@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence, PanInfo } from 'framer-motion';
 import type { ClothingItem } from '../../types';
 import { getImageUrl, PLACEHOLDERS } from '../../src/utils/imagePlaceholder';
+import { resolveColorSwatch } from '../../src/utils/colorUtils';
 
 interface CoverFlowCarouselProps {
     items: ClothingItem[];
@@ -198,8 +199,33 @@ interface CarouselItemProps {
     isMobile: boolean;
 }
 
+const CATEGORY_ICONS: Record<string, string> = {
+    top: 'styler',
+    bottom: 'checkroom',
+    shoes: 'steps',
+    accessory: 'diamond',
+    outerwear: 'dry_cleaning',
+};
+
+function sanitizeDisplayLabel(value: string | undefined | null, fallback: string): string {
+    const sanitized = value?.trim().replace(/^auto-generated test item:\s*/i, '');
+    return sanitized || fallback;
+}
+
 const CarouselItem = ({ item, offset, isActive, onClick, isMobile }: CarouselItemProps) => {
     const imageUrl = useMemo(() => getImageUrl(item as any, false), [item]);
+    const hasImage = imageUrl !== PLACEHOLDERS.noImage;
+    const colorSwatch = useMemo(() => resolveColorSwatch(item.metadata?.color_primary), [item.metadata?.color_primary]);
+    const itemTitle = useMemo(
+        () => sanitizeDisplayLabel(item.metadata?.subcategory, item.metadata?.category || 'Prenda'),
+        [item.metadata?.category, item.metadata?.subcategory],
+    );
+    const itemSubtitle = useMemo(() => {
+        const categoryLabel = sanitizeDisplayLabel(item.metadata?.category, 'Prenda');
+        return item.metadata?.color_primary ? `${categoryLabel} • ${colorSwatch.label}` : categoryLabel;
+    }, [colorSwatch.label, item.metadata?.category, item.metadata?.color_primary]);
+    const categoryIcon = CATEGORY_ICONS[item.metadata?.category || ''] || 'checkroom';
+
     // 3D Transform calculations tuned for mobile/desktop
     const spacing = isMobile ? 52 : 62;
     const x = offset * spacing;
@@ -243,38 +269,70 @@ const CarouselItem = ({ item, offset, isActive, onClick, isMobile }: CarouselIte
         ${isActive ? 'shadow-primary/30 ring-1 ring-primary/30' : 'brightness-75 grayscale-[0.3]'}
         bg-white dark:bg-gray-800
       `}>
-                <div className="w-full h-full relative flex items-center justify-center p-4 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900">
-                    {/* Image */}
+                <div
+                    className="w-full h-full relative flex items-center justify-center p-4"
+                    style={hasImage
+                        ? undefined
+                        : {
+                            background: `radial-gradient(circle at top, rgba(255,255,255,0.55), transparent 42%), linear-gradient(180deg, ${colorSwatch.cssColor}22 0%, ${colorSwatch.cssColor}66 100%)`,
+                        }}
+                >
+                    {hasImage ? (
+                        <img
+                            src={imageUrl}
+                            alt={itemTitle}
+                            className="w-full h-full object-contain drop-shadow-xl"
+                            draggable={false}
+                            onError={(event) => {
+                                event.currentTarget.src = PLACEHOLDERS.error;
+                            }}
+                        />
+                    ) : (
+                        <div className="flex h-full w-full flex-col items-center justify-center rounded-[1.75rem] border border-white/35 bg-white/25 px-5 py-6 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] backdrop-blur-md">
+                            <div
+                                className="mb-4 flex h-16 w-16 items-center justify-center rounded-full border shadow-sm"
+                                style={{
+                                    backgroundColor: `${colorSwatch.cssColor}33`,
+                                    borderColor: colorSwatch.borderColor,
+                                    color: colorSwatch.checkColor,
+                                }}
+                            >
+                                <span className="material-symbols-outlined text-[30px]">{categoryIcon}</span>
+                            </div>
+                            <span className="mb-2 rounded-full border border-white/35 bg-white/35 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#14343b]">
+                                Sin foto
+                            </span>
+                            <h3 className="max-w-[14rem] text-lg font-semibold leading-tight text-[#14343b]">
+                                {itemTitle}
+                            </h3>
+                            <p className="mt-2 max-w-[14rem] text-sm font-medium text-[#14343bcc]">
+                                {itemSubtitle}
+                            </p>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* Reflection (Visual trick) - Made more subtle for glass theme */}
+            {hasImage && (
+                <div
+                    className="absolute top-full left-0 w-full h-20 opacity-20 pointer-events-none"
+                    style={{
+                        transform: 'scaleY(-1) translateY(-10px)',
+                        maskImage: 'linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,1) 20%, rgba(0,0,0,0) 100%)',
+                        WebkitMaskImage: 'linear-gradient(to bottom, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 60%)'
+                    }}
+                >
                     <img
                         src={imageUrl}
-                        alt={item.metadata?.subcategory || 'Prenda'}
-                        className="w-full h-full object-contain drop-shadow-xl"
-                        draggable={false}
+                        alt=""
+                        className="w-full h-full object-contain blur-[2px]"
                         onError={(event) => {
                             event.currentTarget.src = PLACEHOLDERS.error;
                         }}
                     />
                 </div>
-            </div>
-
-            {/* Reflection (Visual trick) - Made more subtle for glass theme */}
-            <div
-                className="absolute top-full left-0 w-full h-20 opacity-20 pointer-events-none"
-                style={{
-                    transform: 'scaleY(-1) translateY(-10px)',
-                    maskImage: 'linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,1) 20%, rgba(0,0,0,0) 100%)',
-                    WebkitMaskImage: 'linear-gradient(to bottom, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 60%)'
-                }}
-            >
-                <img
-                    src={imageUrl}
-                    alt=""
-                    className="w-full h-full object-contain blur-[2px]"
-                    onError={(event) => {
-                        event.currentTarget.src = PLACEHOLDERS.error;
-                    }}
-                />
-            </div>
+            )}
         </motion.div>
     );
 };
