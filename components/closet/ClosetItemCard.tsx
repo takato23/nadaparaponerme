@@ -78,6 +78,12 @@ export default function ClosetItemCard({
     return sanitized || 'Prenda';
   }, [item]);
 
+  const displaySubtitle = useMemo(() => {
+    const sanitizedDescription = item.metadata?.description?.trim().replace(/^auto-generated test item:\s*/i, '');
+    const subtitle = [item.metadata?.color_primary, sanitizedDescription].filter(Boolean).join(' • ');
+    return subtitle || 'Sin detalle';
+  }, [item]);
+
   const statusBadge = useMemo(() => {
     if (item.status === 'virtual') {
       return {
@@ -231,7 +237,7 @@ export default function ClosetItemCard({
             {displayTitle}
           </h3>
           <p className="mt-1 text-sm text-text-secondary dark:text-gray-400 capitalize truncate font-medium">
-            {[item.metadata?.color_primary, item.metadata?.description].filter(Boolean).join(' • ') || 'Sin detalle'}
+            {displaySubtitle}
           </p>
           {item.metadata?.vibe_tags && item.metadata.vibe_tags.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-1.5">
