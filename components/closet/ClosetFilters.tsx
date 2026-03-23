@@ -10,7 +10,7 @@
  * - Smooth animations
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import type { AdvancedFilters, CategoryFilter } from '../../types/closet';
 import { motion, AnimatePresence } from 'framer-motion';
 import { normalizeColorValue, resolveColorSwatch } from '../../src/utils/colorUtils';
@@ -51,11 +51,33 @@ export default function ClosetFilters({
   filteredCount
 }: ClosetFiltersProps) {
   const [localFilters, setLocalFilters] = useState<AdvancedFilters>(filters);
+  const panelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
     setLocalFilters(filters);
   }, [filters, isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    panelRef.current?.focus();
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onClose();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen, onClose]);
 
   const handleApply = () => {
     onApplyFilters(localFilters);
@@ -149,7 +171,7 @@ export default function ClosetFilters({
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center">
+        <div className="fixed inset-0 z-[70] flex items-end justify-center p-0 md:items-center md:p-6">
           {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
@@ -157,15 +179,21 @@ export default function ClosetFilters({
             exit={{ opacity: 0 }}
             className="absolute inset-0 bg-black/60 backdrop-blur-sm"
             onClick={onClose}
+            aria-hidden="true"
           />
 
           {/* Bottom Sheet */}
           <motion.div
+            ref={panelRef}
             initial={{ y: '100%' }}
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="relative flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl border-t border-white/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(223,231,236,0.9))] shadow-2xl backdrop-blur-xl dark:border-white/20 dark:bg-gray-900/95 md:rounded-3xl"
+            className="relative z-[71] flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl border-t border-white/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(223,231,236,0.92))] shadow-2xl backdrop-blur-xl dark:border-white/20 dark:bg-gray-900/95 md:rounded-3xl"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Filtros avanzados del armario"
+            tabIndex={-1}
           >
             {/* Header */}
             <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/70 bg-white/72 px-6 py-5 backdrop-blur-md dark:border-gray-700/50 dark:bg-gray-900/80">

@@ -662,7 +662,10 @@ export default function ClosetViewEnhanced({
   ]);
 
   const renderListView = () => (
-    <div className="h-full overflow-y-auto px-4 py-4 pb-[calc(7rem+env(safe-area-inset-bottom))]">
+    <div
+      key={selection.isSelectionMode ? 'list-selection' : 'list-browse'}
+      className="h-full overflow-y-auto px-4 py-4 pb-[calc(7rem+env(safe-area-inset-bottom))]"
+    >
       <div className="mx-auto flex max-w-5xl flex-col gap-3">
         {displayItems.map((item, index) => (
           <ClosetItemCard
@@ -851,6 +854,7 @@ export default function ClosetViewEnhanced({
               renderListView()
             ) : viewPreferences.currentViewMode === 'masonry' && viewPreferences.isDesktop ? (
               <ClosetGridMasonry
+                key={selection.isSelectionMode ? 'masonry-selection' : 'masonry-browse'}
                 items={displayItems}
                 onItemClick={handleItemClick}
                 showVersatilityScore={viewPreferences.preferences.shared.visualTheme.showVersatilityScore}
@@ -870,9 +874,14 @@ export default function ClosetViewEnhanced({
                 emptyActionLabel={filters.hasFilters ? 'Limpiar filtros' : 'Agregar prenda'}
               />
             ) : viewPreferences.currentViewMode === 'carousel' ? (
-              <ClosetPeekDeck items={displayItems} onItemClick={handleItemClick} />
+              <ClosetPeekDeck
+                key={selection.isSelectionMode ? 'carousel-selection' : 'carousel-browse'}
+                items={displayItems}
+                onItemClick={handleItemClick}
+              />
             ) : (
               <ClosetGridVirtualized
+                key={selection.isSelectionMode ? 'grid-selection' : 'grid-browse'}
                 items={displayItems}
                 onItemClick={handleItemClick}
                 showVersatilityScore={viewPreferences.preferences.shared.visualTheme.showVersatilityScore}
