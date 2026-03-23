@@ -460,6 +460,12 @@ export default function LiquidDetailModal({ item, isRecommended = false, isOpen,
 
     const handleAnalyzeItemAI = async () => {
         if (!localItem || isOnDemandAnalyzing) return;
+        if (!hasRealImage) {
+            const message = 'Esta prenda no tiene una foto real para analizar. Subí una imagen antes de usar IA.';
+            setError(message);
+            toast.error(message);
+            return;
+        }
 
         setIsOnDemandAnalyzing(true);
         setError(null);
@@ -484,6 +490,12 @@ export default function LiquidDetailModal({ item, isRecommended = false, isOpen,
 
     const handleRetryNormalization = async () => {
         if (!localItem || isRetryingNormalization) return;
+        if (!hasRealImage) {
+            const message = 'Esta prenda no tiene una foto real para normalizar. Subí una imagen antes de reintentar.';
+            setError(message);
+            toast.error(message);
+            return;
+        }
         setIsRetryingNormalization(true);
         try {
             const { retryClothingItemNormalization } = await import('../../src/services/closetService');
@@ -501,6 +513,12 @@ export default function LiquidDetailModal({ item, isRecommended = false, isOpen,
 
     const handlePremiumNormalization = async () => {
         if (!localItem || isPremiumNormalizing) return;
+        if (!hasRealImage) {
+            const message = 'Esta prenda no tiene una foto real para mejorar. Subí una imagen antes de continuar.';
+            setError(message);
+            toast.error(message);
+            return;
+        }
         setIsPremiumNormalizing(true);
         try {
             const { requestPremiumNormalization } = await import('../../src/services/closetService');
@@ -750,7 +768,7 @@ export default function LiquidDetailModal({ item, isRecommended = false, isOpen,
                                                                 </button>
 
                                                                 {isCategoryExpanded && (
-                                                                    <div className="border-t border-white/10 px-4 pb-4 pt-3">
+                                                                    <div className="border-t border-white/10 bg-black/35 px-4 pb-4 pt-3 backdrop-blur-md">
                                                                         <div className="flex flex-wrap gap-2">
                                                                             {detailCategoryOptions.map((option) => {
                                                                                 const isSelected = selectedCategoryChip === option.id;
@@ -789,7 +807,13 @@ export default function LiquidDetailModal({ item, isRecommended = false, isOpen,
                                                                 </span>
                                                                 {localItem.metadata?.color_primary && (
                                                                     <span className="px-3 py-1.5 rounded-full border border-white/16 bg-[rgba(10,14,26,0.5)] text-white text-xs font-semibold flex items-center gap-1.5 shadow-[0_10px_24px_rgba(0,0,0,0.12)] capitalize">
-                                                                        <div className="w-3 h-3 rounded-full shadow-inner border border-white/50" style={{ backgroundColor: colorSwatch.cssColor }} />
+                                                                        <div
+                                                                            className="w-3.5 h-3.5 rounded-full shadow-inner"
+                                                                            style={{
+                                                                                backgroundColor: colorSwatch.cssColor,
+                                                                                border: `1px solid ${colorSwatch.borderColor}`,
+                                                                            }}
+                                                                        />
                                                                         {localItem.metadata.color_primary}
                                                                     </span>
                                                                 )}
@@ -886,7 +910,7 @@ export default function LiquidDetailModal({ item, isRecommended = false, isOpen,
 
                                                     <button
                                                         onClick={handleAnalyzeItemAI}
-                                                        disabled={isOnDemandAnalyzing || localItem.aiStatus === 'processing'}
+                                                        disabled={isOnDemandAnalyzing || localItem.aiStatus === 'processing' || !hasRealImage}
                                                         className="mt-4 w-full py-4 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/20 backdrop-blur-md shadow-[0_4px_16px_0_rgba(255,255,255,0.1)] text-sm font-bold text-white transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
                                                     >
                                                         <span className="material-symbols-outlined text-[18px]">magic_button</span>
@@ -923,7 +947,7 @@ export default function LiquidDetailModal({ item, isRecommended = false, isOpen,
                                                             <button
                                                                 type="button"
                                                                 onClick={handleRetryNormalization}
-                                                                disabled={isRetryingNormalization}
+                                                                disabled={isRetryingNormalization || !hasRealImage}
                                                                 className="rounded-xl border border-white/18 bg-white/10 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-white/16 disabled:opacity-50"
                                                             >
                                                                 {isRetryingNormalization ? 'Reintentando...' : 'Reintentar'}
@@ -931,7 +955,7 @@ export default function LiquidDetailModal({ item, isRecommended = false, isOpen,
                                                             <button
                                                                 type="button"
                                                                 onClick={handlePremiumNormalization}
-                                                                disabled={isPremiumNormalizing}
+                                                                disabled={isPremiumNormalizing || !hasRealImage}
                                                                 className="rounded-xl border border-amber-300/30 bg-amber-400/20 px-3 py-2 text-xs font-semibold text-amber-50 transition-colors hover:bg-amber-400/28 disabled:opacity-50"
                                                             >
                                                                 {isPremiumNormalizing ? 'Mejorando...' : 'Mejorar foto'}

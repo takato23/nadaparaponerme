@@ -11,6 +11,7 @@ import ConfirmDeleteModal from './ui/ConfirmDeleteModal';
 import { useConsentPreferences } from '../hooks/useConsentPreferences';
 import { setConsentPreferences } from '../src/services/consentService';
 import { isAdminUser } from '../src/services/accessControlService';
+import { resolveColorSwatch } from '../src/utils/colorUtils';
 import type { ClothingItem, CommunityUser } from '../types';
 import SocialNotificationsBell from './SocialNotificationsBell';
 import SocialNotificationsPanel from './SocialNotificationsPanel';
@@ -371,27 +372,12 @@ const ProfileView = ({
 
         const max = sorted[0]?.[1] || 1;
 
-        // Map common color names to hex codes for visualization
-        const colorMap: Record<string, string> = {
-            'Negro': '#000000',
-            'Blanco': '#ffffff',
-            'Azul': '#3b82f6',
-            'Rojo': '#ef4444',
-            'Verde': '#10b981',
-            'Amarillo': '#eab308',
-            'Rosa': '#ec4899',
-            'Gris': '#6b7280',
-            'Beige': '#d6d3d1',
-            'Marrón': '#78350f',
-            'Naranja': '#f97316',
-            'Violeta': '#8b5cf6'
-        };
-
         return sorted.map(([label, count]) => ({
             label,
             count,
             height: `${(count / max) * 100}%`,
-            color: colorMap[label] || '#cbd5e1' // Default to slate-300
+            color: resolveColorSwatch(label).cssColor,
+            borderColor: resolveColorSwatch(label).borderColor,
         }));
     }, [closet]);
 
@@ -1293,7 +1279,7 @@ const ProfileView = ({
                                             className="w-full rounded-t-xl relative overflow-hidden group shadow-sm"
                                             style={{
                                                 backgroundColor: bar.color,
-                                                border: bar.color === '#ffffff' ? '1px solid #e5e7eb' : 'none'
+                                                border: `1px solid ${bar.borderColor}`
                                             }}
                                         >
                                             <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent"></div>

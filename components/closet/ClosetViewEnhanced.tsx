@@ -33,6 +33,7 @@ import { getImageUrl } from '../../src/utils/imagePlaceholder';
 
 const MAX_LOOK_SELECTION = 6;
 const MAX_EXTRA_ITEMS = 3;
+const LOOK_RECOMMENDATION_TIMEOUT_MS = 25000;
 const CLOSET_LOOK_BUILDER_SEEN_KEY = 'ojodeloca-closet-look-builder-seen';
 const CLOSET_TOUR_STEPS: SurfaceTourStep[] = [
   {
@@ -82,6 +83,22 @@ interface LookDraft {
   explanation: string;
   mode: LookComposerMode;
   extraItemIds?: string[];
+}
+
+function withAsyncTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMessage: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = window.setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
+
+    promise
+      .then((result) => {
+        window.clearTimeout(timer);
+        resolve(result);
+      })
+      .catch((error) => {
+        window.clearTimeout(timer);
+        reject(error);
+      });
+  });
 }
 
 export default function ClosetViewEnhanced({
@@ -362,6 +379,12 @@ export default function ClosetViewEnhanced({
       return;
     }
 
+    const categories = new Set(items.map((item) => item.metadata.category));
+    if (!categories.has('top') || !categories.has('bottom') || !categories.has('shoes')) {
+      toast.error('Para pedir un look con IA necesitás al menos una prenda de arriba, una de abajo y un calzado.');
+      return;
+    }
+
     markLookBuilderSeen();
 
     const selectedLabels = (baseItems || [])
@@ -373,7 +396,11 @@ export default function ClosetViewEnhanced({
 
     setIsGeneratingLook(true);
     try {
-      const result = await generateOutfit(prompt, items);
+      const result = await withAsyncTimeout(
+        generateOutfit(prompt, items),
+        LOOK_RECOMMENDATION_TIMEOUT_MS,
+        'La IA tardó demasiado en cerrar el look. Reintentá en unos segundos.'
+      );
       if (!result.top_id || !result.bottom_id || !result.shoes_id) {
         toast.error('No pude cerrar un look completo con tu armario.');
         return;
