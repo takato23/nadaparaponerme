@@ -20,6 +20,10 @@ import { CreditsIndicator } from './CreditsIndicator';
 import { SuccessFeedback, useSuccessFeedback } from './ui/SuccessFeedback';
 import { ROUTES } from '../src/routes';
 import QuickEraserModal from './QuickEraserModal';
+import { useAccessibleModal } from '../hooks/useFocusTrap';
+import { SegmentedControl } from './ui/SegmentedControl';
+import { Chip } from './ui/Chip';
+import { ListGroup, ListRow } from './ui/ListGroup';
 
 interface AddItemViewProps {
   onAddLocalItem: (item: ClothingItem) => void;
@@ -29,22 +33,6 @@ interface AddItemViewProps {
 }
 
 type ViewState = 'capture' | 'camera' | 'preview' | 'generate' | 'analyzing' | 'editing';
-
-// Reusable Chip Component
-const Chip = ({ label, selected, onClick }: { label: string; selected: boolean; onClick: () => void }) => (
-  <button
-    onClick={onClick}
-    className={`
-      px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-200
-      ${selected
-        ? 'bg-primary text-white shadow-glow-accent transform scale-105'
-        : 'bg-gray-100 dark:bg-gray-800 text-text-secondary dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
-      }
-    `}
-  >
-    {label}
-  </button>
-);
 
 const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }: AddItemViewProps) => {
   const navigate = useNavigate();
@@ -329,6 +317,19 @@ const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }
     updateMetadataField(field, newArray);
   };
 
+  // Block dismissal while a save/analysis is in flight or the camera is live.
+  const canDismiss = !isSaving && viewState !== 'analyzing' && viewState !== 'camera';
+  const requestClose = () => {
+    if (canDismiss) onBack();
+  };
+
+  // Scroll lock + focus trap + Escape-to-close + dialog semantics.
+  const { containerProps } = useAccessibleModal({
+    isOpen: true,
+    onClose: requestClose,
+    autoFocus: false,
+  });
+
   const renderContent = () => {
     switch (viewState) {
       case 'camera':
@@ -407,19 +408,21 @@ const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }
             />
 
             {/* Generate with AI — secondary inset list row */}
-            <button
-              onClick={() => setViewState('generate')}
-              className="mt-3 w-full flex items-center gap-3 p-4 rounded-[22px] bg-gray-100 dark:bg-gray-800 active:scale-[0.99] transition-transform"
-            >
-              <span className="w-11 h-11 rounded-full bg-white dark:bg-gray-700 flex items-center justify-center text-secondary shadow-soft shrink-0">
-                <span className="material-symbols-outlined text-[24px]">auto_awesome</span>
-              </span>
-              <span className="text-left flex-grow">
-                <span className="block text-[16px] font-semibold text-text-primary dark:text-white">Generar con IA</span>
-                <span className="block text-[13px] text-text-secondary dark:text-gray-400">Describí una prenda y la creo</span>
-              </span>
-              <span className="material-symbols-outlined text-[20px] text-gray-400">chevron_right</span>
-            </button>
+            <div className="mt-3">
+              <ListGroup>
+                <ListRow
+                  leading={
+                    <span className="w-11 h-11 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-secondary shrink-0">
+                      <span className="material-symbols-outlined text-[24px]">auto_awesome</span>
+                    </span>
+                  }
+                  title="Generar con IA"
+                  subtitle="Describí una prenda y la creo"
+                  onClick={() => setViewState('generate')}
+                  showChevron
+                />
+              </ListGroup>
+            </div>
 
             {/* Empty state hint */}
             <div className="flex-grow flex flex-col items-center justify-center text-center py-10">
@@ -690,35 +693,16 @@ const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }
 
               {/* Save Buttons */}
               <div className="pt-4 pb-8 space-y-3">
-                <div className="grid grid-cols-3 gap-2">
-                  <button
-                    onClick={() => setItemStatus('owned')}
-                    className={`py-3 rounded-xl border text-sm font-medium transition-all ${itemStatus === 'owned'
-                      ? 'bg-primary/10 border-primary text-primary'
-                      : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:bg-gray-50'
-                      }`}
-                  >
-                    Es Mío
-                  </button>
-                  <button
-                    onClick={() => setItemStatus('virtual')}
-                    className={`py-3 rounded-xl border text-sm font-medium transition-all ${itemStatus === 'virtual'
-                      ? 'bg-purple-500/10 border-purple-500 text-purple-600'
-                      : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:bg-gray-50'
-                      }`}
-                  >
-                    Probar / Ajeno
-                  </button>
-                  <button
-                    onClick={() => setItemStatus('wishlist')}
-                    className={`py-3 rounded-xl border text-sm font-medium transition-all ${itemStatus === 'wishlist'
-                      ? 'bg-amber-500/10 border-amber-500 text-amber-600'
-                      : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:bg-gray-50'
-                      }`}
-                  >
-                    Wishlist
-                  </button>
-                </div>
+                <SegmentedControl<typeof itemStatus>
+                  aria-label="Estado de la prenda"
+                  options={[
+                    { value: 'owned', label: 'Es mío' },
+                    { value: 'virtual', label: 'Probar' },
+                    { value: 'wishlist', label: 'Wishlist' },
+                  ]}
+                  value={itemStatus}
+                  onChange={setItemStatus}
+                />
 
                 <button
                   onClick={handleSave}
@@ -758,23 +742,28 @@ const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-sm md:items-center md:p-6">
+      <div
+        onClick={requestClose}
+        className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-sm md:items-center md:p-6"
+      >
         <motion.div
+          {...containerProps}
+          onClick={(e) => e.stopPropagation()}
           initial={{ opacity: 0, y: '100%' }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: '100%' }}
           transition={{ type: 'spring', damping: 32, stiffness: 320 }}
-          className="w-full max-w-md bg-white dark:bg-gray-900 rounded-t-[2.25rem] md:rounded-[2.25rem] shadow-2xl overflow-hidden h-[92vh] md:h-[800px] flex flex-col relative"
+          className="w-full max-w-md bg-white dark:bg-gray-900 rounded-t-[2.25rem] md:rounded-[2.25rem] shadow-2xl overflow-hidden h-[92vh] md:h-[800px] flex flex-col relative focus:outline-none"
         >
           {/* Grabber handle */}
           <div className="absolute top-2.5 left-1/2 -translate-x-1/2 z-30 w-9 h-1.5 rounded-full bg-gray-300/80 dark:bg-gray-600/80 pointer-events-none" />
 
           {/* iOS-style nav bar (capture state) */}
           {viewState === 'capture' && (
-            <div className="shrink-0 pt-5 px-3 pb-1 flex items-center justify-between gap-2">
+            <div className="glass-nav shrink-0 rounded-t-[2.25rem] pt-5 px-3 pb-2.5 flex items-center justify-between gap-2">
               <button
-                onClick={onBack}
-                className="px-3.5 h-9 rounded-full bg-gray-100 dark:bg-gray-800 text-[15px] font-medium text-text-primary dark:text-gray-200 active:scale-95 transition-transform"
+                onClick={requestClose}
+                className="px-3.5 h-9 rounded-full bg-black/5 dark:bg-white/10 text-[15px] font-medium text-text-primary dark:text-gray-200 active:scale-95 transition-transform"
               >
                 Cerrar
               </button>
@@ -790,11 +779,14 @@ const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }
             <div className="absolute top-0 left-0 right-0 p-4 pt-6 z-20 flex justify-between items-center pointer-events-none">
               <button
                 onClick={() => {
-                  if (viewState === 'editing') setViewState('capture');
-                  else if (viewState === 'generate') setViewState('capture');
-                  else onBack();
+                  if (viewState === 'editing' || viewState === 'generate') setViewState('capture');
+                  else requestClose();
                 }}
-                className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white shadow-lg pointer-events-auto active:scale-95 transition-transform"
+                className={`w-10 h-10 rounded-full backdrop-blur-md flex items-center justify-center shadow-lg pointer-events-auto active:scale-95 transition-transform ${
+                  viewState === 'editing'
+                    ? 'bg-black/30 text-white'
+                    : 'bg-black/5 dark:bg-white/10 text-text-primary dark:text-gray-200'
+                }`}
               >
                 <span className="material-symbols-outlined">arrow_back</span>
               </button>

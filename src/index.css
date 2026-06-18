@@ -11,10 +11,11 @@
     --safe-area-inset-bottom: env(safe-area-inset-bottom);
     --safe-area-inset-left: env(safe-area-inset-left);
 
-    /* Default Glass Theme Variables */
-    --glass-blur: 20px;
-    --glass-opacity: 0.2;
-    --glass-saturation: 150%;
+    /* Default Glass Theme Variables (iOS 27 "frosted" tuning) */
+    /* Note: ThemeContext.tsx overrides these at runtime via setProperty. */
+    --glass-blur: 22px;
+    --glass-opacity: 0.55;
+    --glass-saturation: 170%;
     --glass-radius: 24px;
   }
 
@@ -117,7 +118,8 @@
     border-radius: var(--glass-radius);
 
     @apply border border-white/50 dark:border-white/10;
-    box-shadow: inset 0 2px 3px rgba(255, 255, 255, 0.7), inset 0 -3px 4px rgba(0, 0, 0, 0.15), 0 10px 30px rgba(0, 0, 0, 0.1);
+    /* iOS 27: brighter specular inner highlight + darkened hairline edge for definition on busy backgrounds */
+    box-shadow: inset 0 2px 3px rgba(255, 255, 255, 0.85), inset 0 -3px 4px rgba(0, 0, 0, 0.15), inset 0 0 0 0.5px rgba(0, 0, 0, 0.12), 0 0 0 0.5px rgba(0, 0, 0, 0.06), 0 10px 30px rgba(0, 0, 0, 0.1);
     will-change: transform;
     transform: translateZ(0);
     transition: border-radius 0.3s ease, background-color 0.3s ease, backdrop-filter 0.3s ease;
@@ -126,13 +128,47 @@
   .liquid-glass::before {
     content: '';
     @apply absolute top-0 left-0 w-[150%] h-[80%] pointer-events-none z-[2];
-    background: radial-gradient(ellipse at 50% 0%, rgba(255, 255, 255, 0.5) 0%, rgba(255, 255, 255, 0) 50%);
+    background: radial-gradient(ellipse at 50% 0%, rgba(255, 255, 255, 0.7) 0%, rgba(255, 255, 255, 0) 50%);
     transform: translateY(-50%) translateX(-15%) rotate(-20deg);
   }
 
   .dark .liquid-glass {
     background-color: rgba(15, 23, 42, var(--glass-opacity));
-    box-shadow: inset 0 2px 3px rgba(255, 255, 255, 0.15), inset 0 -3px 4px rgba(0, 0, 0, 0.35), 0 10px 30px rgba(0, 0, 0, 0.3);
+    /* iOS 27: stronger darkened hairline edge in dark mode for definition */
+    box-shadow: inset 0 2px 3px rgba(255, 255, 255, 0.18), inset 0 -3px 4px rgba(0, 0, 0, 0.35), inset 0 0 0 0.5px rgba(0, 0, 0, 0.5), 0 0 0 0.5px rgba(0, 0, 0, 0.35), 0 10px 30px rgba(0, 0, 0, 0.3);
+  }
+
+  /* --- iOS 27 SHEET CHROME VARIANTS --- */
+
+  /* Near-opaque frosted surface for bottom-sheet bodies (favors legibility) */
+  .glass-sheet {
+    @apply relative overflow-hidden;
+    background-color: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(28px) saturate(180%);
+    -webkit-backdrop-filter: blur(28px) saturate(180%);
+    border-radius: var(--glass-radius);
+    @apply border border-white/40 dark:border-white/10;
+    /* Soft top highlight + darkened hairline edge */
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), inset 0 0 0 0.5px rgba(0, 0, 0, 0.12), 0 -8px 30px rgba(0, 0, 0, 0.12);
+  }
+
+  .dark .glass-sheet {
+    background-color: rgba(17, 19, 26, 0.85);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), inset 0 0 0 0.5px rgba(0, 0, 0, 0.5), 0 -8px 30px rgba(0, 0, 0, 0.4);
+  }
+
+  /* Translucent top nav / footer chrome over scrolling content */
+  .glass-nav {
+    @apply relative;
+    background-color: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border-bottom: 0.5px solid rgba(0, 0, 0, 0.12);
+  }
+
+  .dark .glass-nav {
+    background-color: rgba(17, 19, 26, 0.7);
+    border-bottom: 0.5px solid rgba(0, 0, 0, 0.5);
   }
 
   /* Smooth fade in animation */
@@ -649,6 +685,35 @@
 @media (prefers-contrast: high) {
   .liquid-glass {
     @apply border-2 border-current;
+  }
+}
+
+/* Reduced transparency support - fall back to solid surfaces (keep borders/shadows for definition) */
+@media (prefers-reduced-transparency: reduce) {
+
+  .liquid-glass,
+  .glass-card,
+  .glass-ai,
+  .glass-panel,
+  .glass-sheet,
+  .glass-nav {
+    background-color: #FFFFFF;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  .dark .liquid-glass,
+  .dark .glass-card,
+  .dark .glass-ai,
+  .dark .glass-panel,
+  .dark .glass-sheet,
+  .dark .glass-nav {
+    background-color: #111319;
+  }
+
+  /* Drop the translucent specular overlay so it doesn't tint solid surfaces */
+  .liquid-glass::before {
+    display: none;
   }
 }
 
