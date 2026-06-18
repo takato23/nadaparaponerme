@@ -540,20 +540,6 @@ export function resetAllUsage(): void {
 /**
  * @deprecated No longer needed
  */
-export function resetFeatureUsage(_feature: FeatureType): void {
-  // No-op for backwards compatibility
-}
-
-/**
- * @deprecated No longer needed
- */
-export function getFeatureUsage(_feature: FeatureType): number {
-  return getCreditUsage().used;
-}
-
-/**
- * @deprecated No longer needed
- */
 export function formatUsageDisplay(_status: UsageStatus): string {
   const status = getCreditStatus();
   if (status.limit === -1) return '∞';
