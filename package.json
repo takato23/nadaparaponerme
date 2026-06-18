@@ -16,8 +16,8 @@
     "@google/genai": "^2.8.0",
     "@hello-pangea/dnd": "^18.0.1",
     "@imgly/background-removal": "^1.7.0",
-    "@react-three/drei": "^9.122.0",
-    "@react-three/fiber": "^8.18.0",
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^9.6.1",
     "@remotion/cli": "^4.0.407",
     "@remotion/media-utils": "^4.0.407",
     "@remotion/transitions": "^4.0.407",
@@ -38,14 +38,14 @@
     "maath": "^0.10.8",
     "onnxruntime-web": "^1.24.2",
     "posthog-js": "^1.328.0",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
     "react-hot-toast": "^2.6.0",
-    "react-is": "^18.3.1",
+    "react-is": "^19.2.7",
     "react-router-dom": "^7.9.6",
     "react-virtualized-auto-sizer": "^1.0.26",
     "react-window": "^2.2.3",
-    "recharts": "2.10.3",
+    "recharts": "^2.15.4",
     "remotion": "^4.0.407",
     "tailwind-merge": "^3.4.0",
     "three": "^0.182.0"
@@ -55,6 +55,8 @@
     "@playwright/test": "^1.57.0",
     "@tailwindcss/postcss": "^4.1.17",
     "@types/node": "^22.14.0",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.0.0",
     "autoprefixer": "^10.4.22",
     "eslint": "^9.39.2",
@@ -72,6 +74,6 @@
     "vitest": "^4.0.16"
   },
   "overrides": {
-    "react-is": "^18.3.1"
+    "react-is": "$react-is"
   }
 }
