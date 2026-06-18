@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import type { ClothingItem, BrandRecognitionResult, DupeFinderResult, GroundingChunk } from '../../types';
+import type { ClothingItem, BrandRecognitionResult, DupeFinderResult } from '../../types';
 import { useNavigate } from 'react-router-dom';
 import { ROUTES } from '../../src/routes';
 import * as aiService from '../../src/services/aiService';
-import { buildSearchTermFromItem, getShoppingLinks } from '../../src/services/monetizationService';
 import Loader from '../Loader';
 import { isRealImage } from '../../src/utils/imagePlaceholder';
 import { useToast } from '../../hooks/useToast';
@@ -31,11 +30,35 @@ export default function LiquidDetailModal({ item, isOpen, onClose, onItemUpdated
     const [dupeResult, setDupeResult] = useState<DupeFinderResult | null>(null);
     const [error, setError] = useState<string | null>(null);
 
-    // Sync localItem with prop
+    // Sync localItem with the latest prop (incl. on-demand AI updates of the same item)
     useEffect(() => {
         setLocalItem(item);
-        setImageSide('front'); // Reset to front when item changes
     }, [item]);
+
+    // Reset per-item view state only when a *different* item is opened, so stale
+    // brand/dupe results from a previous prenda never leak into the new one.
+    useEffect(() => {
+        setImageSide('front');
+        setActiveTab('details');
+        setBrandResult(null);
+        setDupeResult(null);
+        setError(null);
+    }, [item?.id]);
+
+    // Close on Escape and lock background scroll while open
+    useEffect(() => {
+        if (!isOpen) return;
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') onClose();
+        };
+        document.addEventListener('keydown', handleKeyDown);
+        const previousOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        return () => {
+            document.removeEventListener('keydown', handleKeyDown);
+            document.body.style.overflow = previousOverflow;
+        };
+    }, [isOpen, onClose]);
 
     if (!localItem) return null;
 
