@@ -345,86 +345,98 @@ const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }
       case 'capture':
         return (
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="flex flex-col items-center justify-center h-full text-center p-8 space-y-6"
+            exit={{ opacity: 0, y: -12 }}
+            transition={{ duration: 0.25, ease: [0.32, 0.72, 0, 1] }}
+            className="flex flex-col h-full overflow-y-auto px-5 pb-8 pt-1"
           >
-            <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mb-2 animate-pulse-glow">
-              <span className="material-symbols-outlined text-4xl text-primary">checkroom</span>
-            </div>
-            <div>
-              <h2 className="text-3xl font-serif font-bold text-text-primary dark:text-gray-100 mb-2">
-                Nueva Prenda
+            {/* Large iOS title */}
+            <div className="px-1 pt-1 pb-5">
+              <h2 className="text-[28px] leading-tight font-display font-bold tracking-tight text-text-primary dark:text-white">
+                Nueva prenda
               </h2>
-              <p className="text-text-secondary dark:text-gray-400 max-w-xs mx-auto">
-                Sube una foto o describe tu prenda para agregarla a tu armario virtual.
+              <p className="mt-1.5 text-[15px] leading-snug text-text-secondary dark:text-gray-400">
+                Sacá una foto o elegí de la galería. Si hay varias prendas o un outfit puesto, las separo solas: revisás y guardás todas juntas.
               </p>
             </div>
 
-            {/* Photo Tips Button */}
-            <button
-              onClick={() => setShowGuidance(true)}
-              className="px-4 py-2 rounded-xl bg-primary/10 text-primary hover:bg-primary/20 transition-colors flex items-center gap-2 text-sm font-medium"
-            >
-              <span className="material-symbols-outlined text-lg">help</span>
-              Tips para Fotos Perfectas
-            </button>
-
             {error && (
-              <div className="p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl text-sm">
-                {error}
+              <div className="mb-4 p-3.5 rounded-2xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-[14px] flex items-start gap-2">
+                <span className="material-symbols-outlined text-[20px] leading-none">error</span>
+                <span>{error}</span>
               </div>
             )}
 
-            <div className="w-full space-y-3">
-              <TooltipWrapper content="Usá la cámara para sacar una foto de tu prenda sobre fondo blanco" position="bottom">
-                <button
-                  onClick={() => setViewState('camera')}
-                  className="w-full bg-primary hover:bg-primary-dark text-white font-bold py-4 px-6 rounded-2xl shadow-glow-accent transition-all transform hover:scale-[1.02] flex items-center justify-center gap-2"
-                >
-                  <span className="material-symbols-outlined">photo_camera</span>
-                  Tomar Foto
-                </button>
-              </TooltipWrapper>
+            {/* Primary capture actions — iOS-style cards */}
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => setViewState('camera')}
+                className="group flex flex-col items-start gap-3 p-4 rounded-[22px] bg-primary text-white shadow-soft-lg active:scale-[0.97] transition-transform"
+              >
+                <span className="w-11 h-11 rounded-full bg-white/20 flex items-center justify-center">
+                  <span className="material-symbols-outlined text-[24px]">photo_camera</span>
+                </span>
+                <span className="text-left">
+                  <span className="block text-[16px] font-semibold">Cámara</span>
+                  <span className="block text-[13px] text-white/80">Sacar foto ahora</span>
+                </span>
+              </button>
 
-              <TooltipWrapper content="Seleccioná una imagen existente de tu galería o archivos" position="bottom">
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-text-primary dark:text-gray-200 font-bold py-4 px-6 rounded-2xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-all transform hover:scale-[1.02] flex items-center justify-center gap-2"
-                >
-                  <span className="material-symbols-outlined">add_a_photo</span>
-                  Subir Archivo
-                </button>
-              </TooltipWrapper>
-              <input
-                type="file"
-                accept="image/*"
-                capture="environment"
-                ref={fileInputRef}
-                onChange={handleFileChange}
-                className="hidden"
-              />
-
-              <div className="relative py-2">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-gray-200 dark:border-gray-700"></div>
-                </div>
-                <div className="relative flex justify-center text-sm">
-                  <span className="px-2 bg-white dark:bg-gray-900 text-gray-500">o</span>
-                </div>
-              </div>
-
-              <TooltipWrapper content="Describí una prenda y la IA la creará desde cero con imagen realista" position="bottom">
-        <button
-          onClick={() => setViewState('generate')}
-                  className="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-text-primary dark:text-gray-200 font-bold py-4 px-6 rounded-2xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-all transform hover:scale-[1.02] flex items-center justify-center gap-2"
-                >
-                  <span className="material-symbols-outlined text-secondary">auto_awesome</span>
-                  Generar con IA
-                </button>
-              </TooltipWrapper>
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="group flex flex-col items-start gap-3 p-4 rounded-[22px] bg-gray-100 dark:bg-gray-800 text-text-primary dark:text-white active:scale-[0.97] transition-transform"
+              >
+                <span className="w-11 h-11 rounded-full bg-white dark:bg-gray-700 flex items-center justify-center text-primary shadow-soft">
+                  <span className="material-symbols-outlined text-[24px]">photo_library</span>
+                </span>
+                <span className="text-left">
+                  <span className="block text-[16px] font-semibold">Galería</span>
+                  <span className="block text-[13px] text-text-secondary dark:text-gray-400">Elegir de tus fotos</span>
+                </span>
+              </button>
             </div>
+
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              className="hidden"
+            />
+
+            {/* Generate with AI — secondary inset list row */}
+            <button
+              onClick={() => setViewState('generate')}
+              className="mt-3 w-full flex items-center gap-3 p-4 rounded-[22px] bg-gray-100 dark:bg-gray-800 active:scale-[0.99] transition-transform"
+            >
+              <span className="w-11 h-11 rounded-full bg-white dark:bg-gray-700 flex items-center justify-center text-secondary shadow-soft shrink-0">
+                <span className="material-symbols-outlined text-[24px]">auto_awesome</span>
+              </span>
+              <span className="text-left flex-grow">
+                <span className="block text-[16px] font-semibold text-text-primary dark:text-white">Generar con IA</span>
+                <span className="block text-[13px] text-text-secondary dark:text-gray-400">Describí una prenda y la creo</span>
+              </span>
+              <span className="material-symbols-outlined text-[20px] text-gray-400">chevron_right</span>
+            </button>
+
+            {/* Empty state hint */}
+            <div className="flex-grow flex flex-col items-center justify-center text-center py-10">
+              <div className="w-14 h-14 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-3">
+                <span className="material-symbols-outlined text-[28px] text-gray-400">add_a_photo</span>
+              </div>
+              <p className="text-[14px] text-text-secondary dark:text-gray-400">Todavía no cargaste ninguna foto.</p>
+            </div>
+
+            {/* Photo tips — subtle footer link */}
+            <button
+              onClick={() => setShowGuidance(true)}
+              className="mx-auto flex items-center gap-1.5 px-4 py-2 text-[14px] font-medium text-primary active:opacity-60 transition-opacity"
+            >
+              <span className="material-symbols-outlined text-[18px]">tips_and_updates</span>
+              Tips para fotos perfectas
+            </button>
           </motion.div>
         );
 
@@ -434,9 +446,9 @@ const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -20 }}
-            className="p-6 h-full flex flex-col"
+            className="p-6 pt-16 h-full flex flex-col"
           >
-            <h2 className="text-2xl font-serif font-bold mb-6 dark:text-gray-100">Describe tu prenda</h2>
+            <h2 className="text-[26px] font-display font-bold tracking-tight mb-6 text-text-primary dark:text-gray-100">Describí tu prenda</h2>
             {error && <p className="text-red-500 mb-4 text-sm">{error}</p>}
 
             <div className="flex-grow">
@@ -519,7 +531,7 @@ const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }
               </div>
               <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent flex items-end p-6">
                 <div className="flex-grow">
-                  <h2 className="text-white text-2xl font-serif font-bold capitalize">
+                  <h2 className="text-white text-2xl font-display font-bold tracking-tight capitalize">
                     {metadata.subcategory}
                   </h2>
                   <p className="text-white/80 text-sm capitalize">
@@ -746,38 +758,45 @@ const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 md:p-6">
+      <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-sm md:items-center md:p-6">
         <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.95 }}
-          className="w-full max-w-md bg-white dark:bg-gray-900 rounded-3xl shadow-2xl overflow-hidden h-[85vh] md:h-[800px] flex flex-col relative"
+          initial={{ opacity: 0, y: '100%' }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: '100%' }}
+          transition={{ type: 'spring', damping: 32, stiffness: 320 }}
+          className="w-full max-w-md bg-white dark:bg-gray-900 rounded-t-[2.25rem] md:rounded-[2.25rem] shadow-2xl overflow-hidden h-[92vh] md:h-[800px] flex flex-col relative"
         >
-          {/* Header (only show back button if not in capture mode or if needed) */}
+          {/* Grabber handle */}
+          <div className="absolute top-2.5 left-1/2 -translate-x-1/2 z-30 w-9 h-1.5 rounded-full bg-gray-300/80 dark:bg-gray-600/80 pointer-events-none" />
+
+          {/* iOS-style nav bar (capture state) */}
+          {viewState === 'capture' && (
+            <div className="shrink-0 pt-5 px-3 pb-1 flex items-center justify-between gap-2">
+              <button
+                onClick={onBack}
+                className="px-3.5 h-9 rounded-full bg-gray-100 dark:bg-gray-800 text-[15px] font-medium text-text-primary dark:text-gray-200 active:scale-95 transition-transform"
+              >
+                Cerrar
+              </button>
+              <span className="text-[16px] font-semibold text-text-primary dark:text-white">Agregar prenda</span>
+              <div className="shrink-0">
+                <CreditsIndicator variant="compact" />
+              </div>
+            </div>
+          )}
+
+          {/* Floating back button (image/form states) */}
           {viewState !== 'capture' && viewState !== 'preview' && (
-            <div className="absolute top-0 left-0 right-0 p-4 z-20 flex justify-between items-center pointer-events-none">
+            <div className="absolute top-0 left-0 right-0 p-4 pt-6 z-20 flex justify-between items-center pointer-events-none">
               <button
                 onClick={() => {
                   if (viewState === 'editing') setViewState('capture');
                   else if (viewState === 'generate') setViewState('capture');
                   else onBack();
                 }}
-                className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white shadow-lg pointer-events-auto hover:bg-white/30 transition-colors"
+                className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white shadow-lg pointer-events-auto active:scale-95 transition-transform"
               >
                 <span className="material-symbols-outlined">arrow_back</span>
-              </button>
-            </div>
-          )}
-
-          {/* Header with credits indicator and close button */}
-          {viewState === 'capture' && (
-            <div className="absolute top-4 left-4 right-4 flex items-center justify-between z-20">
-              <CreditsIndicator variant="compact" />
-              <button
-                onClick={onBack}
-                className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-              >
-                <span className="material-symbols-outlined">close</span>
               </button>
             </div>
           )}
