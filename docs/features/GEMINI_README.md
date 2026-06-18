@@ -24,9 +24,7 @@ npm run dev
 | File | Purpose | When to Use |
 |------|---------|-------------|
 | **GEMINI_README.md** ⬅️ | Quick reference | Start here |
-| **GEMINI_SETUP_COMPLETE.md** | Complete setup summary | Review what was done |
-| **GEMINI_CONFIGURATION_ANALYSIS.md** | Technical deep dive | Understand architecture |
-| **GEMINI_SETUP_VERIFICATION.md** | Testing & troubleshooting | Debug issues |
+| **GEMINI_CONFIGURATION_ANALYSIS.md** | Technical deep dive + API limits & error handling | Understand architecture, debug quota issues |
 
 ---
 
@@ -99,9 +97,7 @@ supabase functions logs <function-name>
 
 ## 📚 Full Documentation
 
-- **Architecture**: See `GEMINI_CONFIGURATION_ANALYSIS.md`
-- **Testing**: See `GEMINI_SETUP_VERIFICATION.md`
-- **Summary**: See `GEMINI_SETUP_COMPLETE.md`
+- **Architecture, 26 functions, API limits & troubleshooting**: See `GEMINI_CONFIGURATION_ANALYSIS.md`
 
 ---
 

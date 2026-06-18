@@ -18,7 +18,7 @@ Tienes dos opciones para crear la tabla:
 Si ya tienes las otras tablas creadas, ejecuta solo esta migración:
 
 1. Ve a tu proyecto de Supabase: https://supabase.com/dashboard/project/qpoojigxxswkpkfbrfiy/sql/new
-2. Abre el archivo `supabase/migrations/apply_style_challenges.sql`
+2. Abre el archivo `supabase/migrations/_archive/apply_style_challenges.sql` (o la migración canónica `20250101000005_style_challenges.sql`)
 3. Copia y pega todo el contenido en el SQL Editor de Supabase
 4. Ejecuta el script (Run)
 5. Deberías ver el mensaje: "✅ Tabla style_challenges creada correctamente!"
