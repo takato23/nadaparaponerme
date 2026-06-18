@@ -50,6 +50,7 @@ interface HomeViewImprovedProps {
   onStartStyleChallenges: () => void;
   onStartRatingView: () => void;
   onStartFeedbackAnalysis: () => void;
+  onStartForgottenItems: () => void;
   onStartGapAnalysis: () => void;
   onStartBrandRecognition: () => void;
   onStartDupeFinder: () => void;

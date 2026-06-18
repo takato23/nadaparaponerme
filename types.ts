@@ -39,6 +39,12 @@ export interface ClothingItem {
   aiLastError?: string | null;
   // Status tracking: 'owned' (default), 'wishlist' (store/external), 'virtual' (try-on draft)
   status?: 'owned' | 'wishlist' | 'virtual' | 'quick';
+  // Usage tracking (powers the "Ropa Olvidada" / forgotten clothing system).
+  // Mirrors the Supabase columns times_worn / last_worn_at and is kept in sync
+  // locally so the forgotten-items engine works offline on any device.
+  times_worn?: number;          // How many times the item has been worn
+  last_worn_at?: string | null; // ISO 8601 timestamp of the last wear, null if never worn
+  added_at?: string;            // ISO 8601 timestamp of when the item was added to the closet
   // Legacy flat color field still consumed in some enhanced closet flows.
   color_primary?: string;
   store_info?: {
@@ -412,6 +418,50 @@ export interface FeedbackAnalysisResult {
     to: string;
   };
   confidence_level: 'low' | 'medium' | 'high'; // based on data quantity
+}
+
+// =====================================================
+// Ropa Olvidada (Forgotten Clothing) System
+// =====================================================
+
+/** Why an item is considered forgotten, used for UI badges. */
+export type ForgottenReason = 'never_worn' | 'long_unworn' | 'rarely_worn';
+
+/** A closet item flagged by the local forgotten-items heuristic engine. */
+export interface ForgottenItem {
+  item: ClothingItem;
+  score: number;                 // 0-100, higher = more forgotten / higher priority
+  daysSinceWorn: number | null;  // null when the item was never worn
+  neverWorn: boolean;
+  outOfSeason: boolean;          // true when the item doesn't match the current season
+  addedDaysAgo: number | null;   // days since the item was added, null if unknown
+  reason: ForgottenReason;
+  reasonLabel: string;           // human-readable Spanish label, e.g. "Nunca usada"
+}
+
+/** Aggregate result returned by the forgotten-items engine. */
+export interface ForgottenItemsSummary {
+  items: ForgottenItem[];        // sorted by score (most forgotten first)
+  totalForgotten: number;
+  closetSize: number;
+  forgottenPercentage: number;   // 0-100
+  neverWornCount: number;
+}
+
+/** Tunable thresholds for the forgotten-items heuristic. */
+export interface ForgottenItemsOptions {
+  now?: Date;
+  gracePeriodDays?: number;      // recently added items are never "forgotten"
+  forgottenThresholdDays?: number; // days unworn before an item starts counting
+  respectSeason?: boolean;       // downrank out-of-season items
+}
+
+/** AI-generated suggestion to bring a forgotten item back into rotation. */
+export interface RevivalSuggestion {
+  item_id: string;
+  tip: string;            // how to re-style the forgotten piece
+  pairs_with: string[];   // subcategories/names from the closet it combines with
+  occasion: string;       // a concrete occasion to wear it
 }
 
 export interface FeedbackPatternData {

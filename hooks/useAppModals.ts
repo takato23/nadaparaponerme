@@ -41,6 +41,7 @@ export function useAppModals() {
   const [showStyleChallenges, setShowStyleChallenges] = useTransitionState(false);
   const [showRatingView, setShowRatingView] = useTransitionState(false);
   const [showFeedbackAnalysis, setShowFeedbackAnalysis] = useTransitionState(false);
+  const [showForgottenItems, setShowForgottenItems] = useTransitionState(false);
   const [showGapAnalysis, setShowGapAnalysis] = useTransitionState(false);
   const [showBrandRecognition, setShowBrandRecognition] = useTransitionState(false);
   const [showDupeFinder, setShowDupeFinder] = useTransitionState(false);
@@ -126,6 +127,8 @@ export function useAppModals() {
     setShowRatingView,
     showFeedbackAnalysis,
     setShowFeedbackAnalysis,
+    showForgottenItems,
+    setShowForgottenItems,
     showGapAnalysis,
     setShowGapAnalysis,
     showBrandRecognition,

@@ -110,6 +110,24 @@ export function matchesFilters(
     }
   }
 
+  // Usage filter (powers presets like "unused" and the Ropa Olvidada flows)
+  if (filters.usage) {
+    const timesWorn = item.times_worn ?? 0;
+    if (filters.usage.minTimesWorn !== undefined && timesWorn < filters.usage.minTimesWorn) {
+      return false;
+    }
+    if (filters.usage.maxTimesWorn !== undefined && timesWorn > filters.usage.maxTimesWorn) {
+      return false;
+    }
+    if (filters.usage.lastWornWithin !== undefined) {
+      // Keep only items worn within the given number of days.
+      if (!item.last_worn_at) return false;
+      const lastWorn = new Date(item.last_worn_at).getTime();
+      const cutoff = Date.now() - filters.usage.lastWornWithin * 24 * 60 * 60 * 1000;
+      if (isNaN(lastWorn) || lastWorn < cutoff) return false;
+    }
+  }
+
   // Favorite filter
   if (filters.isFavorite !== undefined) {
     // Note: This requires adding is_favorite to ClothingItem type
@@ -207,15 +225,12 @@ function compareItems(
       break;
 
     case 'timesWorn':
-      // Note: This requires times_worn field in ClothingItem
-      // comparison = (a.times_worn || 0) - (b.times_worn || 0);
-      comparison = 0;
+      comparison = (a.times_worn || 0) - (b.times_worn || 0);
       break;
 
     case 'lastWorn':
-      // Note: This requires last_worn_at field in ClothingItem
-      // comparison = (a.last_worn_at || '').localeCompare(b.last_worn_at || '');
-      comparison = 0;
+      // Never-worn items sort as the oldest (empty string sorts first).
+      comparison = (a.last_worn_at || '').localeCompare(b.last_worn_at || '');
       break;
 
     case 'price':

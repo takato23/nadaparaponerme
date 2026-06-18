@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type, Part, Modality } from "@google/genai";
-import type { ClothingItemMetadata, ClothingItem, FitResult, PackingListResult, GroundingChunk, ColorPaletteAnalysis, ChatMessage, WeatherData, WeatherOutfitResult, Lookbook, LookbookTheme, ChallengeType, ChallengeDifficulty, FeedbackInsights, FeedbackPatternData, OutfitRating, SavedOutfit, ShoppingGap, ShoppingRecommendation, ShoppingChatMessage } from '../../types';
+import type { ClothingItemMetadata, ClothingItem, FitResult, PackingListResult, GroundingChunk, ColorPaletteAnalysis, ChatMessage, WeatherData, WeatherOutfitResult, Lookbook, LookbookTheme, ChallengeType, ChallengeDifficulty, FeedbackInsights, FeedbackPatternData, OutfitRating, SavedOutfit, ShoppingGap, ShoppingRecommendation, ShoppingChatMessage, RevivalSuggestion } from '../../types';
 import { getSeason } from './weatherService';
 import { getToneInstructions } from './aiToneHelper';
 import { retryAIOperation, retryAIOperation as retryWithBackoff } from '../../utils/retryWithBackoff';
@@ -1710,6 +1710,96 @@ IMPORTANTE:
     } catch (error) {
         console.error("Error analyzing feedback patterns:", error);
         throw new Error("No se pudo analizar el feedback. Inténtalo de nuevo.");
+    }
+}
+
+// --- Ropa Olvidada: AI Revival Suggestions ---
+// Optional enrichment layer for the forgotten-clothing system. The local
+// heuristic decides WHICH items are forgotten; this only suggests HOW to wear
+// them again, grounded in the rest of the closet. Runs server-side via Gemini.
+
+const revivalSuggestionsSchema = {
+    type: Type.OBJECT,
+    properties: {
+        suggestions: {
+            type: Type.ARRAY,
+            description: 'Una sugerencia por cada prenda olvidada recibida',
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    item_id: { type: Type.STRING, description: 'ID exacto de la prenda olvidada' },
+                    tip: { type: Type.STRING, description: 'Cómo reestilizar la prenda (1-2 oraciones concretas)' },
+                    pairs_with: {
+                        type: Type.ARRAY,
+                        description: '2-3 prendas del armario con las que combina (subcategoría + color)',
+                        items: { type: Type.STRING },
+                    },
+                    occasion: { type: Type.STRING, description: 'Una ocasión concreta para usarla' },
+                },
+                required: ['item_id', 'tip', 'pairs_with', 'occasion'],
+            },
+        },
+    },
+    required: ['suggestions'],
+};
+
+export async function generateRevivalSuggestions(
+    forgotten: ClothingItem[],
+    closet: ClothingItem[],
+): Promise<RevivalSuggestion[]> {
+    if (forgotten.length === 0) return [];
+
+    const forgottenData = forgotten.slice(0, 6).map((item) => ({
+        id: item.id,
+        subcategory: item.metadata.subcategory,
+        category: item.metadata.category,
+        color: item.metadata.color_primary,
+        vibes: item.metadata.vibe_tags,
+        seasons: item.metadata.seasons,
+    }));
+
+    const closetSummary = closet.slice(0, 60).map((item) => ({
+        id: item.id,
+        subcategory: item.metadata.subcategory,
+        category: item.metadata.category,
+        color: item.metadata.color_primary,
+    }));
+
+    const systemInstruction = `Eres un estilista personal experto en revalorizar prendas olvidadas del armario.
+
+PRENDAS OLVIDADAS (hay que darles una nueva oportunidad):
+${JSON.stringify(forgottenData, null, 2)}
+
+RESTO DEL ARMARIO (para combinar):
+${JSON.stringify(closetSummary, null, 2)}
+
+INSTRUCCIONES:
+- Para CADA prenda olvidada, generá una sugerencia con su "item_id" EXACTO.
+- "tip": cómo reestilizarla de forma fresca y concreta (1-2 oraciones).
+- "pairs_with": 2-3 prendas reales del armario (subcategoría + color) que combinen.
+- "occasion": una ocasión concreta (trabajo, salida, finde, etc.).
+- Sé específico, accionable y motivador. Español argentino, tono cercano.
+- No inventes prendas que no estén en el armario.`;
+
+    try {
+        const response = await getAIClient().models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: { parts: [{ text: 'Generá sugerencias para revivir las prendas olvidadas.' }] },
+            config: {
+                systemInstruction,
+                responseMimeType: 'application/json',
+                responseSchema: revivalSuggestionsSchema,
+            },
+        });
+
+        const parsed = JSON.parse(response.text);
+        if (!parsed || !Array.isArray(parsed.suggestions)) {
+            throw new Error('Respuesta inválida de la IA');
+        }
+        return parsed.suggestions as RevivalSuggestion[];
+    } catch (error) {
+        console.error('Error generating revival suggestions:', error);
+        throw new Error('No se pudieron generar sugerencias. Inténtalo de nuevo.');
     }
 }
 

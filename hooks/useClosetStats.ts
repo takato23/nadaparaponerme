@@ -75,18 +75,32 @@ export function useClosetStats(
       .map(({ item }) => item);
   }, [itemsWithVersatility]);
 
-  // Calculate usage statistics
-  // Note: This requires times_worn and last_worn_at fields in ClothingItem
-  // For now, we'll return placeholder data
+  // Calculate usage statistics from the times_worn / last_worn_at tracking fields.
   const usageStats: UsageStats = useMemo(() => {
-    // Placeholder implementation
+    if (items.length === 0) {
+      return {
+        totalTimesWorn: 0,
+        averageTimesWorn: 0,
+        mostWornItems: [],
+        leastWornItems: [],
+        unwornCount: 0,
+        unwornPercentage: 0
+      };
+    }
+
+    const totalTimesWorn = items.reduce((sum, item) => sum + (item.times_worn || 0), 0);
+    const unwornCount = items.filter(item => (item.times_worn || 0) === 0).length;
+
+    const byWearDesc = [...items].sort((a, b) => (b.times_worn || 0) - (a.times_worn || 0));
+    const byWearAsc = [...items].sort((a, b) => (a.times_worn || 0) - (b.times_worn || 0));
+
     return {
-      totalTimesWorn: 0,
-      averageTimesWorn: 0,
-      mostWornItems: [],
-      leastWornItems: [],
-      unwornCount: items.length, // Assume all unworn for now
-      unwornPercentage: 100
+      totalTimesWorn,
+      averageTimesWorn: Math.round((totalTimesWorn / items.length) * 10) / 10,
+      mostWornItems: byWearDesc.slice(0, 10),
+      leastWornItems: byWearAsc.slice(0, 10),
+      unwornCount,
+      unwornPercentage: Math.round((unwornCount / items.length) * 100)
     };
   }, [items]);
 

@@ -99,6 +99,7 @@ const LookbookCreatorView = lazy(() => import('./components/LookbookCreatorView'
 const StyleChallengesView = lazy(() => import('./components/StyleChallengesView'));
 const OutfitRatingView = lazy(() => import('./components/OutfitRatingView'));
 const FeedbackAnalysisView = lazy(() => import('./components/FeedbackAnalysisView'));
+const ForgottenClothingView = lazy(() => import('./components/ForgottenClothingView'));
 const ClosetGapAnalysisView = lazy(() => import('./components/ClosetGapAnalysisView'));
 const BrandRecognitionView = lazy(() => import('./components/BrandRecognitionView'));
 const DupeFinderView = lazy(() => import('./components/DupeFinderView'));
@@ -1037,7 +1038,41 @@ const AppContent = () => {
         // Will integrate with Google Analytics or Mixpanel for user feedback tracking
     };
 
+    /**
+     * Record that one or more closet items were worn today.
+     * Powers the "Ropa Olvidada" system: updates times_worn / last_worn_at
+     * locally (works offline on any device) and best-effort syncs to Supabase.
+     */
+    const markItemsAsWorn = useCallback((ids: string[]) => {
+        const cleanIds = ids.filter(Boolean);
+        if (cleanIds.length === 0) return;
+        const idSet = new Set(cleanIds);
+        const nowIso = new Date().toISOString();
+
+        setCloset(prev => prev.map(item =>
+            idSet.has(item.id)
+                ? { ...item, times_worn: (item.times_worn || 0) + 1, last_worn_at: nowIso }
+                : item
+        ));
+
+        if (useSupabaseCloset) {
+            cleanIds.forEach(id => {
+                closetService.incrementTimesWorn(id).catch(err =>
+                    console.warn('Failed to sync times_worn for', id, err)
+                );
+            });
+        }
+    }, [setCloset, useSupabaseCloset]);
+
+    const handleMarkItemsWorn = useCallback((ids: string[]) => {
+        markItemsAsWorn(ids);
+        toast.success(ids.length > 1 ? '¡Prendas registradas como usadas!' : '¡Registrada como usada hoy!');
+    }, [markItemsAsWorn, toast]);
+
     const handleSaveOutfit = async (outfit: Omit<FitResult, 'missing_piece_suggestion'>) => {
+        // Saving an outfit is a strong signal the pieces are in rotation: record wear.
+        markItemsAsWorn([outfit.top_id, outfit.bottom_id, outfit.shoes_id]);
+
         // Create temporary outfit for optimistic update
         const tempOutfit: SavedOutfit = {
             ...outfit,
@@ -1485,6 +1520,7 @@ const AppContent = () => {
                                                 onStartStyleChallenges={() => modals.setShowStyleChallenges(true)}
                                                 onStartRatingView={() => modals.setShowRatingView(true)}
                                                 onStartFeedbackAnalysis={() => modals.setShowFeedbackAnalysis(true)}
+                                                onStartForgottenItems={() => modals.setShowForgottenItems(true)}
                                                 onStartGapAnalysis={() => modals.setShowGapAnalysis(true)}
                                                 onStartBrandRecognition={() => navigate(ROUTES.CLOSET)}
                                                 onStartDupeFinder={() => navigate(ROUTES.CLOSET)}
@@ -2096,6 +2132,20 @@ const AppContent = () => {
                             closet={closet}
                             savedOutfits={savedOutfits}
                             onClose={() => modals.setShowFeedbackAnalysis(false)}
+                        />
+                    )
+                }
+
+                {
+                    modals.showForgottenItems && (
+                        <ForgottenClothingView
+                            closet={closet}
+                            onMarkAsWorn={handleMarkItemsWorn}
+                            onViewItem={(id) => {
+                                modals.setShowForgottenItems(false);
+                                modals.setSelectedItemId(id);
+                            }}
+                            onClose={() => modals.setShowForgottenItems(false)}
                         />
                     )
                 }

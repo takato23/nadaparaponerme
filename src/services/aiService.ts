@@ -710,6 +710,16 @@ export async function analyzeFeedbackPatterns(...args: Parameters<typeof geminiS
   return await geminiServiceFull.analyzeFeedbackPatterns(...args);
 }
 
+// Ropa Olvidada: AI revival suggestions (optional enrichment).
+// The forgotten-items detection itself is local/offline; this only adds styling
+// tips. In V1 safe mode (or when the AI key isn't available) it returns [] so the
+// feature degrades gracefully to the heuristic-only experience.
+export async function generateRevivalSuggestions(...args: Parameters<typeof geminiServiceFull.generateRevivalSuggestions>) {
+  if (V1_SAFE_MODE) return [];
+  if (getFeatureFlag('useSupabaseAI')) return assertFeatureAvailable('Sugerencias de revival');
+  return await geminiServiceFull.generateRevivalSuggestions(...args);
+}
+
 // Closet Gap Analysis
 export async function analyzeClosetGaps(...args: Parameters<typeof geminiServiceFull.analyzeClosetGaps>) {
   if (V1_SAFE_MODE) return [];

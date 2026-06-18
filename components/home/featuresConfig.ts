@@ -394,6 +394,18 @@ const INTELLIGENCE_FEATURES: FeatureConfig[] = [
     badge: 'ai',
   },
   {
+    id: 'forgotten-items',
+    icon: 'history_toggle_off',
+    title: 'Ropa Olvidada',
+    description: 'Redescubrí prendas que dejaste de usar',
+    category: 'intelligence',
+    keywords: ['olvidada', 'olvidado', 'sin usar', 'redescubrir', 'rescatar', 'nunca usé', 'placard'],
+    tooltip: 'Detecta prendas que no usás hace tiempo y te ayuda a volver a ponértelas',
+    handlerKey: 'onStartForgottenItems',
+    popularity: 73,
+    badge: 'new',
+  },
+  {
     id: 'brand-recognition',
     icon: 'sell',
     title: 'Detector de Marcas',

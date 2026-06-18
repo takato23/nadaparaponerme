@@ -79,6 +79,10 @@ function convertToLegacyFormat(item: ClothingItemRow): LegacyClothingItem {
     aiAnalyzedAt: item.ai_analyzed_at,
     aiMetadataVersion: item.ai_metadata_version ?? 0,
     aiLastError: item.ai_last_error,
+    // Usage tracking — powers the Ropa Olvidada (forgotten clothing) system.
+    times_worn: (item as any).times_worn ?? 0,
+    last_worn_at: (item as any).last_worn_at ?? null,
+    added_at: (item as any).created_at ?? undefined,
   };
 }
 
