@@ -24,6 +24,7 @@ import { useAccessibleModal } from '../hooks/useFocusTrap';
 import { SegmentedControl } from './ui/SegmentedControl';
 import { Chip } from './ui/Chip';
 import { ListGroup, ListRow } from './ui/ListGroup';
+import { EmptyGarmentIllustration } from './ui/EmptyGarmentIllustration';
 
 interface AddItemViewProps {
   onAddLocalItem: (item: ClothingItem) => void;
@@ -425,11 +426,10 @@ const AddItemView = ({ onAddLocalItem, onClosetSync, onBack, useSupabaseCloset }
             </div>
 
             {/* Empty state hint */}
-            <div className="flex-grow flex flex-col items-center justify-center text-center py-10">
-              <div className="w-14 h-14 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-3">
-                <span className="material-symbols-outlined text-[28px] text-gray-400">add_a_photo</span>
-              </div>
-              <p className="text-[14px] text-text-secondary dark:text-gray-400">Todavía no cargaste ninguna foto.</p>
+            <div className="flex-grow flex flex-col items-center justify-center text-center py-8">
+              <EmptyGarmentIllustration className="w-28 h-28 mb-2" />
+              <p className="text-[15px] font-medium text-text-primary dark:text-gray-200">Todavía no cargaste ninguna foto</p>
+              <p className="mt-1 text-[13px] text-text-secondary dark:text-gray-400">Empezá con la cámara o tu galería</p>
             </div>
 
             {/* Photo tips — subtle footer link */}
