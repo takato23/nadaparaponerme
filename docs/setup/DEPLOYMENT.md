@@ -301,3 +301,36 @@ Después de tu primer deployment:
 - Backup de database semanal (Settings → Database → Backups)
 
 ¡Felicidades! Tu app está en producción 🚀
+
+---
+
+## ✅ Checklist de Deployment
+
+> Consolidado desde el antiguo `DEPLOYMENT_CHECKLIST.md`.
+
+**Pre-Deployment**
+- [ ] Build local exitoso (`npm run build`)
+- [ ] `vercel.json` presente y errores de importación corregidos
+- [ ] Código subido a GitHub y variables de entorno preparadas
+
+**Credenciales necesarias**
+- [ ] `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` (Supabase Dashboard)
+- [ ] `GEMINI_API_KEY` (Supabase Secrets — **NO** usar `VITE_GEMINI_API_KEY` en Vercel)
+- [ ] `VITE_OPENWEATHER_API_KEY`, `VITE_MERCADOPAGO_PUBLIC_KEY` (opcional)
+- [ ] `MERCADOPAGO_ACCESS_TOKEN`, `MERCADOPAGO_WEBHOOK_TOKEN`, `MERCADOPAGO_WEBHOOK_SECRET` (Supabase Secrets)
+- [ ] `APP_URL` / `APP_URL_ALLOWLIST` (Supabase Secrets, para callbacks de pago)
+
+**Vercel + Supabase**
+- [ ] Proyecto importado desde GitHub y variables configuradas en Vercel
+- [ ] Deployment exitoso y URL de producción obtenida
+- [ ] CORS con dominio de Vercel, Auth Redirect URLs actualizadas, Storage policies verificadas
+- [ ] Edge Functions (IA + pagos) funcionando y webhooks apuntando a Supabase Functions
+
+**Verificación post-deploy**
+- [ ] Página carga sin errores de consola
+- [ ] Login/Signup, subir prenda e imágenes funcionan
+- [ ] IA genera outfits, chat IA responde, clima se muestra (si aplica)
+
+**Performance y seguridad**
+- [ ] Lighthouse > 80, Vercel Analytics + Supabase Usage monitoreados con alertas
+- [ ] `.env.local` en `.gitignore`, sin API keys hardcodeadas, RLS activo, HTTPS, CORS por dominio

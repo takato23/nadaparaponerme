@@ -64,7 +64,6 @@ const MultiplayerChallengesView = lazy(() => import('./MultiplayerChallengesView
 const PaywallView = lazy(() => import('./PaywallView'));
 const FeatureLockedView = lazy(() => import('./FeatureLockedView'));
 const ProfessionalStyleWizardView = lazy(() => import('./ProfessionalStyleWizardView'));
-const OutfitGenerationTestingPlayground = lazy(() => import('./OutfitGenerationTestingPlayground'));
 const AestheticPlayground = lazy(() => import('./AestheticPlayground'));
 const LiquidMorphDemo = lazy(() => import('./LiquidMorphDemo'));
 const DigitalTwinSetup = lazy(() => import('./digital-twin/DigitalTwinSetup'));
@@ -174,7 +173,6 @@ interface AppModalsProps {
   isDeleting: boolean;
 
   // Testing playground state
-  showTestingPlayground: boolean;
   showAestheticPlayground: boolean;
   showLiquidMorphDemo: boolean;
 
@@ -246,7 +244,6 @@ interface AppModalsProps {
     onCreateOutfitFromCapsule: (topId: string, bottomId: string, shoesId: string) => void;
 
     // Playgrounds
-    onCloseTestingPlayground: () => void;
     onCloseAestheticPlayground: () => void;
     onCloseLiquidMorphDemo: () => void;
 
@@ -295,7 +292,6 @@ export const AppModals: React.FC<AppModalsProps> = ({
   professionalProfile,
   deleteConfirm,
   isDeleting,
-  showTestingPlayground,
   showAestheticPlayground,
   showLiquidMorphDemo,
   handlers
@@ -830,15 +826,6 @@ export const AppModals: React.FC<AppModalsProps> = ({
       )}
 
       {/* Testing Playgrounds */}
-      {showTestingPlayground && (
-        <Suspense fallback={<LazyLoader type="modal" />}>
-          <OutfitGenerationTestingPlayground
-            closet={closet}
-            onClose={handlers.onCloseTestingPlayground}
-          />
-        </Suspense>
-      )}
-
       {showAestheticPlayground && (
         <Suspense fallback={<LazyLoader type="view" />}>
           <AestheticPlayground onClose={handlers.onCloseAestheticPlayground} />

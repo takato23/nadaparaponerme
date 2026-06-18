@@ -65,7 +65,6 @@ interface HomeViewImprovedProps {
   onStartMultiplayerChallenges: () => void;
   onStartBulkUpload: () => void;
   onNavigateToSavedLooks: () => void;
-  onStartOutfitTesting?: () => void;
   hasProfessionalProfile?: boolean;
   onShowProfessionalWizard?: () => void;
   onShowAnalytics?: () => void;

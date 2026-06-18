@@ -107,7 +107,7 @@ export default defineConfig(({ mode, command }) => {
                 return 'vendor-date';
               }
               // AI/ML related
-              if (id.includes('@google') || id.includes('generative-ai')) {
+              if (id.includes('@google')) {
                 return 'vendor-ai';
               }
               // Image processing

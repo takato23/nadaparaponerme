@@ -293,6 +293,58 @@ supabase functions serve analyze-clothing
 
 ---
 
-**Última actualización**: 2025-01-14
-**Versión del análisis**: 1.0
+## Límites de la API y manejo de errores (Free Tier)
+
+> Consolidado desde el antiguo `GEMINI_API_LIMITS.md`.
+
+### Límites del Free Tier (Gemini 2.5 Flash, modelo estable actual)
+- **15 requests por minuto (RPM)**
+- **1 millón de tokens por día**
+- **1500 requests por día**
+
+Los modelos Gemini 1.5/2.0 fueron retirados; `gemini-2.5-flash` es el reemplazo estable.
+
+### Error 429 ("Quota Exceeded")
+Ocurre al superar los límites gratuitos: demasiados requests por minuto, exceder el
+límite diario, o problemas de billing en la API key.
+
+**Soluciones implementadas en el código:**
+- Modelo actualizado a `gemini-2.5-flash`.
+- Mensajes de error claros en español (cuota excedida vs. rate limit temporal).
+- `retryAIOperation()` reintenta solo en errores recuperables (rate limit temporal 429
+  sin billing, 503 sobrecarga, timeouts) y **no** reintenta en cuota excedida ni billing.
+
+### Buenas prácticas para evitar límites
+1. No spamear: esperar 4-5 s entre requests (ver throttling abajo).
+2. Cachear resultados de análisis repetidos.
+3. Agrupar operaciones (batch) cuando sea posible.
+4. Limitar cuántos outfits puede generar un usuario por minuto.
+
+```typescript
+let lastRequestTime = 0;
+const MIN_DELAY = 5000; // 5 segundos
+async function generateOutfitWithThrottle(prompt: string) {
+  const sinceLast = Date.now() - lastRequestTime;
+  if (sinceLast < MIN_DELAY) {
+    await new Promise(r => setTimeout(r, MIN_DELAY - sinceLast));
+  }
+  lastRequestTime = Date.now();
+  return generateOutfit(prompt, inventory);
+}
+```
+
+### Plan pago (pay-as-you-go)
+Sin límite de RPM; ~$0.075/1M tokens input y ~$0.30/1M tokens output. Conviene cuando se
+superan 1500 requests/día o se necesita más de 15 RPM en producción.
+
+### Monitoreo y notas
+- Uso actual: https://ai.dev/usage?tab=rate-limit
+- Límites por modelo: https://ai.google.dev/gemini-api/docs/rate-limits
+- RPM se resetea cada minuto; el límite diario a medianoche PST.
+- Cada API key tiene sus propios límites (no se comparten).
+
+---
+
+**Última actualización**: 2025-01-14 (límites consolidados 2026-06)
+**Versión del análisis**: 1.1
 **API Key configurada**: ✅ Frontend | ⚠️ Supabase (requiere configuración)

@@ -114,7 +114,6 @@ const VirtualShoppingAssistantView = lazy(() => import('./components/VirtualShop
 const MultiplayerChallengesView = lazy(() => import('./components/MultiplayerChallengesView'));
 const PaywallView = lazy(() => import('./components/PaywallView'));
 const FeatureLockedView = lazy(() => import('./components/FeatureLockedView'));
-const OutfitGenerationTestingPlayground = lazy(() => import('./components/OutfitGenerationTestingPlayground'));
 const AestheticPlayground = lazy(() => import('./components/AestheticPlayground'));
 const LandingPage = lazy(() => import('./components/LandingPage'));
 const ProfessionalStyleWizardView = lazy(() => import('./components/ProfessionalStyleWizardView'));
@@ -682,8 +681,6 @@ const AppContent = () => {
         }
     };
 
-    // Testing Playground state (dev tool for comparing outfit generation versions)
-    const [showTestingPlayground, setShowTestingPlayground] = useState(false);
     const [showAestheticPlayground, setShowAestheticPlayground] = useState(false);
     const [showLiquidMorphDemo, setShowLiquidMorphDemo] = useState(false);
 
@@ -1493,7 +1490,6 @@ const AppContent = () => {
                                                 onShowGenerationHistory={() => modals.setShowGenerationHistory(true)}
                                                 onStartStyleEvolution={() => modals.setShowStyleEvolution(true)}
                                                 onStartCalendarSync={() => modals.setShowCalendarSync(true)}
-                                                onStartOutfitTesting={() => startTransition(() => setShowTestingPlayground(true))}
                                                 hasProfessionalProfile={!!professionalProfile}
                                                 onShowProfessionalWizard={() => modals.setShowProfessionalWizard(true)}
                                                 onShowAnalytics={() => modals.setShowAnalytics(true)}
@@ -2397,17 +2393,6 @@ const AppContent = () => {
                     )
                 }
 
-                {/* Testing Playground (Dev Tool) */}
-                {
-                    showTestingPlayground && (
-                        <Suspense fallback={<LazyLoader type="modal" />}>
-                            <OutfitGenerationTestingPlayground
-                                closet={closet}
-                                onClose={() => setShowTestingPlayground(false)}
-                            />
-                        </Suspense>
-                    )
-                }
 
                 {/* Toast Notifications */}
                 <div role="region" aria-label="Notificaciones" aria-live="polite">

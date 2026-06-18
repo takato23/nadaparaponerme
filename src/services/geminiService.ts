@@ -3818,12 +3818,3 @@ Respondé de forma conversacional, útil y accionable.`;
     }
 }
 
-// =============================================================================
-// EXPORTS FOR ENHANCED GENERATORS
-// =============================================================================
-
-/**
- * Export helpers for enhanced outfit generation
- * These are needed by the enhanced generators in generateOutfit-enhanced.ts
- */
-export { getAIClient, retryAIOperation as retryWithBackoff };

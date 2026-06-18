@@ -53,7 +53,9 @@ export const Card = React.forwardRef<HTMLElement, CardProps>(function Card({
   component: Component = 'div',
   ...rest
 }, ref) {
-  const Tag = Component as React.ElementType;
+  // Polymorphic tag: cast to any so JSX prop inference doesn't collapse to `never`
+  // under React 19's stricter element types.
+  const Tag = Component as any;
   const baseClasses = variantClasses[variant];
   const paddingClass = paddingClasses[padding];
   const roundedClass = roundedClasses[rounded];

@@ -31,3 +31,13 @@ supabase/.temp/
 *.sln
 *.sw?
 .vercel
+
+# Local AI agent tooling (not part of the app, kept on disk only)
+.agent/
+.agents/
+.gemini/
+
+# Stray test/reference images dropped in repo root
+/*.png
+/*.jpg
+/*.jpeg

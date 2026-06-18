@@ -178,8 +178,7 @@ npm run verify-setup
 
 # 2. For issues, check:
 - GEMINI_README.md (quick reference)
-- GEMINI_SETUP_COMPLETE.md (full setup guide)
-- GEMINI_CONFIGURATION_ANALYSIS.md (technical details)
+- GEMINI_CONFIGURATION_ANALYSIS.md (technical details, API limits & troubleshooting)
 ```
 
 ### Available Features (26 AI Functions)
