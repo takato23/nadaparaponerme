@@ -13,7 +13,7 @@
     "remotion:render": "remotion render src/remotion/index.ts LookReveal out/look-reveal.mp4"
   },
   "dependencies": {
-    "@google/genai": "^1.27.0",
+    "@google/genai": "^2.8.0",
     "@hello-pangea/dnd": "^18.0.1",
     "@imgly/background-removal": "^1.7.0",
     "@react-three/drei": "^9.122.0",
