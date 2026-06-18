@@ -103,6 +103,32 @@ REGLAS:
 ${HARDENING_RULES}`;
 }
 
+function buildVisionSystemInstruction(inventory: any[], surface: 'studio' | 'closet') {
+  return `Eres un asistente de moda personal en español con un "ojo de loca" para la moda.
+Superficie actual: ${surface}.
+El usuario adjuntó una FOTO. Analizala con criterio de estilista.
+
+ARMARIO DEL USUARIO:
+${JSON.stringify(inventory, null, 2)}
+
+REGLAS:
+- Describe brevemente la prenda o look de la foto (tipo, color, estilo, ocasión).
+- Da consejos accionables: con qué combinarla, qué prendas del armario le quedan, mejoras posibles.
+- Si recomiendas un outfit con prendas del armario, usa IDs exactos del inventario.
+- Si la foto no es de moda/ropa, respondé breve y redirigí al objetivo de estilismo.
+- No inventes IDs ni prendas fuera del inventario.
+${HARDENING_RULES}`;
+}
+
+/** Parse a `data:<mime>;base64,<data>` URL into Gemini inlineData parts. Returns null if invalid. */
+function parseImageDataUrl(imageDataUrl: unknown): { mimeType: string; data: string } | null {
+  if (typeof imageDataUrl !== 'string' || !imageDataUrl.startsWith('data:image')) return null;
+  const [mimeTypePart, base64Data] = imageDataUrl.split(';base64,');
+  const mimeType = mimeTypePart.split(':')[1];
+  if (!base64Data || !mimeType) return null;
+  return { mimeType, data: base64Data };
+}
+
 function buildStructuredSystemInstruction(inventory: any[], surface: 'studio' | 'closet', previousSuggestion?: any) {
   const rerankHint = previousSuggestion
     ? `\nSugerencia previa a mejorar: ${JSON.stringify(previousSuggestion)}`
@@ -1235,14 +1261,18 @@ serve(async (req) => {
       );
     }
 
+    const attachedImage = parseImageDataUrl(body?.imageDataUrl);
+    const hasImage = Boolean(attachedImage);
+
     const rawMessage = typeof body?.message === 'string' ? body.message.trim() : '';
-    if (!rawMessage) {
+    if (!rawMessage && !hasImage) {
       return new Response(
         JSON.stringify({ error: 'Missing message', request_id: requestId }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json', 'X-Request-Id': requestId } },
       );
     }
-    const message = rawMessage.slice(0, MAX_MESSAGE_LENGTH);
+    // When the user only sends a photo, give the model a default instruction.
+    const message = (rawMessage || (hasImage ? 'Analizá esta foto y dame consejos de estilo.' : '')).slice(0, MAX_MESSAGE_LENGTH);
 
     const rawChatHistory = Array.isArray(body?.chatHistory) ? body.chatHistory : [];
     const chatHistory = rawChatHistory
@@ -1264,7 +1294,7 @@ serve(async (req) => {
       .join('||');
     promptHash = await buildPromptHash(`${surface}|${responseMode}|${message}|${historyForHash}`);
 
-    if (idempotencyKey) {
+    if (idempotencyKey && !hasImage) {
       const { data: existingJob, error: existingJobError } = await supabase
         .from('ai_insight_jobs')
         .select('status, response_json')
@@ -1315,15 +1345,17 @@ serve(async (req) => {
     closetHash = await buildClosetHash(inventory);
     const categoryById = buildCategoryMap(inventory);
 
-    const { data: cachedInsight, error: cacheError } = await supabase
-      .from('ai_insight_cache')
-      .select('id, response_json, hit_count')
-      .eq('user_id', user.id)
-      .eq('insight_type', INSIGHT_TYPE)
-      .eq('closet_hash', closetHash)
-      .eq('prompt_hash', promptHash)
-      .gt('expires_at', new Date().toISOString())
-      .maybeSingle();
+    const { data: cachedInsight, error: cacheError } = hasImage
+      ? { data: null, error: null }
+      : await supabase
+        .from('ai_insight_cache')
+        .select('id, response_json, hit_count')
+        .eq('user_id', user.id)
+        .eq('insight_type', INSIGHT_TYPE)
+        .eq('closet_hash', closetHash)
+        .eq('prompt_hash', promptHash)
+        .gt('expires_at', new Date().toISOString())
+        .maybeSingle();
 
     if (!cacheError && cachedInsight?.response_json) {
       await supabase
@@ -1420,7 +1452,37 @@ serve(async (req) => {
 
     let payload: any;
 
-    if (responseMode === 'structured') {
+    if (hasImage) {
+      // Vision path: the user attached a photo. Analyze it with a fashion-aware prompt.
+      const visionResult = await withRetry(() =>
+        ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: [
+            ...conversationHistory,
+            {
+              role: 'user',
+              parts: [
+                { inlineData: { mimeType: attachedImage!.mimeType, data: attachedImage!.data } },
+                { text: message },
+              ],
+            },
+          ],
+          config: {
+            systemInstruction: buildVisionSystemInstruction(inventory, surface),
+          },
+        }),
+      );
+
+      payload = {
+        role: 'assistant',
+        content: visionResult.text || '',
+        outfitSuggestion: null,
+        validation_warnings: [],
+        threadId: resolvedThreadId,
+        model: 'gemini-2.5-flash-vision',
+        cache_hit: false,
+      };
+    } else if (responseMode === 'structured') {
       const flashResult = await withRetry(() =>
         ai.models.generateContent({
           model: 'gemini-2.5-flash',
@@ -1531,21 +1593,24 @@ serve(async (req) => {
     payload.credits_used = incremented ? CREDIT_COST : 0;
     await recordAIBudgetSuccess(supabase, user.id, 'chat-stylist', payload.credits_used);
 
-    await supabase.from('ai_insight_cache').upsert(
-      {
-        user_id: user.id,
-        insight_type: INSIGHT_TYPE,
-        closet_hash: closetHash,
-        prompt_hash: promptHash,
-        response_json: payload,
-        model: payload.model || 'gemini-2.5-flash',
-        credits_used: payload.credits_used || 0,
-        expires_at: new Date(Date.now() + CACHE_TTL_HOURS * 60 * 60 * 1000).toISOString(),
-      },
-      { onConflict: 'user_id,insight_type,closet_hash,prompt_hash' },
-    );
+    // Image-based answers are not cached: prompt hash does not include the photo.
+    if (!hasImage) {
+      await supabase.from('ai_insight_cache').upsert(
+        {
+          user_id: user.id,
+          insight_type: INSIGHT_TYPE,
+          closet_hash: closetHash,
+          prompt_hash: promptHash,
+          response_json: payload,
+          model: payload.model || 'gemini-2.5-flash',
+          credits_used: payload.credits_used || 0,
+          expires_at: new Date(Date.now() + CACHE_TTL_HOURS * 60 * 60 * 1000).toISOString(),
+        },
+        { onConflict: 'user_id,insight_type,closet_hash,prompt_hash' },
+      );
+    }
 
-    if (idempotencyKey) {
+    if (idempotencyKey && !hasImage) {
       await supabase.from('ai_insight_jobs').upsert(
         {
           user_id: user.id,

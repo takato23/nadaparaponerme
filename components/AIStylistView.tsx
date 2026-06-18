@@ -11,6 +11,9 @@ import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion';
 import type { ClothingItem, ChatMessage, ChatConversation, GuidedLookWorkflowResponse } from '../types';
 import { chatWithFashionAssistantWorkflow, chatWithStudioStylist, generateVirtualTryOnWithSlots } from '../src/services/aiService';
+import AttachMenu, { type AttachOption } from './chat/AttachMenu';
+import EmbeddedCameraSheet from './chat/EmbeddedCameraSheet';
+import PhotoPickerSheet from './chat/PhotoPickerSheet';
 import { sanitizeUserInput } from '../utils/sanitize';
 import { useSubscription } from '../hooks/useSubscription';
 import { LimitReachedModal } from './QuotaIndicator';
@@ -214,6 +217,11 @@ const AIStylistView: React.FC<AIStylistViewProps> = ({
   const [guidedWorkflow, setGuidedWorkflow] = useState<GuidedLookWorkflowResponse | null>(null);
   const [guidedAutosaveEnabled, setGuidedAutosaveEnabled] = useState(false);
   const [limitModalSource, setLimitModalSource] = useState<'chat' | 'guided' | 'edit' | 'tryon' | null>(null);
+  // Attachment UI (ChatGPT-style "+" menu, embedded camera and photo picker)
+  const [showAttachMenu, setShowAttachMenu] = useState(false);
+  const [showCamera, setShowCamera] = useState(false);
+  const [showPhotoPicker, setShowPhotoPicker] = useState(false);
+  const [pendingAttachment, setPendingAttachment] = useState<string | null>(null);
 
   // Subscription hook for tracking usage
   const subscription = useSubscription();
@@ -222,6 +230,7 @@ const AIStylistView: React.FC<AIStylistViewProps> = ({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const selfieInputRef = useRef<HTMLInputElement>(null);
+  const attachInputRef = useRef<HTMLInputElement>(null);
 
   // Computed
   const currentConversation = conversations.find(c => c.id === currentConversationId);
@@ -255,6 +264,10 @@ const AIStylistView: React.FC<AIStylistViewProps> = ({
     setGuidedWorkflow(null);
     setGuidedAutosaveEnabled(false);
     setLimitModalSource(null);
+    setShowAttachMenu(false);
+    setShowCamera(false);
+    setShowPhotoPicker(false);
+    setPendingAttachment(null);
   }, [currentConversationId]);
 
   useEffect(() => {
@@ -1004,6 +1017,113 @@ const AIStylistView: React.FC<AIStylistViewProps> = ({
 
     return updatedMessages;
   }, [messages, onMessagesUpdate, onUpdateTitle]);
+
+  // ===== Attachment helpers (camera / gallery / files) =====
+
+  // Gemini vision needs base64. Convert remote URLs (e.g. Supabase storage) when needed.
+  const ensureDataUrl = useCallback(async (url: string): Promise<string> => {
+    if (!url) return url;
+    if (url.startsWith('data:')) return url;
+    const response = await fetch(url);
+    const blob = await response.blob();
+    return await readFileAsDataUrl(new File([blob], 'photo', { type: blob.type || 'image/jpeg' }));
+  }, [readFileAsDataUrl]);
+
+  const handleAttachmentSelected = useCallback(async (url: string) => {
+    try {
+      const dataUrl = await ensureDataUrl(url);
+      setPendingAttachment(dataUrl);
+      inputRef.current?.focus();
+    } catch (error) {
+      console.error('No se pudo preparar la imagen adjunta:', error);
+      appendAssistantMessage(messages, 'No pude preparar esa foto. Probá con otra imagen.');
+    }
+  }, [ensureDataUrl, appendAssistantMessage, messages]);
+
+  const handleDeviceFileSelected = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    try {
+      const dataUrl = await readFileAsDataUrl(file);
+      setPendingAttachment(dataUrl);
+      inputRef.current?.focus();
+    } catch {
+      appendAssistantMessage(messages, 'No pude leer ese archivo. Probá con una imagen.');
+    }
+  }, [readFileAsDataUrl, appendAssistantMessage, messages]);
+
+  const handleAttachOption = useCallback((option: AttachOption) => {
+    if (option === 'camera') {
+      setShowCamera(true);
+    } else if (option === 'photos') {
+      setShowPhotoPicker(true);
+    } else {
+      attachInputRef.current?.click();
+    }
+  }, []);
+
+  const runImageChat = useCallback(async (text: string, imageDataUrl: string) => {
+    if (!currentConversation || isTyping) return;
+
+    const canUseStatus = subscription.canUseAIFeature('fashion_chat');
+    if (!canUseStatus.canUse) {
+      setLimitModalSource('chat');
+      setShowLimitModal(true);
+      return;
+    }
+
+    const effectiveText = text.trim() || 'Analizá esta foto y dame consejos de estilo.';
+    const userMessage: ChatMessage = {
+      id: `user_${Date.now()}`,
+      role: 'user',
+      content: effectiveText,
+      timestamp: Date.now(),
+      imageDataUrl,
+    };
+    const updatedMessages = [...messages, userMessage];
+    onMessagesUpdate(updatedMessages);
+    setInputValue('');
+    setPendingAttachment(null);
+    setStreamingMessage('');
+
+    if (messages.filter((m) => m.role === 'user').length === 0) {
+      onUpdateTitle('📷 ' + effectiveText.slice(0, 38));
+    }
+
+    setIsTyping(true);
+    try {
+      const response = await chatWithStudioStylist(
+        effectiveText,
+        enrichedCloset,
+        messages,
+        { surface: 'closet', imageDataUrl },
+      );
+      appendAssistantMessage(updatedMessages, response.content, response.outfitSuggestion || undefined);
+      await subscription.refresh();
+    } catch (error: any) {
+      console.error('Error in image chat:', error);
+      const userFacingError = mapChatErrorMessage(error);
+      if (isCreditError(error?.message || String(error))) {
+        setLimitModalSource('chat');
+        setShowLimitModal(true);
+      }
+      appendAssistantMessage(updatedMessages, userFacingError);
+    } finally {
+      setIsTyping(false);
+    }
+  }, [
+    appendAssistantMessage,
+    currentConversation,
+    enrichedCloset,
+    isCreditError,
+    isTyping,
+    mapChatErrorMessage,
+    messages,
+    onMessagesUpdate,
+    onUpdateTitle,
+    subscription,
+  ]);
 
   const handlePrepareGarmentEditFromInput = useCallback(async () => {
     if (!lookCreation.generatedItem || isTyping) return;
@@ -1770,11 +1890,20 @@ const AIStylistView: React.FC<AIStylistViewProps> = ({
     withTimeout,
   ]);
 
+  // Unified submit: route to image chat when there is a pending attachment.
+  const handleSubmit = useCallback(() => {
+    if (pendingAttachment) {
+      void runImageChat(inputValue, pendingAttachment);
+      return;
+    }
+    void handleSend(inputValue);
+  }, [pendingAttachment, inputValue, runImageChat, handleSend]);
+
   // Keyboard handler
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleSend(inputValue);
+      handleSubmit();
     }
   };
 
@@ -1840,25 +1969,43 @@ const AIStylistView: React.FC<AIStylistViewProps> = ({
         transition={{ type: 'spring', damping: 25, stiffness: 300 }}
         className="relative w-full max-w-3xl h-[85vh] bg-white/85 dark:bg-[#05060a]/80 backdrop-blur-3xl border border-white/50 dark:border-white/10 rounded-3xl shadow-2xl overflow-hidden flex"
       >
-        {/* Sidebar */}
+        {/* Sidebar (slide-over drawer, ChatGPT-style) */}
         <AnimatePresence>
           {showSidebar && (
             <>
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setShowSidebar(false)}
+                className="absolute inset-0 z-20 bg-black/30 backdrop-blur-[2px]"
+              />
               <motion.aside
-                initial={{ width: 0, opacity: 0 }}
-                animate={{ width: 240, opacity: 1 }}
-                exit={{ width: 0, opacity: 0 }}
-                transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-                className="h-full bg-gray-50 dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col overflow-hidden"
+                initial={{ x: '-100%' }}
+                animate={{ x: 0 }}
+                exit={{ x: '-100%' }}
+                transition={{ type: 'spring', damping: 30, stiffness: 320 }}
+                drag="x"
+                dragConstraints={{ left: 0, right: 0 }}
+                dragElastic={{ left: 0.4, right: 0 }}
+                onDragEnd={(_, info) => { if (info.offset.x < -80) setShowSidebar(false); }}
+                className="absolute left-0 top-0 z-30 h-full w-[280px] max-w-[80%] bg-gray-50/95 dark:bg-gray-900/95 backdrop-blur-xl border-r border-gray-200 dark:border-gray-800 flex flex-col overflow-hidden rounded-l-3xl shadow-2xl"
               >
                 {/* Sidebar Header */}
-                <div className="p-4 border-b border-gray-100 dark:border-gray-800">
+                <div className="flex items-center justify-between gap-2 p-4 border-b border-gray-100 dark:border-gray-800">
                   <button
                     onClick={() => { onNewConversation(); setShowSidebar(false); }}
-                    className="w-full py-2.5 px-4 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg font-medium text-sm hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors flex items-center justify-center gap-2"
+                    className="flex-1 py-2.5 px-4 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-xl font-medium text-sm hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors flex items-center justify-center gap-2"
                   >
                     <span className="material-symbols-rounded text-lg">add</span>
                     Nueva conversación
+                  </button>
+                  <button
+                    onClick={() => setShowSidebar(false)}
+                    aria-label="Cerrar"
+                    className="grid h-9 w-9 place-items-center rounded-xl text-gray-500 dark:text-gray-400 hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+                  >
+                    <span className="material-symbols-rounded">close</span>
                   </button>
                 </div>
 
@@ -1941,7 +2088,7 @@ const AIStylistView: React.FC<AIStylistViewProps> = ({
                 <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shadow-sm shadow-violet-500/20">
                   <span className="material-symbols-rounded text-white text-lg drop-shadow-sm">checkroom</span>
                 </div>
-                <span className="font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 dark:from-white dark:via-gray-200 dark:to-white">Estilista IA</span>
+                <span className="font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 dark:from-white dark:via-gray-200 dark:to-white">Kumbi</span>
               </div>
             </div>
 
@@ -2089,9 +2236,18 @@ const AIStylistView: React.FC<AIStylistViewProps> = ({
                           ? 'bg-gray-900/90 dark:bg-white/90 border-gray-800/50 dark:border-white/20 text-white dark:text-gray-900 ml-auto'
                           : 'bg-white/60 dark:bg-black/40 border-violet-200/50 dark:border-violet-800/30 hover:border-violet-300 dark:hover:border-violet-700/50 transition-colors'
                           }`}>
-                          <p className="whitespace-pre-wrap break-words text-[15px] leading-relaxed font-medium">
-                            {sanitizeUserInput(content)}
-                          </p>
+                          {msg.imageDataUrl && (
+                            <img
+                              src={msg.imageDataUrl}
+                              alt="Foto enviada"
+                              className="mb-2 max-h-60 w-full rounded-xl object-cover"
+                            />
+                          )}
+                          {content && (
+                            <p className="whitespace-pre-wrap break-words text-[15px] leading-relaxed font-medium">
+                              {sanitizeUserInput(content)}
+                            </p>
+                          )}
                         </div>
 
                         {/* Outfit Preview */}
@@ -2488,14 +2644,69 @@ const AIStylistView: React.FC<AIStylistViewProps> = ({
                   </div>
                 </div>
               )}
+              {/* Attachment preview chip */}
+              <AnimatePresence>
+                {pendingAttachment && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0, y: 8 }}
+                    animate={{ opacity: 1, height: 'auto', y: 0 }}
+                    exit={{ opacity: 0, height: 0, y: 8 }}
+                    className="mb-2 flex items-center gap-2"
+                  >
+                    <div className="relative">
+                      <img
+                        src={pendingAttachment}
+                        alt="Adjunto"
+                        className="h-16 w-16 rounded-xl object-cover ring-1 ring-black/10 dark:ring-white/10 shadow-sm"
+                      />
+                      <button
+                        onClick={() => setPendingAttachment(null)}
+                        aria-label="Quitar adjunto"
+                        className="absolute -right-1.5 -top-1.5 grid h-5 w-5 place-items-center rounded-full bg-gray-900 text-white shadow-md hover:scale-110 transition-transform"
+                      >
+                        <span className="material-symbols-rounded text-[14px]">close</span>
+                      </button>
+                    </div>
+                    <span className="text-xs text-gray-500 dark:text-gray-400">Foto lista para enviar a Kumbi</span>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
               <div className="relative flex items-end gap-2">
+                {/* "+" attach button with ChatGPT-style popover */}
+                <div className="relative">
+                  <button
+                    onClick={() => setShowAttachMenu((v) => !v)}
+                    disabled={isTyping}
+                    aria-label="Adjuntar"
+                    className={`p-3.5 rounded-2xl border border-white/60 dark:border-white/10 backdrop-blur-md shadow-sm transition-all hover:scale-105 active:scale-95 disabled:opacity-50 ${
+                      showAttachMenu
+                        ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900'
+                        : 'bg-white/60 dark:bg-white/5 text-gray-700 dark:text-gray-200 hover:bg-white/80 dark:hover:bg-white/10'
+                    }`}
+                  >
+                    <motion.span
+                      animate={{ rotate: showAttachMenu ? 45 : 0 }}
+                      transition={{ type: 'spring', damping: 18, stiffness: 320 }}
+                      className="material-symbols-rounded block font-bold"
+                    >
+                      add
+                    </motion.span>
+                  </button>
+                  <AttachMenu
+                    isOpen={showAttachMenu}
+                    onClose={() => setShowAttachMenu(false)}
+                    onSelect={handleAttachOption}
+                  />
+                </div>
+
                 <div className="flex-1 relative">
                   <textarea
                     ref={inputRef}
                     value={inputValue}
                     onChange={(e) => setInputValue(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    placeholder="Escribí tu mensaje..."
+                    placeholder={pendingAttachment ? 'Agregá un comentario (opcional)...' : 'Escribí tu mensaje...'}
                     disabled={isTyping}
                     rows={1}
                     className="w-full px-5 py-3.5 bg-white/60 dark:bg-white/5 border border-white/60 dark:border-white/10 backdrop-blur-md rounded-2xl resize-none text-gray-900 dark:text-white placeholder-gray-500/80 focus:outline-none focus:ring-2 focus:ring-violet-500/50 shadow-inner transition-all text-sm font-medium disabled:opacity-50"
@@ -2503,14 +2714,23 @@ const AIStylistView: React.FC<AIStylistViewProps> = ({
                   />
                 </div>
                 <button
-                  onClick={() => handleSend(inputValue)}
-                  disabled={!inputValue.trim() || isTyping}
+                  onClick={handleSubmit}
+                  disabled={(!inputValue.trim() && !pendingAttachment) || isTyping}
                   className="p-3.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-2xl hover:bg-gray-800 dark:hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-xl transition-all hover:scale-105 active:scale-95"
                   title="Enviar"
                 >
                   <span className="material-symbols-rounded font-bold drop-shadow-sm">send</span>
                 </button>
               </div>
+
+              {/* Hidden input for "Archivos" and native photo fallback */}
+              <input
+                ref={attachInputRef}
+                type="file"
+                accept="image/*"
+                onChange={(event) => void handleDeviceFileSelected(event)}
+                className="hidden"
+              />
 
               {/* Credits warning */}
               {chatCreditsStatus.limit !== -1 && chatCreditsStatus.remaining <= 5 && (
@@ -2523,6 +2743,22 @@ const AIStylistView: React.FC<AIStylistViewProps> = ({
           </div>
         </div>
       </motion.div>
+
+      {/* Embedded camera (ChatGPT-style bottom sheet) */}
+      <EmbeddedCameraSheet
+        isOpen={showCamera}
+        onClose={() => setShowCamera(false)}
+        onCapture={(dataUrl) => void handleAttachmentSelected(dataUrl)}
+      />
+
+      {/* Embedded photo gallery */}
+      <PhotoPickerSheet
+        isOpen={showPhotoPicker}
+        onClose={() => setShowPhotoPicker(false)}
+        items={enrichedCloset}
+        onSelect={(url) => void handleAttachmentSelected(url)}
+        onPickFromDevice={() => attachInputRef.current?.click()}
+      />
 
       {/* Limit Reached Modal */}
       <LimitReachedModal

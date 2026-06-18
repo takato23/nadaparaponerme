@@ -676,6 +676,7 @@ export async function chatWithStylistViaEdge(
     threadId?: string | null;
     idempotencyKey?: string;
     workflow?: GuidedLookWorkflowRequest;
+    imageDataUrl?: string;
   } = {}
 ): Promise<ChatStylistResponse & { validation_warnings?: string[]; workflow?: GuidedLookWorkflowResponse }> {
   try {
@@ -689,6 +690,7 @@ export async function chatWithStylistViaEdge(
         threadId: options.threadId || null,
         idempotencyKey: options.idempotencyKey || undefined,
         workflow: options.workflow || undefined,
+        imageDataUrl: options.imageDataUrl || undefined,
       },
     });
 

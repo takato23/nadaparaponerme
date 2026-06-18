@@ -254,6 +254,8 @@ export interface ChatMessage {
   content: string;
   timestamp: number;
   outfitSuggestion?: StructuredOutfitSuggestion;
+  /** Optional image (base64 data URL) attached by the user to this message. */
+  imageDataUrl?: string;
 }
 
 export interface ChatState {

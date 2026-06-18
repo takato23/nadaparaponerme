@@ -597,7 +597,7 @@ export async function chatWithStudioStylist(
   message: string,
   inventory: ClothingItem[],
   chatHistory: Array<{ role: 'user' | 'assistant'; content: string }>,
-  options: { threadId?: string | null; surface?: 'studio' | 'closet' } = {}
+  options: { threadId?: string | null; surface?: 'studio' | 'closet'; imageDataUrl?: string } = {}
 ): Promise<{
   role: 'assistant';
   content: string;
@@ -641,6 +641,7 @@ export async function chatWithStudioStylist(
       surface: options.surface || 'studio',
       threadId: options.threadId || null,
       idempotencyKey,
+      imageDataUrl: options.imageDataUrl,
     });
   }
 
