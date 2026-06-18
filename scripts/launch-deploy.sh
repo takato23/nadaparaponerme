@@ -4,7 +4,9 @@
 
 set -e
 
-PROJECT_REF="qpoojigxxswkpkfbrfiy"
+# Project ref configurable: export SUPABASE_PROJECT_REF=... para apuntar a otro proyecto.
+# Cae al ref por defecto si no se define (el ref no es secreto: ya aparece en URLs públicas).
+PROJECT_REF="${SUPABASE_PROJECT_REF:-qpoojigxxswkpkfbrfiy}"
 echo "🚀 Deploy para proyecto: $PROJECT_REF"
 
 # 1. Login a Supabase (si no estás logueado)
