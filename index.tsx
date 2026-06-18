@@ -21,6 +21,16 @@ root.render(
   </React.StrictMode>
 );
 
+// Remove the instant HTML boot screen once React has mounted. The React
+// <SplashScreen> already covers it, so fading this out is a seamless handoff.
+const removeInitialBoot = () => {
+  const boot = document.getElementById('initial-boot');
+  if (!boot) return;
+  boot.classList.add('ib-hide');
+  window.setTimeout(() => boot.remove(), 450);
+};
+requestAnimationFrame(() => requestAnimationFrame(removeInitialBoot));
+
 // Register Service Worker for PWA
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => {

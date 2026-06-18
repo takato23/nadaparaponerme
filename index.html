@@ -62,6 +62,69 @@
     href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200"
     rel="stylesheet" />
 
+  <!-- Instant boot screen: paints before the JS bundle loads to avoid a white
+       flash. The React <SplashScreen> covers it on mount; index.tsx removes it. -->
+  <style>
+    #initial-boot {
+      position: fixed;
+      inset: 0;
+      z-index: 2147483647;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 24px;
+      background-color: #05060a;
+      background-image:
+        radial-gradient(62% 48% at 50% 42%, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0) 60%),
+        radial-gradient(55% 45% at 18% 24%, rgba(168, 85, 247, 0.22) 0%, rgba(168, 85, 247, 0) 70%),
+        radial-gradient(55% 45% at 80% 60%, rgba(59, 130, 246, 0.18) 0%, rgba(59, 130, 246, 0) 70%),
+        radial-gradient(45% 40% at 55% 90%, rgba(236, 72, 153, 0.14) 0%, rgba(236, 72, 153, 0) 70%),
+        linear-gradient(180deg, rgba(3, 7, 18, 0) 0%, rgba(3, 7, 18, 0.78) 100%);
+      opacity: 1;
+      transition: opacity 400ms ease;
+      font-family: 'Outfit', 'Manrope', system-ui, -apple-system, sans-serif;
+    }
+    #initial-boot.ib-hide { opacity: 0; pointer-events: none; }
+    #initial-boot .ib-eye {
+      width: 96px;
+      height: 96px;
+      color: #ffffff;
+      filter: drop-shadow(0 0 24px rgba(168, 85, 247, 0.45));
+      animation: ib-pulse 2.4s ease-in-out infinite;
+    }
+    #initial-boot .ib-name {
+      font-size: 30px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      background: linear-gradient(90deg, #c084fc 0%, #f0abfc 50%, #f472b6 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    #initial-boot .ib-bar {
+      position: relative;
+      width: 160px;
+      height: 6px;
+      border-radius: 9999px;
+      overflow: hidden;
+      background: rgba(255, 255, 255, 0.1);
+    }
+    #initial-boot .ib-bar span {
+      position: absolute;
+      inset: 0;
+      width: 40%;
+      border-radius: 9999px;
+      background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.55) 50%, rgba(255,255,255,0) 100%);
+      animation: ib-slide 1.3s ease-in-out infinite;
+    }
+    @keyframes ib-pulse { 0%, 100% { opacity: 0.85; } 50% { opacity: 1; } }
+    @keyframes ib-slide { 0% { transform: translateX(-120%); } 100% { transform: translateX(320%); } }
+    @media (prefers-reduced-motion: reduce) {
+      #initial-boot .ib-eye, #initial-boot .ib-bar span { animation: none; }
+    }
+  </style>
+
 </head>
 
 <body class="font-display">
@@ -70,6 +133,16 @@
     <div class="iridescent-gradient h-full w-full opacity-50 blur-3xl"></div>
   </div>
   <div class="fixed inset-0 bg-background-light/30 dark:bg-background-dark/30 z-[-1]"></div>
+  <div id="initial-boot" aria-hidden="true">
+    <svg class="ib-eye" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M6 50 C 24 18, 76 18, 94 50 C 76 82, 24 82, 6 50 Z" fill="currentColor" />
+      <circle cx="50" cy="50" r="22" fill="#F9F9F9" />
+      <circle cx="50" cy="50" r="9.5" fill="currentColor" />
+      <circle cx="44" cy="44" r="3.4" fill="#FFFFFF" opacity="0.7" />
+    </svg>
+    <div class="ib-name">Ojo de Loca</div>
+    <div class="ib-bar"><span></span></div>
+  </div>
   <div id="root"></div>
   <script type="module" src="/index.tsx"></script>
 </body>

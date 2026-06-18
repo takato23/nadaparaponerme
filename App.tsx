@@ -47,6 +47,7 @@ import { PricingModal } from './components/PricingModal';
 import { QuotaIndicator, LimitReachedModal } from './components/QuotaIndicator';
 import { CreditsDetailView } from './components/CreditsDetailView';
 import AuthEyeScreen from './components/AuthEyeScreen';
+import SplashScreen from './components/SplashScreen';
 import CookieConsentBanner from './components/legal/CookieConsentBanner';
 import { PWAInstallPrompt } from './components/PWAInstallPrompt';
 import { useConsentPreferences } from './hooks/useConsentPreferences';
@@ -62,6 +63,9 @@ import { AIGenerationProvider } from './contexts/AIGenerationContext';
 import ClosetViewEnhanced from './components/closet/ClosetViewEnhanced';
 import { GlobalCanvas } from './components/3d/GlobalCanvas';
 const DISABLE_3D_BACKGROUND = true;
+// Module-level boot guard: the splash plays once per full page load, not on
+// client-side route changes / re-renders within the same session.
+let appHasBooted = false;
 import { DISALLOW_CLIENT_GEMINI_KEY_IN_PROD, PAYMENTS_ENABLED, V1_SAFE_MODE } from './src/config/runtime';
 
 // Lazy load all view components
@@ -1364,6 +1368,12 @@ const AppContent = () => {
 
     const [showAuthView, setShowAuthView] = useState(false);
     const [authInitialMode, setAuthInitialMode] = useState<'login' | 'signup'>('login');
+    // Brand boot/splash: shown once per full page load before any content.
+    const [showSplash, setShowSplash] = useState(() => !appHasBooted);
+    const handleSplashFinish = useCallback(() => {
+        appHasBooted = true;
+        setShowSplash(false);
+    }, []);
     useEffect(() => {
         if (isAuthenticated) return;
         const params = new URLSearchParams(location.search);
@@ -1395,6 +1405,12 @@ const AppContent = () => {
             return [ROUTES.STUDIO, ROUTES.STUDIO_MIRROR, ROUTES.STUDIO_PHOTOSHOOT]
                 .some(route => path === route || path.startsWith(`${route}/`));
         })();
+
+    // Brand boot/splash takes over the very first paint for everyone, then hands
+    // off to the landing/login flow (or the app, if already authenticated).
+    if (showSplash) {
+        return <SplashScreen onFinish={handleSplashFinish} />;
+    }
 
     if (!isAuthenticated && !isPublicRoute) {
         if (showAuthView) {
