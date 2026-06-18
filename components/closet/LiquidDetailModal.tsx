@@ -241,39 +241,8 @@ export default function LiquidDetailModal({ item, isOpen, onClose, onItemUpdated
                             </button>
                         </div>
 
-                        {/* Tab Navigation */}
-                        <div className="flex overflow-x-auto no-scrollbar border-b border-gray-200 dark:border-gray-700 px-4 pt-3 sm:px-8 sm:pt-6">
-                            <button
-                                onClick={() => setActiveTab('details')}
-                                className={`px-3 sm:px-4 py-2 font-medium text-sm whitespace-nowrap border-b-2 transition-colors ${activeTab === 'details'
-                                    ? 'border-primary text-primary'
-                                    : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
-                                    }`}
-                            >
-                                Detalles
-                            </button>
-                            <button
-                                onClick={handleAnalyzeBrand}
-                                className={`px-3 sm:px-4 py-2 font-medium text-sm whitespace-nowrap border-b-2 transition-colors ${activeTab === 'brand'
-                                    ? 'border-purple-500 text-purple-500'
-                                    : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
-                                    }`}
-                            >
-                                🏷️ Marca & Precio
-                            </button>
-                            <button
-                                onClick={handleFindDupes}
-                                className={`px-3 sm:px-4 py-2 font-medium text-sm whitespace-nowrap border-b-2 transition-colors ${activeTab === 'dupes'
-                                    ? 'border-blue-500 text-blue-500'
-                                    : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
-                                    }`}
-                            >
-                                🛍️ Dónde Comprar
-                            </button>
-                        </div>
-
                         {/* Tab Content */}
-                        <div className="p-5 pb-[calc(8rem+env(safe-area-inset-bottom))] sm:p-8 sm:pb-[calc(8rem+env(safe-area-inset-bottom))]">
+                        <div className="p-5 pt-6 pb-[calc(8rem+env(safe-area-inset-bottom))] sm:p-8 sm:pb-[calc(8rem+env(safe-area-inset-bottom))]">
                             {/* Details Tab */}
                             {activeTab === 'details' && (
                                 <motion.div
@@ -281,37 +250,25 @@ export default function LiquidDetailModal({ item, isOpen, onClose, onItemUpdated
                                     animate={{ opacity: 1, y: 0 }}
                                     exit={{ opacity: 0, y: -10 }}
                                 >
-                                    <h2 className="text-2xl sm:text-[2rem] leading-tight font-serif font-bold text-slate-900 dark:text-white mb-2 capitalize">
-                                        {item.metadata?.subcategory || 'Prenda'}
+                                    <h2 className="text-2xl sm:text-[2rem] leading-tight font-serif font-bold text-slate-900 dark:text-white mb-3 capitalize">
+                                        {localItem.metadata?.subcategory || 'Prenda'}
                                     </h2>
 
-                                    <div className="flex flex-wrap gap-2 mb-4">
-                                        <span className={`px-2.5 py-1 rounded-full text-xs font-medium flex items-center gap-1 border ${localItem.aiStatus === 'ready'
-                                            ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300'
-                                            : localItem.aiStatus === 'processing'
-                                                ? 'bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300'
-                                                : localItem.aiStatus === 'failed'
-                                                    ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
-                                                    : 'bg-slate-100/80 dark:bg-slate-800/70 text-slate-500 dark:text-slate-400 border-slate-200/80 dark:border-slate-700/70'
-                                            }`}>
-                                            <span className="material-symbols-outlined text-sm">auto_awesome</span>
-                                            {localItem.aiStatus === 'ready'
-                                                ? 'IA lista'
-                                                : localItem.aiStatus === 'processing'
-                                                    ? 'Analizando IA'
-                                                    : localItem.aiStatus === 'failed'
-                                                        ? 'Error IA'
-                                                        : 'Sin analizar'}
-                                        </span>
-                                        <span className="px-3 py-1 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 text-sm font-medium capitalize flex items-center gap-1">
-                                            <span className="material-symbols-outlined text-sm">palette</span>
-                                            {item.metadata?.color_primary}
-                                        </span>
-                                        <span className="px-3 py-1 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-300 text-sm font-medium capitalize flex items-center gap-1">
-                                            <span className="material-symbols-outlined text-sm">styler</span>
-                                            {item.metadata?.category}
-                                        </span>
-                                        {item.metadata?.seasons?.map(season => (
+                                    {/* Chips de identidad: color · categoría · estaciones */}
+                                    <div className="flex flex-wrap gap-2 mb-5">
+                                        {localItem.metadata?.color_primary && (
+                                            <span className="px-3 py-1 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 text-sm font-medium capitalize flex items-center gap-1">
+                                                <span className="material-symbols-outlined text-sm">palette</span>
+                                                {localItem.metadata.color_primary}
+                                            </span>
+                                        )}
+                                        {localItem.metadata?.category && (
+                                            <span className="px-3 py-1 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-300 text-sm font-medium capitalize flex items-center gap-1">
+                                                <span className="material-symbols-outlined text-sm">styler</span>
+                                                {localItem.metadata.category}
+                                            </span>
+                                        )}
+                                        {localItem.metadata?.seasons?.map(season => (
                                             <span key={season} className="px-3 py-1 rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-300 text-sm font-medium capitalize flex items-center gap-1">
                                                 <span className="material-symbols-outlined text-sm">wb_sunny</span>
                                                 {season}
@@ -319,28 +276,45 @@ export default function LiquidDetailModal({ item, isOpen, onClose, onItemUpdated
                                         ))}
                                     </div>
 
-                                    <div className="mb-5 flex items-center justify-between gap-3 rounded-2xl border border-indigo-200/60 bg-indigo-50/60 px-4 py-3 dark:border-indigo-800/50 dark:bg-indigo-900/20">
-                                        <div>
-                                            <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
-                                                Análisis IA on-demand
-                                            </p>
-                                            <p className="text-xs text-slate-600 dark:text-slate-300">
-                                                Guardás rápido y analizás sólo cuando lo necesitás.
-                                            </p>
+                                    {/* Análisis IA: una sola pieza accionable, según estado */}
+                                    {localItem.aiStatus === 'ready' ? (
+                                        <div className="mb-5">
+                                            <button
+                                                onClick={handleAnalyzeItemAI}
+                                                disabled={isOnDemandAnalyzing}
+                                                className="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline disabled:opacity-50 flex items-center gap-1"
+                                            >
+                                                <span className="material-symbols-outlined text-sm">auto_awesome</span>
+                                                {isOnDemandAnalyzing ? 'Analizando…' : 'Re-analizar con IA'}
+                                            </button>
                                         </div>
-                                        <button
-                                            onClick={handleAnalyzeItemAI}
-                                            disabled={isOnDemandAnalyzing || localItem.aiStatus === 'processing'}
-                                            className="rounded-xl bg-indigo-600 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
-                                        >
-                                            {isOnDemandAnalyzing ? 'Analizando...' : localItem.aiStatus === 'ready' ? 'Re-analizar' : 'Analizar ahora'}
-                                        </button>
-                                    </div>
+                                    ) : (
+                                        <div className="mb-5 flex items-center justify-between gap-3 rounded-2xl border border-indigo-200/60 bg-indigo-50/60 px-4 py-3 dark:border-indigo-800/50 dark:bg-indigo-900/20">
+                                            <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                                                {localItem.aiStatus === 'failed'
+                                                    ? 'El análisis IA falló. Probá de nuevo.'
+                                                    : 'Analizá esta prenda con IA cuando quieras.'}
+                                            </p>
+                                            <button
+                                                onClick={handleAnalyzeItemAI}
+                                                disabled={isOnDemandAnalyzing || localItem.aiStatus === 'processing'}
+                                                className="shrink-0 rounded-xl bg-indigo-600 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+                                            >
+                                                {isOnDemandAnalyzing
+                                                    ? 'Analizando…'
+                                                    : localItem.aiStatus === 'processing'
+                                                        ? 'Analizando…'
+                                                        : localItem.aiStatus === 'failed'
+                                                            ? 'Reintentar'
+                                                            : 'Analizar ahora'}
+                                            </button>
+                                        </div>
+                                    )}
 
                                     {/* Vibe Tags */}
-                                    {item.metadata?.vibe_tags && item.metadata.vibe_tags.length > 0 && (
+                                    {localItem.metadata?.vibe_tags && localItem.metadata.vibe_tags.length > 0 && (
                                         <div className="flex flex-wrap gap-2 mb-6">
-                                            {item.metadata.vibe_tags.map(tag => (
+                                            {localItem.metadata.vibe_tags.map(tag => (
                                                 <span key={tag} className="px-3 py-1 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 text-sm font-medium border border-gray-200 dark:border-gray-700">
                                                     #{tag}
                                                 </span>
@@ -348,64 +322,58 @@ export default function LiquidDetailModal({ item, isOpen, onClose, onItemUpdated
                                         </div>
                                     )}
 
-                                    <div className="grid grid-cols-2 gap-4 mb-6">
-                                        <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50">
-                                            <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Categoría</p>
-                                            <p className="font-medium text-slate-900 dark:text-white capitalize">{item.metadata?.category || '-'}</p>
+                                    {/* Atributos extra: solo si hay alguno */}
+                                    {(localItem.metadata?.neckline || localItem.metadata?.sleeve_type || localItem.metadata?.fabric_composition) && (
+                                        <div className="grid grid-cols-2 gap-4 mb-6">
+                                            {localItem.metadata?.neckline && (
+                                                <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50">
+                                                    <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Cuello</p>
+                                                    <p className="font-medium text-slate-900 dark:text-white capitalize">{localItem.metadata.neckline}</p>
+                                                </div>
+                                            )}
+                                            {localItem.metadata?.sleeve_type && (
+                                                <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50">
+                                                    <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Manga</p>
+                                                    <p className="font-medium text-slate-900 dark:text-white capitalize">{localItem.metadata.sleeve_type}</p>
+                                                </div>
+                                            )}
+                                            {localItem.metadata?.fabric_composition && (
+                                                <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50">
+                                                    <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Composición</p>
+                                                    <p className="font-medium text-slate-900 dark:text-white">{localItem.metadata.fabric_composition}</p>
+                                                </div>
+                                            )}
                                         </div>
-                                        <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50">
-                                            <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Subcategoría</p>
-                                            <p className="font-medium text-slate-900 dark:text-white capitalize">{item.metadata?.subcategory || '-'}</p>
-                                        </div>
-                                        {item.metadata?.neckline && (
-                                            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50">
-                                                <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Cuello</p>
-                                                <p className="font-medium text-slate-900 dark:text-white capitalize">{item.metadata.neckline}</p>
-                                            </div>
-                                        )}
-                                        {item.metadata?.sleeve_type && (
-                                            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50">
-                                                <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Manga</p>
-                                                <p className="font-medium text-slate-900 dark:text-white capitalize">{item.metadata.sleeve_type}</p>
-                                            </div>
-                                        )}
-                                    </div>
+                                    )}
 
                                     {/* Extended Details */}
-                                    <div className="space-y-4">
-                                        {item.metadata?.styling_tips && (
-                                            <div className="p-4 rounded-2xl bg-indigo-50 dark:bg-indigo-900/20">
-                                                <div className="flex items-center gap-2 mb-2">
-                                                    <span className="material-symbols-outlined text-indigo-500 text-sm">style</span>
-                                                    <p className="text-xs text-indigo-600 dark:text-indigo-300 uppercase tracking-wider font-bold">Consejos de Estilo</p>
+                                    {(localItem.metadata?.styling_tips || localItem.metadata?.care_instructions) && (
+                                        <div className="space-y-4">
+                                            {localItem.metadata?.styling_tips && (
+                                                <div className="p-4 rounded-2xl bg-indigo-50 dark:bg-indigo-900/20">
+                                                    <div className="flex items-center gap-2 mb-2">
+                                                        <span className="material-symbols-outlined text-indigo-500 text-sm">style</span>
+                                                        <p className="text-xs text-indigo-600 dark:text-indigo-300 uppercase tracking-wider font-bold">Consejos de Estilo</p>
+                                                    </div>
+                                                    <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
+                                                        {localItem.metadata.styling_tips}
+                                                    </p>
                                                 </div>
-                                                <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
-                                                    {item.metadata.styling_tips}
-                                                </p>
-                                            </div>
-                                        )}
+                                            )}
 
-                                        {item.metadata?.care_instructions && (
-                                            <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-900/20">
-                                                <div className="flex items-center gap-2 mb-2">
-                                                    <span className="material-symbols-outlined text-emerald-500 text-sm">wash</span>
-                                                    <p className="text-xs text-emerald-600 dark:text-emerald-300 uppercase tracking-wider font-bold">Cuidados</p>
+                                            {localItem.metadata?.care_instructions && (
+                                                <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-900/20">
+                                                    <div className="flex items-center gap-2 mb-2">
+                                                        <span className="material-symbols-outlined text-emerald-500 text-sm">wash</span>
+                                                        <p className="text-xs text-emerald-600 dark:text-emerald-300 uppercase tracking-wider font-bold">Cuidados</p>
+                                                    </div>
+                                                    <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
+                                                        {localItem.metadata.care_instructions}
+                                                    </p>
                                                 </div>
-                                                <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
-                                                    {item.metadata.care_instructions}
-                                                </p>
-                                            </div>
-                                        )}
-
-                                        {item.metadata?.fabric_composition && (
-                                            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50">
-                                                <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Composición</p>
-                                                <p className="text-sm font-medium text-slate-900 dark:text-white">
-                                                    {item.metadata.fabric_composition}
-                                                </p>
-                                            </div>
-                                        )}
-                                    </div>
+                                            )}
+                                        </div>
+                                    )}
                                 </motion.div>
                             )}
 
@@ -417,6 +385,13 @@ export default function LiquidDetailModal({ item, isOpen, onClose, onItemUpdated
                                     exit={{ opacity: 0, y: -10 }}
                                     className="min-h-[200px]"
                                 >
+                                    <button
+                                        onClick={() => setActiveTab('details')}
+                                        className="mb-4 inline-flex items-center gap-1 text-sm font-medium text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition-colors"
+                                    >
+                                        <span className="material-symbols-outlined text-base">arrow_back</span>
+                                        Detalles
+                                    </button>
                                     {isAnalyzing ? (
                                         <div className="flex flex-col items-center justify-center py-12">
                                             <Loader size="large" />
@@ -462,6 +437,14 @@ export default function LiquidDetailModal({ item, isOpen, onClose, onItemUpdated
                                                     💡 {brandResult.market_insights}
                                                 </p>
                                             </div>
+
+                                            <button
+                                                onClick={handleFindDupes}
+                                                className="w-full py-3 rounded-xl bg-primary/10 text-primary font-semibold hover:bg-primary/20 transition-colors flex items-center justify-center gap-2"
+                                            >
+                                                <span className="material-symbols-outlined text-lg">shopping_bag</span>
+                                                Buscar alternativas más baratas
+                                            </button>
                                         </div>
                                     ) : (
                                         <div className="flex flex-col items-center justify-center py-12">
@@ -480,6 +463,13 @@ export default function LiquidDetailModal({ item, isOpen, onClose, onItemUpdated
                                     exit={{ opacity: 0, y: -10 }}
                                     className="min-h-[200px]"
                                 >
+                                    <button
+                                        onClick={() => setActiveTab('details')}
+                                        className="mb-4 inline-flex items-center gap-1 text-sm font-medium text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition-colors"
+                                    >
+                                        <span className="material-symbols-outlined text-base">arrow_back</span>
+                                        Detalles
+                                    </button>
                                     {isAnalyzing ? (
                                         <div className="flex flex-col items-center justify-center py-12">
                                             <Loader size="large" />
